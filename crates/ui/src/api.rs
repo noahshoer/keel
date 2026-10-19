@@ -2,7 +2,9 @@
 //! Requires `app.withGlobalTauri = true` in tauri.conf.json.
 
 use serde::Serialize;
-use todo_core::commands::{ApplyResult, Command};
+use todo_core::commands::{Action, ApplyResult, Command};
+use todo_core::ids::Id;
+use todo_core::recurrence::Recurrence;
 use todo_core::model::{Project, Task};
 use wasm_bindgen::prelude::*;
 
@@ -60,4 +62,46 @@ pub async fn list_tasks(project_id: &str) -> Result<Vec<Task>, String> {
 
 pub async fn dispatch(cmd: &Command) -> Result<ApplyResult, String> {
     invoke("dispatch", &CmdArg { cmd }).await
+}
+
+fn command(action: Action, temp: bool) -> Command {
+    Command {
+        uuid: uuid(),
+        temp_id: temp.then(|| format!("tmp-{}", uuid())),
+        action,
+    }
+}
+
+pub async fn add_task(
+    content: String,
+    project_id: Id,
+    recurrence: Option<Recurrence>,
+) -> Result<ApplyResult, String> {
+    dispatch(&command(
+        Action::TaskAdd {
+            content,
+            project_id,
+            description: None,
+            priority: None,
+            due: None,
+            labels: None,
+            parent_id: None,
+            section_id: None,
+            recurrence,
+        },
+        true,
+    ))
+    .await
+}
+
+pub async fn complete_task(id: Id) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::TaskComplete { id }, false)).await
+}
+
+pub async fn delete_task(id: Id) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::TaskDelete { id }, false)).await
+}
+
+pub async fn set_streak(id: Id, enabled: bool, goal: Option<i64>) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::TaskSetStreak { id, enabled, goal }, false)).await
 }
