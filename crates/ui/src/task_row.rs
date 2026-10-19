@@ -4,7 +4,7 @@ use todo_core::model::{Label, Priority, Project, Section, Task};
 use todo_core::views::{self, DueBucket};
 
 use crate::api;
-use crate::editor::{changes, new_task, EditorValues, TaskEditor};
+use crate::editor::{add_from_editor, changes, EditorValues, TaskEditor};
 
 /// Pixels of indentation per sub-task level.
 const INDENT: usize = 28;
@@ -92,12 +92,20 @@ pub fn TaskRow(
     let mut sub_defaults =
         EditorValues::blank(task.project_id.clone(), task.section_id.clone(), String::new(), Vec::new());
     sub_defaults.parent_id = Some(task.id.clone());
+    let (sub_projects, sub_sections, sub_labels) = (projects.clone(), sections.clone(), labels.clone());
     let sub_indent = format!("margin-left: {}px;", (depth + 1) * INDENT);
     let collapsed = task.is_collapsed;
     let id_collapse = task.id.clone();
 
     let due = views::due_date_of(&task)
-        .map(|d| (due_class(views::due_bucket(d, today)), views::due_label(d, today)));
+        .map(|d| {
+            let label = views::due_label(d, today);
+            let label = match views::due_time(&task) {
+                Some(t) => format!("{label} {}", views::time_label(t)),
+                None => label,
+            };
+            (due_class(views::due_bucket(d, today)), label)
+        });
     let recurring = task.due.as_ref().is_some_and(|d| d.is_recurring);
     let streak_on = task.streak_enabled;
     let goal = task.streak_goal;
@@ -248,9 +256,11 @@ pub fn TaskRow(
                     labels,
                     keep_label: None,
                     submit_text: "Add sub-task".to_string(),
+                    quick_add: true,
                     on_submit: move |v: EditorValues| {
+                        let (p, s, l) = (sub_projects.clone(), sub_sections.clone(), sub_labels.clone());
                         spawn(async move {
-                            let _ = api::add_task(new_task(&v)).await;
+                            add_from_editor(v, p, s, l).await;
                             adding_sub.set(false);
                             reload += 1;
                         });

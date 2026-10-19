@@ -175,6 +175,13 @@ button, input, select { font-family: inherit; color: inherit; }
 .chip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 6px;
   border: 1px solid var(--chip-border); border-radius: 5px; font-size: 12px; color: var(--subtle); background: var(--chip-bg); }
 .chip input, .chip select { border: none; outline: none; background: transparent; font-size: 12px; color: var(--chip-text); }
+.quick-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 2px 0 6px; font-size: 12px; }
+.quick-label { color: var(--muted); }
+.quick-chip { padding: 1px 6px; border-radius: 4px; background: var(--chip-bg); color: var(--chip-text); }
+.quick-chip.chip-date { color: #058527; }
+.quick-chip.chip-priority { color: #d1453b; }
+.quick-chip.chip-project { color: #246fe0; }
+.quick-chip.chip-label { color: #eb8909; }
 .chip select option { background: var(--chip-bg); color: var(--chip-text); }
 .editor-footer { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--divider); padding: 10px 0; }
 .btn { border: none; border-radius: 5px; padding: 7px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
