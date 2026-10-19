@@ -81,6 +81,10 @@ pub enum Action {
     TaskComplete {
         id: Id,
     },
+    /// Reopen a completed task.
+    TaskUncomplete {
+        id: Id,
+    },
     TaskDelete {
         id: Id,
     },
@@ -96,6 +100,12 @@ pub enum Action {
     LabelAdd {
         name: String,
     },
+    /// Rename a label (and on every task). Renaming onto an existing label's
+    /// name merges the two.
+    LabelUpdate {
+        id: Id,
+        name: String,
+    },
     /// Soft-delete a label and strip its name from every task.
     LabelDelete {
         id: Id,
@@ -103,6 +113,12 @@ pub enum Action {
     ProjectAdd {
         name: String,
     },
+    /// Rename a project. No-op for the Inbox.
+    ProjectUpdate {
+        id: Id,
+        name: String,
+    },
+    /// Soft-delete a project and its tasks. No-op for the Inbox.
     ProjectDelete {
         id: Id,
     },
@@ -114,11 +130,14 @@ impl Action {
             Action::TaskAdd { .. } => "task_add",
             Action::TaskUpdate { .. } => "task_update",
             Action::TaskComplete { .. } => "task_complete",
+            Action::TaskUncomplete { .. } => "task_uncomplete",
             Action::TaskDelete { .. } => "task_delete",
             Action::TaskSetStreak { .. } => "task_set_streak",
             Action::LabelAdd { .. } => "label_add",
+            Action::LabelUpdate { .. } => "label_update",
             Action::LabelDelete { .. } => "label_delete",
             Action::ProjectAdd { .. } => "project_add",
+            Action::ProjectUpdate { .. } => "project_update",
             Action::ProjectDelete { .. } => "project_delete",
         }
     }
@@ -349,14 +368,69 @@ pub fn apply_at<R: Repository>(
                 result.id_mapping.insert(temp, project.id.clone());
             }
         }
+        Action::ProjectUpdate { id, name } => {
+            let name = name.trim().to_string();
+            if let Some(mut project) = repo.get_project(&id)? {
+                if !project.is_inbox && !name.is_empty() {
+                    project.name = name;
+                    project.updated_at = Utc::now();
+                    repo.upsert_project(&project)?;
+                }
+            }
+        }
         Action::ProjectDelete { id } => {
             if let Some(mut project) = repo.get_project(&id)? {
+                if project.is_inbox {
+                    return finish(repo, &cmd.uuid, type_name, &args_json, result);
+                }
                 project.is_deleted = true;
                 project.updated_at = Utc::now();
                 repo.upsert_project(&project)?;
             }
             for task in repo.list_tasks(&id)? {
                 repo.soft_delete_task(&task.id)?;
+            }
+        }
+        Action::TaskUncomplete { id } => {
+            if let Some(mut task) = repo.get_task(&id)? {
+                task.checked = false;
+                task.completed_at = None;
+                task.updated_at = Utc::now();
+                repo.upsert_task(&task)?;
+            }
+        }
+        Action::LabelUpdate { id, name } => {
+            let name = name.trim().to_string();
+            let labels = repo.list_labels()?;
+            if let (Some(mut label), false) = (labels.iter().find(|l| l.id == id).cloned(), name.is_empty()) {
+                let old = label.name.clone();
+                // Renaming onto another label's name merges into that label.
+                let target = labels
+                    .iter()
+                    .find(|l| l.id != id && l.name.eq_ignore_ascii_case(&name))
+                    .map(|l| l.name.clone());
+                let new_name = target.clone().unwrap_or_else(|| name.clone());
+                for mut task in repo.list_all_tasks()? {
+                    if !task.labels.iter().any(|n| n.eq_ignore_ascii_case(&old)) {
+                        continue;
+                    }
+                    let mut renamed: Vec<String> = Vec::new();
+                    for n in task.labels.drain(..) {
+                        let n = if n.eq_ignore_ascii_case(&old) { new_name.clone() } else { n };
+                        if !renamed.iter().any(|r| r.eq_ignore_ascii_case(&n)) {
+                            renamed.push(n);
+                        }
+                    }
+                    task.labels = renamed;
+                    task.updated_at = Utc::now();
+                    repo.upsert_task(&task)?;
+                }
+                if target.is_some() {
+                    label.is_deleted = true;
+                } else {
+                    label.name = new_name;
+                }
+                repo.upsert_label(&label)?;
             }
         }
     }
