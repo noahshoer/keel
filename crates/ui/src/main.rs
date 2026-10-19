@@ -53,6 +53,7 @@ fn App() -> Element {
                                             labels: None,
                                             parent_id: None,
                                             section_id: None,
+                                            recurrence: None,
                                         },
                                     };
                                     let _ = api::dispatch(&cmd).await;
