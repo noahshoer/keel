@@ -44,6 +44,21 @@ fn label_view(state: tauri::State<'_, AppService>, name: String) -> Result<Vec<T
 }
 
 #[tauri::command(rename_all = "snake_case")]
+fn completed_today(state: tauri::State<'_, AppService>) -> Result<Vec<Task>, String> {
+    state.completed_today().map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+fn completed_in_project(state: tauri::State<'_, AppService>, project_id: String) -> Result<Vec<Task>, String> {
+    state.completed_in_project(&project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+fn completed_with_label(state: tauri::State<'_, AppService>, name: String) -> Result<Vec<Task>, String> {
+    state.completed_with_label(&name).map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
 fn dispatch(state: tauri::State<'_, AppService>, cmd: Command) -> Result<ApplyResult, String> {
     state.dispatch(cmd).map_err(|e| e.to_string())
 }
@@ -72,6 +87,9 @@ pub fn run() {
             project_view,
             list_labels,
             label_view,
+            completed_today,
+            completed_in_project,
+            completed_with_label,
             dispatch
         ])
         .run(tauri::generate_context!())

@@ -200,6 +200,25 @@ button, input, select { font-family: inherit; color: inherit; }
 .label-new { width: 100%; margin-top: 6px; padding: 5px 6px; font-size: 12px; border: 1px solid var(--border);
   border-radius: 4px; outline: none; background: var(--bg); }
 
+/* Completed tasks + sidebar management */
+.view-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.view-toggle { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; cursor: pointer;
+  color: var(--muted); font-size: 13px; padding: 4px 8px; border-radius: 5px; }
+.view-toggle:hover { background: var(--icon-hover); color: var(--text); }
+.check.done { background: var(--muted); border: 1px solid var(--muted); color: var(--bg); }
+.check.done .icon { opacity: 1; }
+.task.completed .task-content { text-decoration: line-through; color: var(--muted); }
+.task.completed .task-body { cursor: default; }
+.done-when { color: var(--muted); }
+.nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-actions { display: none; gap: 0; }
+.nav-item:hover .nav-actions { display: inline-flex; }
+.nav-actions .icon-btn { padding: 2px; }
+.confirm-box { margin: 4px 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+.confirm-text { font-size: 12px; margin-bottom: 8px; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.confirm-actions .btn { padding: 5px 10px; font-size: 12px; }
+
 .empty { text-align: center; color: var(--muted); padding: 56px 0 24px; }
 .empty .big { font-size: 15px; color: var(--text); font-weight: 600; margin-bottom: 4px; }
 .error { color: var(--due-overdue); padding: 24px; }

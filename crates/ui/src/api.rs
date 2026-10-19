@@ -188,3 +188,35 @@ pub async fn update_task(id: Id, p: TaskPatch) -> Result<ApplyResult, String> {
     ))
     .await
 }
+
+pub async fn completed_today() -> Result<Vec<Task>, String> {
+    invoke("completed_today", &NoArgs {}).await
+}
+
+pub async fn completed_in_project(project_id: &str) -> Result<Vec<Task>, String> {
+    invoke("completed_in_project", &ProjectArg { project_id }).await
+}
+
+pub async fn completed_with_label(name: &str) -> Result<Vec<Task>, String> {
+    invoke("completed_with_label", &NameArg { name }).await
+}
+
+pub async fn uncomplete_task(id: Id) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::TaskUncomplete { id }, false)).await
+}
+
+pub async fn rename_project(id: Id, name: String) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::ProjectUpdate { id, name }, false)).await
+}
+
+pub async fn delete_project(id: Id) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::ProjectDelete { id }, false)).await
+}
+
+pub async fn rename_label(id: Id, name: String) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::LabelUpdate { id, name }, false)).await
+}
+
+pub async fn delete_label(id: Id) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::LabelDelete { id }, false)).await
+}
