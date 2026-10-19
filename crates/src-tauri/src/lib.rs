@@ -6,17 +6,19 @@ use todo_core::commands::{ApplyResult, Command};
 use todo_core::model::{Project, Task};
 use todo_service::AppService;
 
-#[tauri::command]
+// `rename_all = "snake_case"` so top-level command arg names stay snake_case
+// end-to-end (Tauri v2 camelCases them by default). Frontend sends snake_case.
+#[tauri::command(rename_all = "snake_case")]
 fn list_projects(state: tauri::State<'_, AppService>) -> Result<Vec<Project>, String> {
     state.list_projects().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 fn list_tasks(state: tauri::State<'_, AppService>, project_id: String) -> Result<Vec<Task>, String> {
     state.list_tasks(&project_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 fn dispatch(state: tauri::State<'_, AppService>, cmd: Command) -> Result<ApplyResult, String> {
     state.dispatch(cmd).map_err(|e| e.to_string())
 }
