@@ -4,7 +4,7 @@ use chrono::{Local, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
-use crate::model::{Due, Label, Priority, Project, Section, Task};
+use crate::model::{Due, Filter, Label, Priority, Project, Section, Task};
 use crate::recurrence::Recurrence;
 use crate::repository::{RepoError, Repository};
 use crate::streak;
@@ -135,6 +135,21 @@ pub enum Action {
     ProjectAdd {
         name: String,
     },
+    /// Save a filter (name + query; the query is validated by the UI/service).
+    FilterAdd {
+        name: String,
+        query: String,
+    },
+    FilterUpdate {
+        id: Id,
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        query: Option<String>,
+    },
+    FilterDelete {
+        id: Id,
+    },
     /// Rename a project. No-op for the Inbox.
     ProjectUpdate {
         id: Id,
@@ -163,6 +178,9 @@ impl Action {
             Action::LabelUpdate { .. } => "label_update",
             Action::LabelDelete { .. } => "label_delete",
             Action::ProjectAdd { .. } => "project_add",
+            Action::FilterAdd { .. } => "filter_add",
+            Action::FilterUpdate { .. } => "filter_update",
+            Action::FilterDelete { .. } => "filter_delete",
             Action::ProjectUpdate { .. } => "project_update",
             Action::ProjectDelete { .. } => "project_delete",
         }
@@ -442,6 +460,31 @@ pub fn apply_at<R: Repository>(
             repo.upsert_project(&project)?;
             if let Some(temp) = cmd.temp_id {
                 result.id_mapping.insert(temp, project.id.clone());
+            }
+        }
+        Action::FilterAdd { name, query } => {
+            let order = repo.list_filters()?.len() as i64;
+            let filter = Filter::new(name.trim(), query.trim(), order);
+            repo.upsert_filter(&filter)?;
+            if let Some(temp) = cmd.temp_id {
+                result.id_mapping.insert(temp, filter.id.clone());
+            }
+        }
+        Action::FilterUpdate { id, name, query } => {
+            if let Some(mut filter) = repo.list_filters()?.into_iter().find(|f| f.id == id) {
+                if let Some(n) = name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()) {
+                    filter.name = n;
+                }
+                if let Some(q) = query.map(|q| q.trim().to_string()).filter(|q| !q.is_empty()) {
+                    filter.query = q;
+                }
+                repo.upsert_filter(&filter)?;
+            }
+        }
+        Action::FilterDelete { id } => {
+            if let Some(mut filter) = repo.list_filters()?.into_iter().find(|f| f.id == id) {
+                filter.is_deleted = true;
+                repo.upsert_filter(&filter)?;
             }
         }
         Action::ProjectUpdate { id, name } => {

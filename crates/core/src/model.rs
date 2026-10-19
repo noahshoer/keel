@@ -237,6 +237,20 @@ impl Section {
     }
 }
 
+impl Filter {
+    pub fn new(name: impl Into<String>, query: impl Into<String>, item_order: i64) -> Filter {
+        Filter {
+            id: Id::new(),
+            name: name.into(),
+            query: query.into(),
+            color: "charcoal".to_string(),
+            item_order,
+            is_favorite: false,
+            is_deleted: false,
+        }
+    }
+}
+
 impl Label {
     pub fn new(name: impl Into<String>) -> Label {
         Label {
