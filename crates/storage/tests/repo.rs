@@ -64,6 +64,29 @@ fn floating_due_stored_as_null_tz() {
 }
 
 #[test]
+fn soft_delete_cascades_to_grandchildren() {
+    let (_d, repo) = temp_db();
+    let project = Id::new();
+    let mut parent = Task::new("parent", project.clone());
+    let mut child = Task::new("child", project.clone());
+    child.parent_id = Some(parent.id.clone());
+    let mut grandchild = Task::new("grandchild", project.clone());
+    grandchild.parent_id = Some(child.id.clone());
+    parent.child_order = 0;
+    repo.upsert_task(&parent).unwrap();
+    repo.upsert_task(&child).unwrap();
+    repo.upsert_task(&grandchild).unwrap();
+    assert_eq!(repo.list_tasks(&project).unwrap().len(), 3);
+
+    repo.soft_delete_task(&parent.id).unwrap();
+
+    assert!(
+        repo.list_tasks(&project).unwrap().is_empty(),
+        "deleting a task soft-deletes the whole sub-tree (children and grandchildren)"
+    );
+}
+
+#[test]
 fn list_tasks_filters_by_project_and_excludes_deleted() {
     let (_d, repo) = temp_db();
     let proj_a = Id::new();

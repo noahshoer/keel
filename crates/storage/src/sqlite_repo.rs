@@ -244,9 +244,15 @@ impl Repository for SqliteRepo {
     fn soft_delete_task(&self, id: &Id) -> Result<(), RepoError> {
         let conn = self.conn.lock().map_err(backend)?;
         let now = ts(&Utc::now());
-        // Soft-delete the task and its direct sub-tasks.
+        // Soft-delete the task and its entire sub-tree (children, grandchildren, …).
         conn.execute(
-            "UPDATE task SET is_deleted = 1, updated_at = ?2 WHERE id = ?1 OR parent_id = ?1",
+            "UPDATE task SET is_deleted = 1, updated_at = ?2 WHERE id IN (\
+                 WITH RECURSIVE sub(id) AS (\
+                     SELECT ?1 \
+                     UNION ALL \
+                     SELECT t.id FROM task t JOIN sub ON t.parent_id = sub.id\
+                 ) SELECT id FROM sub\
+             )",
             params![id.as_str(), now],
         )
         .map_err(backend)?;
