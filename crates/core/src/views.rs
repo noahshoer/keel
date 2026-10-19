@@ -4,6 +4,7 @@
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
+use crate::ids::Id;
 use crate::model::Task;
 
 /// Which colored due chip a date gets, relative to today.
@@ -52,6 +53,60 @@ pub fn due_label(due: NaiveDate, today: NaiveDate) -> String {
             }
         }
     }
+}
+
+/// A task positioned in a nested (sub-task) display.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Nested {
+    pub task: Task,
+    pub depth: usize,
+    /// True when the task has sub-tasks in this list (shown or collapsed).
+    pub has_children: bool,
+}
+
+/// Orders a flat list for display: each sub-task follows its parent (depth+1),
+/// siblings keep their input order, collapsed tasks hide their descendants, and
+/// a sub-task whose parent isn't in the list shows at top level.
+pub fn nest(tasks: Vec<Task>) -> Vec<Nested> {
+    use std::collections::{HashMap, HashSet};
+
+    let present: HashSet<&Id> = tasks.iter().map(|t| &t.id).collect();
+    let mut children: HashMap<&Id, Vec<usize>> = HashMap::new();
+    let mut roots = Vec::new();
+    for (i, t) in tasks.iter().enumerate() {
+        match &t.parent_id {
+            Some(p) if p != &t.id && present.contains(p) => children.entry(p).or_default().push(i),
+            _ => roots.push(i),
+        }
+    }
+
+    fn visit<'a>(
+        i: usize,
+        depth: usize,
+        tasks: &'a [Task],
+        children: &HashMap<&'a Id, Vec<usize>>,
+        seen: &mut HashSet<usize>,
+        out: &mut Vec<Nested>,
+    ) {
+        if !seen.insert(i) {
+            return; // cycle guard
+        }
+        let task = &tasks[i];
+        let kids = children.get(&task.id).map(Vec::as_slice).unwrap_or(&[]);
+        out.push(Nested { task: task.clone(), depth, has_children: !kids.is_empty() });
+        if !task.is_collapsed {
+            for &k in kids {
+                visit(k, depth + 1, tasks, children, seen, out);
+            }
+        }
+    }
+
+    let mut out = Vec::with_capacity(tasks.len());
+    let mut seen = HashSet::new();
+    for &r in &roots {
+        visit(r, 0, &tasks, &children, &mut seen, &mut out);
+    }
+    out
 }
 
 /// The calendar date of a task's due (`YYYY-MM-DD` or a datetime string).
@@ -115,5 +170,69 @@ mod tests {
             recurrence: None,
         });
         assert_eq!(due_date_of(&t), Some(d(2026, 10, 19)));
+    }
+}
+
+#[cfg(test)]
+mod nest_tests {
+    use super::nest;
+    use crate::ids::Id;
+    use crate::model::Task;
+
+    fn t(name: &str, parent: Option<&Task>) -> Task {
+        let mut task = Task::new(name, Id::from("P"));
+        task.parent_id = parent.map(|p| p.id.clone());
+        task
+    }
+
+    fn shape(tasks: Vec<Task>) -> Vec<(String, usize, bool)> {
+        nest(tasks).into_iter().map(|n| (n.task.content, n.depth, n.has_children)).collect()
+    }
+
+    #[test]
+    fn nests_children_under_parents_in_order() {
+        let a = t("a", None);
+        let b = t("b", None);
+        let a1 = t("a1", Some(&a));
+        let a2 = t("a2", Some(&a));
+        // Input is flat and interleaved; children follow their parent, in input order.
+        let got = shape(vec![a1.clone(), b.clone(), a.clone(), a2.clone()]);
+        assert_eq!(
+            got,
+            vec![
+                ("b".into(), 0, false),
+                ("a".into(), 0, true),
+                ("a1".into(), 1, false),
+                ("a2".into(), 1, false),
+            ]
+        );
+    }
+
+    #[test]
+    fn grandchildren_depth_2() {
+        let a = t("a", None);
+        let a1 = t("a1", Some(&a));
+        let a1x = t("a1x", Some(&a1));
+        let got = shape(vec![a, a1, a1x]);
+        assert_eq!(got[2], ("a1x".into(), 2, false));
+        assert!(got[1].2, "a1 has children");
+    }
+
+    #[test]
+    fn collapsed_hides_descendants() {
+        let mut a = t("a", None);
+        let a1 = t("a1", Some(&a));
+        let a1x = t("a1x", Some(&a1));
+        let b = t("b", None);
+        a.is_collapsed = true;
+        let got = shape(vec![a, a1, a1x, b]);
+        assert_eq!(got, vec![("a".into(), 0, true), ("b".into(), 0, false)]);
+    }
+
+    #[test]
+    fn orphan_child_is_top_level() {
+        let missing_parent = t("gone", None);
+        let orphan = t("orphan", Some(&missing_parent));
+        assert_eq!(shape(vec![orphan]), vec![("orphan".into(), 0, false)]);
     }
 }

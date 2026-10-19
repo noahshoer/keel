@@ -5,7 +5,7 @@
 use chrono::{Local, NaiveDate};
 use todo_core::commands::{apply_at, ApplyResult, Command};
 use todo_core::ids::Id;
-use todo_core::model::{Label, Project, Task};
+use todo_core::model::{Label, Project, Section, Task};
 use todo_core::repository::{RepoError, Repository};
 use todo_core::streak;
 use todo_core::views;
@@ -159,6 +159,10 @@ impl AppService {
             t.completed_at
                 .is_some_and(|c| c.with_timezone(&Local).date_naive() == today)
         })
+    }
+
+    pub fn list_sections(&self, project_id: &str) -> Result<Vec<Section>, RepoError> {
+        self.repo.list_sections(&Id::from(project_id))
     }
 
     pub fn list_labels(&self) -> Result<Vec<Label>, RepoError> {

@@ -69,6 +69,7 @@ fn noop(id: &Id) -> Action {
         project_id: None,
         labels: None,
         due: None,
+        is_collapsed: None,
     }
 }
 
@@ -89,6 +90,7 @@ fn update_content_only_keeps_everything_else() {
             project_id: None,
             labels: None,
             due: None,
+            is_collapsed: None,
         },
         mon(),
     );
@@ -117,6 +119,7 @@ fn update_sets_date_priority_project_labels() {
             project_id: Some(other.clone()),
             labels: Some(vec!["work".into(), "deep".into()]),
             due: Some(DueEdit { date: Some("2026-02-01".into()), recurrence: None }),
+            is_collapsed: None,
         },
         mon(),
     );

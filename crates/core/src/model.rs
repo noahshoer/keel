@@ -218,6 +218,25 @@ pub struct Label {
     pub is_deleted: bool,
 }
 
+impl Section {
+    pub fn new(project_id: Id, name: impl Into<String>, section_order: i64) -> Section {
+        let now = Utc::now();
+        Section {
+            id: Id::new(),
+            project_id,
+            name: name.into(),
+            description: None,
+            section_order,
+            order_key: None,
+            is_collapsed: false,
+            is_archived: false,
+            is_deleted: false,
+            added_at: now,
+            updated_at: now,
+        }
+    }
+}
+
 impl Label {
     pub fn new(name: impl Into<String>) -> Label {
         Label {

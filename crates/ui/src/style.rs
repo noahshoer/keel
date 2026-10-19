@@ -219,6 +219,24 @@ button, input, select { font-family: inherit; color: inherit; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .confirm-actions .btn { padding: 5px 10px; font-size: 12px; }
 
+/* Sub-tasks + sections */
+.task { position: relative; }
+.chevron { position: absolute; left: -24px; top: 10px; width: 20px; height: 20px; padding: 0;
+  border: none; background: none; color: var(--muted); cursor: pointer; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center; transition: transform .12s; }
+.chevron:hover { background: var(--icon-hover); color: var(--text); }
+.chevron.collapsed { transform: rotate(-90deg); }
+.section-block { margin-top: 18px; }
+.section-row { position: relative; }
+.section-actions { display: none; margin-left: auto; gap: 2px; }
+.section-row:hover .section-actions { display: inline-flex; }
+.section-rename { padding: 14px 0 6px; }
+.add-section-row { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding: 6px 0;
+  color: var(--accent); cursor: pointer; opacity: .55; transition: opacity .12s; }
+.add-section-row:hover { opacity: 1; }
+.add-section-line { flex: 1; height: 1px; background: var(--accent); }
+.add-section-label { font-size: 13px; font-weight: 600; }
+
 .empty { text-align: center; color: var(--muted); padding: 56px 0 24px; }
 .empty .big { font-size: 15px; color: var(--text); font-weight: 600; margin-bottom: 4px; }
 .error { color: var(--due-overdue); padding: 24px; }

@@ -4,7 +4,7 @@ use chrono::{Local, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
-use crate::model::{Due, Label, Priority, Project, Task};
+use crate::model::{Due, Label, Priority, Project, Section, Task};
 use crate::recurrence::Recurrence;
 use crate::repository::{RepoError, Repository};
 use crate::streak;
@@ -77,8 +77,30 @@ pub enum Action {
         /// `None` keeps the due; `Some(DueEdit { date: None, recurrence: None })` clears it.
         #[serde(default)]
         due: Option<DueEdit>,
+        /// Collapse/expand the task's sub-tasks.
+        #[serde(default)]
+        is_collapsed: Option<bool>,
+    },
+    /// Move a task (and its whole sub-tree) to a project, optionally a section.
+    TaskMove {
+        id: Id,
+        project_id: Id,
+        #[serde(default)]
+        section_id: Option<Id>,
     },
     TaskComplete {
+        id: Id,
+    },
+    SectionAdd {
+        project_id: Id,
+        name: String,
+    },
+    SectionUpdate {
+        id: Id,
+        name: String,
+    },
+    /// Soft-delete a section and the tasks in it.
+    SectionDelete {
         id: Id,
     },
     /// Reopen a completed task.
@@ -132,6 +154,10 @@ impl Action {
             Action::TaskComplete { .. } => "task_complete",
             Action::TaskUncomplete { .. } => "task_uncomplete",
             Action::TaskDelete { .. } => "task_delete",
+            Action::TaskMove { .. } => "task_move",
+            Action::SectionAdd { .. } => "section_add",
+            Action::SectionUpdate { .. } => "section_update",
+            Action::SectionDelete { .. } => "section_delete",
             Action::TaskSetStreak { .. } => "task_set_streak",
             Action::LabelAdd { .. } => "label_add",
             Action::LabelUpdate { .. } => "label_update",
@@ -273,10 +299,52 @@ pub fn apply_at<R: Repository>(
                     None => {
                         task.checked = true;
                         task.completed_at = Some(now);
+                        // Sub-tasks complete with their parent (recurring ones
+                        // are left as they are).
+                        for mut child in descendants(repo, &task.id)? {
+                            let child_recurring = child.due.as_ref().is_some_and(|d| d.is_recurring);
+                            if !child.checked && !child_recurring {
+                                child.checked = true;
+                                child.completed_at = Some(now);
+                                child.updated_at = now;
+                                repo.upsert_task(&child)?;
+                            }
+                        }
                     }
                 }
                 task.updated_at = now;
                 repo.upsert_task(&task)?;
+            }
+        }
+        Action::TaskMove { id, project_id, section_id } => {
+            move_subtree(repo, &id, &project_id, section_id.as_ref())?;
+        }
+        Action::SectionAdd { project_id, name } => {
+            let order = repo.list_sections(&project_id)?.len() as i64;
+            let section = Section::new(project_id, name.trim(), order);
+            repo.upsert_section(&section)?;
+            if let Some(temp) = cmd.temp_id {
+                result.id_mapping.insert(temp, section.id.clone());
+            }
+        }
+        Action::SectionUpdate { id, name } => {
+            let name = name.trim().to_string();
+            if let (Some(mut section), false) = (repo.get_section(&id)?, name.is_empty()) {
+                section.name = name;
+                section.updated_at = Utc::now();
+                repo.upsert_section(&section)?;
+            }
+        }
+        Action::SectionDelete { id } => {
+            if let Some(mut section) = repo.get_section(&id)? {
+                for task in repo.list_tasks(&section.project_id)? {
+                    if task.section_id.as_ref() == Some(&id) {
+                        repo.soft_delete_task(&task.id)?;
+                    }
+                }
+                section.is_deleted = true;
+                section.updated_at = Utc::now();
+                repo.upsert_section(&section)?;
             }
         }
         Action::TaskUpdate {
@@ -287,7 +355,15 @@ pub fn apply_at<R: Repository>(
             project_id,
             labels,
             due,
+            is_collapsed,
         } => {
+            // A project change is a move: the sub-tree follows and the
+            // section (which belongs to the old project) is cleared.
+            if let Some(p) = &project_id {
+                if repo.get_task(&id)?.is_some_and(|t| &t.project_id != p) {
+                    move_subtree(repo, &id, p, None)?;
+                }
+            }
             if let Some(mut task) = repo.get_task(&id)? {
                 if let Some(c) = content {
                     task.content = c;
@@ -298,8 +374,8 @@ pub fn apply_at<R: Repository>(
                 if let Some(p) = priority {
                     task.priority = p;
                 }
-                if let Some(p) = project_id {
-                    task.project_id = p;
+                if let Some(c) = is_collapsed {
+                    task.is_collapsed = c;
                 }
                 if let Some(l) = labels {
                     task.labels = l;
@@ -436,6 +512,40 @@ pub fn apply_at<R: Repository>(
     }
 
     finish(repo, &cmd.uuid, type_name, &args_json, result)
+}
+
+/// Every task below `id` (children, grandchildren, …), non-deleted.
+fn descendants<R: Repository>(repo: &R, id: &Id) -> Result<Vec<Task>, RepoError> {
+    let all = repo.list_all_tasks()?;
+    let mut out = Vec::new();
+    let mut frontier = vec![id.clone()];
+    while let Some(parent) = frontier.pop() {
+        for t in all.iter().filter(|t| t.parent_id.as_ref() == Some(&parent)) {
+            if !out.iter().any(|o: &Task| o.id == t.id) && t.id != *id {
+                frontier.push(t.id.clone());
+                out.push(t.clone());
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Moves a task and its whole sub-tree to `project_id` / `section_id`.
+fn move_subtree<R: Repository>(
+    repo: &R,
+    id: &Id,
+    project_id: &Id,
+    section_id: Option<&Id>,
+) -> Result<(), RepoError> {
+    let Some(root) = repo.get_task(id)? else { return Ok(()) };
+    let now = Utc::now();
+    for mut t in std::iter::once(root).chain(descendants(repo, id)?) {
+        t.project_id = project_id.clone();
+        t.section_id = section_id.cloned();
+        t.updated_at = now;
+        repo.upsert_task(&t)?;
+    }
+    Ok(())
 }
 
 fn finish<R: Repository>(

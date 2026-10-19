@@ -3,7 +3,7 @@
 //! bridges the webview to them.
 
 use todo_core::commands::{ApplyResult, Command};
-use todo_core::model::{Label, Project, Task};
+use todo_core::model::{Label, Project, Section, Task};
 use todo_service::AppService;
 
 // `rename_all = "snake_case"` so top-level command arg names stay snake_case
@@ -59,6 +59,11 @@ fn completed_with_label(state: tauri::State<'_, AppService>, name: String) -> Re
 }
 
 #[tauri::command(rename_all = "snake_case")]
+fn list_sections(state: tauri::State<'_, AppService>, project_id: String) -> Result<Vec<Section>, String> {
+    state.list_sections(&project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
 fn dispatch(state: tauri::State<'_, AppService>, cmd: Command) -> Result<ApplyResult, String> {
     state.dispatch(cmd).map_err(|e| e.to_string())
 }
@@ -90,6 +95,7 @@ pub fn run() {
             completed_today,
             completed_in_project,
             completed_with_label,
+            list_sections,
             dispatch
         ])
         .run(tauri::generate_context!())

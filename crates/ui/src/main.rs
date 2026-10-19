@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use chrono::{Datelike, NaiveDate};
 use dioxus::prelude::*;
 use todo_core::ids::Id;
-use todo_core::model::{Label, Project, Task};
+use todo_core::model::{Label, Project, Section, Task};
 use todo_core::views;
 
 use editor::{AddTask, EditorValues};
@@ -60,6 +60,8 @@ fn main() {
 #[derive(Clone, PartialEq)]
 struct Loaded {
     projects: Vec<Project>,
+    /// Sections of every project (for grouping and the editor's location picker).
+    sections: Vec<Section>,
     labels: Vec<Label>,
     inbox: Project,
     today_count: usize,
@@ -68,69 +70,54 @@ struct Loaded {
     completed: Vec<Task>,
 }
 
+/// A titled run of tasks in the date-based views.
 #[derive(Clone, PartialEq)]
-struct Section {
+struct Group {
     title: Option<String>,
     muted: String,
     tasks: Vec<Task>,
 }
 
-/// Splits a view's tasks into Todoist-style sections.
-fn sections(view: &View, tasks: Vec<Task>, today: NaiveDate) -> Vec<Section> {
+/// Splits Today / Upcoming into Todoist-style date groups.
+fn date_groups(view: &View, tasks: Vec<Task>, today: NaiveDate) -> Vec<Group> {
+    let (overdue, rest): (Vec<Task>, Vec<Task>) = tasks
+        .into_iter()
+        .partition(|t| views::due_date_of(t).is_some_and(|d| d < today));
+    let mut out = Vec::new();
+    let split = !overdue.is_empty();
+    if split {
+        out.push(Group { title: Some("Overdue".into()), muted: String::new(), tasks: overdue });
+    }
     match view {
         View::Today => {
-            let (overdue, due_today): (Vec<Task>, Vec<Task>) = tasks
-                .into_iter()
-                .partition(|t| views::due_date_of(t).is_some_and(|d| d < today));
-            let mut out = Vec::new();
-            let split = !overdue.is_empty();
-            if split {
-                out.push(Section { title: Some("Overdue".into()), muted: String::new(), tasks: overdue });
-            }
-            if !due_today.is_empty() {
-                out.push(Section {
+            if !rest.is_empty() {
+                out.push(Group {
                     title: split.then(|| "Today".to_string()),
                     muted: if split { format!("{} · {}", short_date(today), weekday(today)) } else { String::new() },
-                    tasks: due_today,
+                    tasks: rest,
                 });
             }
-            out
         }
-        View::Upcoming => {
-            // Overdue first (Todoist lists it at the top of Upcoming).
-            let (overdue, upcoming): (Vec<Task>, Vec<Task>) = tasks
-                .into_iter()
-                .partition(|t| views::due_date_of(t).is_some_and(|d| d < today));
-            let mut sections = Vec::new();
-            if !overdue.is_empty() {
-                sections.push(Section { title: Some("Overdue".into()), muted: String::new(), tasks: overdue });
-            }
-            let mut out: Vec<(NaiveDate, Vec<Task>)> = Vec::new();
-            for t in upcoming {
+        _ => {
+            let mut days: Vec<(NaiveDate, Vec<Task>)> = Vec::new();
+            for t in rest {
                 let Some(d) = views::due_date_of(&t) else { continue };
-                match out.last_mut() {
+                match days.last_mut() {
                     Some((last, group)) if *last == d => group.push(t),
-                    _ => out.push((d, vec![t])),
+                    _ => days.push((d, vec![t])),
                 }
             }
-            sections.extend(out.into_iter().map(|(d, tasks)| {
+            out.extend(days.into_iter().map(|(d, tasks)| {
                 let rel = match (d - today).num_days() {
                     0 => "Today · ",
                     1 => "Tomorrow · ",
                     _ => "",
                 };
-                Section { title: Some(short_date(d)), muted: format!("{rel}{}", weekday(d)), tasks }
+                Group { title: Some(short_date(d)), muted: format!("{rel}{}", weekday(d)), tasks }
             }));
-            sections
-        }
-        View::Inbox | View::Project(..) | View::Label(_) => {
-            if tasks.is_empty() {
-                Vec::new()
-            } else {
-                vec![Section { title: None, muted: String::new(), tasks }]
-            }
         }
     }
+    out
 }
 
 #[component]
@@ -150,6 +137,10 @@ fn App() -> Element {
             .find(|p| p.is_inbox)
             .cloned()
             .ok_or_else(|| "no inbox project".to_string())?;
+        let mut sections = Vec::new();
+        for p in &projects {
+            sections.extend(api::list_sections(p.id.as_str()).await?);
+        }
         let labels = api::list_labels().await?;
         let today_tasks = api::today_view().await?;
         let today_count = today_tasks.len();
@@ -169,7 +160,7 @@ fn App() -> Element {
             View::Project(id, _) => api::project_view(id.as_str()).await?,
             View::Label(name) => api::label_view(name).await?,
         };
-        // Completed tasks are hidden unless this view's toggle is on.
+        // Completed tasks are hidden unless the toggle is on.
         let completed = if show_completed() {
             match &v {
                 View::Today => api::completed_today().await?,
@@ -181,7 +172,7 @@ fn App() -> Element {
         } else {
             Vec::new()
         };
-        Ok::<Loaded, String>(Loaded { projects, labels, inbox, today_count, tasks, completed })
+        Ok::<Loaded, String>(Loaded { projects, sections, labels, inbox, today_count, tasks, completed })
     });
 
     let today = today();
@@ -215,6 +206,22 @@ fn App() -> Element {
     }
 }
 
+/// What a task row shows on the right: "Project" or "Project / Section".
+fn location_names(loaded: &Loaded) -> HashMap<Id, String> {
+    let projects: HashMap<&Id, &str> = loaded.projects.iter().map(|p| (&p.id, p.name.as_str())).collect();
+    let sections: HashMap<&Id, &str> = loaded.sections.iter().map(|s| (&s.id, s.name.as_str())).collect();
+    let all = loaded.tasks.iter().chain(loaded.completed.iter());
+    all.map(|t| {
+        let project = projects.get(&t.project_id).copied().unwrap_or("");
+        let label = match t.section_id.as_ref().and_then(|s| sections.get(s)) {
+            Some(section) => format!("{project} / {section}"),
+            None => project.to_string(),
+        };
+        (t.id.clone(), label)
+    })
+    .collect()
+}
+
 #[component]
 fn MainPane(
     view: View,
@@ -227,8 +234,7 @@ fn MainPane(
     // Upcoming has no completed list (Todoist hides that toggle there too).
     let can_show_completed = !matches!(view, View::Upcoming);
     let toggle_text = if show_completed() { "Hide completed" } else { "Show completed" };
-    let names: HashMap<Id, String> =
-        loaded.projects.iter().map(|p| (p.id.clone(), p.name.clone())).collect();
+    let names = location_names(&loaded);
     let show_project = matches!(view, View::Today | View::Upcoming | View::Label(_));
     let title = match &view {
         View::Today => "Today".to_string(),
@@ -241,9 +247,11 @@ fn MainPane(
         View::Upcoming => format!("Next {UPCOMING_DAYS} days"),
         _ => String::new(),
     };
-    let add_project = match &view {
-        View::Project(id, _) => id.clone(),
-        _ => loaded.inbox.id.clone(),
+    // The project a project-style view shows (Inbox or a project).
+    let project_id = match &view {
+        View::Project(id, _) => Some(id.clone()),
+        View::Inbox => Some(loaded.inbox.id.clone()),
+        _ => None,
     };
     let add_date = match &view {
         View::Today | View::Upcoming => today.format("%Y-%m-%d").to_string(),
@@ -253,15 +261,34 @@ fn MainPane(
         View::Label(name) => vec![name.clone()],
         _ => Vec::new(),
     };
-    let defaults = EditorValues::blank(add_project, add_date, add_labels);
+    let defaults = EditorValues::blank(
+        project_id.clone().unwrap_or_else(|| loaded.inbox.id.clone()),
+        None,
+        add_date,
+        add_labels,
+    );
     let view_key = format!("{view:?}");
     let empty = loaded.tasks.is_empty();
-    let secs = sections(&view, loaded.tasks.clone(), today);
     let empty_text = match &view {
         View::Today => ("You're all done for today!", "Enjoy the rest of your day."),
         View::Upcoming => ("Nothing scheduled.", "Tasks with dates in the next two weeks show up here."),
         _ => ("No tasks yet.", "Add one below."),
     };
+
+    // Project views: unsectioned tasks first, then each section's tasks.
+    let project_sections: Vec<Section> = match &project_id {
+        Some(pid) => loaded.sections.iter().filter(|s| &s.project_id == pid).cloned().collect(),
+        None => Vec::new(),
+    };
+    let in_section = |t: &Task, s: &Section| t.section_id.as_ref() == Some(&s.id);
+    let unsectioned: Vec<Task> = loaded
+        .tasks
+        .iter()
+        .filter(|t| !project_sections.iter().any(|s| in_section(t, s)))
+        .cloned()
+        .collect();
+    let date_view = matches!(view, View::Today | View::Upcoming);
+    let groups = if date_view { date_groups(&view, loaded.tasks.clone(), today) } else { Vec::new() };
 
     rsx! {
         main { class: "main",
@@ -281,39 +308,78 @@ fn MainPane(
                 if !subtitle.is_empty() {
                     p { class: "view-sub", "{subtitle}" }
                 }
-                if empty {
+                if empty && project_sections.is_empty() {
                     div { class: "empty",
                         div { class: "big", "{empty_text.0}" }
                         div { "{empty_text.1}" }
                     }
                 }
-                for (i, section) in secs.into_iter().enumerate() {
-                    div { key: "{i}",
-                        if let Some(t) = section.title.clone() {
-                            div { class: "section-title",
-                                "{t}"
-                                span { class: "muted", "{section.muted}" }
+                if date_view {
+                    for (i, group) in groups.into_iter().enumerate() {
+                        div { key: "{i}",
+                            if let Some(t) = group.title.clone() {
+                                div { class: "section-title",
+                                    "{t}"
+                                    span { class: "muted", "{group.muted}" }
+                                }
                             }
-                        }
-                        for task in section.tasks.clone() {
-                            TaskRow {
-                                key: "{task.id}",
-                                project_name: if show_project { names.get(&task.project_id).cloned() } else { None },
-                                task: task.clone(),
+                            TaskList {
+                                tasks: group.tasks.clone(),
+                                nested: false,
                                 today,
+                                names: names.clone(),
+                                show_project,
                                 projects: loaded.projects.clone(),
+                                sections: loaded.sections.clone(),
                                 labels: loaded.labels.clone(),
                                 reload,
                             }
                         }
                     }
-                }
-                AddTask {
-                    key: "{view_key}",
-                    defaults,
-                    projects: loaded.projects.clone(),
-                    labels: loaded.labels.clone(),
-                    reload,
+                    AddTask {
+                        key: "{view_key}",
+                        defaults: defaults.clone(),
+                        projects: loaded.projects.clone(),
+                        sections: loaded.sections.clone(),
+                        labels: loaded.labels.clone(),
+                        reload,
+                    }
+                } else {
+                    TaskList {
+                        tasks: unsectioned,
+                        nested: true,
+                        today,
+                        names: names.clone(),
+                        show_project,
+                        projects: loaded.projects.clone(),
+                        sections: loaded.sections.clone(),
+                        labels: loaded.labels.clone(),
+                        reload,
+                    }
+                    AddTask {
+                        key: "{view_key}",
+                        defaults: defaults.clone(),
+                        projects: loaded.projects.clone(),
+                        sections: loaded.sections.clone(),
+                        labels: loaded.labels.clone(),
+                        reload,
+                    }
+                    for section in project_sections.iter() {
+                        SectionBlock {
+                            key: "{section.id}",
+                            section: section.clone(),
+                            tasks: loaded.tasks.iter().filter(|t| in_section(t, section)).cloned().collect::<Vec<Task>>(),
+                            today,
+                            names: names.clone(),
+                            projects: loaded.projects.clone(),
+                            sections: loaded.sections.clone(),
+                            labels: loaded.labels.clone(),
+                            reload,
+                        }
+                    }
+                    if let Some(pid) = project_id.clone() {
+                        AddSection { key: "add-section-{pid}", project_id: pid, reload }
+                    }
                 }
                 if show_completed() && can_show_completed {
                     div { class: "section-title",
@@ -326,13 +392,223 @@ fn MainPane(
                     for task in loaded.completed.clone() {
                         CompletedRow {
                             key: "done-{task.id}",
-                            project_name: if show_project { names.get(&task.project_id).cloned() } else { None },
+                            project_name: if show_project { names.get(&task.id).cloned() } else { None },
                             task: task.clone(),
                             today,
                             reload,
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// Task rows; with `nested`, sub-tasks indent under their parents and
+/// collapsed parents hide them.
+#[component]
+fn TaskList(
+    tasks: Vec<Task>,
+    nested: bool,
+    today: NaiveDate,
+    names: HashMap<Id, String>,
+    show_project: bool,
+    projects: Vec<Project>,
+    sections: Vec<Section>,
+    labels: Vec<Label>,
+    reload: Signal<u32>,
+) -> Element {
+    let rows: Vec<views::Nested> = if nested {
+        views::nest(tasks)
+    } else {
+        tasks
+            .into_iter()
+            .map(|task| views::Nested { task, depth: 0, has_children: false })
+            .collect()
+    };
+    rsx! {
+        for row in rows {
+            TaskRow {
+                key: "{row.task.id}",
+                project_name: if show_project { names.get(&row.task.id).cloned() } else { None },
+                depth: row.depth,
+                has_children: row.has_children,
+                task: row.task.clone(),
+                today,
+                projects: projects.clone(),
+                sections: sections.clone(),
+                labels: labels.clone(),
+                reload,
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum HeadMode {
+    Normal,
+    Renaming,
+    ConfirmDelete,
+}
+
+/// A project section: header (rename / delete on hover), its tasks, and its
+/// own "+ Add task".
+#[component]
+fn SectionBlock(
+    section: Section,
+    tasks: Vec<Task>,
+    today: NaiveDate,
+    names: HashMap<Id, String>,
+    projects: Vec<Project>,
+    sections: Vec<Section>,
+    labels: Vec<Label>,
+    reload: Signal<u32>,
+) -> Element {
+    let mut reload = reload;
+    let mut mode = use_signal(|| HeadMode::Normal);
+    let mut draft = use_signal(String::new);
+    let count = tasks.len();
+    let name = section.name.clone();
+    let id_rename = section.id.clone();
+    let id_delete = section.id.clone();
+    let defaults = EditorValues::blank(section.project_id.clone(), Some(section.id.clone()), String::new(), Vec::new());
+    let task_word = if count == 1 { "task" } else { "tasks" };
+
+    rsx! {
+        div { class: "section-block",
+            match mode() {
+                HeadMode::Renaming => rsx! {
+                    form {
+                        class: "section-rename",
+                        onsubmit: move |e| {
+                            e.prevent_default();
+                            let n = draft().trim().to_string();
+                            mode.set(HeadMode::Normal);
+                            if n.is_empty() {
+                                return;
+                            }
+                            let id = id_rename.clone();
+                            spawn(async move {
+                                let _ = api::rename_section(id, n).await;
+                                reload += 1;
+                            });
+                        },
+                        input {
+                            class: "project-input",
+                            autofocus: true,
+                            value: "{draft}",
+                            oninput: move |e| draft.set(e.value()),
+                            onkeydown: move |e| {
+                                if e.key() == Key::Escape {
+                                    mode.set(HeadMode::Normal);
+                                }
+                            },
+                        }
+                    }
+                },
+                HeadMode::ConfirmDelete => rsx! {
+                    div { class: "confirm-box",
+                        div { class: "confirm-text", "Delete section “{name}” and its {count} {task_word}?" }
+                        div { class: "confirm-actions",
+                            button { class: "btn btn-cancel", onclick: move |_| mode.set(HeadMode::Normal), "Cancel" }
+                            button {
+                                class: "btn btn-add",
+                                onclick: move |_| {
+                                    mode.set(HeadMode::Normal);
+                                    let id = id_delete.clone();
+                                    spawn(async move {
+                                        let _ = api::delete_section(id).await;
+                                        reload += 1;
+                                    });
+                                },
+                                "Delete"
+                            }
+                        }
+                    }
+                },
+                HeadMode::Normal => rsx! {
+                    div { class: "section-title section-row",
+                        "{name}"
+                        span { class: "muted", "{count}" }
+                        span { class: "section-actions",
+                            button {
+                                class: "icon-btn",
+                                title: "Rename section",
+                                onclick: move |_| {
+                                    draft.set(section.name.clone());
+                                    mode.set(HeadMode::Renaming);
+                                },
+                                Icon { svg: icons::pencil() }
+                            }
+                            button {
+                                class: "icon-btn",
+                                title: "Delete section",
+                                onclick: move |_| mode.set(HeadMode::ConfirmDelete),
+                                Icon { svg: icons::trash_small() }
+                            }
+                        }
+                    }
+                },
+            }
+            TaskList {
+                tasks,
+                nested: true,
+                today,
+                names,
+                show_project: false,
+                projects: projects.clone(),
+                sections: sections.clone(),
+                labels: labels.clone(),
+                reload,
+            }
+            AddTask { defaults, projects, sections, labels, reload }
+        }
+    }
+}
+
+/// "+ Add section" at the bottom of a project.
+#[component]
+fn AddSection(project_id: Id, reload: Signal<u32>) -> Element {
+    let mut reload = reload;
+    let mut open = use_signal(|| false);
+    let mut name = use_signal(String::new);
+    if !open() {
+        return rsx! {
+            div { class: "add-section-row", onclick: move |_| open.set(true),
+                span { class: "add-section-line" }
+                span { class: "add-section-label", "Add section" }
+                span { class: "add-section-line" }
+            }
+        };
+    }
+    rsx! {
+        form {
+            class: "section-rename",
+            onsubmit: move |e| {
+                e.prevent_default();
+                let n = name().trim().to_string();
+                if n.is_empty() {
+                    return;
+                }
+                let pid = project_id.clone();
+                spawn(async move {
+                    let _ = api::add_section(pid, n).await;
+                    name.set(String::new());
+                    open.set(false);
+                    reload += 1;
+                });
+            },
+            input {
+                class: "project-input",
+                placeholder: "Name this section, then Enter",
+                autofocus: true,
+                value: "{name}",
+                oninput: move |e| name.set(e.value()),
+                onkeydown: move |e| {
+                    if e.key() == Key::Escape {
+                        open.set(false);
+                    }
+                },
             }
         }
     }
