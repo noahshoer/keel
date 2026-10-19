@@ -1660,6 +1660,7 @@ dependencies = [
 name = "todo-ui"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "dioxus",
  "getrandom 0.3.4",
  "js-sys",

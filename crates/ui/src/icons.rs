@@ -1,0 +1,62 @@
+//! Our own simple line icons (inline SVG strings, rendered via inner HTML).
+
+use dioxus::prelude::*;
+
+const OPEN: &str = r#"<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="SW" stroke-linecap="round" stroke-linejoin="round">"#;
+
+fn svg(size: u32, stroke: &str, body: &str) -> String {
+    format!(
+        "{}{}</svg>",
+        OPEN.replace("SZ", &size.to_string()).replace("SW", stroke),
+        body
+    )
+}
+
+pub fn inbox() -> String {
+    svg(20, "1.6", r#"<path d="M4 13h4l1.5 2.5h5L16 13h4"/><path d="M5.5 5h13L20 13v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-5z"/>"#)
+}
+
+/// Calendar showing today's day-of-month.
+pub fn today(day: u32) -> String {
+    svg(
+        20,
+        "1.6",
+        &format!(
+            r#"<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16"/><text x="12" y="17.6" text-anchor="middle" font-size="7.5" font-weight="600" fill="currentColor" stroke="none" font-family="sans-serif">{day}</text>"#
+        ),
+    )
+}
+
+pub fn upcoming() -> String {
+    svg(20, "1.6", r#"<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16M8 3v4M16 3v4M8 13h2M12 13h2M8 16.5h2M12 16.5h2"/>"#)
+}
+
+pub fn calendar_small() -> String {
+    svg(12, "2", r#"<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/>"#)
+}
+
+pub fn repeat_small() -> String {
+    svg(12, "2", r#"<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>"#)
+}
+
+pub fn trash() -> String {
+    svg(18, "1.6", r#"<path d="M5 7h14M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>"#)
+}
+
+pub fn plus(size: u32) -> String {
+    svg(size, "2", r#"<path d="M12 5v14M5 12h14"/>"#)
+}
+
+pub fn check() -> String {
+    svg(11, "3", r#"<path d="M5 12l5 5L20 7"/>"#)
+}
+
+pub fn flag_small() -> String {
+    svg(12, "2", r#"<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>"#)
+}
+
+/// Renders an SVG string from this module.
+#[component]
+pub fn Icon(svg: String) -> Element {
+    rsx! { span { class: "icon", dangerous_inner_html: "{svg}" } }
+}

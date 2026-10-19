@@ -4,3 +4,4 @@ pub mod model;
 pub mod recurrence;
 pub mod repository;
 pub mod streak;
+pub mod views;

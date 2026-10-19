@@ -241,6 +241,20 @@ impl Repository for SqliteRepo {
         Ok(out)
     }
 
+    fn list_all_tasks(&self) -> Result<Vec<Task>, RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let sql = format!(
+            "SELECT {TASK_COLS} FROM task WHERE is_deleted = 0 ORDER BY child_order ASC, added_at ASC"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(backend)?;
+        let rows = stmt.query_map([], |row| row_to_task(row)).map_err(backend)?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r.map_err(backend)?);
+        }
+        Ok(out)
+    }
+
     fn soft_delete_task(&self, id: &Id) -> Result<(), RepoError> {
         let conn = self.conn.lock().map_err(backend)?;
         let now = ts(&Utc::now());
