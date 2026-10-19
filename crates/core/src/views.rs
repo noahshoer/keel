@@ -109,6 +109,26 @@ pub fn nest(tasks: Vec<Task>) -> Vec<Nested> {
     out
 }
 
+/// The time of day of a task's due, when it has one (`…THH:MM:SS`).
+pub fn due_time(task: &Task) -> Option<chrono::NaiveTime> {
+    task.due
+        .as_ref()
+        .and_then(|d| d.date.get(11..16))
+        .and_then(|s| chrono::NaiveTime::parse_from_str(s, "%H:%M").ok())
+}
+
+/// 12-hour label: "5 PM", "5:30 PM", "12 AM".
+pub fn time_label(t: chrono::NaiveTime) -> String {
+    use chrono::Timelike;
+    let (pm, h12) = t.hour12();
+    let suffix = if pm { "PM" } else { "AM" };
+    if t.minute() == 0 {
+        format!("{h12} {suffix}")
+    } else {
+        format!("{h12}:{:02} {suffix}", t.minute())
+    }
+}
+
 /// The calendar date of a task's due (`YYYY-MM-DD` or a datetime string).
 pub fn due_date_of(task: &Task) -> Option<NaiveDate> {
     task.due
@@ -234,5 +254,44 @@ mod nest_tests {
         let missing_parent = t("gone", None);
         let orphan = t("orphan", Some(&missing_parent));
         assert_eq!(shape(vec![orphan]), vec![("orphan".into(), 0, false)]);
+    }
+}
+
+#[cfg(test)]
+mod time_tests {
+    use super::{due_time, time_label};
+    use crate::ids::Id;
+    use crate::model::{Due, Task};
+    use chrono::NaiveTime;
+
+    fn t(h: u32, m: u32) -> NaiveTime {
+        NaiveTime::from_hms_opt(h, m, 0).unwrap()
+    }
+
+    #[test]
+    fn labels_12_hour() {
+        assert_eq!(time_label(t(17, 0)), "5 PM");
+        assert_eq!(time_label(t(17, 30)), "5:30 PM");
+        assert_eq!(time_label(t(0, 0)), "12 AM");
+        assert_eq!(time_label(t(12, 0)), "12 PM");
+        assert_eq!(time_label(t(9, 5)), "9:05 AM");
+    }
+
+    #[test]
+    fn reads_time_from_due() {
+        let mut task = Task::new("x", Id::from("P"));
+        assert_eq!(due_time(&task), None);
+        let due = |date: &str| Due {
+            date: date.into(),
+            timezone: None,
+            string: String::new(),
+            lang: "en".into(),
+            is_recurring: false,
+            recurrence: None,
+        };
+        task.due = Some(due("2026-10-19"));
+        assert_eq!(due_time(&task), None, "date-only due has no time");
+        task.due = Some(due("2026-10-19T17:30:00"));
+        assert_eq!(due_time(&task), Some(t(17, 30)));
     }
 }
