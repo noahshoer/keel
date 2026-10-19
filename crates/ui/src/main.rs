@@ -4,6 +4,7 @@ mod icons;
 mod sidebar;
 mod style;
 mod task_row;
+mod theme;
 
 use std::collections::HashMap;
 
@@ -124,6 +125,8 @@ fn sections(view: &View, tasks: Vec<Task>, today: NaiveDate) -> Vec<Section> {
 fn App() -> Element {
     let view = use_signal(|| View::Today);
     let reload = use_signal(|| 0u32);
+    let theme = use_signal(theme::saved);
+    use_hook(|| theme::apply(&theme.peek()));
 
     let data = use_resource(move || async move {
         let _ = reload();
@@ -150,7 +153,7 @@ fn App() -> Element {
     let state = (*data.read()).clone();
 
     rsx! {
-        style { dangerous_inner_html: style::CSS }
+        style { dangerous_inner_html: style::css() }
         div { class: "app",
             match state {
                 None => rsx! {
@@ -165,6 +168,7 @@ fn App() -> Element {
                         projects: loaded.projects.clone(),
                         today_count: loaded.today_count,
                         today_day: today.day(),
+                        theme,
                         reload,
                     }
                     MainPane { view: current, loaded, today, reload }
