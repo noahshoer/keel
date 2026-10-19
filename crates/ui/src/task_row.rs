@@ -1,9 +1,10 @@
 use chrono::NaiveDate;
 use dioxus::prelude::*;
-use todo_core::model::{Priority, Task};
+use todo_core::model::{Label, Priority, Project, Task};
 use todo_core::views::{self, DueBucket};
 
 use crate::api;
+use crate::editor::{patch_for, EditorValues, TaskEditor};
 use crate::icons::{self, Icon};
 
 fn check_class(p: Priority) -> &'static str {
@@ -30,10 +31,44 @@ pub fn TaskRow(
     task: Task,
     today: NaiveDate,
     project_name: Option<String>,
+    projects: Vec<Project>,
+    labels: Vec<Label>,
     reload: Signal<u32>,
 ) -> Element {
     let mut reload = reload;
     let mut panel = use_signal(|| false);
+    let mut editing = use_signal(|| false);
+
+    if editing() {
+        let before = EditorValues::from_task(&task);
+        let existing_rule = task.due.as_ref().and_then(|d| d.recurrence.clone());
+        let keep_label = (before.repeat == "keep")
+            .then(|| format!("Keep: {}", task.due.as_ref().map(|d| d.string.clone()).unwrap_or_default()));
+        let id = task.id.clone();
+        let initial = before.clone();
+        return rsx! {
+            TaskEditor {
+                initial,
+                projects,
+                labels,
+                keep_label,
+                submit_text: "Save".to_string(),
+                on_submit: move |after: EditorValues| {
+                    let patch = patch_for(&before, &after, existing_rule.clone());
+                    let id = id.clone();
+                    spawn(async move {
+                        if !patch.is_empty() {
+                            let _ = api::update_task(id, patch).await;
+                        }
+                        editing.set(false);
+                        reload += 1;
+                    });
+                },
+                on_cancel: move |_| editing.set(false),
+                reload,
+            }
+        };
+    }
 
     let due = views::due_date_of(&task)
         .map(|d| (due_class(views::due_bucket(d, today)), views::due_label(d, today)));
@@ -41,7 +76,7 @@ pub fn TaskRow(
     let streak_on = task.streak_enabled;
     let goal = task.streak_goal;
     let goal_value = goal.map(|g| g.to_string()).unwrap_or_default();
-    let show_meta = due.is_some() || streak_on;
+    let show_meta = due.is_some() || streak_on || !task.labels.is_empty();
 
     let id_complete = task.id.clone();
     let id_delete = task.id.clone();
@@ -63,7 +98,10 @@ pub fn TaskRow(
                     },
                     Icon { svg: icons::check() }
                 }
-                div { class: "task-body",
+                div {
+                    class: "task-body",
+                    title: "Edit task",
+                    onclick: move |_| editing.set(true),
                     div { class: "task-content", "{task.content}" }
                     if !task.description.is_empty() {
                         div { class: "task-desc", "{task.description}" }
@@ -77,6 +115,12 @@ pub fn TaskRow(
                                     if recurring {
                                         Icon { svg: icons::repeat_small() }
                                     }
+                                }
+                            }
+                            for name in task.labels.iter() {
+                                span { key: "{name}", class: "label-tag",
+                                    Icon { svg: icons::tag_small() }
+                                    "{name}"
                                 }
                             }
                             if streak_on {

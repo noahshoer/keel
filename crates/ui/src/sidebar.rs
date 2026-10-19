@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use todo_core::model::Project;
+use todo_core::model::{Label, Project};
 
 use crate::icons::{self, Icon};
 use crate::{api, theme, View};
@@ -16,6 +16,7 @@ fn nav_class(active: bool) -> &'static str {
 pub fn Sidebar(
     view: Signal<View>,
     projects: Vec<Project>,
+    labels: Vec<Label>,
     today_count: usize,
     today_day: u32,
     theme: Signal<String>,
@@ -31,6 +32,8 @@ pub fn Sidebar(
     };
     let theme_title = theme::label(&theme_pref());
     let mut adding = use_signal(|| false);
+    let mut adding_label = use_signal(|| false);
+    let mut label_name = use_signal(String::new);
     let mut name = use_signal(String::new);
     let current = view();
     let count = if today_count > 0 { today_count.to_string() } else { String::new() };
@@ -108,6 +111,43 @@ pub fn Sidebar(
             for p in user_projects {
                 NavProject { key: "{p.id}", active: current == View::Project(p.id.clone(), p.name.clone()), project: p, view }
             }
+            div { class: "section-head",
+                "Labels"
+                button {
+                    class: "icon-btn",
+                    title: "Add label",
+                    onclick: move |_| adding_label.set(!adding_label()),
+                    Icon { svg: icons::plus(16) }
+                }
+            }
+            if adding_label() {
+                form {
+                    class: "project-form",
+                    onsubmit: move |e| {
+                        e.prevent_default();
+                        let n = label_name().trim().to_string();
+                        if n.is_empty() {
+                            return;
+                        }
+                        spawn(async move {
+                            let _ = api::add_label(n).await;
+                            label_name.set(String::new());
+                            adding_label.set(false);
+                            reload += 1;
+                        });
+                    },
+                    input {
+                        class: "project-input",
+                        placeholder: "Label name, then Enter",
+                        autofocus: true,
+                        value: "{label_name}",
+                        oninput: move |e| label_name.set(e.value()),
+                    }
+                }
+            }
+            for l in labels {
+                NavLabel { key: "{l.id}", active: current == View::Label(l.name.clone()), name: l.name, view }
+            }
         }
     }
 }
@@ -122,6 +162,20 @@ fn NavProject(project: Project, active: bool, view: Signal<View>) -> Element {
             onclick: move |_| view.set(target.clone()),
             span { class: "nav-icon hash", "#" }
             "{project.name}"
+        }
+    }
+}
+
+#[component]
+fn NavLabel(name: String, active: bool, view: Signal<View>) -> Element {
+    let mut view = view;
+    let target = View::Label(name.clone());
+    rsx! {
+        div {
+            class: nav_class(active),
+            onclick: move |_| view.set(target.clone()),
+            span { class: "nav-icon label", Icon { svg: icons::tag() } }
+            "{name}"
         }
     }
 }

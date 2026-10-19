@@ -184,6 +184,22 @@ button, input, select { font-family: inherit; color: inherit; }
 .btn-add:hover { background: var(--accent-hover); }
 .btn-add:disabled { opacity: .45; cursor: not-allowed; }
 
+/* Labels + editor pickers */
+.task-body { cursor: pointer; }
+.label-tag { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); }
+.nav-icon.label { color: var(--muted); }
+.chip-hash { color: var(--muted); font-weight: 600; }
+.chip-btn { cursor: pointer; font-family: inherit; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip-wrap { position: relative; }
+.label-pop { position: absolute; top: 32px; left: 0; z-index: 20; min-width: 220px; padding: 6px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.label-opt { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.label-opt:hover { background: var(--hover); }
+.label-empty { color: var(--muted); font-size: 12px; padding: 4px 6px; }
+.label-new { width: 100%; margin-top: 6px; padding: 5px 6px; font-size: 12px; border: 1px solid var(--border);
+  border-radius: 4px; outline: none; background: var(--bg); }
+
 .empty { text-align: center; color: var(--muted); padding: 56px 0 24px; }
 .empty .big { font-size: 15px; color: var(--text); font-weight: 600; margin-bottom: 4px; }
 .error { color: var(--due-overdue); padding: 24px; }
