@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Todo",
+        "title": "Todo Planner",
         "width": 1200,
         "height": 800
       }

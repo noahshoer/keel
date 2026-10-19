@@ -14,3 +14,6 @@ src-tauri/gen/
 # OS
 .DS_Store
 Thumbs.db
+
+# Tauri-generated capability schemas (rebuilt on every build)
+crates/src-tauri/gen/

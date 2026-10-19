@@ -2,7 +2,7 @@
 name = "todo-ui"
 
 [web.app]
-title = "Todo"
+title = "Todo Planner"
 
 [web.watcher]
 reload_html = true
