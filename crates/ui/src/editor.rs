@@ -1,17 +1,17 @@
-//! The Todoist-style task editor card, shared by "+ Add task" and in-place
-//! editing, plus the collapsed "+ Add task" row.
+//! The Todoist-style task editor card, shared by "+ Add task", "Add sub-task"
+//! and in-place editing, plus the collapsed "+ Add task" row.
 
 use chrono::{Datelike, NaiveDate};
 use dioxus::prelude::*;
 use todo_core::commands::DueEdit;
 use todo_core::ids::Id;
-use todo_core::model::{Label, Priority, Project, Task};
+use todo_core::model::{Label, Priority, Project, Section, Task};
 use todo_core::recurrence::Recurrence;
 
 use crate::api::{self, NewTask, TaskPatch};
 use crate::icons::{self, Icon};
 
-/// Everything the editor edits, as form-friendly strings.
+/// Everything the editor edits, as form-friendly values.
 #[derive(Clone, PartialEq, Debug)]
 pub struct EditorValues {
     pub content: String,
@@ -23,11 +23,14 @@ pub struct EditorValues {
     /// none | daily | weekdays | weekly | monthly | keep (an existing custom rule).
     pub repeat: String,
     pub project_id: Id,
+    pub section_id: Option<Id>,
     pub labels: Vec<String>,
+    /// Only used when adding a sub-task.
+    pub parent_id: Option<Id>,
 }
 
 impl EditorValues {
-    pub fn blank(project_id: Id, date: String, labels: Vec<String>) -> Self {
+    pub fn blank(project_id: Id, section_id: Option<Id>, date: String, labels: Vec<String>) -> Self {
         EditorValues {
             content: String::new(),
             description: String::new(),
@@ -35,7 +38,9 @@ impl EditorValues {
             priority: "4".to_string(),
             repeat: "none".to_string(),
             project_id,
+            section_id,
             labels,
+            parent_id: None,
         }
     }
 
@@ -45,10 +50,12 @@ impl EditorValues {
             content: t.content.clone(),
             description: t.description.clone(),
             date: t.due.as_ref().and_then(|d| d.date.get(..10)).unwrap_or("").to_string(),
-            priority: t.priority.to_api_ui().to_string(),
+            priority: (5 - t.priority.to_api()).to_string(),
             repeat: repeat_choice(&rule).to_string(),
             project_id: t.project_id.clone(),
+            section_id: t.section_id.clone(),
             labels: t.labels.clone(),
+            parent_id: t.parent_id.clone(),
         }
     }
 
@@ -60,16 +67,13 @@ impl EditorValues {
             _ => Priority::None,
         }
     }
-}
 
-/// UI priority number ("P1" = 1 … none = 4) for a stored priority.
-trait UiPriority {
-    fn to_api_ui(self) -> u8;
-}
-
-impl UiPriority for Priority {
-    fn to_api_ui(self) -> u8 {
-        5 - self.to_api()
+    /// `project` or `project|section`, for the location select.
+    fn location(&self) -> String {
+        match &self.section_id {
+            Some(s) => format!("{}|{}", self.project_id, s),
+            None => self.project_id.to_string(),
+        }
     }
 }
 
@@ -98,20 +102,29 @@ fn recurrence_for(choice: &str, date: &str, existing: Option<Recurrence>) -> Opt
     }
 }
 
-/// Builds a patch containing only what changed between `before` and `after`.
-pub fn patch_for(before: &EditorValues, after: &EditorValues, existing: Option<Recurrence>) -> TaskPatch {
+/// Field changes between `before` and `after`, plus a move when the
+/// project/section changed (moves are a separate command that also carries
+/// the sub-tree).
+pub fn changes(
+    before: &EditorValues,
+    after: &EditorValues,
+    existing: Option<Recurrence>,
+) -> (TaskPatch, Option<(Id, Option<Id>)>) {
     let due_changed = before.date != after.date || before.repeat != after.repeat;
-    TaskPatch {
+    let patch = TaskPatch {
         content: (after.content.trim() != before.content).then(|| after.content.trim().to_string()),
         description: (after.description != before.description).then(|| after.description.clone()),
         priority: (after.priority != before.priority).then(|| after.priority()),
-        project_id: (after.project_id != before.project_id).then(|| after.project_id.clone()),
+        project_id: None,
         labels: (after.labels != before.labels).then(|| after.labels.clone()),
         due: due_changed.then(|| DueEdit {
             date: (!after.date.is_empty()).then(|| after.date.clone()),
             recurrence: recurrence_for(&after.repeat, &after.date, existing),
         }),
-    }
+    };
+    let moved = (after.project_id != before.project_id || after.section_id != before.section_id)
+        .then(|| (after.project_id.clone(), after.section_id.clone()));
+    (patch, moved)
 }
 
 /// The new task described by `v`.
@@ -123,6 +136,9 @@ pub fn new_task(v: &EditorValues) -> NewTask {
         recurrence: recurrence_for(&v.repeat, &v.date, None),
         date: v.date.clone(),
         priority: v.priority(),
+        labels: v.labels.clone(),
+        section_id: v.section_id.clone(),
+        parent_id: v.parent_id.clone(),
     }
 }
 
@@ -130,6 +146,7 @@ pub fn new_task(v: &EditorValues) -> NewTask {
 pub fn TaskEditor(
     initial: EditorValues,
     projects: Vec<Project>,
+    sections: Vec<Section>,
     labels: Vec<Label>,
     /// Text for the "keep current rule" repeat option, when the rule is custom.
     keep_label: Option<String>,
@@ -146,6 +163,19 @@ pub fn TaskEditor(
     let v = vals();
     let can_submit = !v.content.trim().is_empty();
     let label_text = if v.labels.is_empty() { "Labels".to_string() } else { v.labels.join(", ") };
+    let location = v.location();
+    // (value, label) for every project and each of its sections.
+    let locations: Vec<(String, String)> = projects
+        .iter()
+        .flat_map(|p| {
+            std::iter::once((p.id.to_string(), p.name.clone())).chain(
+                sections
+                    .iter()
+                    .filter(|s| s.project_id == p.id)
+                    .map(|s| (format!("{}|{}", p.id, s.id), format!("{} / {}", p.name, s.name))),
+            )
+        })
+        .collect();
 
     rsx! {
         form {
@@ -220,16 +250,25 @@ pub fn TaskEditor(
                         }
                     }
                 }
-                label { class: "chip", title: "Project",
+                label { class: "chip", title: "Project / section",
                     span { class: "chip-hash", "#" }
                     select {
-                        value: "{v.project_id}",
+                        value: "{location}",
                         onchange: move |e| {
                             let val = e.value();
-                            vals.with_mut(|v| v.project_id = Id::from(val));
+                            vals.with_mut(|v| match val.split_once('|') {
+                                Some((p, s)) => {
+                                    v.project_id = Id::from(p);
+                                    v.section_id = Some(Id::from(s));
+                                }
+                                None => {
+                                    v.project_id = Id::from(val.as_str());
+                                    v.section_id = None;
+                                }
+                            });
                         },
-                        for p in projects.iter() {
-                            option { key: "{p.id}", value: "{p.id}", "{p.name}" }
+                        for (value, text) in locations.iter() {
+                            option { key: "{value}", value: "{value}", "{text}" }
                         }
                     }
                 }
@@ -324,7 +363,13 @@ fn LabelOption(name: String, checked: bool, vals: Signal<EditorValues>) -> Eleme
 
 /// The collapsed "+ Add task" row; expands into a [`TaskEditor`].
 #[component]
-pub fn AddTask(defaults: EditorValues, projects: Vec<Project>, labels: Vec<Label>, reload: Signal<u32>) -> Element {
+pub fn AddTask(
+    defaults: EditorValues,
+    projects: Vec<Project>,
+    sections: Vec<Section>,
+    labels: Vec<Label>,
+    reload: Signal<u32>,
+) -> Element {
     let mut reload = reload;
     let mut open = use_signal(|| false);
     let mut generation = use_signal(|| 0u32);
@@ -343,6 +388,7 @@ pub fn AddTask(defaults: EditorValues, projects: Vec<Project>, labels: Vec<Label
             key: "{generation}",
             initial: defaults.clone(),
             projects,
+            sections,
             labels,
             keep_label: None,
             submit_text: "Add task".to_string(),

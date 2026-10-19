@@ -1,10 +1,13 @@
 use chrono::NaiveDate;
 use dioxus::prelude::*;
-use todo_core::model::{Label, Priority, Project, Task};
+use todo_core::model::{Label, Priority, Project, Section, Task};
 use todo_core::views::{self, DueBucket};
 
 use crate::api;
-use crate::editor::{patch_for, EditorValues, TaskEditor};
+use crate::editor::{changes, new_task, EditorValues, TaskEditor};
+
+/// Pixels of indentation per sub-task level.
+const INDENT: usize = 28;
 use crate::icons::{self, Icon};
 
 fn check_class(p: Priority) -> &'static str {
@@ -32,12 +35,21 @@ pub fn TaskRow(
     today: NaiveDate,
     project_name: Option<String>,
     projects: Vec<Project>,
+    sections: Vec<Section>,
     labels: Vec<Label>,
+    /// Sub-task nesting level (0 = top level).
+    #[props(default)]
+    depth: usize,
+    /// Shows the collapse chevron.
+    #[props(default)]
+    has_children: bool,
     reload: Signal<u32>,
 ) -> Element {
     let mut reload = reload;
     let mut panel = use_signal(|| false);
     let mut editing = use_signal(|| false);
+    let mut adding_sub = use_signal(|| false);
+    let indent = format!("margin-left: {}px;", depth * INDENT);
 
     if editing() {
         let before = EditorValues::from_task(&task);
@@ -47,28 +59,42 @@ pub fn TaskRow(
         let id = task.id.clone();
         let initial = before.clone();
         return rsx! {
-            TaskEditor {
-                initial,
-                projects,
-                labels,
-                keep_label,
-                submit_text: "Save".to_string(),
-                on_submit: move |after: EditorValues| {
-                    let patch = patch_for(&before, &after, existing_rule.clone());
-                    let id = id.clone();
-                    spawn(async move {
-                        if !patch.is_empty() {
-                            let _ = api::update_task(id, patch).await;
-                        }
-                        editing.set(false);
-                        reload += 1;
-                    });
-                },
-                on_cancel: move |_| editing.set(false),
-                reload,
+            div { style: "{indent}",
+                TaskEditor {
+                    initial,
+                    projects,
+                    sections,
+                    labels,
+                    keep_label,
+                    submit_text: "Save".to_string(),
+                    on_submit: move |after: EditorValues| {
+                        let (patch, moved) = changes(&before, &after, existing_rule.clone());
+                        let id = id.clone();
+                        spawn(async move {
+                            if let Some((project, section)) = moved {
+                                let _ = api::move_task(id.clone(), project, section).await;
+                            }
+                            if !patch.is_empty() {
+                                let _ = api::update_task(id, patch).await;
+                            }
+                            editing.set(false);
+                            reload += 1;
+                        });
+                    },
+                    on_cancel: move |_| editing.set(false),
+                    reload,
+                }
             }
         };
     }
+
+    // Defaults for "Add sub-task": same project/section, child of this task.
+    let mut sub_defaults =
+        EditorValues::blank(task.project_id.clone(), task.section_id.clone(), String::new(), Vec::new());
+    sub_defaults.parent_id = Some(task.id.clone());
+    let sub_indent = format!("margin-left: {}px;", (depth + 1) * INDENT);
+    let collapsed = task.is_collapsed;
+    let id_collapse = task.id.clone();
 
     let due = views::due_date_of(&task)
         .map(|d| (due_class(views::due_bucket(d, today)), views::due_label(d, today)));
@@ -84,8 +110,22 @@ pub fn TaskRow(
     let id_goal = task.id.clone();
 
     rsx! {
-        div { class: "task",
+        div { class: "task", style: "{indent}",
             div { class: "task-row",
+                if has_children {
+                    button {
+                        class: if collapsed { "chevron collapsed" } else { "chevron" },
+                        title: if collapsed { "Show sub-tasks" } else { "Hide sub-tasks" },
+                        onclick: move |_| {
+                            let id = id_collapse.clone();
+                            spawn(async move {
+                                let _ = api::set_collapsed(id, !collapsed).await;
+                                reload += 1;
+                            });
+                        },
+                        Icon { svg: icons::chevron() }
+                    }
+                }
                 button {
                     class: check_class(task.priority),
                     title: "Complete task",
@@ -130,6 +170,12 @@ pub fn TaskRow(
                     }
                 }
                 div { class: "task-actions",
+                    button {
+                        class: "icon-btn",
+                        title: "Add sub-task",
+                        onclick: move |_| adding_sub.set(true),
+                        Icon { svg: icons::subtask() }
+                    }
                     if recurring {
                         button {
                             class: "icon-btn",
@@ -190,6 +236,27 @@ pub fn TaskRow(
                         },
                         if streak_on { "Stop tracking" } else { "Track streak" }
                     }
+                }
+            }
+        }
+        if adding_sub() {
+            div { style: "{sub_indent}",
+                TaskEditor {
+                    initial: sub_defaults,
+                    projects,
+                    sections,
+                    labels,
+                    keep_label: None,
+                    submit_text: "Add sub-task".to_string(),
+                    on_submit: move |v: EditorValues| {
+                        spawn(async move {
+                            let _ = api::add_task(new_task(&v)).await;
+                            adding_sub.set(false);
+                            reload += 1;
+                        });
+                    },
+                    on_cancel: move |_| adding_sub.set(false),
+                    reload,
                 }
             }
         }

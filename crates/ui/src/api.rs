@@ -4,7 +4,7 @@
 use serde::Serialize;
 use todo_core::commands::{Action, ApplyResult, Command, DueEdit};
 use todo_core::ids::Id;
-use todo_core::model::{Due, Label, Priority, Project, Task};
+use todo_core::model::{Due, Label, Priority, Project, Section, Task};
 use todo_core::recurrence::Recurrence;
 use wasm_bindgen::prelude::*;
 
@@ -102,6 +102,10 @@ pub struct NewTask {
     pub date: String,
     pub priority: Priority,
     pub recurrence: Option<Recurrence>,
+    pub labels: Vec<String>,
+    pub section_id: Option<Id>,
+    /// Set when adding a sub-task.
+    pub parent_id: Option<Id>,
 }
 
 pub async fn add_task(t: NewTask) -> Result<ApplyResult, String> {
@@ -121,9 +125,9 @@ pub async fn add_task(t: NewTask) -> Result<ApplyResult, String> {
             description,
             priority: Some(t.priority),
             due,
-            labels: None,
-            parent_id: None,
-            section_id: None,
+            labels: (!t.labels.is_empty()).then_some(t.labels),
+            parent_id: t.parent_id,
+            section_id: t.section_id,
             recurrence: t.recurrence,
         },
         true,
@@ -182,6 +186,7 @@ pub async fn update_task(id: Id, p: TaskPatch) -> Result<ApplyResult, String> {
             priority: p.priority,
             project_id: p.project_id,
             labels: p.labels,
+            is_collapsed: None,
             due: p.due,
         },
         false,
@@ -219,4 +224,42 @@ pub async fn rename_label(id: Id, name: String) -> Result<ApplyResult, String> {
 
 pub async fn delete_label(id: Id) -> Result<ApplyResult, String> {
     dispatch(&command(Action::LabelDelete { id }, false)).await
+}
+
+pub async fn list_sections(project_id: &str) -> Result<Vec<Section>, String> {
+    invoke("list_sections", &ProjectArg { project_id }).await
+}
+
+pub async fn add_section(project_id: Id, name: String) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::SectionAdd { project_id, name }, true)).await
+}
+
+pub async fn rename_section(id: Id, name: String) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::SectionUpdate { id, name }, false)).await
+}
+
+pub async fn delete_section(id: Id) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::SectionDelete { id }, false)).await
+}
+
+/// Move a task (and its sub-tasks) to a project and optional section.
+pub async fn move_task(id: Id, project_id: Id, section_id: Option<Id>) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::TaskMove { id, project_id, section_id }, false)).await
+}
+
+pub async fn set_collapsed(id: Id, collapsed: bool) -> Result<ApplyResult, String> {
+    dispatch(&command(
+        Action::TaskUpdate {
+            id,
+            content: None,
+            description: None,
+            priority: None,
+            project_id: None,
+            labels: None,
+            due: None,
+            is_collapsed: Some(collapsed),
+        },
+        false,
+    ))
+    .await
 }
