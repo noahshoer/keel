@@ -176,7 +176,14 @@ pub fn changes(
 
 /// Parses the editor's title as quick add.
 fn parse_title(v: &EditorValues, projects: &[Project], sections: &[Section]) -> QuickAdd {
-    quickadd::parse(&v.content, crate::today(), projects, sections)
+    let mut qa = quickadd::parse(&v.content, crate::today(), projects, sections);
+    // A bare /Section resolves within the Inbox; carry its project along.
+    if qa.project_id.is_none() {
+        if let Some(s) = qa.section_id.as_ref().and_then(|id| sections.iter().find(|s| &s.id == id)) {
+            qa.project_id = Some(s.project_id.clone());
+        }
+    }
+    qa
 }
 
 /// The new task described by the editor values with the quick-add parse
