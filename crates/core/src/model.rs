@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
+use crate::recurrence::Recurrence;
 
 /// Task priority. Stored API-style (4 = highest / UI "P1" … 1 = none).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -57,8 +58,10 @@ pub struct Due {
     pub string: String,
     pub lang: String,
     pub is_recurring: bool,
-    /// Compiled recurrence rule (RRULE-like); the parser lands in a later plan.
-    pub rrule: Option<String>,
+    /// Structured recurrence rule (NL parsing lands in a later plan).
+    /// Invariant: `is_recurring == recurrence.is_some()`.
+    #[serde(default)]
+    pub recurrence: Option<Recurrence>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -290,7 +293,7 @@ mod tests {
             string: "today".to_string(),
             lang: "en".to_string(),
             is_recurring: false,
-            rrule: None,
+            recurrence: None,
         };
         let json = serde_json::to_string(&due).expect("serialize");
         let back: Due = serde_json::from_str(&json).expect("deserialize");

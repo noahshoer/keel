@@ -56,7 +56,7 @@ fn floating_due_stored_as_null_tz() {
         string: "today".to_string(),
         lang: "en".to_string(),
         is_recurring: false,
-        rrule: None,
+        recurrence: None,
     });
     repo.upsert_task(&task).unwrap();
     let got = repo.get_task(&task.id).unwrap().unwrap();
