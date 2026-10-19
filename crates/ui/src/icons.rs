@@ -35,6 +35,10 @@ pub fn calendar_small() -> String {
     svg(12, "2", r#"<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/>"#)
 }
 
+pub fn clock_small() -> String {
+    svg(12, "2", r#"<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>"#)
+}
+
 pub fn repeat_small() -> String {
     svg(12, "2", r#"<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>"#)
 }
