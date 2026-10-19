@@ -2,9 +2,9 @@
 //! Requires `app.withGlobalTauri = true` in tauri.conf.json.
 
 use serde::Serialize;
-use todo_core::commands::{Action, ApplyResult, Command};
+use todo_core::commands::{Action, ApplyResult, Command, DueEdit};
 use todo_core::ids::Id;
-use todo_core::model::{Due, Priority, Project, Task};
+use todo_core::model::{Due, Label, Priority, Project, Task};
 use todo_core::recurrence::Recurrence;
 use wasm_bindgen::prelude::*;
 
@@ -43,6 +43,11 @@ struct ProjectArg<'a> {
 }
 
 #[derive(Serialize)]
+struct NameArg<'a> {
+    name: &'a str,
+}
+
+#[derive(Serialize)]
 struct DaysArg {
     days: i64,
 }
@@ -66,6 +71,14 @@ pub async fn upcoming_view(days: i64) -> Result<Vec<Task>, String> {
 
 pub async fn project_view(project_id: &str) -> Result<Vec<Task>, String> {
     invoke("project_view", &ProjectArg { project_id }).await
+}
+
+pub async fn list_labels() -> Result<Vec<Label>, String> {
+    invoke("list_labels", &NoArgs {}).await
+}
+
+pub async fn label_view(name: &str) -> Result<Vec<Task>, String> {
+    invoke("label_view", &NameArg { name }).await
 }
 
 pub async fn dispatch(cmd: &Command) -> Result<ApplyResult, String> {
@@ -132,4 +145,46 @@ pub async fn delete_task(id: Id) -> Result<ApplyResult, String> {
 
 pub async fn set_streak(id: Id, enabled: bool, goal: Option<i64>) -> Result<ApplyResult, String> {
     dispatch(&command(Action::TaskSetStreak { id, enabled, goal }, false)).await
+}
+
+pub async fn add_label(name: String) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::LabelAdd { name }, true)).await
+}
+
+/// Only the fields that changed; `None` leaves a field as it is.
+#[derive(Default)]
+pub struct TaskPatch {
+    pub content: Option<String>,
+    pub description: Option<String>,
+    pub priority: Option<Priority>,
+    pub project_id: Option<Id>,
+    pub labels: Option<Vec<String>>,
+    pub due: Option<DueEdit>,
+}
+
+impl TaskPatch {
+    pub fn is_empty(&self) -> bool {
+        self.content.is_none()
+            && self.description.is_none()
+            && self.priority.is_none()
+            && self.project_id.is_none()
+            && self.labels.is_none()
+            && self.due.is_none()
+    }
+}
+
+pub async fn update_task(id: Id, p: TaskPatch) -> Result<ApplyResult, String> {
+    dispatch(&command(
+        Action::TaskUpdate {
+            id,
+            content: p.content,
+            description: p.description,
+            priority: p.priority,
+            project_id: p.project_id,
+            labels: p.labels,
+            due: p.due,
+        },
+        false,
+    ))
+    .await
 }

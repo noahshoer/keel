@@ -73,3 +73,11 @@ pub fn moon() -> String {
 pub fn monitor() -> String {
     svg(18, "1.6", r#"<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>"#)
 }
+
+pub fn tag_small() -> String {
+    svg(12, "2", r#"<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.3"/>"#)
+}
+
+pub fn tag() -> String {
+    svg(18, "1.6", r#"<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.3"/>"#)
+}
