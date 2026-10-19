@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use todo_core::model::Project;
 
 use crate::icons::{self, Icon};
-use crate::{api, View};
+use crate::{api, theme, View};
 
 fn nav_class(active: bool) -> &'static str {
     if active {
@@ -18,10 +18,18 @@ pub fn Sidebar(
     projects: Vec<Project>,
     today_count: usize,
     today_day: u32,
+    theme: Signal<String>,
     reload: Signal<u32>,
 ) -> Element {
     let mut view = view;
     let mut reload = reload;
+    let mut theme_pref = theme;
+    let theme_icon = match theme_pref().as_str() {
+        "light" => icons::sun(),
+        "dark" => icons::moon(),
+        _ => icons::monitor(),
+    };
+    let theme_title = theme::label(&theme_pref());
     let mut adding = use_signal(|| false);
     let mut name = use_signal(String::new);
     let current = view();
@@ -33,6 +41,16 @@ pub fn Sidebar(
             div { class: "brand",
                 div { class: "brand-mark", "✓" }
                 "Todo Planner"
+                button {
+                    class: "icon-btn theme-toggle",
+                    title: "{theme_title}",
+                    onclick: move |_| {
+                        let next = theme::next(&theme_pref()).to_string();
+                        theme::apply(&next);
+                        theme_pref.set(next);
+                    },
+                    Icon { svg: theme_icon.clone() }
+                }
             }
             div {
                 class: nav_class(current == View::Inbox),
