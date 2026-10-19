@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
-use todo_core::model::{Label, Project};
+use todo_core::model::{Filter, Label, Project};
 
+use crate::filters::{FilterForm, FilterRow};
 use crate::icons::{self, Icon};
 use crate::{api, theme, View};
 
@@ -17,6 +18,7 @@ pub fn Sidebar(
     view: Signal<View>,
     projects: Vec<Project>,
     labels: Vec<Label>,
+    filters: Vec<Filter>,
     today_count: usize,
     today_day: u32,
     theme: Signal<String>,
@@ -33,6 +35,7 @@ pub fn Sidebar(
     let theme_title = theme::label(&theme_pref());
     let mut adding = use_signal(|| false);
     let mut adding_label = use_signal(|| false);
+    let mut adding_filter = use_signal(|| false);
     let mut label_name = use_signal(String::new);
     let mut name = use_signal(String::new);
     let current = view();
@@ -147,6 +150,43 @@ pub fn Sidebar(
             }
             for l in labels {
                 NavLabel { key: "{l.id}", active: current == View::Label(l.name.clone()), label: l, view, reload }
+            }
+            div { class: "section-head",
+                "Filters"
+                button {
+                    class: "icon-btn",
+                    title: "Add filter",
+                    onclick: move |_| adding_filter.set(!adding_filter()),
+                    Icon { svg: icons::plus(16) }
+                }
+            }
+            if adding_filter() {
+                FilterForm {
+                    initial_name: String::new(),
+                    initial_query: String::new(),
+                    submit_text: "Add filter".to_string(),
+                    on_save: move |(name, query): (String, String)| {
+                        adding_filter.set(false);
+                        spawn(async move {
+                            if let Ok(res) = api::add_filter(name.clone(), query.clone()).await {
+                                if let Some(id) = res.id_mapping.values().next().cloned() {
+                                    view.set(View::Filter(id, name, query));
+                                }
+                            }
+                            reload += 1;
+                        });
+                    },
+                    on_cancel: move |_| adding_filter.set(false),
+                }
+            }
+            for f in filters {
+                FilterRow {
+                    key: "{f.id}",
+                    active: matches!(&current, View::Filter(id, _, _) if *id == f.id),
+                    filter: f,
+                    view,
+                    reload,
+                }
             }
         }
     }
