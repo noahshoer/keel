@@ -4,24 +4,19 @@
 use serde::Serialize;
 use todo_core::commands::{Action, ApplyResult, Command};
 use todo_core::ids::Id;
+use todo_core::model::{Due, Priority, Project, Task};
 use todo_core::recurrence::Recurrence;
-use todo_core::model::{Project, Task};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(inline_js = r#"
 export async function __invoke(cmd, args) {
   return await window.__TAURI__.core.invoke(cmd, args);
 }
+export function __uuid() { return crypto.randomUUID(); }
 "#)]
 extern "C" {
     #[wasm_bindgen(catch)]
     async fn __invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
-}
-
-#[wasm_bindgen(inline_js = r#"
-export function __uuid() { return crypto.randomUUID(); }
-"#)]
-extern "C" {
     fn __uuid() -> String;
 }
 
@@ -48,6 +43,11 @@ struct ProjectArg<'a> {
 }
 
 #[derive(Serialize)]
+struct DaysArg {
+    days: i64,
+}
+
+#[derive(Serialize)]
 struct CmdArg<'a> {
     cmd: &'a Command,
 }
@@ -56,8 +56,16 @@ pub async fn list_projects() -> Result<Vec<Project>, String> {
     invoke("list_projects", &NoArgs {}).await
 }
 
-pub async fn list_tasks(project_id: &str) -> Result<Vec<Task>, String> {
-    invoke("list_tasks", &ProjectArg { project_id }).await
+pub async fn today_view() -> Result<Vec<Task>, String> {
+    invoke("today_view", &NoArgs {}).await
+}
+
+pub async fn upcoming_view(days: i64) -> Result<Vec<Task>, String> {
+    invoke("upcoming_view", &DaysArg { days }).await
+}
+
+pub async fn project_view(project_id: &str) -> Result<Vec<Task>, String> {
+    invoke("project_view", &ProjectArg { project_id }).await
 }
 
 pub async fn dispatch(cmd: &Command) -> Result<ApplyResult, String> {
@@ -72,26 +80,46 @@ fn command(action: Action, temp: bool) -> Command {
     }
 }
 
-pub async fn add_task(
-    content: String,
-    project_id: Id,
-    recurrence: Option<Recurrence>,
-) -> Result<ApplyResult, String> {
+/// Fields from the add-task editor.
+pub struct NewTask {
+    pub content: String,
+    pub description: String,
+    pub project_id: Id,
+    /// `YYYY-MM-DD`, or empty for no date.
+    pub date: String,
+    pub priority: Priority,
+    pub recurrence: Option<Recurrence>,
+}
+
+pub async fn add_task(t: NewTask) -> Result<ApplyResult, String> {
+    let due = (!t.date.is_empty()).then(|| Due {
+        date: t.date.clone(),
+        timezone: None,
+        string: t.date.clone(),
+        lang: "en".to_string(),
+        is_recurring: false,
+        recurrence: None,
+    });
+    let description = (!t.description.trim().is_empty()).then(|| t.description.trim().to_string());
     dispatch(&command(
         Action::TaskAdd {
-            content,
-            project_id,
-            description: None,
-            priority: None,
-            due: None,
+            content: t.content,
+            project_id: t.project_id,
+            description,
+            priority: Some(t.priority),
+            due,
             labels: None,
             parent_id: None,
             section_id: None,
-            recurrence,
+            recurrence: t.recurrence,
         },
         true,
     ))
     .await
+}
+
+pub async fn add_project(name: String) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::ProjectAdd { name }, true)).await
 }
 
 pub async fn complete_task(id: Id) -> Result<ApplyResult, String> {
