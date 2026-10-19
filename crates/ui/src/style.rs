@@ -237,6 +237,16 @@ button, input, select { font-family: inherit; color: inherit; }
 .add-section-line { flex: 1; height: 1px; background: var(--accent); }
 .add-section-label { font-size: 13px; font-weight: 600; }
 
+/* Filters */
+.mono { font-family: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace; font-size: 12px; }
+.view-sub.mono { color: var(--subtle); }
+.nav-icon.filter { color: var(--accent); }
+.filter-form { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 10px; }
+.project-input.invalid { border-color: var(--due-overdue); }
+.filter-problem { color: var(--due-overdue); font-size: 12px; line-height: 16px; }
+.filter-hint { color: var(--muted); font-size: 11px; line-height: 15px; }
+.big-problem { font-size: 13px; padding: 16px 0; }
+
 .empty { text-align: center; color: var(--muted); padding: 56px 0 24px; }
 .empty .big { font-size: 15px; color: var(--text); font-weight: 600; margin-bottom: 4px; }
 .error { color: var(--due-overdue); padding: 24px; }

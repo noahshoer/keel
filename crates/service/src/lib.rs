@@ -5,7 +5,8 @@
 use chrono::{Local, NaiveDate};
 use todo_core::commands::{apply_at, ApplyResult, Command};
 use todo_core::ids::Id;
-use todo_core::model::{Label, Project, Section, Task};
+use todo_core::filter::{self, FilterContext, FilterError, FilterGroup};
+use todo_core::model::{Filter, Label, Project, Section, Task};
 use todo_core::repository::{RepoError, Repository};
 use todo_core::streak;
 use todo_core::views;
@@ -159,6 +160,54 @@ impl AppService {
             t.completed_at
                 .is_some_and(|c| c.with_timezone(&Local).date_naive() == today)
         })
+    }
+
+    pub fn list_filters(&self) -> Result<Vec<Filter>, RepoError> {
+        self.repo.list_filters()
+    }
+
+    /// Validates a filter query without running it.
+    pub fn check_filter(&self, query: &str) -> Result<(), FilterError> {
+        filter::parse(query).map(|_| ())
+    }
+
+    pub fn filter_view(&self, query: &str) -> Result<Vec<FilterGroup>, RepoError> {
+        self.filter_view_at(query, today())
+    }
+
+    /// Open tasks matching each comma group of `query`, sorted by due date
+    /// (undated last) then priority.
+    pub fn filter_view_at(&self, query: &str, today: NaiveDate) -> Result<Vec<FilterGroup>, RepoError> {
+        let groups = filter::parse(query).map_err(|e| RepoError::Backend(format!("Invalid filter: {e}")))?;
+        let projects = self.repo.list_projects()?;
+        let mut sections = Vec::new();
+        for p in &projects {
+            sections.extend(self.repo.list_sections(&p.id)?);
+        }
+        let ctx = FilterContext {
+            today,
+            projects: projects.into_iter().map(|p| (p.id, p.name)).collect(),
+            sections: sections.into_iter().map(|s| (s.id, s.name)).collect(),
+        };
+        let mut open = self.open_tasks(today)?;
+        open.sort_by(|a, b| {
+            let (da, db) = (views::due_date_of(a), views::due_date_of(b));
+            // Dated before undated, earlier first.
+            da.is_none()
+                .cmp(&db.is_none())
+                .then(da.cmp(&db))
+                .then(b.priority.to_api().cmp(&a.priority.to_api()))
+                .then(a.child_order.cmp(&b.child_order))
+        });
+        let texts = filter::group_texts(query);
+        Ok(groups
+            .iter()
+            .enumerate()
+            .map(|(i, expr)| FilterGroup {
+                query: texts.get(i).cloned().unwrap_or_default(),
+                tasks: open.iter().filter(|t| filter::matches(expr, t, &ctx)).cloned().collect(),
+            })
+            .collect())
     }
 
     pub fn list_sections(&self, project_id: &str) -> Result<Vec<Section>, RepoError> {

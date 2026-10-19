@@ -4,7 +4,8 @@
 use serde::Serialize;
 use todo_core::commands::{Action, ApplyResult, Command, DueEdit};
 use todo_core::ids::Id;
-use todo_core::model::{Due, Label, Priority, Project, Section, Task};
+use todo_core::filter::FilterGroup;
+use todo_core::model::{Due, Filter, Label, Priority, Project, Section, Task};
 use todo_core::recurrence::Recurrence;
 use wasm_bindgen::prelude::*;
 
@@ -30,7 +31,10 @@ async fn invoke<A: Serialize, R: for<'de> serde::Deserialize<'de>>(
     args: &A,
 ) -> Result<R, String> {
     let args = serde_wasm_bindgen::to_value(args).map_err(|e| e.to_string())?;
-    let out = __invoke(cmd, args).await.map_err(|e| format!("{e:?}"))?;
+    // Backend errors arrive as plain strings; show them as-is.
+    let out = __invoke(cmd, args)
+        .await
+        .map_err(|e| e.as_string().unwrap_or_else(|| format!("{e:?}")))?;
     serde_wasm_bindgen::from_value(out).map_err(|e| e.to_string())
 }
 
@@ -262,4 +266,34 @@ pub async fn set_collapsed(id: Id, collapsed: bool) -> Result<ApplyResult, Strin
         false,
     ))
     .await
+}
+
+#[derive(Serialize)]
+struct QueryArg<'a> {
+    query: &'a str,
+}
+
+pub async fn list_filters() -> Result<Vec<Filter>, String> {
+    invoke("list_filters", &NoArgs {}).await
+}
+
+/// Ok when `query` is valid; otherwise the problem, in words.
+pub async fn check_filter(query: &str) -> Result<(), String> {
+    invoke::<_, ()>("check_filter", &QueryArg { query }).await
+}
+
+pub async fn filter_view(query: &str) -> Result<Vec<FilterGroup>, String> {
+    invoke("filter_view", &QueryArg { query }).await
+}
+
+pub async fn add_filter(name: String, query: String) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::FilterAdd { name, query }, true)).await
+}
+
+pub async fn update_filter(id: Id, name: String, query: String) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::FilterUpdate { id, name: Some(name), query: Some(query) }, false)).await
+}
+
+pub async fn delete_filter(id: Id) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::FilterDelete { id }, false)).await
 }

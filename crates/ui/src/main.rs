@@ -1,4 +1,5 @@
 mod editor;
+mod filters;
 mod api;
 mod icons;
 mod sidebar;
@@ -11,7 +12,8 @@ use std::collections::HashMap;
 use chrono::{Datelike, NaiveDate};
 use dioxus::prelude::*;
 use todo_core::ids::Id;
-use todo_core::model::{Label, Project, Section, Task};
+use todo_core::filter::FilterGroup;
+use todo_core::model::{Filter, Label, Project, Section, Task};
 use todo_core::views;
 
 use editor::{AddTask, EditorValues};
@@ -36,6 +38,8 @@ pub enum View {
     Upcoming,
     Project(Id, String),
     Label(String),
+    /// id, name, query
+    Filter(Id, String, String),
 }
 
 /// The local date, from JS (no `SystemTime` on wasm32).
@@ -63,11 +67,16 @@ struct Loaded {
     /// Sections of every project (for grouping and the editor's location picker).
     sections: Vec<Section>,
     labels: Vec<Label>,
+    filters: Vec<Filter>,
     inbox: Project,
     today_count: usize,
     tasks: Vec<Task>,
     /// Empty unless "Show completed" is on for the current view.
     completed: Vec<Task>,
+    /// Result lists for a filter view (one per comma group).
+    filter_groups: Vec<FilterGroup>,
+    /// Why a saved filter couldn't run (shown in the pane).
+    filter_error: Option<String>,
 }
 
 /// A titled run of tasks in the date-based views.
@@ -142,9 +151,23 @@ fn App() -> Element {
             sections.extend(api::list_sections(p.id.as_str()).await?);
         }
         let labels = api::list_labels().await?;
+        let filters = api::list_filters().await?;
         let today_tasks = api::today_view().await?;
         let today_count = today_tasks.len();
+        let mut filter_groups = Vec::new();
+        let mut filter_error = None;
         let tasks = match &v {
+            View::Filter(_, _, query) => match api::filter_view(query).await {
+                Ok(groups) => {
+                    let tasks = groups.iter().flat_map(|g| g.tasks.clone()).collect();
+                    filter_groups = groups;
+                    tasks
+                }
+                Err(e) => {
+                    filter_error = Some(e);
+                    Vec::new()
+                }
+            },
             View::Upcoming => {
                 // Overdue (from the Today query) on top, then the window.
                 let now = today();
@@ -167,12 +190,23 @@ fn App() -> Element {
                 View::Inbox => api::completed_in_project(inbox.id.as_str()).await?,
                 View::Project(id, _) => api::completed_in_project(id.as_str()).await?,
                 View::Label(name) => api::completed_with_label(name).await?,
-                View::Upcoming => Vec::new(),
+                View::Upcoming | View::Filter(..) => Vec::new(),
             }
         } else {
             Vec::new()
         };
-        Ok::<Loaded, String>(Loaded { projects, sections, labels, inbox, today_count, tasks, completed })
+        Ok::<Loaded, String>(Loaded {
+            projects,
+            sections,
+            labels,
+            filters,
+            inbox,
+            today_count,
+            tasks,
+            completed,
+            filter_groups,
+            filter_error,
+        })
     });
 
     let today = today();
@@ -194,6 +228,7 @@ fn App() -> Element {
                         view,
                         projects: loaded.projects.clone(),
                         labels: loaded.labels.clone(),
+                        filters: loaded.filters.clone(),
                         today_count: loaded.today_count,
                         today_day: today.day(),
                         theme,
@@ -231,22 +266,25 @@ fn MainPane(
     reload: Signal<u32>,
 ) -> Element {
     let mut show_completed = show_completed;
-    // Upcoming has no completed list (Todoist hides that toggle there too).
-    let can_show_completed = !matches!(view, View::Upcoming);
+    // Upcoming and filters have no completed list (as in Todoist).
+    let can_show_completed = !matches!(view, View::Upcoming | View::Filter(..));
     let toggle_text = if show_completed() { "Hide completed" } else { "Show completed" };
     let names = location_names(&loaded);
-    let show_project = matches!(view, View::Today | View::Upcoming | View::Label(_));
+    let show_project = matches!(view, View::Today | View::Upcoming | View::Label(_) | View::Filter(..));
     let title = match &view {
         View::Today => "Today".to_string(),
         View::Upcoming => "Upcoming".to_string(),
         View::Inbox => "Inbox".to_string(),
-        View::Project(_, name) | View::Label(name) => name.clone(),
+        View::Project(_, name) | View::Label(name) | View::Filter(_, name, _) => name.clone(),
     };
     let subtitle = match &view {
         View::Today => format!("{} {}", weekday(today), short_date(today)),
         View::Upcoming => format!("Next {UPCOMING_DAYS} days"),
+        View::Filter(_, _, query) => query.clone(),
         _ => String::new(),
     };
+    let filter_view = matches!(view, View::Filter(..));
+    let multi_group = loaded.filter_groups.len() > 1;
     // The project a project-style view shows (Inbox or a project).
     let project_id = match &view {
         View::Project(id, _) => Some(id.clone()),
@@ -272,6 +310,7 @@ fn MainPane(
     let empty_text = match &view {
         View::Today => ("You're all done for today!", "Enjoy the rest of your day."),
         View::Upcoming => ("Nothing scheduled.", "Tasks with dates in the next two weeks show up here."),
+        View::Filter(..) => ("No tasks match this filter.", "Edit it from the sidebar to widen the query."),
         _ => ("No tasks yet.", "Add one below."),
     };
 
@@ -306,15 +345,47 @@ fn MainPane(
                     }
                 }
                 if !subtitle.is_empty() {
-                    p { class: "view-sub", "{subtitle}" }
+                    p { class: if filter_view { "view-sub mono" } else { "view-sub" }, "{subtitle}" }
                 }
-                if empty && project_sections.is_empty() {
+                if let Some(problem) = loaded.filter_error.clone() {
+                    div { class: "filter-problem big-problem", "This filter can’t run: {problem}" }
+                } else if empty && project_sections.is_empty() {
                     div { class: "empty",
                         div { class: "big", "{empty_text.0}" }
                         div { "{empty_text.1}" }
                     }
                 }
-                if date_view {
+                if filter_view {
+                    for (i, group) in loaded.filter_groups.iter().enumerate() {
+                        div { key: "fg-{i}",
+                            if multi_group {
+                                div { class: "section-title",
+                                    span { class: "mono", "{group.query}" }
+                                    span { class: "muted", "{group.tasks.len()}" }
+                                }
+                            }
+                            TaskList {
+                                tasks: group.tasks.clone(),
+                                nested: false,
+                                today,
+                                names: names.clone(),
+                                show_project,
+                                projects: loaded.projects.clone(),
+                                sections: loaded.sections.clone(),
+                                labels: loaded.labels.clone(),
+                                reload,
+                            }
+                        }
+                    }
+                    AddTask {
+                        key: "{view_key}",
+                        defaults: defaults.clone(),
+                        projects: loaded.projects.clone(),
+                        sections: loaded.sections.clone(),
+                        labels: loaded.labels.clone(),
+                        reload,
+                    }
+                } else if date_view {
                     for (i, group) in groups.into_iter().enumerate() {
                         div { key: "{i}",
                             if let Some(t) = group.title.clone() {

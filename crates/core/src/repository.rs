@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::ids::Id;
-use crate::model::{Label, Project, Section, Task};
+use crate::model::{Filter, Label, Project, Section, Task};
 
 /// Errors a `Repository` can return.
 #[derive(Debug)]
@@ -41,6 +41,10 @@ pub trait Repository {
     fn get_section(&self, id: &Id) -> Result<Option<Section>, RepoError>;
     /// Active sections of a project, in display order.
     fn list_sections(&self, project: &Id) -> Result<Vec<Section>, RepoError>;
+
+    fn upsert_filter(&self, filter: &Filter) -> Result<(), RepoError>;
+    /// Active filters, in creation order.
+    fn list_filters(&self) -> Result<Vec<Filter>, RepoError>;
 
     fn upsert_label(&self, label: &Label) -> Result<(), RepoError>;
     /// Active (non-deleted) labels, sorted by name case-insensitively.

@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, Row};
 use todo_core::ids::Id;
-use todo_core::model::{Due, Duration, Label, Priority, Project, Section, Task, ViewStyle};
+use todo_core::model::{Due, Duration, Filter, Label, Priority, Project, Section, Task, ViewStyle};
 use todo_core::repository::{RepoError, Repository};
 
 use crate::migrations;
@@ -410,6 +410,56 @@ impl Repository for SqliteRepo {
 
     fn list_sections(&self, project: &Id) -> Result<Vec<Section>, RepoError> {
         self.query_sections("WHERE project_id = ?1 AND is_deleted = 0", project.as_str())
+    }
+
+    fn upsert_filter(&self, f: &Filter) -> Result<(), RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        conn.execute(
+            "INSERT INTO filter (id, name, query, color, item_order, is_favorite, is_deleted) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) \
+             ON CONFLICT(id) DO UPDATE SET name=excluded.name, query=excluded.query, \
+                color=excluded.color, item_order=excluded.item_order, \
+                is_favorite=excluded.is_favorite, is_deleted=excluded.is_deleted",
+            params![
+                f.id.as_str(),
+                f.name,
+                f.query,
+                f.color,
+                f.item_order,
+                f.is_favorite as i64,
+                f.is_deleted as i64,
+            ],
+        )
+        .map_err(backend)?;
+        Ok(())
+    }
+
+    fn list_filters(&self) -> Result<Vec<Filter>, RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, query, color, item_order, is_favorite, is_deleted FROM filter \
+                 WHERE is_deleted = 0 ORDER BY item_order ASC, rowid ASC",
+            )
+            .map_err(backend)?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(Filter {
+                    id: Id::from(row.get::<_, String>(0)?),
+                    name: row.get(1)?,
+                    query: row.get(2)?,
+                    color: row.get(3)?,
+                    item_order: row.get(4)?,
+                    is_favorite: row.get::<_, i64>(5)? != 0,
+                    is_deleted: row.get::<_, i64>(6)? != 0,
+                })
+            })
+            .map_err(backend)?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r.map_err(backend)?);
+        }
+        Ok(out)
     }
 
     fn upsert_label(&self, l: &Label) -> Result<(), RepoError> {
