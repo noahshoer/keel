@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, Row};
 use todo_core::ids::Id;
-use todo_core::model::{Due, Duration, Priority, Project, Task, ViewStyle};
+use todo_core::model::{Due, Duration, Label, Priority, Project, Task, ViewStyle};
 use todo_core::repository::{RepoError, Repository};
 
 use crate::migrations;
@@ -326,6 +326,54 @@ impl Repository for SqliteRepo {
         let mut stmt = conn.prepare(&sql).map_err(backend)?;
         let rows = stmt
             .query_map([], |row| row_to_project(row))
+            .map_err(backend)?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r.map_err(backend)?);
+        }
+        Ok(out)
+    }
+
+    fn upsert_label(&self, l: &Label) -> Result<(), RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        conn.execute(
+            "INSERT INTO label (id, name, color, item_order, is_favorite, is_deleted) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
+             ON CONFLICT(id) DO UPDATE SET name=excluded.name, color=excluded.color, \
+                item_order=excluded.item_order, is_favorite=excluded.is_favorite, \
+                is_deleted=excluded.is_deleted",
+            params![
+                l.id.as_str(),
+                l.name,
+                l.color,
+                l.item_order,
+                l.is_favorite as i64,
+                l.is_deleted as i64,
+            ],
+        )
+        .map_err(backend)?;
+        Ok(())
+    }
+
+    fn list_labels(&self) -> Result<Vec<Label>, RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, color, item_order, is_favorite, is_deleted FROM label \
+                 WHERE is_deleted = 0 ORDER BY name COLLATE NOCASE ASC",
+            )
+            .map_err(backend)?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(Label {
+                    id: Id::from(row.get::<_, String>(0)?),
+                    name: row.get(1)?,
+                    color: row.get(2)?,
+                    item_order: row.get(3)?,
+                    is_favorite: row.get::<_, i64>(4)? != 0,
+                    is_deleted: row.get::<_, i64>(5)? != 0,
+                })
+            })
             .map_err(backend)?;
         let mut out = Vec::new();
         for r in rows {

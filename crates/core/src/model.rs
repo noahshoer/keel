@@ -218,6 +218,19 @@ pub struct Label {
     pub is_deleted: bool,
 }
 
+impl Label {
+    pub fn new(name: impl Into<String>) -> Label {
+        Label {
+            id: Id::new(),
+            name: name.into(),
+            color: "charcoal".to_string(),
+            item_order: 0,
+            is_favorite: false,
+            is_deleted: false,
+        }
+    }
+}
+
 /// A saved filter (query over tasks).
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Filter {

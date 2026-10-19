@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::ids::Id;
-use crate::model::{Project, Task};
+use crate::model::{Label, Project, Task};
 
 /// Errors a `Repository` can return.
 #[derive(Debug)]
@@ -36,6 +36,10 @@ pub trait Repository {
     fn get_project(&self, id: &Id) -> Result<Option<Project>, RepoError>;
     /// Active (non-deleted) projects.
     fn list_projects(&self) -> Result<Vec<Project>, RepoError>;
+
+    fn upsert_label(&self, label: &Label) -> Result<(), RepoError>;
+    /// Active (non-deleted) labels, sorted by name case-insensitively.
+    fn list_labels(&self) -> Result<Vec<Label>, RepoError>;
 
     /// Command-log idempotency support.
     fn has_command(&self, uuid: &str) -> Result<bool, RepoError>;

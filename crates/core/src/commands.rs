@@ -4,7 +4,7 @@ use chrono::{Local, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
-use crate::model::{Due, Priority, Project, Task};
+use crate::model::{Due, Label, Priority, Project, Task};
 use crate::recurrence::Recurrence;
 use crate::repository::{RepoError, Repository};
 use crate::streak;
@@ -91,6 +91,15 @@ pub enum Action {
         #[serde(default)]
         goal: Option<i64>,
     },
+    /// Create a label. Names are unique case-insensitively; re-adding an
+    /// existing name maps `temp_id` to the existing label.
+    LabelAdd {
+        name: String,
+    },
+    /// Soft-delete a label and strip its name from every task.
+    LabelDelete {
+        id: Id,
+    },
     ProjectAdd {
         name: String,
     },
@@ -107,6 +116,8 @@ impl Action {
             Action::TaskComplete { .. } => "task_complete",
             Action::TaskDelete { .. } => "task_delete",
             Action::TaskSetStreak { .. } => "task_set_streak",
+            Action::LabelAdd { .. } => "label_add",
+            Action::LabelDelete { .. } => "label_delete",
             Action::ProjectAdd { .. } => "project_add",
             Action::ProjectDelete { .. } => "project_delete",
         }
@@ -297,6 +308,38 @@ pub fn apply_at<R: Repository>(
                 task.streak_goal = goal;
                 task.updated_at = Utc::now();
                 repo.upsert_task(&task)?;
+            }
+        }
+        Action::LabelAdd { name } => {
+            let name = name.trim().to_string();
+            let existing = repo
+                .list_labels()?
+                .into_iter()
+                .find(|l| l.name.eq_ignore_ascii_case(&name));
+            let id = match existing {
+                Some(label) => label.id,
+                None => {
+                    let label = Label::new(name);
+                    repo.upsert_label(&label)?;
+                    label.id
+                }
+            };
+            if let Some(temp) = cmd.temp_id {
+                result.id_mapping.insert(temp, id);
+            }
+        }
+        Action::LabelDelete { id } => {
+            if let Some(mut label) = repo.list_labels()?.into_iter().find(|l| l.id == id) {
+                for mut task in repo.list_all_tasks()? {
+                    let before = task.labels.len();
+                    task.labels.retain(|n| !n.eq_ignore_ascii_case(&label.name));
+                    if task.labels.len() != before {
+                        task.updated_at = Utc::now();
+                        repo.upsert_task(&task)?;
+                    }
+                }
+                label.is_deleted = true;
+                repo.upsert_label(&label)?;
             }
         }
         Action::ProjectAdd { name } => {
