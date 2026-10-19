@@ -83,7 +83,9 @@ fn complete_recurring_twice_same_day_no_double() {
     let id = daily_streak_task(&repo, d(2026, 1, 5));
     apply_at(&repo, cmd("c1", None, Action::TaskComplete { id: id.clone() }), d(2026, 1, 5)).unwrap();
     apply_at(&repo, cmd("c2", None, Action::TaskComplete { id: id.clone() }), d(2026, 1, 5)).unwrap();
-    assert_eq!(repo.get_task(&id).unwrap().unwrap().streak_current, 1);
+    let t = repo.get_task(&id).unwrap().unwrap();
+    assert_eq!(t.streak_current, 1);
+    assert_eq!(t.due.unwrap().date, "2026-01-06", "a repeat click must not skip tomorrow's occurrence");
 }
 
 #[test]
@@ -120,4 +122,24 @@ fn set_streak_enables_and_sets_goal() {
     let t = repo.get_task(&id).unwrap().unwrap();
     assert!(t.streak_enabled);
     assert_eq!(t.streak_goal, Some(30));
+}
+
+#[test]
+fn early_completion_credits_the_upcoming_occurrence() {
+    // Mon/Wed habit. 2026-01-05 is a Monday.
+    let repo = SqliteRepo::open_in_memory().unwrap();
+    let project = Id::new();
+    let mon = d(2026, 1, 5);
+    let res = apply_at(&repo, cmd("add", Some("t"), add("gym", &project, Some(Recurrence::Weekly(vec![0, 2])))), mon).unwrap();
+    let id = res.id_mapping["t"].clone();
+    apply_at(&repo, cmd("on", None, Action::TaskSetStreak { id: id.clone(), enabled: true, goal: None }), mon).unwrap();
+
+    apply_at(&repo, cmd("c1", None, Action::TaskComplete { id: id.clone() }), mon).unwrap(); // Mon on time
+    apply_at(&repo, cmd("c2", None, Action::TaskComplete { id: id.clone() }), d(2026, 1, 6)).unwrap(); // Wed's, done Tue
+    let t = repo.get_task(&id).unwrap().unwrap();
+    assert_eq!(t.streak_current, 2);
+    assert_eq!(t.due.as_ref().unwrap().date, "2026-01-12", "next occurrence after Wed is Mon");
+
+    apply_at(&repo, cmd("c3", None, Action::TaskComplete { id: id.clone() }), d(2026, 1, 12)).unwrap(); // next Mon
+    assert_eq!(repo.get_task(&id).unwrap().unwrap().streak_current, 3, "early completion must not break the streak");
 }

@@ -189,15 +189,20 @@ pub fn apply_at<R: Repository>(
                     .as_ref()
                     .and_then(|d| d.recurrence.clone().zip(due_date(d)));
                 match recurring {
-                    // Recurring: reschedule to the next occurrence after
-                    // max(due, today) and credit the streak; stays active.
+                    // Recurring: credit the occurrence being completed, then
+                    // reschedule past it; the task stays active. Re-completing
+                    // an already-credited occurrence is a no-op.
                     Some((rule, current)) => {
-                        let next = rule.next_after(current.max(today));
+                        let occurrence = completed_occurrence(&rule, current, today);
+                        if already_credited(&task, occurrence) {
+                            return finish(repo, &cmd.uuid, type_name, &args_json, result);
+                        }
+                        let next = rule.next_after(occurrence.max(current));
                         if let Some(d) = task.due.as_mut() {
                             let suffix = d.date.get(10..).unwrap_or("").to_string();
                             d.date = format!("{}{}", iso(next), suffix);
                         }
-                        streak::credit_completion(&mut task, today);
+                        streak::credit_completion(&mut task, occurrence);
                     }
                     None => {
                         task.checked = true;
@@ -238,8 +243,42 @@ pub fn apply_at<R: Repository>(
         }
     }
 
-    repo.record_command(&cmd.uuid, type_name, &args_json)?;
+    finish(repo, &cmd.uuid, type_name, &args_json, result)
+}
+
+fn finish<R: Repository>(
+    repo: &R,
+    uuid: &str,
+    type_name: &str,
+    args_json: &str,
+    result: ApplyResult,
+) -> Result<ApplyResult, RepoError> {
+    repo.record_command(uuid, type_name, args_json)?;
     Ok(result)
+}
+
+/// Which occurrence a completion on `today` is for: today's when today is a
+/// scheduled day; the immediately upcoming one when completing early on an
+/// unscheduled day; otherwise today (late — the missed one is not rescued).
+fn completed_occurrence(rule: &Recurrence, due: NaiveDate, today: NaiveDate) -> NaiveDate {
+    if rule.contains(today) {
+        today
+    } else if due == rule.next_after(today) {
+        due
+    } else {
+        today
+    }
+}
+
+/// True when a streak-tracked task has already been credited for `occurrence`
+/// (or a later one), so a repeat completion must not reschedule or count again.
+fn already_credited(task: &Task, occurrence: NaiveDate) -> bool {
+    task.streak_enabled
+        && task
+            .streak_last_period
+            .as_deref()
+            .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+            .is_some_and(|last| occurrence <= last)
 }
 
 #[cfg(test)]
