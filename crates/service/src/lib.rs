@@ -129,6 +129,38 @@ impl AppService {
             .collect())
     }
 
+    /// Completed (checked) tasks matching `keep`, newest first.
+    fn completed(&self, keep: impl Fn(&Task) -> bool) -> Result<Vec<Task>, RepoError> {
+        let mut tasks: Vec<Task> = self
+            .repo
+            .list_all_tasks()?
+            .into_iter()
+            .filter(|t| t.checked && keep(t))
+            .collect();
+        tasks.sort_by(|a, b| b.completed_at.cmp(&a.completed_at));
+        Ok(tasks)
+    }
+
+    pub fn completed_in_project(&self, project_id: &str) -> Result<Vec<Task>, RepoError> {
+        self.completed(|t| t.project_id.as_str() == project_id)
+    }
+
+    pub fn completed_with_label(&self, name: &str) -> Result<Vec<Task>, RepoError> {
+        self.completed(|t| t.labels.iter().any(|l| l.eq_ignore_ascii_case(name)))
+    }
+
+    pub fn completed_today(&self) -> Result<Vec<Task>, RepoError> {
+        self.completed_today_at(today())
+    }
+
+    /// Tasks completed on `today`'s local calendar day.
+    pub fn completed_today_at(&self, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
+        self.completed(|t| {
+            t.completed_at
+                .is_some_and(|c| c.with_timezone(&Local).date_naive() == today)
+        })
+    }
+
     pub fn list_labels(&self) -> Result<Vec<Label>, RepoError> {
         self.repo.list_labels()
     }
