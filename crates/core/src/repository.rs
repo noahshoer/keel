@@ -27,6 +27,8 @@ pub trait Repository {
     fn get_task(&self, id: &Id) -> Result<Option<Task>, RepoError>;
     /// Active (non-deleted) tasks in a project.
     fn list_tasks(&self, project: &Id) -> Result<Vec<Task>, RepoError>;
+    /// Active (non-deleted) tasks across every project.
+    fn list_all_tasks(&self) -> Result<Vec<Task>, RepoError>;
     /// Soft-delete a task and (soft-delete) its sub-tasks.
     fn soft_delete_task(&self, id: &Id) -> Result<(), RepoError>;
 

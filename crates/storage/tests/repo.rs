@@ -108,3 +108,20 @@ fn list_tasks_filters_by_project_and_excludes_deleted() {
     assert_eq!(b.len(), 1);
     assert_eq!(b[0].id, t3.id);
 }
+
+#[test]
+fn list_all_tasks_spans_projects_and_excludes_deleted() {
+    let (_d, repo) = temp_db();
+    let a = Task::new("a", Id::new());
+    let b = Task::new("b", Id::new());
+    let gone = Task::new("gone", Id::new());
+    for t in [&a, &b, &gone] {
+        repo.upsert_task(t).unwrap();
+    }
+    repo.soft_delete_task(&gone.id).unwrap();
+    let mut ids: Vec<_> = repo.list_all_tasks().unwrap().into_iter().map(|t| t.id).collect();
+    ids.sort_by(|x, y| x.as_str().cmp(y.as_str()));
+    let mut want = vec![a.id.clone(), b.id.clone()];
+    want.sort_by(|x, y| x.as_str().cmp(y.as_str()));
+    assert_eq!(ids, want);
+}
