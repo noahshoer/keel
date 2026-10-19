@@ -5,6 +5,40 @@
 //! Theme resolution: `data-theme="light|dark"` on <html> wins; with no
 //! attribute ("System") the OS `prefers-color-scheme` decides.
 
+use base64::Engine;
+
+/// Inter (variable weight, SIL OFL — see assets/fonts/Inter-OFL.txt), compiled
+/// into the wasm and served as data URLs so the app looks the same offline
+/// (no asset pipeline needed).
+const INTER_LATIN: &[u8] = include_bytes!("../assets/fonts/inter-latin-wght-normal.woff2");
+const INTER_LATIN_EXT: &[u8] = include_bytes!("../assets/fonts/inter-latin-ext-wght-normal.woff2");
+
+/// `@font-face` rules for the bundled Inter subsets (encoded once).
+fn fonts() -> &'static str {
+    static FONTS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    FONTS.get_or_init(font_faces)
+}
+
+fn font_faces() -> String {
+    let face = |bytes: &[u8], range: &str| {
+        let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+        format!(
+            "@font-face {{ font-family: \"Inter\"; font-style: normal; font-weight: 100 900; \
+             font-display: swap; src: url(\"data:font/woff2;base64,{data}\") format(\"woff2\"); \
+             unicode-range: {range}; }}\n"
+        )
+    };
+    face(
+        INTER_LATIN_EXT,
+        "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, \
+         U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF",
+    ) + &face(
+        INTER_LATIN,
+        "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, \
+         U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+    )
+}
+
 const LIGHT: &str = r#"
   color-scheme: light;
   --app-bg: #f5f3f0;
@@ -103,7 +137,8 @@ body {
   font-family: "Inter", "Segoe UI Variable Text", "Segoe UI Variable", -apple-system, BlinkMacSystemFont,
     "SF Pro Text", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 14px; color: var(--text); background: var(--app-bg);
-  -webkit-font-smoothing: antialiased; letter-spacing: -0.003em;
+  -webkit-font-smoothing: antialiased; letter-spacing: -0.006em;
+  font-feature-settings: "cv11", "ss03"; font-optical-sizing: auto;
 }
 button, input, select { font-family: inherit; color: inherit; }
 button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, .label-opt, .task-row {
@@ -318,9 +353,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /// forced light), or when forced dark.
 pub fn css() -> String {
     format!(
-        ":root {{{LIGHT}}}\n\
+        "{fonts}:root {{{LIGHT}}}\n\
          @media (prefers-color-scheme: dark) {{ :root:not([data-theme=\"light\"]) {{{DARK}}} }}\n\
          :root[data-theme=\"dark\"] {{{DARK}}}\n\
-         {RULES}"
+         {RULES}",
+        fonts = fonts()
     )
 }
