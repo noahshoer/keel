@@ -1,0 +1,16 @@
+# Rust
+/target
+**/target
+Cargo.lock.bak
+
+# Tauri / Dioxus build output
+dist/
+src-tauri/gen/
+.dx/
+
+# Superpowers SDD scratch (git-ignored workspace)
+.superpowers/
+
+# OS
+.DS_Store
+Thumbs.db
