@@ -195,7 +195,7 @@ fn MainPane(view: View, loaded: Loaded, today: NaiveDate, reload: Signal<u32>) -
         _ => loaded.inbox.id.clone(),
     };
     let add_date = match &view {
-        View::Today => today.format("%Y-%m-%d").to_string(),
+        View::Today | View::Upcoming => today.format("%Y-%m-%d").to_string(),
         _ => String::new(),
     };
     let view_key = format!("{view:?}");
