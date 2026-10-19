@@ -5,7 +5,7 @@
 use chrono::{Local, NaiveDate};
 use todo_core::commands::{apply_at, ApplyResult, Command};
 use todo_core::ids::Id;
-use todo_core::model::{Project, Task};
+use todo_core::model::{Label, Project, Task};
 use todo_core::repository::{RepoError, Repository};
 use todo_core::streak;
 use todo_core::views;
@@ -126,6 +126,23 @@ impl AppService {
             .list_tasks_at(project_id, today)?
             .into_iter()
             .filter(|t| !t.checked)
+            .collect())
+    }
+
+    pub fn list_labels(&self) -> Result<Vec<Label>, RepoError> {
+        self.repo.list_labels()
+    }
+
+    /// Open tasks carrying `name` (case-insensitive), across every project.
+    pub fn label_view(&self, name: &str) -> Result<Vec<Task>, RepoError> {
+        self.label_view_at(name, today())
+    }
+
+    pub fn label_view_at(&self, name: &str, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
+        Ok(self
+            .open_tasks(today)?
+            .into_iter()
+            .filter(|t| t.labels.iter().any(|l| l.eq_ignore_ascii_case(name)))
             .collect())
     }
 
