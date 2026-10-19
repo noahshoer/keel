@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, Row};
 use todo_core::ids::Id;
-use todo_core::model::{Due, Duration, Label, Priority, Project, Task, ViewStyle};
+use todo_core::model::{Due, Duration, Label, Priority, Project, Section, Task, ViewStyle};
 use todo_core::repository::{RepoError, Repository};
 
 use crate::migrations;
@@ -38,6 +38,47 @@ impl SqliteRepo {
         Ok(SqliteRepo {
             conn: Mutex::new(conn),
         })
+    }
+
+    fn query_sections(&self, filter: &str, arg: &str) -> Result<Vec<Section>, RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let sql = format!(
+            "SELECT id, project_id, name, description, section_order, order_key, is_collapsed, \
+             is_archived, is_deleted, added_at, updated_at FROM section {filter} \
+             ORDER BY section_order ASC, added_at ASC"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(backend)?;
+        let rows = stmt
+            .query_map(params![arg], |row| {
+                let added: String = row.get(9)?;
+                let updated: String = row.get(10)?;
+                Ok((
+                    Section {
+                        id: Id::from(row.get::<_, String>(0)?),
+                        project_id: Id::from(row.get::<_, String>(1)?),
+                        name: row.get(2)?,
+                        description: row.get(3)?,
+                        section_order: row.get(4)?,
+                        order_key: row.get(5)?,
+                        is_collapsed: row.get::<_, i64>(6)? != 0,
+                        is_archived: row.get::<_, i64>(7)? != 0,
+                        is_deleted: row.get::<_, i64>(8)? != 0,
+                        added_at: Utc::now(),
+                        updated_at: Utc::now(),
+                    },
+                    added,
+                    updated,
+                ))
+            })
+            .map_err(backend)?;
+        let mut out = Vec::new();
+        for r in rows {
+            let (mut s, added, updated) = r.map_err(backend)?;
+            s.added_at = parse_ts(&added)?;
+            s.updated_at = parse_ts(&updated)?;
+            out.push(s);
+        }
+        Ok(out)
     }
 
     /// Open an in-memory database (used by tests/tools).
@@ -332,6 +373,43 @@ impl Repository for SqliteRepo {
             out.push(r.map_err(backend)?);
         }
         Ok(out)
+    }
+
+    fn upsert_section(&self, s: &Section) -> Result<(), RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        conn.execute(
+            "INSERT INTO section (id, project_id, name, description, section_order, order_key, \
+                is_collapsed, is_archived, is_deleted, added_at, updated_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) \
+             ON CONFLICT(id) DO UPDATE SET project_id=excluded.project_id, name=excluded.name, \
+                description=excluded.description, section_order=excluded.section_order, \
+                order_key=excluded.order_key, is_collapsed=excluded.is_collapsed, \
+                is_archived=excluded.is_archived, is_deleted=excluded.is_deleted, \
+                added_at=excluded.added_at, updated_at=excluded.updated_at",
+            params![
+                s.id.as_str(),
+                s.project_id.as_str(),
+                s.name,
+                s.description,
+                s.section_order,
+                s.order_key,
+                s.is_collapsed as i64,
+                s.is_archived as i64,
+                s.is_deleted as i64,
+                ts(&s.added_at),
+                ts(&s.updated_at),
+            ],
+        )
+        .map_err(backend)?;
+        Ok(())
+    }
+
+    fn get_section(&self, id: &Id) -> Result<Option<Section>, RepoError> {
+        Ok(self.query_sections("WHERE id = ?1", id.as_str())?.into_iter().next())
+    }
+
+    fn list_sections(&self, project: &Id) -> Result<Vec<Section>, RepoError> {
+        self.query_sections("WHERE project_id = ?1 AND is_deleted = 0", project.as_str())
     }
 
     fn upsert_label(&self, l: &Label) -> Result<(), RepoError> {
