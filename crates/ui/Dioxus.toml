@@ -1,0 +1,8 @@
+[application]
+name = "todo-ui"
+
+[web.app]
+title = "Todo"
+
+[web.watcher]
+reload_html = true

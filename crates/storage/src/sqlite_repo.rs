@@ -1,0 +1,342 @@
+use std::sync::Mutex;
+
+use chrono::{DateTime, Utc};
+use rusqlite::{params, Connection, Row};
+use todo_core::ids::Id;
+use todo_core::model::{Due, Duration, Priority, Project, Task, ViewStyle};
+use todo_core::repository::{RepoError, Repository};
+
+use crate::migrations;
+
+/// SQLite-backed `Repository` (local store for v1).
+pub struct SqliteRepo {
+    conn: Mutex<Connection>,
+}
+
+fn backend<E: std::fmt::Display>(e: E) -> RepoError {
+    RepoError::Backend(e.to_string())
+}
+
+fn ts(dt: &DateTime<Utc>) -> String {
+    dt.to_rfc3339()
+}
+
+fn parse_ts(s: &str) -> Result<DateTime<Utc>, RepoError> {
+    DateTime::parse_from_rfc3339(s)
+        .map(|d| d.with_timezone(&Utc))
+        .map_err(backend)
+}
+
+fn opt_id(s: Option<String>) -> Option<Id> {
+    s.map(Id::from)
+}
+
+impl SqliteRepo {
+    pub fn open(path: &str) -> Result<Self, RepoError> {
+        let conn = Connection::open(path).map_err(backend)?;
+        migrations::run(&conn).map_err(backend)?;
+        Ok(SqliteRepo {
+            conn: Mutex::new(conn),
+        })
+    }
+
+    /// Open an in-memory database (used by tests/tools).
+    pub fn open_in_memory() -> Result<Self, RepoError> {
+        let conn = Connection::open_in_memory().map_err(backend)?;
+        migrations::run(&conn).map_err(backend)?;
+        Ok(SqliteRepo {
+            conn: Mutex::new(conn),
+        })
+    }
+}
+
+fn view_style_to_str(v: ViewStyle) -> &'static str {
+    match v {
+        ViewStyle::List => "list",
+        ViewStyle::Board => "board",
+        ViewStyle::Calendar => "calendar",
+    }
+}
+
+fn view_style_from_str(s: &str) -> ViewStyle {
+    match s {
+        "board" => ViewStyle::Board,
+        "calendar" => ViewStyle::Calendar,
+        _ => ViewStyle::List,
+    }
+}
+
+fn row_to_task(row: &Row<'_>) -> rusqlite::Result<Task> {
+    let due_json: String = row.get("due_json")?;
+    let duration_json: String = row.get("duration_json")?;
+    let labels_json: String = row.get("labels_json")?;
+    let priority_api: i64 = row.get("priority")?;
+    let added_at: String = row.get("added_at")?;
+    let updated_at: String = row.get("updated_at")?;
+    let completed_at: Option<String> = row.get("completed_at")?;
+
+    let map_json = |e: serde_json::Error| {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+    };
+    let map_ts = |s: &str| {
+        parse_ts(s).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(
+                0,
+                rusqlite::types::Type::Text,
+                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())),
+            )
+        })
+    };
+
+    Ok(Task {
+        id: Id::from(row.get::<_, String>("id")?),
+        project_id: Id::from(row.get::<_, String>("project_id")?),
+        section_id: opt_id(row.get("section_id")?),
+        parent_id: opt_id(row.get("parent_id")?),
+        content: row.get("content")?,
+        description: row.get("description")?,
+        priority: Priority::from_api(priority_api as u8),
+        due: serde_json::from_str::<Option<Due>>(&due_json).map_err(map_json)?,
+        deadline: row.get("deadline")?,
+        duration: serde_json::from_str::<Option<Duration>>(&duration_json).map_err(map_json)?,
+        labels: serde_json::from_str::<Vec<String>>(&labels_json).map_err(map_json)?,
+        child_order: row.get("child_order")?,
+        order_key: row.get("order_key")?,
+        day_order: row.get("day_order")?,
+        is_collapsed: row.get::<_, i64>("is_collapsed")? != 0,
+        checked: row.get::<_, i64>("checked")? != 0,
+        is_deleted: row.get::<_, i64>("is_deleted")? != 0,
+        added_at: map_ts(&added_at)?,
+        completed_at: match completed_at {
+            Some(s) => Some(map_ts(&s)?),
+            None => None,
+        },
+        updated_at: map_ts(&updated_at)?,
+        streak_enabled: row.get::<_, i64>("streak_enabled")? != 0,
+        streak_current: row.get("streak_current")?,
+        streak_best: row.get("streak_best")?,
+        streak_goal: row.get("streak_goal")?,
+        streak_last_period: row.get("streak_last_period")?,
+    })
+}
+
+fn row_to_project(row: &Row<'_>) -> rusqlite::Result<Project> {
+    let added_at: String = row.get("added_at")?;
+    let updated_at: String = row.get("updated_at")?;
+    let map_ts = |s: &str| {
+        parse_ts(s).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(
+                0,
+                rusqlite::types::Type::Text,
+                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())),
+            )
+        })
+    };
+    Ok(Project {
+        id: Id::from(row.get::<_, String>("id")?),
+        name: row.get("name")?,
+        color: row.get("color")?,
+        icon: row.get("icon")?,
+        parent_id: opt_id(row.get("parent_id")?),
+        child_order: row.get("child_order")?,
+        order_key: row.get("order_key")?,
+        view_style: view_style_from_str(&row.get::<_, String>("view_style")?),
+        is_favorite: row.get::<_, i64>("is_favorite")? != 0,
+        is_collapsed: row.get::<_, i64>("is_collapsed")? != 0,
+        is_archived: row.get::<_, i64>("is_archived")? != 0,
+        is_inbox: row.get::<_, i64>("is_inbox")? != 0,
+        is_deleted: row.get::<_, i64>("is_deleted")? != 0,
+        added_at: map_ts(&added_at)?,
+        updated_at: map_ts(&updated_at)?,
+    })
+}
+
+const TASK_COLS: &str = "id, project_id, section_id, parent_id, content, description, priority, \
+    due_json, deadline, duration_json, labels_json, child_order, order_key, day_order, \
+    is_collapsed, checked, is_deleted, added_at, completed_at, updated_at, \
+    streak_enabled, streak_current, streak_best, streak_goal, streak_last_period";
+
+const PROJECT_COLS: &str = "id, name, color, icon, parent_id, child_order, order_key, view_style, \
+    is_favorite, is_collapsed, is_archived, is_inbox, is_deleted, added_at, updated_at";
+
+impl Repository for SqliteRepo {
+    fn upsert_task(&self, t: &Task) -> Result<(), RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let due_json = serde_json::to_string(&t.due).map_err(backend)?;
+        let duration_json = serde_json::to_string(&t.duration).map_err(backend)?;
+        let labels_json = serde_json::to_string(&t.labels).map_err(backend)?;
+        conn.execute(
+            "INSERT INTO task (id, project_id, section_id, parent_id, content, description, priority, \
+                due_json, deadline, duration_json, labels_json, child_order, order_key, day_order, \
+                is_collapsed, checked, is_deleted, added_at, completed_at, updated_at, \
+                streak_enabled, streak_current, streak_best, streak_goal, streak_last_period) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25) \
+             ON CONFLICT(id) DO UPDATE SET \
+                project_id=excluded.project_id, section_id=excluded.section_id, parent_id=excluded.parent_id, \
+                content=excluded.content, description=excluded.description, priority=excluded.priority, \
+                due_json=excluded.due_json, deadline=excluded.deadline, duration_json=excluded.duration_json, \
+                labels_json=excluded.labels_json, child_order=excluded.child_order, order_key=excluded.order_key, \
+                day_order=excluded.day_order, is_collapsed=excluded.is_collapsed, checked=excluded.checked, \
+                is_deleted=excluded.is_deleted, added_at=excluded.added_at, completed_at=excluded.completed_at, \
+                updated_at=excluded.updated_at, streak_enabled=excluded.streak_enabled, \
+                streak_current=excluded.streak_current, streak_best=excluded.streak_best, \
+                streak_goal=excluded.streak_goal, streak_last_period=excluded.streak_last_period",
+            params![
+                t.id.as_str(),
+                t.project_id.as_str(),
+                t.section_id.as_ref().map(|i| i.as_str()),
+                t.parent_id.as_ref().map(|i| i.as_str()),
+                t.content,
+                t.description,
+                t.priority.to_api() as i64,
+                due_json,
+                t.deadline,
+                duration_json,
+                labels_json,
+                t.child_order,
+                t.order_key,
+                t.day_order,
+                t.is_collapsed as i64,
+                t.checked as i64,
+                t.is_deleted as i64,
+                ts(&t.added_at),
+                t.completed_at.as_ref().map(ts),
+                ts(&t.updated_at),
+                t.streak_enabled as i64,
+                t.streak_current,
+                t.streak_best,
+                t.streak_goal,
+                t.streak_last_period,
+            ],
+        )
+        .map_err(backend)?;
+        Ok(())
+    }
+
+    fn get_task(&self, id: &Id) -> Result<Option<Task>, RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let sql = format!("SELECT {TASK_COLS} FROM task WHERE id = ?1");
+        let mut stmt = conn.prepare(&sql).map_err(backend)?;
+        let mut rows = stmt.query(params![id.as_str()]).map_err(backend)?;
+        match rows.next().map_err(backend)? {
+            Some(row) => Ok(Some(row_to_task(row).map_err(backend)?)),
+            None => Ok(None),
+        }
+    }
+
+    fn list_tasks(&self, project: &Id) -> Result<Vec<Task>, RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let sql = format!(
+            "SELECT {TASK_COLS} FROM task WHERE project_id = ?1 AND is_deleted = 0 \
+             ORDER BY child_order ASC, added_at ASC"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(backend)?;
+        let rows = stmt
+            .query_map(params![project.as_str()], |row| row_to_task(row))
+            .map_err(backend)?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r.map_err(backend)?);
+        }
+        Ok(out)
+    }
+
+    fn soft_delete_task(&self, id: &Id) -> Result<(), RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let now = ts(&Utc::now());
+        // Soft-delete the task and its entire sub-tree (children, grandchildren, …).
+        conn.execute(
+            "UPDATE task SET is_deleted = 1, updated_at = ?2 WHERE id IN (\
+                 WITH RECURSIVE sub(id) AS (\
+                     SELECT ?1 \
+                     UNION ALL \
+                     SELECT t.id FROM task t JOIN sub ON t.parent_id = sub.id\
+                 ) SELECT id FROM sub\
+             )",
+            params![id.as_str(), now],
+        )
+        .map_err(backend)?;
+        Ok(())
+    }
+
+    fn upsert_project(&self, p: &Project) -> Result<(), RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        conn.execute(
+            "INSERT INTO project (id, name, color, icon, parent_id, child_order, order_key, view_style, \
+                is_favorite, is_collapsed, is_archived, is_inbox, is_deleted, added_at, updated_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15) \
+             ON CONFLICT(id) DO UPDATE SET \
+                name=excluded.name, color=excluded.color, icon=excluded.icon, parent_id=excluded.parent_id, \
+                child_order=excluded.child_order, order_key=excluded.order_key, view_style=excluded.view_style, \
+                is_favorite=excluded.is_favorite, is_collapsed=excluded.is_collapsed, \
+                is_archived=excluded.is_archived, is_inbox=excluded.is_inbox, is_deleted=excluded.is_deleted, \
+                added_at=excluded.added_at, updated_at=excluded.updated_at",
+            params![
+                p.id.as_str(),
+                p.name,
+                p.color,
+                p.icon,
+                p.parent_id.as_ref().map(|i| i.as_str()),
+                p.child_order,
+                p.order_key,
+                view_style_to_str(p.view_style),
+                p.is_favorite as i64,
+                p.is_collapsed as i64,
+                p.is_archived as i64,
+                p.is_inbox as i64,
+                p.is_deleted as i64,
+                ts(&p.added_at),
+                ts(&p.updated_at),
+            ],
+        )
+        .map_err(backend)?;
+        Ok(())
+    }
+
+    fn get_project(&self, id: &Id) -> Result<Option<Project>, RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let sql = format!("SELECT {PROJECT_COLS} FROM project WHERE id = ?1");
+        let mut stmt = conn.prepare(&sql).map_err(backend)?;
+        let mut rows = stmt.query(params![id.as_str()]).map_err(backend)?;
+        match rows.next().map_err(backend)? {
+            Some(row) => Ok(Some(row_to_project(row).map_err(backend)?)),
+            None => Ok(None),
+        }
+    }
+
+    fn list_projects(&self) -> Result<Vec<Project>, RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let sql = format!(
+            "SELECT {PROJECT_COLS} FROM project WHERE is_deleted = 0 ORDER BY child_order ASC, added_at ASC"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(backend)?;
+        let rows = stmt
+            .query_map([], |row| row_to_project(row))
+            .map_err(backend)?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r.map_err(backend)?);
+        }
+        Ok(out)
+    }
+
+    fn has_command(&self, uuid: &str) -> Result<bool, RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let mut stmt = conn
+            .prepare("SELECT 1 FROM command_log WHERE uuid = ?1")
+            .map_err(backend)?;
+        let exists = stmt.exists(params![uuid]).map_err(backend)?;
+        Ok(exists)
+    }
+
+    fn record_command(&self, uuid: &str, ctype: &str, args_json: &str) -> Result<(), RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        conn.execute(
+            "INSERT OR IGNORE INTO command_log (uuid, type, args_json, created_at, applied, synced) \
+             VALUES (?1, ?2, ?3, ?4, 1, 0)",
+            params![uuid, ctype, args_json, ts(&Utc::now())],
+        )
+        .map_err(backend)?;
+        Ok(())
+    }
+}
