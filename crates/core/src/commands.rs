@@ -25,6 +25,17 @@ pub struct Command {
     pub action: Action,
 }
 
+/// A due-date edit. `date` is `YYYY-MM-DD` (or a datetime); with only a
+/// `recurrence`, the first occurrence on/after today is used; both `None`
+/// clears the due.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DueEdit {
+    #[serde(default)]
+    pub date: Option<String>,
+    #[serde(default)]
+    pub recurrence: Option<Recurrence>,
+}
+
 /// The operations supported so far. (update/move/uncomplete land with their
 /// features.)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,6 +60,23 @@ pub enum Action {
         /// the first scheduled day on or after today.
         #[serde(default)]
         recurrence: Option<Recurrence>,
+    },
+    /// Patch a task: every field is optional; omitted fields are unchanged.
+    TaskUpdate {
+        id: Id,
+        #[serde(default)]
+        content: Option<String>,
+        #[serde(default)]
+        description: Option<String>,
+        #[serde(default)]
+        priority: Option<Priority>,
+        #[serde(default)]
+        project_id: Option<Id>,
+        #[serde(default)]
+        labels: Option<Vec<String>>,
+        /// `None` keeps the due; `Some(DueEdit { date: None, recurrence: None })` clears it.
+        #[serde(default)]
+        due: Option<DueEdit>,
     },
     TaskComplete {
         id: Id,
@@ -75,6 +103,7 @@ impl Action {
     fn type_name(&self) -> &'static str {
         match self {
             Action::TaskAdd { .. } => "task_add",
+            Action::TaskUpdate { .. } => "task_update",
             Action::TaskComplete { .. } => "task_complete",
             Action::TaskDelete { .. } => "task_delete",
             Action::TaskSetStreak { .. } => "task_set_streak",
@@ -99,6 +128,28 @@ fn describe(rule: &Recurrence) -> String {
         }
         Recurrence::MonthlyDay(day) => format!("every month on the {day}"),
     }
+}
+
+/// Builds a `Due` from an optional date and rule. With only a rule, the first
+/// occurrence on/after `today` is used; with neither, there is no due.
+fn build_due(date: Option<String>, rule: Option<Recurrence>, today: NaiveDate) -> Option<Due> {
+    let (date, string) = match (&date, &rule) {
+        (None, None) => return None,
+        (Some(d), None) => (d.clone(), d.clone()),
+        (Some(d), Some(r)) => (d.clone(), describe(r)),
+        (None, Some(r)) => {
+            let first = if r.contains(today) { today } else { r.next_after(today) };
+            (iso(first), describe(r))
+        }
+    };
+    Some(Due {
+        date,
+        timezone: None,
+        string,
+        lang: "en".to_string(),
+        is_recurring: rule.is_some(),
+        recurrence: rule,
+    })
 }
 
 fn iso(date: NaiveDate) -> String {
@@ -153,23 +204,8 @@ pub fn apply_at<R: Repository>(
                 task.priority = p;
             }
             task.due = match (due, recurrence) {
-                (Some(mut d), Some(rule)) => {
-                    d.is_recurring = true;
-                    d.recurrence = Some(rule);
-                    Some(d)
-                }
-                (None, Some(rule)) => {
-                    let first = if rule.contains(today) { today } else { rule.next_after(today) };
-                    Some(Due {
-                        date: iso(first),
-                        timezone: None,
-                        string: describe(&rule),
-                        lang: "en".to_string(),
-                        is_recurring: true,
-                        recurrence: Some(rule),
-                    })
-                }
                 (due, None) => due,
+                (due, rule) => build_due(due.map(|d| d.date), rule, today),
             };
             if let Some(l) = labels {
                 task.labels = l;
@@ -210,6 +246,45 @@ pub fn apply_at<R: Repository>(
                     }
                 }
                 task.updated_at = now;
+                repo.upsert_task(&task)?;
+            }
+        }
+        Action::TaskUpdate {
+            id,
+            content,
+            description,
+            priority,
+            project_id,
+            labels,
+            due,
+        } => {
+            if let Some(mut task) = repo.get_task(&id)? {
+                if let Some(c) = content {
+                    task.content = c;
+                }
+                if let Some(d) = description {
+                    task.description = d;
+                }
+                if let Some(p) = priority {
+                    task.priority = p;
+                }
+                if let Some(p) = project_id {
+                    task.project_id = p;
+                }
+                if let Some(l) = labels {
+                    task.labels = l;
+                }
+                if let Some(edit) = due {
+                    let old_rule = task.due.as_ref().and_then(|d| d.recurrence.clone());
+                    task.due = build_due(edit.date, edit.recurrence, today);
+                    let new_rule = task.due.as_ref().and_then(|d| d.recurrence.clone());
+                    // A different schedule invalidates the occurrence history.
+                    if new_rule != old_rule {
+                        task.streak_current = 0;
+                        task.streak_last_period = None;
+                    }
+                }
+                task.updated_at = Utc::now();
                 repo.upsert_task(&task)?;
             }
         }
