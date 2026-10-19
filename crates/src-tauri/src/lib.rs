@@ -1,0 +1,43 @@
+//! Tauri shell: thin IPC wrappers over `todo_service::AppService`.
+//! All domain logic lives in the service/core crates; this layer only
+//! bridges the webview to them.
+
+use todo_core::commands::{ApplyResult, Command};
+use todo_core::model::{Project, Task};
+use todo_service::AppService;
+
+#[tauri::command]
+fn list_projects(state: tauri::State<'_, AppService>) -> Result<Vec<Project>, String> {
+    state.list_projects().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_tasks(state: tauri::State<'_, AppService>, project_id: String) -> Result<Vec<Task>, String> {
+    state.list_tasks(&project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn dispatch(state: tauri::State<'_, AppService>, cmd: Command) -> Result<ApplyResult, String> {
+    state.dispatch(cmd).map_err(|e| e.to_string())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .setup(|app| {
+            use tauri::Manager;
+            let dir = app
+                .path()
+                .app_data_dir()
+                .expect("resolve app data dir");
+            std::fs::create_dir_all(&dir).ok();
+            let db_path = dir.join("todo.db");
+            let svc = AppService::open(db_path.to_str().expect("utf-8 db path"))
+                .expect("open local store");
+            app.manage(svc);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![list_projects, list_tasks, dispatch])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

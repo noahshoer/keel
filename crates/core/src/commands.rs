@@ -144,3 +144,38 @@ pub fn apply<R: Repository>(repo: &R, cmd: Command) -> Result<ApplyResult, RepoE
     repo.record_command(&cmd.uuid, type_name, &args_json)?;
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Action, Command};
+    use crate::ids::Id;
+
+    /// Pins the IPC wire contract the frontend must produce for `dispatch`.
+    #[test]
+    fn task_add_command_wire_shape() {
+        let cmd = Command {
+            uuid: "u".to_string(),
+            temp_id: Some("tmp-1".to_string()),
+            action: Action::TaskAdd {
+                content: "x".to_string(),
+                project_id: Id::from("P1"),
+                description: None,
+                priority: None,
+                due: None,
+                labels: None,
+                parent_id: None,
+                section_id: None,
+            },
+        };
+        let v: serde_json::Value = serde_json::to_value(&cmd).unwrap();
+        assert_eq!(v["uuid"], "u");
+        assert_eq!(v["temp_id"], "tmp-1");
+        assert_eq!(v["action"]["type"], "task_add");
+        assert_eq!(v["action"]["content"], "x");
+        assert_eq!(v["action"]["project_id"], "P1");
+
+        // And it round-trips back to a TaskAdd.
+        let back: Command = serde_json::from_value(v).unwrap();
+        assert!(matches!(back.action, Action::TaskAdd { .. }));
+    }
+}
