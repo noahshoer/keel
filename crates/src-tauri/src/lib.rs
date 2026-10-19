@@ -19,6 +19,21 @@ fn list_tasks(state: tauri::State<'_, AppService>, project_id: String) -> Result
 }
 
 #[tauri::command(rename_all = "snake_case")]
+fn today_view(state: tauri::State<'_, AppService>) -> Result<Vec<Task>, String> {
+    state.today_view().map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+fn upcoming_view(state: tauri::State<'_, AppService>, days: i64) -> Result<Vec<Task>, String> {
+    state.upcoming_view(days).map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+fn project_view(state: tauri::State<'_, AppService>, project_id: String) -> Result<Vec<Task>, String> {
+    state.project_view(&project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
 fn dispatch(state: tauri::State<'_, AppService>, cmd: Command) -> Result<ApplyResult, String> {
     state.dispatch(cmd).map_err(|e| e.to_string())
 }
@@ -39,7 +54,14 @@ pub fn run() {
             app.manage(svc);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![list_projects, list_tasks, dispatch])
+        .invoke_handler(tauri::generate_handler![
+            list_projects,
+            list_tasks,
+            today_view,
+            upcoming_view,
+            project_view,
+            dispatch
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -8,6 +8,7 @@ use todo_core::ids::Id;
 use todo_core::model::{Project, Task};
 use todo_core::repository::{RepoError, Repository};
 use todo_core::streak;
+use todo_core::views;
 use todo_storage::SqliteRepo;
 
 pub struct AppService {
@@ -51,7 +52,11 @@ impl AppService {
     /// Lists a project's tasks, first applying lazy streak-miss detection to
     /// streak-enabled tasks and persisting any reset (design §7).
     pub fn list_tasks_at(&self, project_id: &str, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
-        let mut tasks = self.repo.list_tasks(&Id::from(project_id))?;
+        let tasks = self.repo.list_tasks(&Id::from(project_id))?;
+        self.recompute_streaks(tasks, today)
+    }
+
+    fn recompute_streaks(&self, mut tasks: Vec<Task>, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
         for task in tasks.iter_mut().filter(|t| t.streak_enabled) {
             let before = task.streak_current;
             streak::recompute_miss(task, today);
@@ -60,6 +65,68 @@ impl AppService {
             }
         }
         Ok(tasks)
+    }
+
+    /// Open (unchecked) tasks across all projects, after streak recompute.
+    fn open_tasks(&self, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
+        let tasks = self.repo.list_all_tasks()?;
+        Ok(self
+            .recompute_streaks(tasks, today)?
+            .into_iter()
+            .filter(|t| !t.checked)
+            .collect())
+    }
+
+    /// Dated tasks matching `keep`, sorted by due date then priority (high first).
+    fn dated_view(
+        &self,
+        today: NaiveDate,
+        keep: impl Fn(NaiveDate) -> bool,
+    ) -> Result<Vec<Task>, RepoError> {
+        let mut tasks: Vec<(NaiveDate, Task)> = self
+            .open_tasks(today)?
+            .into_iter()
+            .filter_map(|t| views::due_date_of(&t).map(|d| (d, t)))
+            .filter(|(d, _)| keep(*d))
+            .collect();
+        tasks.sort_by(|(da, a), (db, b)| {
+            da.cmp(db)
+                .then(b.priority.to_api().cmp(&a.priority.to_api()))
+                .then(a.child_order.cmp(&b.child_order))
+        });
+        Ok(tasks.into_iter().map(|(_, t)| t).collect())
+    }
+
+    /// Today: open tasks due today or overdue, across every project.
+    pub fn today_view(&self) -> Result<Vec<Task>, RepoError> {
+        self.today_view_at(today())
+    }
+
+    pub fn today_view_at(&self, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
+        self.dated_view(today, |d| d <= today)
+    }
+
+    /// Upcoming: open tasks due in `[today, today + days)`.
+    pub fn upcoming_view(&self, days: i64) -> Result<Vec<Task>, RepoError> {
+        self.upcoming_view_at(today(), days)
+    }
+
+    pub fn upcoming_view_at(&self, today: NaiveDate, days: i64) -> Result<Vec<Task>, RepoError> {
+        let end = today + chrono::Duration::days(days);
+        self.dated_view(today, |d| d >= today && d < end)
+    }
+
+    /// A project's open tasks (dated or not), in manual order.
+    pub fn project_view(&self, project_id: &str) -> Result<Vec<Task>, RepoError> {
+        self.project_view_at(project_id, today())
+    }
+
+    pub fn project_view_at(&self, project_id: &str, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
+        Ok(self
+            .list_tasks_at(project_id, today)?
+            .into_iter()
+            .filter(|t| !t.checked)
+            .collect())
     }
 
     pub fn list_projects(&self) -> Result<Vec<Project>, RepoError> {
