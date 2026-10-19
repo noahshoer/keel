@@ -22,6 +22,19 @@ pub struct FilterContext {
     pub sections: HashMap<Id, String>,
 }
 
+/// One comma-separated part of a filter and the open tasks it matched.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct FilterGroup {
+    /// The group's own query text (e.g. "overdue | @home").
+    pub query: String,
+    pub tasks: Vec<Task>,
+}
+
+/// The text of each comma-separated group, trimmed (labels for result lists).
+pub fn group_texts(query: &str) -> Vec<String> {
+    query.split(',').map(|s| s.trim().to_string()).collect()
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct FilterError(pub String);
 

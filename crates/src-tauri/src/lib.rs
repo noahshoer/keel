@@ -3,7 +3,8 @@
 //! bridges the webview to them.
 
 use todo_core::commands::{ApplyResult, Command};
-use todo_core::model::{Label, Project, Section, Task};
+use todo_core::filter::FilterGroup;
+use todo_core::model::{Filter, Label, Project, Section, Task};
 use todo_service::AppService;
 
 // `rename_all = "snake_case"` so top-level command arg names stay snake_case
@@ -64,6 +65,22 @@ fn list_sections(state: tauri::State<'_, AppService>, project_id: String) -> Res
 }
 
 #[tauri::command(rename_all = "snake_case")]
+fn list_filters(state: tauri::State<'_, AppService>) -> Result<Vec<Filter>, String> {
+    state.list_filters().map_err(|e| e.to_string())
+}
+
+/// Ok when the query parses; otherwise the human-readable problem.
+#[tauri::command(rename_all = "snake_case")]
+fn check_filter(state: tauri::State<'_, AppService>, query: String) -> Result<(), String> {
+    state.check_filter(&query).map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+fn filter_view(state: tauri::State<'_, AppService>, query: String) -> Result<Vec<FilterGroup>, String> {
+    state.filter_view(&query).map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
 fn dispatch(state: tauri::State<'_, AppService>, cmd: Command) -> Result<ApplyResult, String> {
     state.dispatch(cmd).map_err(|e| e.to_string())
 }
@@ -96,6 +113,9 @@ pub fn run() {
             completed_in_project,
             completed_with_label,
             list_sections,
+            list_filters,
+            check_filter,
+            filter_view,
             dispatch
         ])
         .run(tauri::generate_context!())
