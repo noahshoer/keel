@@ -15,8 +15,9 @@ use todo_core::model::{Label, Project, Task};
 use todo_core::views;
 
 use editor::{AddTask, EditorValues};
+use icons::Icon;
 use sidebar::Sidebar;
-use task_row::TaskRow;
+use task_row::{CompletedRow, TaskRow};
 
 const UPCOMING_DAYS: i64 = 14;
 
@@ -63,6 +64,8 @@ struct Loaded {
     inbox: Project,
     today_count: usize,
     tasks: Vec<Task>,
+    /// Empty unless "Show completed" is on for the current view.
+    completed: Vec<Task>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -135,6 +138,7 @@ fn App() -> Element {
     let view = use_signal(|| View::Today);
     let reload = use_signal(|| 0u32);
     let theme = use_signal(theme::saved);
+    let show_completed = use_signal(|| false);
     use_hook(|| theme::apply(&theme.peek()));
 
     let data = use_resource(move || async move {
@@ -165,7 +169,19 @@ fn App() -> Element {
             View::Project(id, _) => api::project_view(id.as_str()).await?,
             View::Label(name) => api::label_view(name).await?,
         };
-        Ok::<Loaded, String>(Loaded { projects, labels, inbox, today_count, tasks })
+        // Completed tasks are hidden unless this view's toggle is on.
+        let completed = if show_completed() {
+            match &v {
+                View::Today => api::completed_today().await?,
+                View::Inbox => api::completed_in_project(inbox.id.as_str()).await?,
+                View::Project(id, _) => api::completed_in_project(id.as_str()).await?,
+                View::Label(name) => api::completed_with_label(name).await?,
+                View::Upcoming => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+        Ok::<Loaded, String>(Loaded { projects, labels, inbox, today_count, tasks, completed })
     });
 
     let today = today();
@@ -192,7 +208,7 @@ fn App() -> Element {
                         theme,
                         reload,
                     }
-                    MainPane { view: current, loaded, today, reload }
+                    MainPane { view: current, loaded, today, show_completed, reload }
                 },
             }
         }
@@ -200,7 +216,17 @@ fn App() -> Element {
 }
 
 #[component]
-fn MainPane(view: View, loaded: Loaded, today: NaiveDate, reload: Signal<u32>) -> Element {
+fn MainPane(
+    view: View,
+    loaded: Loaded,
+    today: NaiveDate,
+    show_completed: Signal<bool>,
+    reload: Signal<u32>,
+) -> Element {
+    let mut show_completed = show_completed;
+    // Upcoming has no completed list (Todoist hides that toggle there too).
+    let can_show_completed = !matches!(view, View::Upcoming);
+    let toggle_text = if show_completed() { "Hide completed" } else { "Show completed" };
     let names: HashMap<Id, String> =
         loaded.projects.iter().map(|p| (p.id.clone(), p.name.clone())).collect();
     let show_project = matches!(view, View::Today | View::Upcoming | View::Label(_));
@@ -240,7 +266,18 @@ fn MainPane(view: View, loaded: Loaded, today: NaiveDate, reload: Signal<u32>) -
     rsx! {
         main { class: "main",
             div { class: "content",
-                h1 { class: "view-title", "{title}" }
+                div { class: "view-head",
+                    h1 { class: "view-title", "{title}" }
+                    if can_show_completed {
+                        button {
+                            class: "view-toggle",
+                            title: "Completed tasks are hidden by default",
+                            onclick: move |_| show_completed.set(!show_completed()),
+                            Icon { svg: icons::check_circle() }
+                            "{toggle_text}"
+                        }
+                    }
+                }
                 if !subtitle.is_empty() {
                     p { class: "view-sub", "{subtitle}" }
                 }
@@ -277,6 +314,24 @@ fn MainPane(view: View, loaded: Loaded, today: NaiveDate, reload: Signal<u32>) -
                     projects: loaded.projects.clone(),
                     labels: loaded.labels.clone(),
                     reload,
+                }
+                if show_completed() && can_show_completed {
+                    div { class: "section-title",
+                        "Completed"
+                        span { class: "muted", "{loaded.completed.len()}" }
+                    }
+                    if loaded.completed.is_empty() {
+                        p { class: "view-sub", "No completed tasks here yet." }
+                    }
+                    for task in loaded.completed.clone() {
+                        CompletedRow {
+                            key: "done-{task.id}",
+                            project_name: if show_project { names.get(&task.project_id).cloned() } else { None },
+                            task: task.clone(),
+                            today,
+                            reload,
+                        }
+                    }
                 }
             }
         }

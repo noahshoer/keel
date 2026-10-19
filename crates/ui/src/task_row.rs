@@ -195,3 +195,57 @@ pub fn TaskRow(
         }
     }
 }
+
+/// A completed task in the "Completed" section: click the filled check to
+/// reopen it.
+#[component]
+pub fn CompletedRow(task: Task, today: NaiveDate, project_name: Option<String>, reload: Signal<u32>) -> Element {
+    let mut reload = reload;
+    let when = task
+        .completed_at
+        .map(|c| views::due_label(c.with_timezone(&chrono::Local).date_naive(), today))
+        .unwrap_or_default();
+    let id_reopen = task.id.clone();
+    let id_delete = task.id.clone();
+    rsx! {
+        div { class: "task completed",
+            div { class: "task-row",
+                button {
+                    class: "check done",
+                    title: "Mark as not done",
+                    onclick: move |_| {
+                        let id = id_reopen.clone();
+                        spawn(async move {
+                            let _ = api::uncomplete_task(id).await;
+                            reload += 1;
+                        });
+                    },
+                    Icon { svg: icons::check() }
+                }
+                div { class: "task-body",
+                    div { class: "task-content", "{task.content}" }
+                    div { class: "task-meta",
+                        span { class: "done-when", "Completed · {when}" }
+                    }
+                }
+                div { class: "task-actions",
+                    button {
+                        class: "icon-btn",
+                        title: "Delete task",
+                        onclick: move |_| {
+                            let id = id_delete.clone();
+                            spawn(async move {
+                                let _ = api::delete_task(id).await;
+                                reload += 1;
+                            });
+                        },
+                        Icon { svg: icons::trash() }
+                    }
+                }
+                if let Some(name) = project_name.clone() {
+                    span { class: "task-project", "{name}" }
+                }
+            }
+        }
+    }
+}

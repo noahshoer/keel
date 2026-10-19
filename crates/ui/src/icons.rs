@@ -81,3 +81,15 @@ pub fn tag_small() -> String {
 pub fn tag() -> String {
     svg(18, "1.6", r#"<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.3"/>"#)
 }
+
+pub fn pencil() -> String {
+    svg(16, "1.6", r#"<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>"#)
+}
+
+pub fn trash_small() -> String {
+    svg(16, "1.6", r#"<path d="M5 7h14M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>"#)
+}
+
+pub fn check_circle() -> String {
+    svg(16, "1.6", r#"<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>"#)
+}

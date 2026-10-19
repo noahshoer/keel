@@ -109,7 +109,7 @@ pub fn Sidebar(
                 }
             }
             for p in user_projects {
-                NavProject { key: "{p.id}", active: current == View::Project(p.id.clone(), p.name.clone()), project: p, view }
+                NavProject { key: "{p.id}", active: current == View::Project(p.id.clone(), p.name.clone()), project: p, view, reload }
             }
             div { class: "section-head",
                 "Labels"
@@ -146,36 +146,198 @@ pub fn Sidebar(
                 }
             }
             for l in labels {
-                NavLabel { key: "{l.id}", active: current == View::Label(l.name.clone()), name: l.name, view }
+                NavLabel { key: "{l.id}", active: current == View::Label(l.name.clone()), label: l, view, reload }
             }
         }
     }
 }
 
+/// What a sidebar row is doing besides navigating.
+#[derive(Clone, Copy, PartialEq)]
+enum RowMode {
+    Normal,
+    Renaming,
+    ConfirmDelete,
+}
+
+/// A project or label row with hover actions: rename inline, delete with an
+/// inline confirm. `kind` is "project" or "label".
 #[component]
-fn NavProject(project: Project, active: bool, view: Signal<View>) -> Element {
+fn ManagedRow(
+    name: String,
+    icon: Element,
+    icon_class: String,
+    active: bool,
+    kind: String,
+    on_open: EventHandler<()>,
+    on_rename: EventHandler<String>,
+    on_delete: EventHandler<()>,
+) -> Element {
+    let mut mode = use_signal(|| RowMode::Normal);
+    let mut draft = use_signal(String::new);
+    let start_name = name.clone();
+    let warning = if kind == "project" {
+        format!("Delete “{name}” and all its tasks?")
+    } else {
+        format!("Delete label “{name}”? It’s removed from its tasks.")
+    };
+
+    match mode() {
+        RowMode::Renaming => rsx! {
+            form {
+                class: "project-form",
+                onsubmit: move |e| {
+                    e.prevent_default();
+                    let n = draft().trim().to_string();
+                    if !n.is_empty() {
+                        on_rename.call(n);
+                    }
+                    mode.set(RowMode::Normal);
+                },
+                input {
+                    class: "project-input",
+                    autofocus: true,
+                    value: "{draft}",
+                    oninput: move |e| draft.set(e.value()),
+                    onkeydown: move |e| {
+                        if e.key() == Key::Escape {
+                            mode.set(RowMode::Normal);
+                        }
+                    },
+                }
+            }
+        },
+        RowMode::ConfirmDelete => rsx! {
+            div { class: "confirm-box",
+                div { class: "confirm-text", "{warning}" }
+                div { class: "confirm-actions",
+                    button {
+                        class: "btn btn-cancel",
+                        onclick: move |_| mode.set(RowMode::Normal),
+                        "Cancel"
+                    }
+                    button {
+                        class: "btn btn-add",
+                        onclick: move |_| {
+                            mode.set(RowMode::Normal);
+                            on_delete.call(());
+                        },
+                        "Delete"
+                    }
+                }
+            }
+        },
+        RowMode::Normal => rsx! {
+            div {
+                class: nav_class(active),
+                onclick: move |_| on_open.call(()),
+                span { class: "nav-icon {icon_class}", {icon} }
+                span { class: "nav-name", "{name}" }
+                span { class: "nav-actions",
+                    button {
+                        class: "icon-btn",
+                        title: "Rename",
+                        onclick: move |e| {
+                            e.stop_propagation();
+                            draft.set(start_name.clone());
+                            mode.set(RowMode::Renaming);
+                        },
+                        Icon { svg: icons::pencil() }
+                    }
+                    button {
+                        class: "icon-btn",
+                        title: "Delete",
+                        onclick: move |e| {
+                            e.stop_propagation();
+                            mode.set(RowMode::ConfirmDelete);
+                        },
+                        Icon { svg: icons::trash_small() }
+                    }
+                }
+            }
+        },
+    }
+}
+
+#[component]
+fn NavProject(project: Project, active: bool, view: Signal<View>, reload: Signal<u32>) -> Element {
     let mut view = view;
-    let target = View::Project(project.id.clone(), project.name.clone());
+    let mut reload = reload;
+    let open_target = View::Project(project.id.clone(), project.name.clone());
+    let id_rename = project.id.clone();
+    let id_delete = project.id.clone();
     rsx! {
-        div {
-            class: nav_class(active),
-            onclick: move |_| view.set(target.clone()),
-            span { class: "nav-icon hash", "#" }
-            "{project.name}"
+        ManagedRow {
+            name: project.name.clone(),
+            icon: rsx! { "#" },
+            icon_class: "hash".to_string(),
+            active,
+            kind: "project".to_string(),
+            on_open: move |_| view.set(open_target.clone()),
+            on_rename: move |new_name: String| {
+                let id = id_rename.clone();
+                spawn(async move {
+                    let _ = api::rename_project(id.clone(), new_name.clone()).await;
+                    // Keep the open view's title in sync with the new name.
+                    if matches!(view(), View::Project(ref open, _) if *open == id) {
+                        view.set(View::Project(id, new_name));
+                    }
+                    reload += 1;
+                });
+            },
+            on_delete: move |_| {
+                let id = id_delete.clone();
+                spawn(async move {
+                    let _ = api::delete_project(id.clone()).await;
+                    if matches!(view(), View::Project(ref open, _) if *open == id) {
+                        view.set(View::Inbox);
+                    }
+                    reload += 1;
+                });
+            },
         }
     }
 }
 
 #[component]
-fn NavLabel(name: String, active: bool, view: Signal<View>) -> Element {
+fn NavLabel(label: Label, active: bool, view: Signal<View>, reload: Signal<u32>) -> Element {
     let mut view = view;
-    let target = View::Label(name.clone());
+    let mut reload = reload;
+    let open_target = View::Label(label.name.clone());
+    let old_name = label.name.clone();
+    let old_name_del = label.name.clone();
+    let id_rename = label.id.clone();
+    let id_delete = label.id.clone();
     rsx! {
-        div {
-            class: nav_class(active),
-            onclick: move |_| view.set(target.clone()),
-            span { class: "nav-icon label", Icon { svg: icons::tag() } }
-            "{name}"
+        ManagedRow {
+            name: label.name.clone(),
+            icon: rsx! { Icon { svg: icons::tag() } },
+            icon_class: "label".to_string(),
+            active,
+            kind: "label".to_string(),
+            on_open: move |_| view.set(open_target.clone()),
+            on_rename: move |new_name: String| {
+                let id = id_rename.clone();
+                let old = old_name.clone();
+                spawn(async move {
+                    let _ = api::rename_label(id, new_name.clone()).await;
+                    if matches!(view(), View::Label(ref open) if open.eq_ignore_ascii_case(&old)) {
+                        view.set(View::Label(new_name));
+                    }
+                    reload += 1;
+                });
+            },
+            on_delete: move |_| {
+                let id = id_delete.clone();
+                let old = old_name_del.clone();
+                spawn(async move {
+                    let _ = api::delete_label(id).await;
+                    if matches!(view(), View::Label(ref open) if open.eq_ignore_ascii_case(&old)) {
+                        view.set(View::Inbox);
+                    }
+                    reload += 1;
+                });
+            },
         }
     }
 }
