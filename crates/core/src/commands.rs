@@ -187,21 +187,9 @@ impl Action {
     }
 }
 
-const WEEKDAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
 /// Human text for a rule, stored in `Due.string` (Todoist-style).
 fn describe(rule: &Recurrence) -> String {
-    match rule {
-        Recurrence::Daily => "every day".to_string(),
-        Recurrence::Weekly(days) => {
-            let names: Vec<&str> = days
-                .iter()
-                .filter_map(|d| WEEKDAYS.get(*d as usize).copied())
-                .collect();
-            format!("every {}", names.join(", "))
-        }
-        Recurrence::MonthlyDay(day) => format!("every month on the {day}"),
-    }
+    rule.describe()
 }
 
 /// Builds a `Due` from an optional date and rule. With only a rule, the first
