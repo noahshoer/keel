@@ -25,7 +25,19 @@ struct TitleField: UIViewRepresentable {
     override func didMoveToWindow() {
       super.didMoveToWindow()
       if window != nil { AutoFocusField.current = self }
-      if window != nil { DispatchQueue.main.async { self.becomeFirstResponder() } }
+      if window != nil { focus(attempt: 0) }
+    }
+
+    /// Focus right away (a deferred first try didn't open the keyboard on
+    /// the phone), retrying briefly if refused. The window must be the key
+    /// window too: Keel's isn't always key after launch, and then the field
+    /// takes focus but iOS shows no keyboard.
+    func focus(attempt: Int) {
+      guard let window else { return }
+      if !window.isKeyWindow { window.makeKey() }
+      if isFirstResponder { return }
+      if becomeFirstResponder() || attempt >= 20 { return }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.focus(attempt: attempt + 1) }
     }
   }
 

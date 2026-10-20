@@ -233,8 +233,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   cursor: pointer; border-radius: var(--r-md); }
 .add-task-row .plus { width: 19px; height: 19px; border-radius: 50%; color: var(--accent);
   display: flex; align-items: center; justify-content: center; transition: background-color .16s, color .16s; }
-.add-task-row:hover { color: var(--accent); background: var(--row-hover); }
-.add-task-row:hover .plus { background: var(--accent); color: #fff; }
+/* Mouse only: on iPhone a hover style makes WebKit spend the first tap on hover. */
+@media (hover: hover) {
+  .add-task-row:hover { color: var(--accent); background: var(--row-hover); }
+  .add-task-row:hover .plus { background: var(--accent); color: #fff; }
+}
 .editor { border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 12px 0; margin: 8px 0;
   background: var(--bg); box-shadow: var(--shadow-md); animation: pop-in .18s var(--ease);
   transition: border-color .16s, box-shadow .16s; }
