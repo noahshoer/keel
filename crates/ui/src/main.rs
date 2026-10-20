@@ -164,6 +164,7 @@ fn App() -> Element {
     // Task reminders, read by every task row (refreshed with each load).
     let mut reminders = use_context_provider(|| Signal::new(Vec::<Reminder>::new()));
     pickers::provide_touch();
+    glass::provide();
     // Narrow layouts: the sidebar is a slide-over drawer (CSS ignores this
     // on wide windows, where the sidebar is always shown).
     let mut drawer = use_signal(|| false);

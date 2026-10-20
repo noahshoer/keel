@@ -700,10 +700,20 @@ pub fn AddTask(
 ) -> Element {
     let mut reload = reload;
     let mut open = use_signal(|| false);
+    let glass = crate::glass::use_glass();
 
     if !open() {
+        let (d, p, s, l) = (defaults.clone(), projects.clone(), sections.clone(), labels.clone());
         return rsx! {
-            div { class: "add-task-row", onclick: move |_| open.set(true),
+            div {
+                class: "add-task-row",
+                onclick: move |_| {
+                    if (glass.native)() {
+                        glass.add(d.clone(), p.clone(), s.clone(), l.clone(), reload);
+                    } else {
+                        open.set(true);
+                    }
+                },
                 span { class: "plus", Icon { svg: icons::plus(14) } }
                 "Add task"
             }

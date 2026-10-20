@@ -29,6 +29,7 @@ class GlassPlugin: Plugin {
     }
     DispatchQueue.main.async {
       self.hosting = attachOverlay(model: self.model, to: webview)
+      Demo.run(webview: webview, model: self.model)
     }
   }
 

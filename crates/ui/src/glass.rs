@@ -3,18 +3,19 @@
 //! (`card_state`) and what each action changes (`apply_event`), so typing,
 //! chips and saving behave exactly like the web editor.
 
-// Not wired up yet (the bridge comes next); remove once it is.
-#![allow(dead_code)]
 
 use chrono::{NaiveDate, NaiveTime};
+use dioxus::prelude::*;
 use keel_core::ids::Id;
-use keel_core::model::{Label, Project, Section};
+use keel_core::model::{Label, Project, Section, Task};
+use keel_core::recurrence::Recurrence;
 use keel_core::quickadd::{strip_spans, QuickAdd, SpanKind};
 use serde::{Deserialize, Serialize};
 
+use crate::api;
 use crate::editor::{
-    labels_text, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options, repeat_text,
-    EditorValues,
+    add_from_editor, labels_text, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
+    repeat_text, save_edit, EditorValues,
 };
 use crate::pickers::{date_chip, deadline_text, reminders_text, ReminderDraft};
 
@@ -306,6 +307,154 @@ pub fn apply_event(v: &mut EditorValues, ev: &GlassEvent, mode: CardMode, ctx: &
     Outcome::Changed
 }
 
+
+/// What the values become after a submit: adding resets the card for the
+/// next task (it stays open); editing closes it.
+pub fn after_submit(mode: CardMode, initial: &EditorValues) -> Option<EditorValues> {
+    (mode == CardMode::Add).then(|| initial.clone())
+}
+
+/// One open card: what it was opened with and what it holds now.
+#[derive(Clone)]
+struct CardSession {
+    mode: CardMode,
+    initial: EditorValues,
+    values: EditorValues,
+    /// The task being edited.
+    task_id: Option<Id>,
+    /// Its recurrence rule, kept unless Repeat changes.
+    existing: Option<Recurrence>,
+    ctx: CardContext,
+    reload: Signal<u32>,
+}
+
+/// Forwards the plugin's `card` events (a `GlassEvent` as JSON) to Rust.
+const EVENTS_JS: &str = r#"
+await window.__TAURI__.core.addPluginListener('glass', 'card', (e) => dioxus.send(e.json));
+await new Promise(() => {});
+"#;
+
+/// The native card on iPhone; elsewhere `native` stays false and callers
+/// keep the web editor.
+#[derive(Clone, Copy)]
+pub struct Glass {
+    pub native: Signal<bool>,
+    session: Signal<Option<CardSession>>,
+}
+
+/// Provides [`Glass`] (call once, in `App`): asks the plugin whether it's
+/// there and, if so, starts handling its events.
+pub fn provide() -> Glass {
+    let glass = use_context_provider(|| Glass { native: Signal::new(false), session: Signal::new(None) });
+    use_hook(move || {
+        spawn(async move {
+            if !api::glass_available().await {
+                return;
+            }
+            let mut native = glass.native;
+            native.set(true);
+            let mut events = document::eval(EVENTS_JS);
+            while let Ok(json) = events.recv::<String>().await {
+                if let Ok(ev) = serde_json::from_str::<GlassEvent>(&json) {
+                    glass.handle(ev).await;
+                }
+            }
+        });
+    });
+    glass
+}
+
+pub fn use_glass() -> Glass {
+    use_context()
+}
+
+impl Glass {
+    /// Opens the composer with `defaults` (project, section, date, parent).
+    pub fn add(self, defaults: EditorValues, projects: Vec<Project>, sections: Vec<Section>, labels: Vec<Label>, reload: Signal<u32>) {
+        let ctx = CardContext { projects, sections, labels, keep_label: None, today: crate::today() };
+        self.open(CardSession {
+            mode: CardMode::Add,
+            initial: defaults.clone(),
+            values: defaults,
+            task_id: None,
+            existing: None,
+            ctx,
+            reload,
+        });
+    }
+
+    /// Opens the editor on `task`.
+    pub fn edit(
+        self,
+        task: &Task,
+        reminders: Vec<ReminderDraft>,
+        projects: Vec<Project>,
+        sections: Vec<Section>,
+        labels: Vec<Label>,
+        reload: Signal<u32>,
+    ) {
+        let mut before = EditorValues::from_task(task);
+        before.reminders = reminders;
+        let existing = task.due.as_ref().and_then(|d| d.recurrence.clone());
+        let keep_label = (before.repeat == "keep").then(|| existing.as_ref().map(repeat_text).unwrap_or_default());
+        let ctx = CardContext { projects, sections, labels, keep_label, today: crate::today() };
+        self.open(CardSession {
+            mode: CardMode::Edit,
+            initial: before.clone(),
+            values: before,
+            task_id: Some(task.id.clone()),
+            existing,
+            ctx,
+            reload,
+        });
+    }
+
+    fn open(mut self, s: CardSession) {
+        let state = card_state(&s.values, s.mode, &s.ctx);
+        self.session.set(Some(s));
+        spawn(async move { api::glass_show(&state).await });
+    }
+
+    async fn handle(mut self, ev: GlassEvent) {
+        let Some(mut s) = self.session.peek().clone() else { return };
+        match apply_event(&mut s.values, &ev, s.mode, &s.ctx) {
+            Outcome::Changed => {
+                let state = card_state(&s.values, s.mode, &s.ctx);
+                self.session.set(Some(s));
+                api::glass_update(&state).await;
+            }
+            Outcome::Cancel => {
+                self.session.set(None);
+                api::glass_hide().await;
+            }
+            Outcome::Submit => {
+                if s.values.content.trim().is_empty() {
+                    return;
+                }
+                let mut reload = s.reload;
+                match after_submit(s.mode, &s.initial) {
+                    Some(next) => {
+                        let saved = std::mem::replace(&mut s.values, next);
+                        let state = card_state(&s.values, s.mode, &s.ctx);
+                        let (p, sec, l) = (s.ctx.projects.clone(), s.ctx.sections.clone(), s.ctx.labels.clone());
+                        self.session.set(Some(s));
+                        api::glass_show(&state).await;
+                        add_from_editor(saved, p, sec, l).await;
+                    }
+                    None => {
+                        self.session.set(None);
+                        api::glass_hide().await;
+                        if let Some(id) = s.task_id.clone() {
+                            save_edit(id, s.initial.clone(), s.values.clone(), s.existing.clone()).await;
+                        }
+                    }
+                }
+                reload += 1;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -430,5 +579,12 @@ mod tests {
         assert_eq!(ev, GlassEvent::Pick { pick: Pick::Location { project_id: Id::from("P-WORK"), section_id: None } });
         let ev: GlassEvent = serde_json::from_str(r#"{"type":"title","text":"hi"}"#).unwrap();
         assert_eq!(ev, GlassEvent::Title { text: "hi".into() });
+    }
+
+    #[test]
+    fn add_submit_resets_to_defaults() {
+        let initial = blank("");
+        assert_eq!(after_submit(CardMode::Add, &initial), Some(initial.clone()));
+        assert_eq!(after_submit(CardMode::Edit, &initial), None);
     }
 }

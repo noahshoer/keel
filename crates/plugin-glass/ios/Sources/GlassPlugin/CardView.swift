@@ -20,8 +20,11 @@ struct TitleField: UIViewRepresentable {
   /// Takes focus as soon as it's on screen, so the keyboard opens with the
   /// card (calling it from `makeUIView` was too early on the phone).
   final class AutoFocusField: UITextField {
+    /// The field on screen, for `Demo`.
+    static weak var current: AutoFocusField?
     override func didMoveToWindow() {
       super.didMoveToWindow()
+      if window != nil { AutoFocusField.current = self }
       if window != nil { DispatchQueue.main.async { self.becomeFirstResponder() } }
     }
   }
@@ -140,7 +143,7 @@ struct CardView: View {
                 .padding(.vertical, 2)
               }
             }
-            .scrollClipDisabled()
+            .clipShape(.capsule)
             Button {
               if state.canSubmit { model.send(.submit) }
             } label: {

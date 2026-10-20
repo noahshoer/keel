@@ -371,3 +371,27 @@ struct ImportArgs<'a> {
 pub async fn import_todoist_csv(project_name: &str, text: &str) -> Result<ImportSummary, String> {
     invoke("import_todoist_csv", &ImportArgs { project_name, text }).await
 }
+
+#[derive(Serialize)]
+struct GlassStateArg<'a> {
+    state: &'a crate::glass::CardState,
+}
+
+/// True on iOS, where `tauri-plugin-glass` draws the native card and buttons.
+pub async fn glass_available() -> bool {
+    invoke("plugin:glass|is_available", &NoArgs {}).await.unwrap_or(false)
+}
+
+/// Opens the native card, replacing whatever its fields hold.
+pub async fn glass_show(state: &crate::glass::CardState) {
+    let _ = invoke::<_, ()>("plugin:glass|show", &GlassStateArg { state }).await;
+}
+
+/// Refreshes the open card (highlights, chips) after an edit.
+pub async fn glass_update(state: &crate::glass::CardState) {
+    let _ = invoke::<_, ()>("plugin:glass|update", &GlassStateArg { state }).await;
+}
+
+pub async fn glass_hide() {
+    let _ = invoke::<_, ()>("plugin:glass|hide", &NoArgs {}).await;
+}

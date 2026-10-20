@@ -50,6 +50,7 @@ pub fn TaskRow(
     let mut panel = use_signal(|| false);
     let mut editing = use_signal(|| false);
     let mut adding_sub = use_signal(|| false);
+    let glass = crate::glass::use_glass();
     // All task reminders, shared app-wide (see `App`).
     let all_reminders = use_context::<Signal<Vec<Reminder>>>();
     let my_reminders: Vec<ReminderDraft> = all_reminders
@@ -59,6 +60,10 @@ pub fn TaskRow(
         .map(ReminderDraft::from_reminder)
         .collect();
     let indent = format!("margin-left: {}px;", depth * INDENT);
+    // For the native card (iPhone): what editing and "Add sub-task" open with.
+    let native_lists = (projects.clone(), sections.clone(), labels.clone());
+    let mut native_sub = EditorValues::blank(task.project_id.clone(), task.section_id.clone(), String::new(), Vec::new());
+    native_sub.parent_id = Some(task.id.clone());
 
     if editing() {
         let mut before = EditorValues::from_task(&task);
@@ -160,7 +165,17 @@ pub fn TaskRow(
                 div {
                     class: "task-body",
                     title: "Edit task",
-                    onclick: move |_| editing.set(true),
+                    onclick: {
+                        let (task, mine) = (task.clone(), my_reminders.clone());
+                        let (p, s, l) = native_lists.clone();
+                        move |_| {
+                            if (glass.native)() {
+                                glass.edit(&task, mine.clone(), p.clone(), s.clone(), l.clone(), reload);
+                            } else {
+                                editing.set(true);
+                            }
+                        }
+                    },
                     div { class: "task-content", "{task.content}" }
                     if !task.description.is_empty() {
                         div { class: "task-desc", "{task.description}" }
@@ -203,7 +218,17 @@ pub fn TaskRow(
                     button {
                         class: "icon-btn",
                         title: "Add sub-task",
-                        onclick: move |_| adding_sub.set(true),
+                        onclick: {
+                            let defaults = native_sub.clone();
+                            let (p, s, l) = native_lists.clone();
+                            move |_| {
+                                if (glass.native)() {
+                                    glass.add(defaults.clone(), p.clone(), s.clone(), l.clone(), reload);
+                                } else {
+                                    adding_sub.set(true);
+                                }
+                            }
+                        },
                         Icon { svg: icons::subtask() }
                     }
                     if recurring {
