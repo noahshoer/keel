@@ -4,7 +4,7 @@ use keel_core::model::{Label, Priority, Project, Section, Task};
 use keel_core::views::{self, DueBucket};
 
 use crate::api;
-use crate::editor::{add_from_editor, changes, EditorValues, TaskEditor};
+use crate::editor::{add_from_editor, changes, repeat_text, EditorValues, TaskEditor};
 
 /// Pixels of indentation per sub-task level.
 const INDENT: usize = 28;
@@ -55,7 +55,7 @@ pub fn TaskRow(
         let before = EditorValues::from_task(&task);
         let existing_rule = task.due.as_ref().and_then(|d| d.recurrence.clone());
         let keep_label = (before.repeat == "keep")
-            .then(|| format!("Keep: {}", task.due.as_ref().map(|d| d.string.clone()).unwrap_or_default()));
+            .then(|| existing_rule.as_ref().map(repeat_text).unwrap_or_default());
         let id = task.id.clone();
         let initial = before.clone();
         return rsx! {
