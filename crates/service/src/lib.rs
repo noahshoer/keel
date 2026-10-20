@@ -2,15 +2,18 @@
 //! and exposes dispatch/query operations. The Tauri layer is a thin wrapper
 //! over this.
 
-use chrono::{Local, NaiveDate};
+use chrono::{Local, NaiveDate, NaiveDateTime};
 use todo_core::commands::{apply_at, ApplyResult, Command};
 use todo_core::ids::Id;
 use todo_core::filter::{self, FilterContext, FilterError, FilterGroup};
 use todo_core::model::{Filter, Label, Project, Section, Task};
+use todo_core::reminders::{self, PlannedReminder, ReminderSettings};
 use todo_core::repository::{RepoError, Repository};
 use todo_core::streak;
 use todo_core::views;
 use todo_storage::SqliteRepo;
+
+const REMINDER_SETTINGS_KEY: &str = "reminders";
 
 pub struct AppService {
     repo: SqliteRepo,
@@ -229,6 +232,30 @@ impl AppService {
             .into_iter()
             .filter(|t| t.labels.iter().any(|l| l.eq_ignore_ascii_case(name)))
             .collect())
+    }
+
+    /// Notification preferences for this device (defaults when unset).
+    pub fn reminder_settings(&self) -> Result<ReminderSettings, RepoError> {
+        Ok(self
+            .repo
+            .get_setting(REMINDER_SETTINGS_KEY)?
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default())
+    }
+
+    pub fn set_reminder_settings(&self, settings: &ReminderSettings) -> Result<(), RepoError> {
+        let json = serde_json::to_string(settings).map_err(|e| RepoError::Backend(e.to_string()))?;
+        self.repo.set_setting(REMINDER_SETTINGS_KEY, &json)
+    }
+
+    /// The notifications that should be pending now.
+    pub fn reminder_plan(&self) -> Result<Vec<PlannedReminder>, RepoError> {
+        self.reminder_plan_at(Local::now().naive_local())
+    }
+
+    pub fn reminder_plan_at(&self, now: NaiveDateTime) -> Result<Vec<PlannedReminder>, RepoError> {
+        let tasks = self.open_tasks(now.date())?;
+        Ok(reminders::plan(&tasks, &self.reminder_settings()?, now))
     }
 
     pub fn list_projects(&self) -> Result<Vec<Project>, RepoError> {

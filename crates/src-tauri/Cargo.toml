@@ -16,3 +16,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 todo-core = { path = "../core" }
 todo-service = { path = "../service" }
+tauri-plugin-notification = "2"
+chrono = "0.4"
+time = "0.3"
