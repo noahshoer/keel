@@ -2,6 +2,7 @@ mod editor;
 mod filters;
 mod api;
 mod icons;
+mod pickers;
 mod sidebar;
 mod style;
 mod task_row;
