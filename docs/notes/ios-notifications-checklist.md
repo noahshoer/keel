@@ -47,9 +47,9 @@ Everything except building and running on iOS was done on Windows. This is the o
 - [x] Complete a task that had a pending reminder → it no longer fires.
 - [x] Turn on **Daily summary**; the "Coming up" list shows it.
 - [x] Tapping a notification opens the app.
-- [ ] If you deny permission: the switch stays off and the panel says notifications are blocked.
+- [x] If you deny permission: the switch stays off and the panel says notifications are blocked.
 
-Simulator results (iPhone 16, iOS 18.6, 2026-10-20): everything above passed except the deny case, which hasn't been run yet. To test it, uninstall the app (`xcrun simctl uninstall booted com.nshoe.keel`; this deletes its data) so iOS asks again.
+Simulator results (iPhone 16, iOS 18.6, 2026-10-20): all checks above pass. To re-test the deny case, uninstall the app (`xcrun simctl uninstall booted com.nshoe.keel`; this deletes its data) so iOS asks again.
 
 ## Debugging notes
 - Rust `eprintln!` output appears in the simulator's system log: `xcrun simctl spawn booted log show --last 5m --style compact --predicate 'process == "Keel"' | grep reminders:`.

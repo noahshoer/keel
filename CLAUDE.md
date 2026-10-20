@@ -6,10 +6,12 @@ Owner: Noah (GitHub `noahshoer`, private repo `noahshoer/keel`). v1 targets **iO
 
 ## Current status / what's next
 
-**Next up: the first iOS run on a Mac.** Follow [docs/notes/ios-notifications-checklist.md](docs/notes/ios-notifications-checklist.md) (Xcode → Rust iOS targets → `cargo tauri ios init` → `cargo tauri ios dev` → the checks listed there). Expect a small fix or two:
-- `#[cfg(mobile)]` code in `crates/src-tauri/src/notifications.rs` (`schedule_on_device`) has **never been compiled** (it can't target iOS on Windows). Its plugin calls were checked against the `tauri-plugin-notification` 2.7 source.
-- Likely UI touch-ups on a phone: safe-area padding, tap-target sizes, the keyboard covering the editor. The narrow (<700px) layout with a drawer sidebar exists and was checked at 375px in a browser.
-- Commit the generated `crates/src-tauri/gen/apple` (`.gitignore` only ignores `gen/schemas/`).
+**iOS runs in the simulator** (iPhone 16, iOS 18.6, 2026-10-20). All checks in [docs/notes/ios-notifications-checklist.md](docs/notes/ios-notifications-checklist.md) pass. `crates/src-tauri/gen/apple` is committed. Fixes from that run:
+- `tauri-plugin-notification` 2.7 on iOS reads `Schedule::At` as device-local time (upstream #3256), so `notifications::plugin_date` sends the local time labeled UTC. Its `pending()` and `cancel_all()` always fail, so the scheduled ids are kept in `local_setting` (`AppService::scheduled_reminder_ids`) and cancelled with `cancel(ids)`. Upstream issue draft (not yet filed): `docs/notes/upstream-notification-ios-issue.md`.
+- The viewport has `maximum-scale=1, user-scalable=no`; otherwise iOS zooms into any focused input under 16px.
+- Run `cargo tauri icon` on the Mac; the iOS icon set is only written when `gen/apple` exists.
+
+**Next up: run it on Noah's iPhone.** Pick a signing team in Xcode (Signing & Capabilities), put the team ID in `bundle > iOS > developmentTeam` in `tauri.conf.json`, then `cargo tauri ios dev` and pick the phone. Still unchecked on a real device: tap-target sizes and the keyboard covering the editor.
 
 After iOS: **sync** (dormant by design). Every change already goes through an idempotent command log, so the plan is to swap rusqlite for libSQL and add Turso, plus some device-link model. Then integrations (Apple Reminders, MS To Do, Google Calendar, Outlook, Notion). Spec non-goals for v1: comments, attachments, location reminders, collaboration, templates, activity log, backups.
 
