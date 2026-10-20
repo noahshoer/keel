@@ -5,7 +5,6 @@ Cargo.lock.bak
 
 # Tauri / Dioxus build output
 dist/
-src-tauri/gen/
 .dx/
 
 # Superpowers SDD scratch (git-ignored workspace)
@@ -15,5 +14,9 @@ src-tauri/gen/
 .DS_Store
 Thumbs.db
 
-# Tauri-generated capability schemas (rebuilt on every build)
-crates/src-tauri/gen/
+# Tauri-generated capability schemas (rebuilt on every build); gen/apple and
+# gen/android (from `cargo tauri ios|android init`) are committed.
+crates/src-tauri/gen/schemas/
+
+# Local Claude Code preview config
+.claude/
