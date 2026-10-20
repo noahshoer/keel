@@ -11,7 +11,10 @@ Owner: Noah (GitHub `noahshoer`, private repo `noahshoer/keel`). v1 targets **iO
 - The viewport has `maximum-scale=1, user-scalable=no`; otherwise iOS zooms into any focused input under 16px.
 - Run `cargo tauri icon` on the Mac; the iOS icon set is only written when `gen/apple` exists.
 
-**Next up: run it on Noah's iPhone.** Pick a signing team in Xcode (Signing & Capabilities), put the team ID in `bundle > iOS > developmentTeam` in `tauri.conf.json`, then `cargo tauri ios dev` and pick the phone. Still unchecked on a real device: tap-target sizes and the keyboard covering the editor.
+**Keel runs on Noah's iPhone** (2026-10-20; personal team `SMD3LL6NFU` in `tauri.conf.json`). Phone-only additions: swipe right/left opens/closes the drawer (`ui::gestures`), and the settings note describes only the current device (`reminders_when_closed` command).
+- Standalone install (UI bundled, no Mac needed): `cd crates/src-tauri && cargo tauri ios build --export-method debugging`, then `xcrun devicectl device install app --device 00008160-00082D8921400036 gen/apple/build/arm64/Keel.ipa`. With a free team the install expires after 7 days; re-run to renew. Rebuild `crates/ui/dist` first.
+- `cargo tauri ios dev` loads the UI over Wi-Fi from the Mac (Local Network permission), so the app only works while that command is running.
+- Not yet checked on the phone: tap-target sizes and the keyboard covering the editor.
 
 After iOS: **sync** (dormant by design). Every change already goes through an idempotent command log, so the plan is to swap rusqlite for libSQL and add Turso, plus some device-link model. Then integrations (Apple Reminders, MS To Do, Google Calendar, Outlook, Notion). Spec non-goals for v1: comments, attachments, location reminders, collaboration, templates, activity log, backups.
 
