@@ -55,28 +55,36 @@ fn schedule_on_device<R: Runtime>(app: &AppHandle<R>, plan: &[PlannedReminder]) 
     use tauri_plugin_notification::Schedule;
 
     let n = app.notification();
-    // Everything pending was scheduled by us: replace it with the new plan.
-    if let Ok(pending) = n.pending() {
-        let ids: Vec<i32> = pending.iter().map(|p| p.id()).collect();
-        if !ids.is_empty() {
-            let _ = n.cancel(ids);
+    let svc = app.state::<AppService>();
+    // Replace what we scheduled last time with the new plan. We track the ids
+    // ourselves because plugin 2.7 can't on iOS: `pending()` fails to parse
+    // (iOS omits the `schedule` field Rust requires) and `cancel_all()` sends
+    // null args that Swift rejects. Only `cancel(ids)` works.
+    let previous = svc.scheduled_reminder_ids().unwrap_or_default();
+    if !previous.is_empty() {
+        if let Err(e) = n.cancel(previous) {
+            eprintln!("reminders: cancelling pending failed: {e}");
         }
     }
-    if !matches!(n.permission_state(), Ok(PermissionState::Granted)) {
-        return;
-    }
-    for r in plan {
-        let Some(date) = plugin_date(r.at) else { continue };
-        let result = n
-            .builder()
-            .id(r.id)
-            .title(&r.title)
-            .body(&r.body)
-            .schedule(Schedule::At { date, repeating: false, allow_while_idle: true })
-            .show();
-        if let Err(e) = result {
-            eprintln!("reminders: scheduling {} failed: {e}", r.id);
+    let mut scheduled = Vec::new();
+    if matches!(n.permission_state(), Ok(PermissionState::Granted)) {
+        for r in plan {
+            let Some(date) = plugin_date(r.at) else { continue };
+            let result = n
+                .builder()
+                .id(r.id)
+                .title(&r.title)
+                .body(&r.body)
+                .schedule(Schedule::At { date, repeating: false, allow_while_idle: true })
+                .show();
+            match result {
+                Ok(()) => scheduled.push(r.id),
+                Err(e) => eprintln!("reminders: scheduling {} failed: {e}", r.id),
+            }
         }
+    }
+    if let Err(e) = svc.set_scheduled_reminder_ids(&scheduled) {
+        eprintln!("reminders: saving scheduled ids failed: {e}");
     }
 }
 

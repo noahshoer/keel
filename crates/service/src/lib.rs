@@ -15,6 +15,7 @@ use keel_core::views;
 use keel_storage::SqliteRepo;
 
 const REMINDER_SETTINGS_KEY: &str = "reminders";
+const SCHEDULED_IDS_KEY: &str = "reminders_scheduled_ids";
 
 pub struct AppService {
     repo: SqliteRepo,
@@ -273,6 +274,21 @@ impl AppService {
     pub fn set_reminder_settings(&self, settings: &ReminderSettings) -> Result<(), RepoError> {
         let json = serde_json::to_string(settings).map_err(|e| RepoError::Backend(e.to_string()))?;
         self.repo.set_setting(REMINDER_SETTINGS_KEY, &json)
+    }
+
+    /// Ids of the notifications last handed to the OS (mobile), so the next
+    /// re-plan can cancel them, even after a restart.
+    pub fn scheduled_reminder_ids(&self) -> Result<Vec<i32>, RepoError> {
+        Ok(self
+            .repo
+            .get_setting(SCHEDULED_IDS_KEY)?
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default())
+    }
+
+    pub fn set_scheduled_reminder_ids(&self, ids: &[i32]) -> Result<(), RepoError> {
+        let json = serde_json::to_string(ids).map_err(|e| RepoError::Backend(e.to_string()))?;
+        self.repo.set_setting(SCHEDULED_IDS_KEY, &json)
     }
 
     /// The notifications that should be pending now.

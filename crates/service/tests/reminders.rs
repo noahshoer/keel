@@ -93,3 +93,17 @@ fn plan_includes_task_reminders_and_list_reminders_returns_them() {
     let times: Vec<NaiveDateTime> = svc.reminder_plan_at(at(19, 8, 0)).unwrap().into_iter().map(|r| r.at).collect();
     assert_eq!(times, vec![at(19, 16, 30), at(19, 17, 0)]);
 }
+
+#[test]
+fn scheduled_ids_default_empty_then_persist_across_reopen() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("keel.db");
+    let path = path.to_str().unwrap();
+    let svc = AppService::open(path).unwrap();
+    assert!(svc.scheduled_reminder_ids().unwrap().is_empty());
+
+    svc.set_scheduled_reminder_ids(&[7, -3, 42]).unwrap();
+    drop(svc);
+    let svc = AppService::open(path).unwrap();
+    assert_eq!(svc.scheduled_reminder_ids().unwrap(), vec![7, -3, 42]);
+}
