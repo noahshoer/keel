@@ -52,7 +52,6 @@ pub fn resync<R: Runtime>(app: &AppHandle<R>) {
 
 #[cfg(mobile)]
 fn schedule_on_device<R: Runtime>(app: &AppHandle<R>, plan: &[PlannedReminder]) {
-    use chrono::{Local, TimeZone};
     use tauri_plugin_notification::Schedule;
 
     let n = app.notification();
@@ -67,8 +66,7 @@ fn schedule_on_device<R: Runtime>(app: &AppHandle<R>, plan: &[PlannedReminder]) 
         return;
     }
     for r in plan {
-        let Some(ts) = Local.from_local_datetime(&r.at).earliest().map(|d| d.timestamp()) else { continue };
-        let Ok(date) = time::OffsetDateTime::from_unix_timestamp(ts) else { continue };
+        let Some(date) = plugin_date(r.at) else { continue };
         let result = n
             .builder()
             .id(r.id)
@@ -80,6 +78,19 @@ fn schedule_on_device<R: Runtime>(app: &AppHandle<R>, plan: &[PlannedReminder]) 
             eprintln!("reminders: scheduling {} failed: {e}", r.id);
         }
     }
+}
+
+/// The plugin's iOS side parses `Schedule::At` with a literal `'Z'` and no
+/// time zone, so it reads the wall clock as device-local time. Hand it the
+/// local wall clock labeled UTC; a real UTC instant would fire off by the
+/// UTC offset.
+#[cfg(any(mobile, test))]
+fn plugin_date(at: chrono::NaiveDateTime) -> Option<time::OffsetDateTime> {
+    use chrono::{Datelike, Timelike};
+    let month = time::Month::try_from(at.month() as u8).ok()?;
+    let date = time::Date::from_calendar_date(at.year(), month, at.day() as u8).ok()?;
+    let clock = time::Time::from_hms(at.hour() as u8, at.minute() as u8, at.second() as u8).ok()?;
+    Some(time::PrimitiveDateTime::new(date, clock).assume_utc())
 }
 
 /// Desktop: checks the plan every 20 seconds and shows what's due.
@@ -109,5 +120,19 @@ fn fire_due<R: Runtime>(app: &AppHandle<R>) {
             Ok(()) => eprintln!("reminders: showed {} \"{}\" (due {})", r.id, r.title, r.at),
             Err(e) => eprintln!("reminders: showing {} failed: {e}", r.id),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plugin_date_keeps_the_local_wall_clock() {
+        let at = chrono::NaiveDate::from_ymd_opt(2026, 10, 20).unwrap().and_hms_opt(14, 10, 0).unwrap();
+        let d = plugin_date(at).unwrap();
+        assert_eq!((d.year(), d.month() as u8, d.day()), (2026, 10, 20));
+        assert_eq!((d.hour(), d.minute(), d.second()), (14, 10, 0));
+        assert!(d.offset().is_utc());
     }
 }
