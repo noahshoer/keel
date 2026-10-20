@@ -69,6 +69,13 @@ pub fn Sidebar(
                 crate::settings::SettingsDialog { on_close: move |_| show_settings.set(false) }
             }
             div {
+                class: nav_class(current == View::Search),
+                title: "Search (/ or Ctrl+K)",
+                onclick: move |_| view.set(View::Search),
+                span { class: "nav-icon search", Icon { svg: icons::search() } }
+                "Search"
+            }
+            div {
                 class: nav_class(current == View::Inbox),
                 onclick: move |_| view.set(View::Inbox),
                 span { class: "nav-icon inbox", Icon { svg: icons::inbox() } }

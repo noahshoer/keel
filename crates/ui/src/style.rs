@@ -404,6 +404,15 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .empty .big { font-size: 15px; color: var(--text); font-weight: 600; margin-bottom: 4px; }
 .error { color: var(--due-overdue); padding: 24px; }
 
+/* Search view */
+.nav-icon.search { color: var(--subtle); }
+.search-box { position: relative; display: flex; align-items: center; margin: 6px 0 14px; }
+.search-icon { position: absolute; left: 12px; display: inline-flex; color: var(--muted); pointer-events: none; }
+.search-input { width: 100%; height: 42px; padding: 0 14px 0 40px; border: 1px solid var(--border); border-radius: var(--r-md);
+  font-size: 15px; outline: none; background: var(--bg); color: var(--text); transition: border-color .16s, box-shadow .16s; }
+.search-input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
+.search-input::placeholder { color: var(--muted); }
+
 /* Settings window */
 .modal-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.32); display: flex;
   align-items: flex-start; justify-content: center; padding: 10vh 12px 12px; animation: fade-in .18s var(--ease); }

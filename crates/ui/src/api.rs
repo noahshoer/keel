@@ -8,6 +8,7 @@ use keel_core::filter::FilterGroup;
 use keel_core::model::{Due, Filter, Label, Priority, Project, Section, Task};
 use keel_core::recurrence::Recurrence;
 use keel_core::reminders::{PlannedReminder, ReminderSettings};
+use keel_core::search::SearchResults;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(inline_js = r#"
@@ -327,4 +328,8 @@ pub async fn request_notification_permission() -> Result<String, String> {
 
 pub async fn test_notification() -> Result<(), String> {
     invoke::<_, ()>("test_notification", &NoArgs {}).await
+}
+
+pub async fn search(query: &str) -> Result<SearchResults, String> {
+    invoke("search", &QueryArg { query }).await
 }

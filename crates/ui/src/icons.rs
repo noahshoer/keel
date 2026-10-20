@@ -108,6 +108,10 @@ pub fn subtask() -> String {
     svg(18, "1.6", r#"<path d="M6 4v8a4 4 0 0 0 4 4h8"/><path d="M15 13l3 3-3 3"/>"#)
 }
 
+pub fn search() -> String {
+    svg(20, "1.7", r#"<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>"#)
+}
+
 pub fn hash_small() -> String {
     svg(14, "2", r#"<path d="M5 9h14M5 15h14M10 4l-2 16M16 4l-2 16"/>"#)
 }

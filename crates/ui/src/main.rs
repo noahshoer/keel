@@ -3,6 +3,7 @@ mod filters;
 mod api;
 mod icons;
 mod pickers;
+mod search;
 mod settings;
 mod sidebar;
 mod style;
@@ -19,6 +20,7 @@ use keel_core::model::{Filter, Label, Project, Section, Task};
 use keel_core::views;
 
 use editor::{AddTask, EditorValues};
+use search::SearchPane;
 use icons::Icon;
 use sidebar::Sidebar;
 use task_row::{CompletedRow, TaskRow};
@@ -42,7 +44,25 @@ pub enum View {
     Label(String),
     /// id, name, query
     Filter(Id, String, String),
+    Search,
 }
+
+/// Sends `true` to Rust on "/" (outside text fields) or Ctrl/Cmd+K, then
+/// focuses the search box once the Search view has rendered.
+const SEARCH_SHORTCUT_JS: &str = r#"
+document.addEventListener('keydown', (ev) => {
+  const el = document.activeElement;
+  const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+  const slash = ev.key === '/' && !typing && !ev.ctrlKey && !ev.metaKey && !ev.altKey;
+  const ctrlK = (ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k';
+  if (slash || ctrlK) {
+    ev.preventDefault();
+    dioxus.send(true);
+    setTimeout(() => document.querySelector('.search-input')?.focus(), 60);
+  }
+});
+await new Promise(() => {});
+"#;
 
 /// The local date, from JS (no `SystemTime` on wasm32).
 pub fn today() -> NaiveDate {
@@ -133,7 +153,9 @@ fn date_groups(view: &View, tasks: Vec<Task>, today: NaiveDate) -> Vec<Group> {
 
 #[component]
 fn App() -> Element {
-    let view = use_signal(|| View::Today);
+    let mut view = use_signal(|| View::Today);
+    // Kept across visits to the Search view.
+    let search_query = use_signal(String::new);
     let reload = use_signal(|| 0u32);
     let theme = use_signal(theme::saved);
     let show_completed = use_signal(|| false);
@@ -141,6 +163,15 @@ fn App() -> Element {
     // on wide windows, where the sidebar is always shown).
     let mut drawer = use_signal(|| false);
     use_hook(|| theme::apply(&theme.peek()));
+    // "/" (when not typing) or Ctrl/Cmd+K opens Search and focuses the box.
+    use_hook(move || {
+        spawn(async move {
+            let mut keys = document::eval(SEARCH_SHORTCUT_JS);
+            while keys.recv::<bool>().await.is_ok() {
+                view.set(View::Search);
+            }
+        });
+    });
     // Picking a view closes the drawer.
     use_effect(move || {
         let _ = view();
@@ -192,6 +223,8 @@ fn App() -> Element {
             View::Inbox => api::project_view(inbox.id.as_str()).await?,
             View::Project(id, _) => api::project_view(id.as_str()).await?,
             View::Label(name) => api::label_view(name).await?,
+            // The Search view loads its own results.
+            View::Search => Vec::new(),
         };
         // Completed tasks are hidden unless the toggle is on.
         let completed = if show_completed() {
@@ -200,7 +233,7 @@ fn App() -> Element {
                 View::Inbox => api::completed_in_project(inbox.id.as_str()).await?,
                 View::Project(id, _) => api::completed_in_project(id.as_str()).await?,
                 View::Label(name) => api::completed_with_label(name).await?,
-                View::Upcoming | View::Filter(..) => Vec::new(),
+                View::Upcoming | View::Filter(..) | View::Search => Vec::new(),
             }
         } else {
             Vec::new()
@@ -247,7 +280,7 @@ fn App() -> Element {
                         theme,
                         reload,
                     }
-                    MainPane { view: current, loaded, today, show_completed, drawer, reload }
+                    MainPane { view: current, loaded, today, show_completed, drawer, search_query, reload }
                 },
             }
         }
@@ -277,6 +310,7 @@ fn MainPane(
     today: NaiveDate,
     show_completed: Signal<bool>,
     drawer: Signal<bool>,
+    search_query: Signal<String>,
     reload: Signal<u32>,
 ) -> Element {
     let mut show_completed = show_completed;
@@ -291,6 +325,7 @@ fn MainPane(
         View::Upcoming => "Upcoming".to_string(),
         View::Inbox => "Inbox".to_string(),
         View::Project(_, name) | View::Label(name) | View::Filter(_, name, _) => name.clone(),
+        View::Search => "Search".to_string(),
     };
     let subtitle = match &view {
         View::Today => format!("{} {}", weekday(today), short_date(today)),
@@ -299,6 +334,7 @@ fn MainPane(
         _ => String::new(),
     };
     let filter_view = matches!(view, View::Filter(..));
+    let search_view = view == View::Search;
     let multi_group = loaded.filter_groups.len() > 1;
     // The project a project-style view shows (Inbox or a project).
     let project_id = match &view {
@@ -371,13 +407,23 @@ fn MainPane(
                 }
                 if let Some(problem) = loaded.filter_error.clone() {
                     div { class: "filter-problem big-problem", "This filter can’t run: {problem}" }
-                } else if empty && project_sections.is_empty() {
+                } else if empty && project_sections.is_empty() && !search_view {
                     div { class: "empty",
                         div { class: "big", "{empty_text.0}" }
                         div { "{empty_text.1}" }
                     }
                 }
-                if filter_view {
+                if search_view {
+                    SearchPane {
+                        query: search_query,
+                        today,
+                        show_completed: show_completed(),
+                        projects: loaded.projects.clone(),
+                        sections: loaded.sections.clone(),
+                        labels: loaded.labels.clone(),
+                        reload,
+                    }
+                } else if filter_view {
                     for (i, group) in loaded.filter_groups.iter().enumerate() {
                         div { key: "fg-{i}",
                             if multi_group {
@@ -474,7 +520,7 @@ fn MainPane(
                         AddSection { key: "add-section-{pid}", project_id: pid, reload }
                     }
                 }
-                if show_completed() && can_show_completed {
+                if show_completed() && can_show_completed && !search_view {
                     div { class: "section-title",
                         "Completed"
                         span { class: "muted", "{loaded.completed.len()}" }
