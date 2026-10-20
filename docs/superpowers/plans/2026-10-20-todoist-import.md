@@ -28,13 +28,13 @@
 ---
 
 ## Task 1: CSV reader
-- [ ] `core::import::csv::parse(text) -> Vec<Vec<String>>`. Tests. Commit.
+- [x] `core::import::csv::parse(text) -> Vec<Vec<String>>`. Tests. Commit.
 
 ## Task 2: Todoist mapping
-- [ ] `parse` (header mapping, rows → items, notes attach to previous task) and `plan` (ops with parent/section keys; dates/deadlines/priority/labels/descriptions). Tests incl. a realistic export. Commit.
+- [x] `parse` (header mapping, rows → items, notes attach to previous task) and `plan` (ops with parent/section keys; dates/deadlines/priority/labels/descriptions). Tests incl. a realistic export. Commit.
 
 ## Task 3: Service + IPC
-- [ ] `AppService::import_todoist_csv` + IPC `import_todoist_csv(project_name, text)`. Service test end to end. Commit.
+- [x] `AppService::import_todoist_csv` + IPC `import_todoist_csv(project_name, text)`. Service test end to end. Commit.
 
 ## Task 4: UI
-- [ ] Settings → Import section: file picker, per-file result lines, reload. Verify in the real app over the WebView debug port with a sample export. Merge, push.
+- [x] Settings → Import section: file picker, per-file result lines, reload. Verify in the real app over the WebView debug port with a sample export. Merge, push.

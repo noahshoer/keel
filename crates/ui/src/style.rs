@@ -462,6 +462,13 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .upcoming-when { width: 110px; flex-shrink: 0; color: var(--due-today); font-variant-numeric: tabular-nums; }
 .upcoming-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .upcoming-empty { padding: 8px 0; }
+.file-btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; flex-shrink: 0; }
+.file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.file-btn.busy { opacity: .6; }
+.import-results { list-style: none; margin: 6px 0 0; padding: 0; font-size: 13px; }
+.import-results li { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; }
+.import-results li.ok .icon { color: var(--accent); }
+.import-results li.bad { color: var(--due-overdue); }
 .modal-foot { display: flex; gap: 8px; align-items: flex-start; margin: 14px 0 0; font-size: 12px;
   color: var(--muted); line-height: 17px; }
 .modal-foot .icon { flex-shrink: 0; margin-top: 1px; }
