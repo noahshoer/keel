@@ -4,7 +4,7 @@ use chrono::{Local, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
-use crate::model::{Due, Filter, Label, Priority, Project, Section, Task};
+use crate::model::{Due, Filter, Label, Priority, Project, Reminder, Section, Task};
 use crate::recurrence::Recurrence;
 use crate::repository::{RepoError, Repository};
 use crate::streak;
@@ -60,6 +60,9 @@ pub enum Action {
         /// the first scheduled day on or after today.
         #[serde(default)]
         recurrence: Option<Recurrence>,
+        /// "Must be done by" date (`YYYY-MM-DD`), separate from the due.
+        #[serde(default)]
+        deadline: Option<String>,
     },
     /// Patch a task: every field is optional; omitted fields are unchanged.
     TaskUpdate {
@@ -80,6 +83,9 @@ pub enum Action {
         /// Collapse/expand the task's sub-tasks.
         #[serde(default)]
         is_collapsed: Option<bool>,
+        /// `None` keeps the deadline; `Some("")` clears it.
+        #[serde(default)]
+        deadline: Option<String>,
     },
     /// Move a task (and its whole sub-tree) to a project, optionally a section.
     TaskMove {
@@ -159,6 +165,18 @@ pub enum Action {
     ProjectDelete {
         id: Id,
     },
+    /// A reminder on a task: `minute_offset` before its due time (relative),
+    /// or at a fixed local time `at` = `YYYY-MM-DDTHH:MM` (absolute).
+    ReminderAdd {
+        task_id: Id,
+        #[serde(default)]
+        minute_offset: Option<i64>,
+        #[serde(default)]
+        at: Option<String>,
+    },
+    ReminderDelete {
+        id: Id,
+    },
 }
 
 impl Action {
@@ -183,8 +201,22 @@ impl Action {
             Action::FilterDelete { .. } => "filter_delete",
             Action::ProjectUpdate { .. } => "project_update",
             Action::ProjectDelete { .. } => "project_delete",
+            Action::ReminderAdd { .. } => "reminder_add",
+            Action::ReminderDelete { .. } => "reminder_delete",
         }
     }
+}
+
+/// A local date-time typed as `YYYY-MM-DDTHH:MM` (seconds optional).
+fn parse_local_datetime(s: &str) -> Option<chrono::NaiveDateTime> {
+    chrono::NaiveDateTime::parse_from_str(s.trim(), "%Y-%m-%dT%H:%M:%S")
+        .or_else(|_| chrono::NaiveDateTime::parse_from_str(s.trim(), "%Y-%m-%dT%H:%M"))
+        .ok()
+}
+
+/// `YYYY-MM-DD` when `s` is a real date (anything else, e.g. "", gives `None`).
+fn valid_date(s: &str) -> Option<String> {
+    NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok().map(iso)
 }
 
 /// Human text for a rule, stored in `Due.string` (Todoist-style).
@@ -257,8 +289,10 @@ pub fn apply_at<R: Repository>(
             parent_id,
             section_id,
             recurrence,
+            deadline,
         } => {
             let mut task = Task::new(content, project_id);
+            task.deadline = deadline.as_deref().and_then(valid_date);
             if let Some(d) = description {
                 task.description = d;
             }
@@ -362,6 +396,7 @@ pub fn apply_at<R: Repository>(
             labels,
             due,
             is_collapsed,
+            deadline,
         } => {
             // A project change is a move: the sub-tree follows and the
             // section (which belongs to the old project) is cleared.
@@ -386,6 +421,9 @@ pub fn apply_at<R: Repository>(
                 if let Some(l) = labels {
                     task.labels = l;
                 }
+                if let Some(d) = deadline {
+                    task.deadline = valid_date(&d);
+                }
                 if let Some(edit) = due {
                     let old_rule = task.due.as_ref().and_then(|d| d.recurrence.clone());
                     task.due = build_due(edit.date, edit.recurrence, today);
@@ -401,7 +439,37 @@ pub fn apply_at<R: Repository>(
             }
         }
         Action::TaskDelete { id } => {
+            // The task's reminders (and its sub-tasks') go with it.
+            let mut gone: Vec<Id> = descendants(repo, &id)?.into_iter().map(|t| t.id).collect();
+            gone.push(id.clone());
+            for mut r in repo.list_reminders()? {
+                if gone.contains(&r.task_id) {
+                    r.is_deleted = true;
+                    repo.upsert_reminder(&r)?;
+                }
+            }
             repo.soft_delete_task(&id)?;
+        }
+        Action::ReminderAdd { task_id, minute_offset, at } => {
+            let task_exists = repo.get_task(&task_id)?.is_some_and(|t| !t.is_deleted);
+            let reminder = match (minute_offset, at.as_deref().and_then(parse_local_datetime)) {
+                _ if !task_exists => None,
+                (Some(m), _) => Some(Reminder::relative(task_id, m)),
+                (None, Some(at)) => Some(Reminder::absolute(task_id, at)),
+                (None, None) => None,
+            };
+            if let Some(r) = reminder {
+                repo.upsert_reminder(&r)?;
+                if let Some(temp) = cmd.temp_id {
+                    result.id_mapping.insert(temp, r.id.clone());
+                }
+            }
+        }
+        Action::ReminderDelete { id } => {
+            if let Some(mut r) = repo.list_reminders()?.into_iter().find(|r| r.id == id) {
+                r.is_deleted = true;
+                repo.upsert_reminder(&r)?;
+            }
         }
         Action::TaskSetStreak { id, enabled, goal } => {
             if let Some(mut task) = repo.get_task(&id)? {
@@ -635,6 +703,7 @@ mod tests {
                 parent_id: None,
                 section_id: None,
                 recurrence: None,
+                deadline: None,
             },
         };
         let v: serde_json::Value = serde_json::to_value(&cmd).unwrap();

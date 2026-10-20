@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::ids::Id;
-use crate::model::{Filter, Label, Project, Section, Task};
+use crate::model::{Filter, Label, Project, Reminder, Section, Task};
 
 /// Errors a `Repository` can return.
 #[derive(Debug)]
@@ -49,6 +49,10 @@ pub trait Repository {
     fn upsert_label(&self, label: &Label) -> Result<(), RepoError>;
     /// Active (non-deleted) labels, sorted by name case-insensitively.
     fn list_labels(&self) -> Result<Vec<Label>, RepoError>;
+
+    fn upsert_reminder(&self, reminder: &Reminder) -> Result<(), RepoError>;
+    /// Active (non-deleted) task reminders, oldest first.
+    fn list_reminders(&self) -> Result<Vec<Reminder>, RepoError>;
 
     /// Command-log idempotency support.
     fn has_command(&self, uuid: &str) -> Result<bool, RepoError>;

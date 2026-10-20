@@ -17,6 +17,7 @@ fn add_task_cmd(uuid: &str, temp: &str, content: &str, project: &Id) -> Command 
             parent_id: None,
             section_id: None,
             recurrence: None,
+            deadline: None,
         },
     }
 }
@@ -131,6 +132,7 @@ fn delete_task_soft_deletes_subtasks() {
                 parent_id: Some(parent.clone()),
                 section_id: None,
                 recurrence: None,
+                deadline: None,
             },
         },
     )

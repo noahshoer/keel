@@ -40,6 +40,7 @@ impl F {
             parent_id: None,
             section_id: None,
             recurrence: None,
+            deadline: None,
         };
         let cmd = Command { uuid: format!("u{}", self.n), temp_id: Some("t".into()), action };
         self.svc.dispatch_at(cmd, today()).unwrap().id_mapping["t"].to_string()

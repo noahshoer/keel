@@ -39,6 +39,7 @@ fn dispatch_task_add_then_list_returns_it() {
             parent_id: None,
             section_id: None,
             recurrence: None,
+            deadline: None,
         },
     })
     .unwrap();

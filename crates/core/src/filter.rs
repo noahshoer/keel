@@ -73,6 +73,7 @@ pub enum Term {
     Tomorrow,
     Overdue,
     NoDate,
+    NoDeadline,
     Recurring,
     NoLabels,
     Subtask,
@@ -85,6 +86,9 @@ pub enum Term {
     DueBefore(DateRef),
     DueAfter(DateRef),
     DueOn(DateRef),
+    DeadlineBefore(DateRef),
+    DeadlineAfter(DateRef),
+    DeadlineOn(DateRef),
     /// today ≤ due < today + n.
     NextDays(i64),
 }
@@ -184,6 +188,7 @@ fn parse_term(raw: &str) -> Result<Term, FilterError> {
         "tomorrow" => Term::Tomorrow,
         "overdue" => Term::Overdue,
         "no date" => Term::NoDate,
+        "no deadline" => Term::NoDeadline,
         "recurring" => Term::Recurring,
         "no labels" => Term::NoLabels,
         "subtask" => Term::Subtask,
@@ -206,6 +211,12 @@ fn parse_term(raw: &str) -> Result<Term, FilterError> {
                 Term::DueAfter(parse_date(rest)?)
             } else if let Some(rest) = t.strip_prefix("due:") {
                 Term::DueOn(parse_date(rest)?)
+            } else if let Some(rest) = t.strip_prefix("deadline before:") {
+                Term::DeadlineBefore(parse_date(rest)?)
+            } else if let Some(rest) = t.strip_prefix("deadline after:") {
+                Term::DeadlineAfter(parse_date(rest)?)
+            } else if let Some(rest) = t.strip_prefix("deadline:") {
+                Term::DeadlineOn(parse_date(rest)?)
             } else if let Some(n) = parse_days(t.strip_prefix("next ").unwrap_or(t)) {
                 if n < 1 {
                     return err(format!("“{raw}” needs at least 1 day"));
@@ -316,6 +327,7 @@ pub fn matches(expr: &Expr, task: &Task, ctx: &FilterContext) -> bool {
 fn term_matches(term: &Term, task: &Task, ctx: &FilterContext) -> bool {
     let due = due_date_of(task);
     let today = ctx.today;
+    let deadline = task.deadline.as_deref().and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
     let lower_eq = |a: &str, b: &str| a.to_lowercase() == b;
     match term {
         Term::All => true,
@@ -323,6 +335,7 @@ fn term_matches(term: &Term, task: &Task, ctx: &FilterContext) -> bool {
         Term::Tomorrow => due == Some(today + Duration::days(1)),
         Term::Overdue => due.is_some_and(|d| d < today),
         Term::NoDate => due.is_none(),
+        Term::NoDeadline => deadline.is_none(),
         Term::Recurring => task.due.as_ref().is_some_and(|d| d.is_recurring),
         Term::NoLabels => task.labels.is_empty(),
         Term::Subtask => task.parent_id.is_some(),
@@ -338,6 +351,9 @@ fn term_matches(term: &Term, task: &Task, ctx: &FilterContext) -> bool {
         Term::DueBefore(r) => due.is_some_and(|d| d < r.resolve(today)),
         Term::DueAfter(r) => due.is_some_and(|d| d > r.resolve(today)),
         Term::DueOn(r) => due == Some(r.resolve(today)),
+        Term::DeadlineBefore(r) => deadline.is_some_and(|d| d < r.resolve(today)),
+        Term::DeadlineAfter(r) => deadline.is_some_and(|d| d > r.resolve(today)),
+        Term::DeadlineOn(r) => deadline == Some(r.resolve(today)),
         Term::NextDays(n) => due.is_some_and(|d| d >= today && d < today + Duration::days(*n)),
     }
 }
@@ -451,6 +467,19 @@ mod tests {
     fn comma_makes_groups() {
         let groups = parse("today, overdue,  @home").unwrap();
         assert_eq!(groups.len(), 3);
+    }
+
+    #[test]
+    fn deadline_terms() {
+        let mut t = task("report");
+        t.deadline = Some("2026-10-21".into());
+        let none = task("free");
+        assert!(m("deadline: +2 days", &t) && !m("deadline: today", &t));
+        assert!(m("deadline before: +3 days", &t) && !m("deadline before: +2 days", &t), "strict");
+        assert!(m("deadline after: today", &t) && !m("deadline after: 2026-10-21", &t));
+        assert!(m("no deadline", &none) && !m("no deadline", &t));
+        assert!(!m("deadline before: +30 days", &none), "no deadline never matches a comparison");
+        assert!(m("deadline before: +7 days & p4", &t));
     }
 
     #[test]

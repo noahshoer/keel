@@ -112,6 +112,14 @@ pub fn search() -> String {
     svg(20, "1.7", r#"<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>"#)
 }
 
+pub fn target_small() -> String {
+    svg(12, "2", r#"<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>"#)
+}
+
+pub fn bell_small() -> String {
+    svg(12, "2", r#"<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>"#)
+}
+
 pub fn hash_small() -> String {
     svg(14, "2", r#"<path d="M5 9h14M5 15h14M10 4l-2 16M16 4l-2 16"/>"#)
 }

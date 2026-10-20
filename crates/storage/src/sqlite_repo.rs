@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, Row};
 use keel_core::ids::Id;
-use keel_core::model::{Due, Duration, Filter, Label, Priority, Project, Section, Task, ViewStyle};
+use keel_core::model::{Due, Duration, Filter, Label, Priority, Project, Reminder, ReminderType, Section, Task, ViewStyle};
 use keel_core::repository::{RepoError, Repository};
 
 use crate::migrations;
@@ -502,6 +502,54 @@ impl Repository for SqliteRepo {
         )
         .map_err(backend)?;
         Ok(())
+    }
+
+    fn upsert_reminder(&self, r: &Reminder) -> Result<(), RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let due_json = serde_json::to_string(&r.due).map_err(backend)?;
+        let kind = match r.kind {
+            ReminderType::Relative => "relative",
+            ReminderType::Absolute => "absolute",
+        };
+        conn.execute(
+            "INSERT INTO reminder (id, task_id, kind, due_json, minute_offset, is_deleted) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
+             ON CONFLICT(id) DO UPDATE SET task_id=excluded.task_id, kind=excluded.kind, \
+                due_json=excluded.due_json, minute_offset=excluded.minute_offset, \
+                is_deleted=excluded.is_deleted",
+            params![r.id.as_str(), r.task_id.as_str(), kind, due_json, r.minute_offset, r.is_deleted as i64],
+        )
+        .map_err(backend)?;
+        Ok(())
+    }
+
+    fn list_reminders(&self) -> Result<Vec<Reminder>, RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, task_id, kind, due_json, minute_offset, is_deleted FROM reminder \
+                 WHERE is_deleted = 0 ORDER BY rowid ASC",
+            )
+            .map_err(backend)?;
+        let rows = stmt
+            .query_map([], |row| {
+                let due_json: String = row.get(3)?;
+                let kind: String = row.get(2)?;
+                Ok(Reminder {
+                    id: Id::from(row.get::<_, String>(0)?),
+                    task_id: Id::from(row.get::<_, String>(1)?),
+                    kind: if kind == "absolute" { ReminderType::Absolute } else { ReminderType::Relative },
+                    due: serde_json::from_str(&due_json).unwrap_or(None),
+                    minute_offset: row.get(4)?,
+                    is_deleted: row.get::<_, i64>(5)? != 0,
+                })
+            })
+            .map_err(backend)?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r.map_err(backend)?);
+        }
+        Ok(out)
     }
 
     fn list_labels(&self) -> Result<Vec<Label>, RepoError> {

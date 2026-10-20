@@ -48,6 +48,7 @@ impl Harness {
                 parent_id: None,
                 section_id: None,
                 recurrence,
+                deadline: None,
             },
             mon(),
         );
@@ -70,6 +71,7 @@ fn noop(id: &Id) -> Action {
         labels: None,
         due: None,
         is_collapsed: None,
+        deadline: None,
     }
 }
 
@@ -91,6 +93,7 @@ fn update_content_only_keeps_everything_else() {
             labels: None,
             due: None,
             is_collapsed: None,
+            deadline: None,
         },
         mon(),
     );
@@ -120,6 +123,7 @@ fn update_sets_date_priority_project_labels() {
             labels: Some(vec!["work".into(), "deep".into()]),
             due: Some(DueEdit { date: Some("2026-02-01".into()), recurrence: None }),
             is_collapsed: None,
+            deadline: None,
         },
         mon(),
     );

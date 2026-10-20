@@ -31,6 +31,7 @@ fn add(svc: &AppService, uuid: &str, name: &str, due: &str) {
                 parent_id: None,
                 section_id: None,
                 recurrence: None,
+                deadline: None,
             },
         },
         NaiveDate::from_ymd_opt(2026, 10, 19).unwrap(),
@@ -70,4 +71,25 @@ fn plan_uses_stored_settings_and_open_tasks() {
     assert_eq!(plan.len(), 1);
     assert_eq!(plan[0].at, at(19, 17, 0));
     assert_eq!(plan[0].title, "Call mom");
+}
+
+#[test]
+fn plan_includes_task_reminders_and_list_reminders_returns_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
+    add(&svc, "u1", "Call mom", "2026-10-19T17:00:00");
+    let task = svc.list_tasks(svc.list_projects().unwrap()[0].id.as_str()).unwrap().remove(0);
+    svc.dispatch_at(
+        Command {
+            uuid: "u2".into(),
+            temp_id: Some("r".into()),
+            action: Action::ReminderAdd { task_id: task.id.clone(), minute_offset: Some(30), at: None },
+        },
+        NaiveDate::from_ymd_opt(2026, 10, 19).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(svc.list_reminders().unwrap().len(), 1);
+    svc.set_reminder_settings(&ReminderSettings { enabled: true, ..ReminderSettings::default() }).unwrap();
+    let times: Vec<NaiveDateTime> = svc.reminder_plan_at(at(19, 8, 0)).unwrap().into_iter().map(|r| r.at).collect();
+    assert_eq!(times, vec![at(19, 16, 30), at(19, 17, 0)]);
 }

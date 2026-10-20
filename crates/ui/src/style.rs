@@ -404,6 +404,23 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .empty .big { font-size: 15px; color: var(--text); font-weight: 600; margin-bottom: 4px; }
 .error { color: var(--due-overdue); padding: 24px; }
 
+/* Deadlines + task reminders */
+.deadline { display: inline-flex; align-items: center; gap: 4px; }
+.deadline.set { color: var(--due-week); }
+.deadline.urgent { color: var(--due-overdue); font-weight: 500; }
+.reminder-tag { display: inline-flex; align-items: center; color: var(--muted); }
+.deadline-chip.set { color: var(--due-week); }
+.deadline-chip.urgent { color: var(--due-overdue); }
+.reminder-chip { color: var(--accent); }
+.quick-chip.chip-deadline { color: var(--due-week); }
+.hl-deadline { --hl-bg: rgba(105,47,194,.14); }
+.reminder-pop { min-width: 250px; }
+.reminder-item { display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 8px; font-size: 13px; }
+.reminder-item .icon-btn { font-size: 16px; line-height: 1; width: 26px; height: 26px; }
+.menu-divider { height: 1px; background: var(--divider); margin: 6px 2px; }
+.menu-item:disabled { opacity: .4; cursor: default; background: none; }
+.label-new.bad { border-color: var(--due-overdue); }
+
 /* Search view */
 .nav-icon.search { color: var(--subtle); }
 .search-box { position: relative; display: flex; align-items: center; margin: 6px 0 14px; }

@@ -24,6 +24,7 @@ fn add(svc: &AppService, n: &mut u32, content: &str, project: &Id, labels: &[&st
                     parent_id: None,
                     section_id: None,
                     recurrence: None,
+                    deadline: None,
                 },
             },
             today(),

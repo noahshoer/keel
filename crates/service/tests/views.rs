@@ -72,6 +72,7 @@ impl Fixture {
                         parent_id: None,
                         section_id: None,
                         recurrence: None,
+                        deadline: None,
                     },
                 },
                 today(),
