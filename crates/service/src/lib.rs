@@ -9,6 +9,7 @@ use keel_core::filter::{self, FilterContext, FilterError, FilterGroup};
 use keel_core::model::{Filter, Label, Project, Section, Task};
 use keel_core::reminders::{self, PlannedReminder, ReminderSettings};
 use keel_core::repository::{RepoError, Repository};
+use keel_core::search::{self, SearchResults};
 use keel_core::streak;
 use keel_core::views;
 use keel_storage::SqliteRepo;
@@ -163,6 +164,32 @@ impl AppService {
             t.completed_at
                 .is_some_and(|c| c.with_timezone(&Local).date_naive() == today)
         })
+    }
+
+    /// Text search over open tasks (title matches first, then due date,
+    /// then priority) plus the newest matching completed tasks.
+    pub fn search(&self, query: &str) -> Result<SearchResults, RepoError> {
+        self.search_at(query, today())
+    }
+
+    pub fn search_at(&self, query: &str, today: NaiveDate) -> Result<SearchResults, RepoError> {
+        let words = search::words(query);
+        if words.is_empty() {
+            return Ok(SearchResults::default());
+        }
+        let mut open: Vec<Task> = self.open_tasks(today)?.into_iter().filter(|t| search::matches(t, &words)).collect();
+        open.sort_by(|a, b| {
+            let (da, db) = (views::due_date_of(a), views::due_date_of(b));
+            search::rank(a, &words)
+                .cmp(&search::rank(b, &words))
+                .then(da.is_none().cmp(&db.is_none()))
+                .then(da.cmp(&db))
+                .then(b.priority.to_api().cmp(&a.priority.to_api()))
+                .then(a.child_order.cmp(&b.child_order))
+        });
+        let mut completed = self.completed(|t| search::matches(t, &words))?;
+        completed.truncate(50);
+        Ok(SearchResults { open, completed })
     }
 
     pub fn list_filters(&self) -> Result<Vec<Filter>, RepoError> {
