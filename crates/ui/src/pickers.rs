@@ -134,6 +134,22 @@ pub fn DatePicker(date: String, time: String, open: OpenPop, on_change: EventHan
     }
 }
 
+/// The date picker's shortcuts: (label, hint, date).
+pub fn quick_dates(today: NaiveDate) -> Vec<(&'static str, String, NaiveDate)> {
+    let saturday = today + Duration::days(((5 - today.weekday().num_days_from_monday() as i64) + 7) % 7);
+    let next_monday = today + Duration::days(7 - today.weekday().num_days_from_monday() as i64);
+    let tomorrow = today + Duration::days(1);
+    vec![
+        ("Today", DOW[today.weekday().num_days_from_monday() as usize].to_string(), today),
+        ("Tomorrow", DOW[tomorrow.weekday().num_days_from_monday() as usize].to_string(), tomorrow),
+        ("This weekend", DOW[5].to_string(), saturday),
+        ("Next week", format!("Mon {} {}", next_monday.day(), &MONTHS[next_monday.month0() as usize][..3]), next_monday),
+    ]
+}
+
+/// Relative reminder choices, in minutes before the due time.
+pub const REMINDER_PRESETS: [i64; 5] = [0, 10, 30, 60, 1440];
+
 #[component]
 fn Scheduler(
     selected: Option<NaiveDate>,
@@ -155,15 +171,16 @@ fn Scheduler(
     let time_str = time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
     let touch = use_context::<Touch>().0;
 
-    let saturday = today + Duration::days(((5 - today.weekday().num_days_from_monday() as i64) + 7) % 7);
-    let next_monday = today + Duration::days(7 - today.weekday().num_days_from_monday() as i64);
-    let tomorrow = today + Duration::days(1);
-    let quick: Vec<(&str, String, NaiveDate, String, &str)> = vec![
-        ("Today", DOW[today.weekday().num_days_from_monday() as usize].to_string(), today, icons::calendar_small(), "q-today"),
-        ("Tomorrow", DOW[tomorrow.weekday().num_days_from_monday() as usize].to_string(), tomorrow, icons::sun(), "q-tomorrow"),
-        ("This weekend", DOW[5].to_string(), saturday, icons::sofa(), "q-weekend"),
-        ("Next week", format!("Mon {} {}", next_monday.day(), &MONTHS[next_monday.month0() as usize][..3]), next_monday, icons::arrow_right(), "q-next"),
-    ];
+    let quick: Vec<(&str, String, NaiveDate, String, &str)> = quick_dates(today)
+        .into_iter()
+        .zip([
+            (icons::calendar_small(), "q-today"),
+            (icons::sun(), "q-tomorrow"),
+            (icons::sofa(), "q-weekend"),
+            (icons::arrow_right(), "q-next"),
+        ])
+        .map(|((label, hint, d), (icon, cls))| (label, hint, d, icon, cls))
+        .collect();
 
     let m = month();
     let weeks = calendar::month_weeks(m);
@@ -494,7 +511,7 @@ pub fn ReminderPicker(
             _ => custom_bad.set(true),
         }
     };
-    let presets = [0i64, 10, 30, 60, 1440];
+    let presets = REMINDER_PRESETS;
 
     rsx! {
         div { class: "chip-wrap",

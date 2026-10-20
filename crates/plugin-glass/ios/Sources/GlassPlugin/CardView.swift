@@ -90,18 +90,30 @@ func chipIcon(_ id: ChipId) -> String {
   }
 }
 
+extension ChipId: Identifiable {
+  var id: String { rawValue }
+}
+
+struct ChipLabel: View {
+  let chip: ChipState
+
+  var body: some View {
+    Label(chip.label, systemImage: chipIcon(chip.id))
+      .font(.subheadline.weight(chip.set ? .semibold : .regular))
+      .foregroundStyle(chip.set ? keelGreen : Color.primary)
+      .lineLimit(1)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+  }
+}
+
 struct ChipButton: View {
   let chip: ChipState
   let action: () -> Void
 
   var body: some View {
     Button(action: action) {
-      Label(chip.label, systemImage: chipIcon(chip.id))
-        .font(.subheadline.weight(chip.set ? .semibold : .regular))
-        .foregroundStyle(chip.set ? keelGreen : Color.primary)
-        .lineLimit(1)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+      ChipLabel(chip: chip)
     }
     .buttonStyle(.plain)
     .glassEffect(chip.set ? .regular.tint(keelGreen.opacity(0.18)).interactive() : .regular.interactive(), in: .capsule)
@@ -137,7 +149,11 @@ struct CardView: View {
               GlassEffectContainer(spacing: 8) {
                 HStack(spacing: 8) {
                   ForEach(state.chips, id: \.id) { chip in
-                    ChipButton(chip: chip) { model.picker = chip.id }
+                    if chip.id == .priority || chip.id == .repeat {
+                      ChipMenu(chip: chip, picker: state.picker) { model.send(.pick($0)) }
+                    } else {
+                      ChipButton(chip: chip) { model.picker = chip.id }
+                    }
                   }
                 }
                 .padding(.vertical, 2)
@@ -161,6 +177,9 @@ struct CardView: View {
         }
         .padding(16)
         .glassEffect(in: .rect(cornerRadius: 26))
+        .sheet(item: $model.picker, onDismiss: { TitleField.AutoFocusField.current?.becomeFirstResponder() }) { id in
+          PickerSheet(id: id, model: model)
+        }
         .padding(.horizontal, 8)
         .padding(.bottom, 8)
         .offset(y: max(drag, 0))

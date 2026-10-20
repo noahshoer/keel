@@ -17,7 +17,7 @@ use crate::editor::{
     add_from_editor, labels_text, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
     repeat_text, save_edit, EditorValues,
 };
-use crate::pickers::{date_chip, deadline_text, reminders_text, ReminderDraft};
+use crate::pickers::{date_chip, deadline_text, offset_text, quick_dates, reminders_text, ReminderDraft, REMINDER_PRESETS};
 
 /// Adding parses the title as quick add; editing never does (as on the web).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -74,6 +74,22 @@ pub struct PickerData {
     pub all_labels: Vec<String>,
     pub deadline: String,
     pub reminders: Vec<ReminderDraft>,
+    /// What each reminder shows, in order.
+    pub reminder_labels: Vec<String>,
+    /// (minutes before, label)
+    pub reminder_presets: Vec<(i64, String)>,
+    /// Relative reminders need a due date.
+    pub has_due: bool,
+    pub quick_dates: Vec<QuickDate>,
+}
+
+/// A date-picker shortcut ("Tomorrow", "Next week").
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct QuickDate {
+    pub label: String,
+    pub hint: String,
+    /// `YYYY-MM-DD`
+    pub date: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -266,6 +282,13 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
         all_labels: ctx.labels.iter().map(|l| l.name.clone()).collect(),
         deadline: shown.deadline.clone(),
         reminders: shown.reminders.clone(),
+        reminder_labels: shown.reminders.iter().map(|r| r.label(ctx.today)).collect(),
+        reminder_presets: REMINDER_PRESETS.iter().map(|&m| (m, offset_text(m))).collect(),
+        has_due: date.is_some() || time.is_some(),
+        quick_dates: quick_dates(ctx.today)
+            .into_iter()
+            .map(|(label, hint, d)| QuickDate { label: label.to_string(), hint, date: d.format("%Y-%m-%d").to_string() })
+            .collect(),
     };
 
     CardState {
@@ -586,5 +609,28 @@ mod tests {
         let initial = blank("");
         assert_eq!(after_submit(CardMode::Add, &initial), Some(initial.clone()));
         assert_eq!(after_submit(CardMode::Edit, &initial), None);
+    }
+
+    #[test]
+    fn picker_offers_the_web_quick_dates_and_presets() {
+        let p = card_state(&blank(""), CardMode::Add, &ctx()).picker;
+        let quick: Vec<(&str, &str)> = p.quick_dates.iter().map(|q| (q.label.as_str(), q.date.as_str())).collect();
+        assert_eq!(
+            quick,
+            vec![("Today", "2026-10-19"), ("Tomorrow", "2026-10-20"), ("This weekend", "2026-10-24"), ("Next week", "2026-10-26")]
+        );
+        let offsets: Vec<i64> = p.reminder_presets.iter().map(|(m, _)| *m).collect();
+        assert_eq!(offsets, vec![0, 10, 30, 60, 1440]);
+        assert_eq!(p.reminder_presets[4].1, crate::pickers::offset_text(1440));
+        assert!(!p.has_due);
+        assert!(card_state(&blank("x tomorrow"), CardMode::Add, &ctx()).picker.has_due);
+    }
+
+    #[test]
+    fn picker_labels_each_reminder() {
+        let mut v = blank("x");
+        v.reminders = vec![ReminderDraft { id: None, minute_offset: Some(30), at: None }];
+        let p = card_state(&v, CardMode::Add, &ctx()).picker;
+        assert_eq!(p.reminder_labels, vec![v.reminders[0].label(today())]);
     }
 }

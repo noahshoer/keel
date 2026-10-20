@@ -51,6 +51,34 @@ struct PickerData: Codable, Equatable {
   let allLabels: [String]
   let deadline: String
   let reminders: [ReminderDraft]
+  let reminderLabels: [String]
+  let reminderPresets: [ReminderPreset]
+  let hasDue: Bool
+  let quickDates: [QuickDate]
+}
+
+struct QuickDate: Codable, Equatable {
+  let label: String
+  let hint: String
+  let date: String
+}
+
+/// A `[minutes, label]` pair.
+struct ReminderPreset: Codable, Equatable {
+  let minutes: Int
+  let label: String
+
+  init(from decoder: Decoder) throws {
+    var c = try decoder.unkeyedContainer()
+    minutes = try c.decode(Int.self)
+    label = try c.decode(String.self)
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var c = encoder.unkeyedContainer()
+    try c.encode(minutes)
+    try c.encode(label)
+  }
 }
 
 struct CardState: Codable, Equatable {
