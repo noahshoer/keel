@@ -50,10 +50,21 @@ fn when_text(r: &PlannedReminder) -> String {
     format!("{day} {}", views::time_label(r.at.time()))
 }
 
+/// How reminders reach this device: the OS holds them on iPhone; the
+/// desktop app shows them itself.
+fn delivery_note(when_closed: bool) -> &'static str {
+    if when_closed {
+        "Reminders arrive even when Keel is closed."
+    } else {
+        "Reminders appear while Keel is open on this computer."
+    }
+}
+
 #[component]
 pub fn SettingsDialog(on_close: EventHandler<()>) -> Element {
     let mut settings = use_signal(|| None::<ReminderSettings>);
     let mut permission = use_signal(String::new);
+    let mut when_closed = use_signal(|| None::<bool>);
     let mut upcoming = use_signal(Vec::<PlannedReminder>::new);
     let mut message = use_signal(|| None::<String>);
     let mut open: OpenPop = use_signal(|| None);
@@ -65,6 +76,9 @@ pub fn SettingsDialog(on_close: EventHandler<()>) -> Element {
             }
             if let Ok(p) = api::notification_permission().await {
                 permission.set(p);
+            }
+            if let Ok(c) = api::reminders_when_closed().await {
+                when_closed.set(Some(c));
             }
             upcoming.set(api::upcoming_reminders().await.unwrap_or_default());
         });
@@ -247,11 +261,26 @@ pub fn SettingsDialog(on_close: EventHandler<()>) -> Element {
                         }
                     }
                 }
-                p { class: "modal-foot",
-                    Icon { svg: icons::monitor() }
-                    "On this computer, reminders appear while the app is open. On iPhone they arrive even when it's closed."
+                if let Some(closed) = when_closed() {
+                    p { class: "modal-foot",
+                        Icon { svg: if closed { icons::bell_small() } else { icons::monitor() } }
+                        "{delivery_note(closed)}"
+                    }
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn delivery_note_describes_only_this_device() {
+        let phone = delivery_note(true);
+        assert!(phone.contains("closed") && !phone.contains("computer"), "{phone}");
+        let desktop = delivery_note(false);
+        assert!(desktop.contains("open") && !desktop.contains("iPhone"), "{desktop}");
     }
 }

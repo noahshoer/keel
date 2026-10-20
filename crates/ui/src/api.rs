@@ -330,6 +330,11 @@ pub async fn notification_permission() -> Result<String, String> {
     invoke("notification_permission", &NoArgs {}).await
 }
 
+/// True where the OS delivers reminders while the app is closed (iOS).
+pub async fn reminders_when_closed() -> Result<bool, String> {
+    invoke("reminders_when_closed", &NoArgs {}).await
+}
+
 pub async fn request_notification_permission() -> Result<String, String> {
     invoke("request_notification_permission", &NoArgs {}).await
 }
