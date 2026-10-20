@@ -93,7 +93,32 @@
 - [ ] **Step 4:** Write the findings (what worked, the exact overlay and keyboard technique, any gotchas) into this plan under "Spike notes" on `feat/liquid-glass` and commit. **If (a) or (b) fails, stop and report to Noah.**
 
 ### Spike notes
-_(filled in by Task 1)_
+Spike on branch `spike/glass-overlay` (`201c721`, kept for reference, never merged). Passed on Noah's iPhone on 2026-10-20: no keyboard gap and no page scroll, the highlight keeps up with typing, and swipe-to-drawer and list scrolling work.
+
+**What works:**
+- **Overlay:**
+  - In `load(webview:)`, on the next main-queue turn, a `PassthroughView` is added as a **subview of the WKWebView**, filling it (autoresizing).
+  - It contains a `UIHostingController` view with a clear background. The hosting controller is added as a child of the web view's view controller.
+- **Pass-through:**
+  - SwiftUI content has no UIViews, so `super.hitTest` returns the hosting view for glass buttons *and* for empty space. Returning nil for the hosting view would let taps fall through the buttons.
+  - Instead, the model keeps the window-space frames of the touchable controls (`.onGeometryChange(for: CGRect.self) { $0.frame(in: .global) }`).
+  - While the card is closed, `hitTest` returns nil unless the point (`convert(point, to: nil)`) is inside one of those frames.
+  - While the card is open, the overlay takes every touch. A near-transparent full-screen layer under the card catches "tap outside", and that tap never reaches the list.
+- **Title field:**
+  - A `UIViewRepresentable` `UITextField`. Highlighting sets `attributedText` from UTF-16 `NSRange`s and keeps `selectedTextRange`.
+  - The update is skipped when `field.text != model.text`.
+- **Focus:** a `UITextField` subclass calls `becomeFirstResponder()` in `didMoveToWindow`. Calling it from `makeUIView` (even async) did not open the keyboard on the first tap.
+- **Events:**
+  - Swift `trigger("title", data: [...])` reaches JS through `window.__TAURI__.core.addPluginListener('glass', 'title', cb)`.
+  - JS `invoke('plugin:glass|<cmd>', args)` reaches the Swift `@objc` method directly; the Rust side needs no command.
+  - The plugin's `build.rs` must list `register_listener` and `remove_listener` as well as each Swift command.
+  - The app needs `crates/src-tauri/capabilities/default.json` with `core:default` and `glass:default`; there was no capabilities file before.
+- **Package.swift:** `swift-tools-version:5.9`, `platforms: [.iOS("26.0")]`.
+
+**Gotchas:**
+- The headless simulator never shows a software keyboard, so keyboard behavior can only be checked on the phone (or in Simulator.app).
+- `.fixedSize(horizontal: false, vertical: true)` is needed on the representable, or the card fills the screen.
+- **Pre-existing web bug found:** on iPhone, task rows need a double tap, because `.task:hover .task-actions` changes opacity and WebKit spends the first tap on hover. That's unrelated to the overlay; it's fixed under Task 8.
 
 ---
 
