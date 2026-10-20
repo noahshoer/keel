@@ -46,7 +46,7 @@ pub fn Sidebar(
     rsx! {
         aside { class: "sidebar",
             div { class: "brand",
-                div { class: "brand-mark", "✓" }
+                div { class: "brand-mark", title: "Keel", Icon { svg: icons::logo(28) } }
                 "Keel"
                 button {
                     class: "icon-btn theme-toggle",
