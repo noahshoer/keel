@@ -37,6 +37,25 @@ fn offset_label(m: i64) -> String {
     }
 }
 
+/// "Travel: 12 tasks, 2 sections, 3 new labels, 1 date kept as text".
+fn import_line(s: &keel_core::import::todoist::ImportSummary) -> String {
+    let plural = |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    let mut parts = vec![plural(s.tasks, "task", "tasks")];
+    if s.sections > 0 {
+        parts.push(plural(s.sections, "section", "sections"));
+    }
+    if s.labels_created > 0 {
+        parts.push(plural(s.labels_created, "new label", "new labels"));
+    }
+    if s.comments > 0 {
+        parts.push(plural(s.comments, "comment", "comments"));
+    }
+    if s.kept_as_text > 0 {
+        parts.push(format!("{} kept as text in the description", plural(s.kept_as_text, "date", "dates")));
+    }
+    format!("{}: {}", s.project_name, parts.join(", "))
+}
+
 /// "Today 5 PM", "Tue 9 AM", "3 Nov 9 AM".
 fn when_text(r: &PlannedReminder) -> String {
     let today = crate::today();
@@ -51,8 +70,12 @@ fn when_text(r: &PlannedReminder) -> String {
 }
 
 #[component]
-pub fn SettingsDialog(on_close: EventHandler<()>) -> Element {
+pub fn SettingsDialog(on_close: EventHandler<()>, reload: Signal<u32>) -> Element {
+    let mut reload = reload;
     let mut settings = use_signal(|| None::<ReminderSettings>);
+    // One line per imported file: (ok, text).
+    let mut imports = use_signal(Vec::<(bool, String)>::new);
+    let mut importing = use_signal(|| false);
     let mut permission = use_signal(String::new);
     let mut upcoming = use_signal(Vec::<PlannedReminder>::new);
     let mut message = use_signal(|| None::<String>);
@@ -243,6 +266,59 @@ pub fn SettingsDialog(on_close: EventHandler<()>) -> Element {
                                         if r.task_id.is_some() { "{r.title}" } else { "Daily summary · {r.body}" }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+                h3 { class: "modal-section", "Import" }
+                div { class: "setting-row",
+                    div { class: "setting-text",
+                        div { class: "setting-name", "From Todoist" }
+                        div { class: "setting-hint",
+                            "In Todoist, open a project → ⋯ → Manage data → Export as CSV. Each file becomes a new project."
+                        }
+                    }
+                    label { class: if importing() { "btn btn-cancel file-btn busy" } else { "btn btn-cancel file-btn" },
+                        if importing() { "Importing…" } else { "Choose CSV files" }
+                        input {
+                            r#type: "file",
+                            accept: ".csv,text/csv",
+                            multiple: true,
+                            disabled: importing(),
+                            onchange: move |evt| {
+                                let Some(files) = evt.files() else { return };
+                                importing.set(true);
+                                spawn(async move {
+                                    for name in files.files() {
+                                        let project = name
+                                            .rsplit(['/', '\\'])
+                                            .next()
+                                            .unwrap_or(&name)
+                                            .trim_end_matches(".csv")
+                                            .trim_end_matches(".CSV")
+                                            .to_string();
+                                        let line = match files.read_file_to_string(&name).await {
+                                            None => (false, format!("{project}: couldn't read the file")),
+                                            Some(text) => match api::import_todoist_csv(&project, &text).await {
+                                                Ok(s) => (true, import_line(&s)),
+                                                Err(e) => (false, format!("{project}: {e}")),
+                                            },
+                                        };
+                                        imports.with_mut(|l| l.push(line));
+                                    }
+                                    importing.set(false);
+                                    reload += 1;
+                                });
+                            },
+                        }
+                    }
+                }
+                if !imports().is_empty() {
+                    ul { class: "import-results",
+                        for (i, (ok, text)) in imports().iter().enumerate() {
+                            li { key: "{i}", class: if *ok { "ok" } else { "bad" },
+                                Icon { svg: if *ok { icons::check_small() } else { icons::no_date() } }
+                                span { "{text}" }
                             }
                         }
                     }

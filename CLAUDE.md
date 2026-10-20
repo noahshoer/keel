@@ -15,7 +15,7 @@ Owner: Noah (GitHub `noahshoer`, private repo `noahshoer/keel`). v1 targets **iO
 
 After iOS: **sync** (dormant by design). Every change already goes through an idempotent command log, so the plan is to swap rusqlite for libSQL and add Turso, plus some device-link model. Then integrations (Apple Reminders, MS To Do, Google Calendar, Outlook, Notion). Spec non-goals for v1: comments, attachments, location reminders, collaboration, templates, activity log, backups.
 
-v1 features done: projects, sections, sub-tasks, labels, filters (query language), priorities, due dates and times, deadlines, recurrence (incl. intervals, yearly, last day/workday, nth weekday), streaks, natural-language quick add with live highlighting, search, completed-task view, local notifications (global rule + per-task reminders + daily summary), dark mode, responsive layout.
+v1 features done: projects, sections, sub-tasks, labels, filters (query language), priorities, due dates and times, deadlines, recurrence (incl. intervals, yearly, last day/workday, nth weekday), streaks, natural-language quick add with live highlighting, search, completed-task view, local notifications (global rule + per-task reminders + daily summary), dark mode, responsive layout, and Todoist CSV import (Settings → Import; `core::import::{csv, todoist}`, `AppService::import_todoist_csv`).
 
 ## Layout
 

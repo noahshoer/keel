@@ -9,6 +9,7 @@ use keel_core::commands::{ApplyResult, Command};
 use keel_core::filter::FilterGroup;
 use keel_core::model::{Filter, Label, Project, Reminder, Section, Task};
 use keel_core::reminders::{PlannedReminder, ReminderSettings};
+use keel_core::import::todoist::ImportSummary;
 use keel_core::search::SearchResults;
 use keel_service::AppService;
 
@@ -96,6 +97,18 @@ fn dispatch(app: tauri::AppHandle, state: tauri::State<'_, AppService>, cmd: Com
 #[tauri::command(rename_all = "snake_case")]
 fn search(state: tauri::State<'_, AppService>, query: String) -> Result<SearchResults, String> {
     state.search(&query).map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+fn import_todoist_csv(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppService>,
+    project_name: String,
+    text: String,
+) -> Result<ImportSummary, String> {
+    let summary = state.import_todoist_csv(&project_name, &text)?;
+    notifications::resync(&app);
+    Ok(summary)
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -209,6 +222,7 @@ pub fn run() {
             dispatch,
             search,
             list_reminders,
+            import_todoist_csv,
             get_reminder_settings,
             set_reminder_settings,
             upcoming_reminders,

@@ -8,6 +8,7 @@ use keel_core::filter::FilterGroup;
 use keel_core::model::{Due, Filter, Label, Priority, Project, Reminder, Section, Task};
 use keel_core::recurrence::Recurrence;
 use keel_core::reminders::{PlannedReminder, ReminderSettings};
+use keel_core::import::todoist::ImportSummary;
 use keel_core::search::SearchResults;
 use wasm_bindgen::prelude::*;
 
@@ -353,4 +354,15 @@ pub async fn add_reminder(task_id: Id, minute_offset: Option<i64>, at: Option<St
 
 pub async fn delete_reminder(id: Id) -> Result<ApplyResult, String> {
     dispatch(&command(Action::ReminderDelete { id }, false)).await
+}
+
+#[derive(Serialize)]
+struct ImportArgs<'a> {
+    project_name: &'a str,
+    text: &'a str,
+}
+
+/// Imports one Todoist project CSV export as a new project.
+pub async fn import_todoist_csv(project_name: &str, text: &str) -> Result<ImportSummary, String> {
+    invoke("import_todoist_csv", &ImportArgs { project_name, text }).await
 }

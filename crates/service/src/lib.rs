@@ -3,10 +3,11 @@
 //! over this.
 
 use chrono::{Local, NaiveDate, NaiveDateTime};
-use keel_core::commands::{apply_at, ApplyResult, Command};
+use keel_core::commands::{apply_at, Action, ApplyResult, Command};
+use keel_core::import::todoist::{self, ImportOp, ImportSummary};
 use keel_core::ids::Id;
 use keel_core::filter::{self, FilterContext, FilterError, FilterGroup};
-use keel_core::model::{Filter, Label, Project, Reminder, Section, Task};
+use keel_core::model::{Due, Filter, Label, Project, Reminder, Section, Task};
 use keel_core::reminders::{self, PlannedReminder, ReminderSettings};
 use keel_core::repository::{RepoError, Repository};
 use keel_core::search::{self, SearchResults};
@@ -191,6 +192,80 @@ impl AppService {
         let mut completed = self.completed(|t| search::matches(t, &words))?;
         completed.truncate(50);
         Ok(SearchResults { open, completed })
+    }
+
+    /// Imports a Todoist project CSV export as a new project named
+    /// `project_name`, through normal commands (so it lands in the command
+    /// log). Nothing is created when the file isn't a Todoist export.
+    pub fn import_todoist_csv(&self, project_name: &str, text: &str) -> Result<ImportSummary, String> {
+        let items = todoist::parse(text).map_err(|e| e.to_string())?;
+        let plan = todoist::plan(&items, today());
+        let run = |action: Action| -> Result<Option<Id>, String> {
+            let cmd = Command { uuid: Id::new().to_string(), temp_id: Some("new".to_string()), action };
+            let result = self.dispatch(cmd).map_err(|e| e.to_string())?;
+            Ok(result.id_mapping.get("new").cloned())
+        };
+
+        let name = match project_name.trim() {
+            "" => "Imported from Todoist".to_string(),
+            n => n.to_string(),
+        };
+        let project_id = run(Action::ProjectAdd { name: name.clone() })?.ok_or("The project wasn't created.")?;
+
+        let existing = self.list_labels().map_err(|e| e.to_string())?;
+        let mut labels_created = 0;
+        for label in &plan.labels {
+            if !existing.iter().any(|l| l.name.eq_ignore_ascii_case(label)) {
+                run(Action::LabelAdd { name: label.clone() })?;
+                labels_created += 1;
+            }
+        }
+
+        // Ids of what each op created, so later ops can point at them.
+        let mut ids: Vec<Option<Id>> = Vec::with_capacity(plan.ops.len());
+        let (mut tasks, mut sections) = (0, 0);
+        for op in &plan.ops {
+            let id = match op {
+                ImportOp::Section { name } => {
+                    sections += 1;
+                    run(Action::SectionAdd { project_id: project_id.clone(), name: name.clone() })?
+                }
+                ImportOp::Task { content, .. } if content.trim().is_empty() => None,
+                ImportOp::Task { parent, section, content, description, priority, labels, due, recurrence, deadline } => {
+                    tasks += 1;
+                    let lookup = |key: &Option<usize>| key.and_then(|k| ids.get(k).cloned().flatten());
+                    run(Action::TaskAdd {
+                        content: content.clone(),
+                        project_id: project_id.clone(),
+                        description: (!description.is_empty()).then(|| description.clone()),
+                        priority: Some(*priority),
+                        due: due.as_ref().map(|date| Due {
+                            date: date.clone(),
+                            timezone: None,
+                            string: date.clone(),
+                            lang: "en".to_string(),
+                            is_recurring: false,
+                            recurrence: None,
+                        }),
+                        labels: (!labels.is_empty()).then(|| labels.clone()),
+                        parent_id: lookup(parent),
+                        section_id: lookup(section),
+                        recurrence: recurrence.clone(),
+                        deadline: deadline.clone(),
+                    })?
+                }
+            };
+            ids.push(id);
+        }
+        Ok(ImportSummary {
+            project_id,
+            project_name: name,
+            tasks,
+            sections,
+            labels_created,
+            comments: plan.comments,
+            kept_as_text: plan.kept_as_text,
+        })
     }
 
     pub fn list_filters(&self) -> Result<Vec<Filter>, RepoError> {

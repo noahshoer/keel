@@ -66,7 +66,7 @@ pub fn Sidebar(
                 }
             }
             if show_settings() {
-                crate::settings::SettingsDialog { on_close: move |_| show_settings.set(false) }
+                crate::settings::SettingsDialog { on_close: move |_| show_settings.set(false), reload }
             }
             div {
                 class: nav_class(current == View::Search),
