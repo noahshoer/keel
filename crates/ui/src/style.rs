@@ -354,6 +354,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 
 /* Completed tasks + sidebar management */
 .view-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* iPhone: native glass buttons float over the header (menu left, search
+   right) and the list (+ bottom right); keep their spots clear. */
+.native-glass .menu-btn { visibility: hidden; margin-right: 8px; }
+.native-glass .view-head { padding-right: 52px; }
+.native-glass .content { padding-bottom: 120px; }
 .view-head .view-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .view-head .view-toggle { flex-shrink: 0; }
 .menu-btn { display: none; margin-left: -6px; color: var(--subtle); }

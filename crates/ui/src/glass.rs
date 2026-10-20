@@ -357,6 +357,34 @@ await window.__TAURI__.core.addPluginListener('glass', 'card', (e) => dioxus.sen
 await new Promise(() => {});
 "#;
 
+/// Forwards which floating button was tapped.
+const BUTTONS_JS: &str = r#"
+document.body.classList.add('native-glass');
+await window.__TAURI__.core.addPluginListener('glass', 'button', (e) => dioxus.send(e.name));
+await new Promise(() => {});
+"#;
+
+/// Opens the composer the way the view's own "Add task" row would, with
+/// that row's defaults.
+const ADD_JS: &str = "document.querySelector('.view-add')?.click();";
+
+/// What a floating glass button does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ButtonAction {
+    AddTask,
+    OpenMenu,
+    Search,
+}
+
+pub fn button_action(name: &str) -> Option<ButtonAction> {
+    match name {
+        "fab" => Some(ButtonAction::AddTask),
+        "menu" => Some(ButtonAction::OpenMenu),
+        "search" => Some(ButtonAction::Search),
+        _ => None,
+    }
+}
+
 /// The native card on iPhone; elsewhere `native` stays false and callers
 /// keep the web editor.
 #[derive(Clone, Copy)]
@@ -366,8 +394,9 @@ pub struct Glass {
 }
 
 /// Provides [`Glass`] (call once, in `App`): asks the plugin whether it's
-/// there and, if so, starts handling its events.
-pub fn provide() -> Glass {
+/// there and, if so, starts handling its events. `on_button` gets the
+/// floating buttons' taps, except Add, which is handled here.
+pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
     let glass = use_context_provider(|| Glass { native: Signal::new(false), session: Signal::new(None) });
     use_hook(move || {
         spawn(async move {
@@ -376,6 +405,18 @@ pub fn provide() -> Glass {
             }
             let mut native = glass.native;
             native.set(true);
+            spawn(async move {
+                let mut taps = document::eval(BUTTONS_JS);
+                while let Ok(name) = taps.recv::<String>().await {
+                    match button_action(&name) {
+                        Some(ButtonAction::AddTask) => {
+                            let _ = document::eval(ADD_JS);
+                        }
+                        Some(action) => on_button(action),
+                        None => {}
+                    }
+                }
+            });
             let mut events = document::eval(EVENTS_JS);
             while let Ok(json) = events.recv::<String>().await {
                 if let Ok(ev) = serde_json::from_str::<GlassEvent>(&json) {
@@ -632,5 +673,13 @@ mod tests {
         v.reminders = vec![ReminderDraft { id: None, minute_offset: Some(30), at: None }];
         let p = card_state(&v, CardMode::Add, &ctx()).picker;
         assert_eq!(p.reminder_labels, vec![v.reminders[0].label(today())]);
+    }
+
+    #[test]
+    fn button_names_map_to_actions() {
+        assert_eq!(button_action("fab"), Some(ButtonAction::AddTask));
+        assert_eq!(button_action("menu"), Some(ButtonAction::OpenMenu));
+        assert_eq!(button_action("search"), Some(ButtonAction::Search));
+        assert_eq!(button_action("other"), None);
     }
 }

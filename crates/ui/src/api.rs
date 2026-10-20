@@ -395,3 +395,13 @@ pub async fn glass_update(state: &crate::glass::CardState) {
 pub async fn glass_hide() {
     let _ = invoke::<_, ()>("plugin:glass|hide", &NoArgs {}).await;
 }
+
+#[derive(Serialize)]
+struct VisibleArg {
+    visible: bool,
+}
+
+/// Shows or hides the floating glass buttons.
+pub async fn glass_buttons(visible: bool) {
+    let _ = invoke::<_, ()>("plugin:glass|buttons", &VisibleArg { visible }).await;
+}

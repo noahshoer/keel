@@ -164,7 +164,6 @@ fn App() -> Element {
     // Task reminders, read by every task row (refreshed with each load).
     let mut reminders = use_context_provider(|| Signal::new(Vec::<Reminder>::new()));
     pickers::provide_touch();
-    glass::provide();
     // Narrow layouts: the sidebar is a slide-over drawer (CSS ignores this
     // on wide windows, where the sidebar is always shown).
     let mut drawer = use_signal(|| false);
@@ -182,6 +181,19 @@ fn App() -> Element {
                 view.set(View::Search);
             }
         });
+    });
+    // iPhone: the native glass card and floating buttons.
+    let glass = glass::provide(move |action| match action {
+        glass::ButtonAction::OpenMenu => drawer.set(true),
+        glass::ButtonAction::Search => view.set(View::Search),
+        glass::ButtonAction::AddTask => {}
+    });
+    // The floating buttons step aside while the drawer is open.
+    use_effect(move || {
+        let visible = (glass.native)() && !drawer();
+        if (glass.native)() {
+            spawn(async move { api::glass_buttons(visible).await });
+        }
     });
     // Touch: swipe right opens the drawer, swipe left closes it.
     use_hook(move || {
@@ -471,6 +483,7 @@ fn MainPane(
                     }
                     AddTask {
                         key: "{view_key}",
+                        main: true,
                         defaults: defaults.clone(),
                         projects: loaded.projects.clone(),
                         sections: loaded.sections.clone(),
@@ -501,6 +514,7 @@ fn MainPane(
                     }
                     AddTask {
                         key: "{view_key}",
+                        main: true,
                         defaults: defaults.clone(),
                         projects: loaded.projects.clone(),
                         sections: loaded.sections.clone(),
@@ -521,6 +535,7 @@ fn MainPane(
                     }
                     AddTask {
                         key: "{view_key}",
+                        main: true,
                         defaults: defaults.clone(),
                         projects: loaded.projects.clone(),
                         sections: loaded.sections.clone(),

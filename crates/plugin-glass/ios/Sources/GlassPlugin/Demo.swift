@@ -15,7 +15,12 @@ enum Demo {
     let submit = parts.count > 2 && parts[2] == "1"
     let chip = parts.count > 3 ? ChipId(rawValue: parts[3]) : nil
     DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-      webview.evaluateJavaScript("document.querySelector('\(selector)')?.click()")
+      // "@fab", "@menu", "@search" tap a floating button instead.
+      if selector.hasPrefix("@") {
+        model.button(String(selector.dropFirst()))
+      } else {
+        webview.evaluateJavaScript("document.querySelector('\(selector)')?.click()")
+      }
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
         if let chip { model.picker = chip }
         guard !text.isEmpty, let field = TitleField.AutoFocusField.current else { return }

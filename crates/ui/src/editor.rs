@@ -697,6 +697,9 @@ pub fn AddTask(
     sections: Vec<Section>,
     labels: Vec<Label>,
     reload: Signal<u32>,
+    /// The view's own row (the floating + opens this one).
+    #[props(default)]
+    main: bool,
 ) -> Element {
     let mut reload = reload;
     let mut open = use_signal(|| false);
@@ -707,6 +710,7 @@ pub fn AddTask(
         return rsx! {
             div {
                 class: "add-task-row",
+                class: if main { "view-add" },
                 onclick: move |_| {
                     if (glass.native)() {
                         glass.add(d.clone(), p.clone(), s.clone(), l.clone(), reload);
