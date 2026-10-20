@@ -1,5 +1,6 @@
 mod editor;
 mod filters;
+mod gestures;
 mod api;
 mod icons;
 mod pickers;
@@ -176,6 +177,18 @@ fn App() -> Element {
             let mut keys = document::eval(SEARCH_SHORTCUT_JS);
             while keys.recv::<bool>().await.is_ok() {
                 view.set(View::Search);
+            }
+        });
+    });
+    // Touch: swipe right opens the drawer, swipe left closes it.
+    use_hook(move || {
+        spawn(async move {
+            let mut swipes = document::eval(gestures::SWIPE_JS);
+            while let Ok(s) = swipes.recv::<gestures::Swipe>().await {
+                let open_now = *drawer.peek();
+                if let Some(open) = gestures::drawer_swipe(&s, open_now) {
+                    drawer.set(open);
+                }
             }
         });
     });

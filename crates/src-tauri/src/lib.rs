@@ -147,6 +147,13 @@ fn notification_permission(app: tauri::AppHandle) -> Result<String, String> {
     Ok(notifications::permission_text(state).to_string())
 }
 
+/// Mobile schedules with the OS, so reminders arrive while the app is
+/// closed; the desktop ticker only runs while it's open.
+#[tauri::command(rename_all = "snake_case")]
+fn reminders_when_closed() -> bool {
+    cfg!(mobile)
+}
+
 #[tauri::command(rename_all = "snake_case")]
 fn request_notification_permission(app: tauri::AppHandle) -> Result<String, String> {
     let state = app.notification().request_permission().map_err(|e| e.to_string())?;
@@ -227,6 +234,7 @@ pub fn run() {
             set_reminder_settings,
             upcoming_reminders,
             notification_permission,
+            reminders_when_closed,
             request_notification_permission,
             test_notification
         ])
