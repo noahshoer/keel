@@ -1,11 +1,11 @@
-use todo_core::ids::Id;
-use todo_core::model::{Due, Task};
-use todo_core::repository::Repository;
-use todo_storage::SqliteRepo;
+use keel_core::ids::Id;
+use keel_core::model::{Due, Task};
+use keel_core::repository::Repository;
+use keel_storage::SqliteRepo;
 
 fn temp_db() -> (tempfile::TempDir, SqliteRepo) {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("todo.db");
+    let path = dir.path().join("keel.db");
     let repo = SqliteRepo::open(path.to_str().unwrap()).expect("open");
     (dir, repo)
 }
@@ -13,7 +13,7 @@ fn temp_db() -> (tempfile::TempDir, SqliteRepo) {
 #[test]
 fn migrations_are_idempotent() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("todo.db");
+    let path = dir.path().join("keel.db");
     let p = path.to_str().unwrap();
     // Opening twice on the same file must both succeed (migrations re-run safely).
     let r1 = SqliteRepo::open(p).expect("first open runs migrations");

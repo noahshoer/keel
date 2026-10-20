@@ -1,8 +1,8 @@
 use chrono::NaiveDate;
-use todo_core::commands::{Action, Command};
-use todo_core::ids::Id;
-use todo_core::recurrence::Recurrence;
-use todo_service::AppService;
+use keel_core::commands::{Action, Command};
+use keel_core::ids::Id;
+use keel_core::recurrence::Recurrence;
+use keel_service::AppService;
 
 fn d(y: i32, m: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(y, m, day).unwrap()
@@ -20,7 +20,7 @@ fn cmd(uuid: &str, temp: Option<&str>, action: Action) -> Command {
 /// completes it once on `today`. Returns (dir guard, service, inbox id, task id).
 fn completed_streak_task(today: NaiveDate) -> (tempfile::TempDir, AppService, Id, Id) {
     let dir = tempfile::tempdir().unwrap();
-    let svc = AppService::open(dir.path().join("todo.db").to_str().unwrap()).unwrap();
+    let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
     let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap().id;
 
     let res = svc
@@ -78,7 +78,7 @@ fn list_resets_streak_after_missed_period_and_persists() {
     drop(svc);
 
     // Reopen: the reset was written, not just computed on the fly.
-    let svc2 = AppService::open(dir.path().join("todo.db").to_str().unwrap()).unwrap();
+    let svc2 = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
     let stored = svc2
         .list_tasks_at(inbox.as_str(), d(2026, 1, 5)) // a date that wouldn't itself reset
         .unwrap()

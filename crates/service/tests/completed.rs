@@ -1,7 +1,7 @@
 use chrono::{Duration, Local};
-use todo_core::commands::{Action, Command};
-use todo_core::ids::Id;
-use todo_service::AppService;
+use keel_core::commands::{Action, Command};
+use keel_core::ids::Id;
+use keel_service::AppService;
 
 struct F {
     _dir: tempfile::TempDir,
@@ -13,12 +13,12 @@ struct F {
 impl F {
     fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
-        let svc = AppService::open(dir.path().join("todo.db").to_str().unwrap()).unwrap();
+        let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
         let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap().id;
         F { _dir: dir, svc, inbox, n: 0 }
     }
 
-    fn run(&mut self, action: Action) -> todo_core::commands::ApplyResult {
+    fn run(&mut self, action: Action) -> keel_core::commands::ApplyResult {
         self.n += 1;
         self.svc
             .dispatch(Command { uuid: format!("u{}", self.n), temp_id: Some("t".into()), action })
@@ -48,7 +48,7 @@ impl F {
     }
 }
 
-fn names(tasks: Vec<todo_core::model::Task>) -> Vec<String> {
+fn names(tasks: Vec<keel_core::model::Task>) -> Vec<String> {
     tasks.into_iter().map(|t| t.content).collect()
 }
 

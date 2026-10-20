@@ -11,8 +11,8 @@ use std::sync::Mutex;
 
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_notification::{NotificationExt, PermissionState};
-use todo_core::reminders::PlannedReminder;
-use todo_service::AppService;
+use keel_core::reminders::PlannedReminder;
+use keel_service::AppService;
 
 /// The current plan, plus (desktop) which ids have already been shown.
 #[derive(Default)]

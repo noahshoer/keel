@@ -20,7 +20,7 @@ Everything except building and running on iOS was done on Windows. This is the o
    ```
 4. Clone the repo, then build the web UI once (Tauri loads it from `crates/ui/dist`):
    ```bash
-   cd crates/ui && dx build --platform web && mkdir -p dist && cp -r target/dx/todo-ui/debug/web/public/* dist/
+   cd crates/ui && dx build --platform web && mkdir -p dist && cp -r target/dx/keel-ui/debug/web/public/* dist/
    ```
 5. Generate the Xcode project (only works on macOS):
    ```bash

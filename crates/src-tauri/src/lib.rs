@@ -1,15 +1,15 @@
-//! Tauri shell: thin IPC wrappers over `todo_service::AppService`.
+//! Tauri shell: thin IPC wrappers over `keel_service::AppService`.
 //! All domain logic lives in the service/core crates; this layer only
 //! bridges the webview to them.
 
 mod notifications;
 
 use tauri_plugin_notification::NotificationExt;
-use todo_core::commands::{ApplyResult, Command};
-use todo_core::filter::FilterGroup;
-use todo_core::model::{Filter, Label, Project, Section, Task};
-use todo_core::reminders::{PlannedReminder, ReminderSettings};
-use todo_service::AppService;
+use keel_core::commands::{ApplyResult, Command};
+use keel_core::filter::FilterGroup;
+use keel_core::model::{Filter, Label, Project, Section, Task};
+use keel_core::reminders::{PlannedReminder, ReminderSettings};
+use keel_service::AppService;
 
 // `rename_all = "snake_case"` so top-level command arg names stay snake_case
 // end-to-end (Tauri v2 camelCases them by default). Frontend sends snake_case.
@@ -134,10 +134,28 @@ fn request_notification_permission(app: tauri::AppHandle) -> Result<String, Stri
 fn test_notification(app: tauri::AppHandle) -> Result<(), String> {
     app.notification()
         .builder()
-        .title("Todo Planner")
+        .title("Keel")
         .body("Notifications are working.")
         .show()
         .map_err(|e| e.to_string())
+}
+
+/// The app was renamed from "todo-planner" (identifier `com.nshoe.todoplanner`,
+/// store `todo.db`). On first launch as Keel, copy that store into the new
+/// data dir so existing tasks carry over. The old copy is left in place.
+fn migrate_legacy_store(dir: &std::path::Path, db_path: &std::path::Path) {
+    if db_path.exists() {
+        return;
+    }
+    let Some(legacy) = dir.parent().map(|p| p.join("com.nshoe.todoplanner").join("todo.db")) else {
+        return;
+    };
+    if legacy.exists() {
+        match std::fs::copy(&legacy, db_path) {
+            Ok(_) => eprintln!("migrated store from {}", legacy.display()),
+            Err(e) => eprintln!("could not migrate store from {}: {e}", legacy.display()),
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -151,7 +169,8 @@ pub fn run() {
                 .app_data_dir()
                 .expect("resolve app data dir");
             std::fs::create_dir_all(&dir).ok();
-            let db_path = dir.join("todo.db");
+            let db_path = dir.join("keel.db");
+            migrate_legacy_store(&dir, &db_path);
             let svc = AppService::open(db_path.to_str().expect("utf-8 db path"))
                 .expect("open local store");
             app.manage(svc);

@@ -1,10 +1,10 @@
 [package]
-name = "todo-app"
+name = "keel"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "todo_app_lib"
+name = "keel_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -14,8 +14,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-todo-core = { path = "../core" }
-todo-service = { path = "../service" }
+keel-core = { path = "../core" }
+keel-service = { path = "../service" }
 tauri-plugin-notification = "2"
 chrono = "0.4"
 time = "0.3"

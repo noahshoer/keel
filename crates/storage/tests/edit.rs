@@ -1,10 +1,10 @@
 use chrono::NaiveDate;
-use todo_core::commands::{apply_at, Action, Command, DueEdit};
-use todo_core::ids::Id;
-use todo_core::model::{Priority, Task};
-use todo_core::recurrence::Recurrence;
-use todo_core::repository::Repository;
-use todo_storage::SqliteRepo;
+use keel_core::commands::{apply_at, Action, Command, DueEdit};
+use keel_core::ids::Id;
+use keel_core::model::{Priority, Task};
+use keel_core::recurrence::Recurrence;
+use keel_core::repository::Repository;
+use keel_storage::SqliteRepo;
 
 fn d(y: i32, m: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(y, m, day).unwrap()
@@ -26,7 +26,7 @@ impl Harness {
         Harness { repo: SqliteRepo::open_in_memory().unwrap(), n: 0 }
     }
 
-    fn run(&mut self, action: Action, today: NaiveDate) -> todo_core::commands::ApplyResult {
+    fn run(&mut self, action: Action, today: NaiveDate) -> keel_core::commands::ApplyResult {
         self.n += 1;
         apply_at(
             &self.repo,

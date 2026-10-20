@@ -1,6 +1,6 @@
-use todo_core::commands::{apply, Action, ApplyResult, Command};
-use todo_core::repository::Repository;
-use todo_storage::SqliteRepo;
+use keel_core::commands::{apply, Action, ApplyResult, Command};
+use keel_core::repository::Repository;
+use keel_storage::SqliteRepo;
 
 fn run(repo: &SqliteRepo, uuid: &str, action: Action) -> ApplyResult {
     apply(repo, Command { uuid: uuid.into(), temp_id: Some("t".into()), action }).unwrap()

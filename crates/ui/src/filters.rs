@@ -2,7 +2,7 @@
 //! validation) and a filter row (open / edit / delete).
 
 use dioxus::prelude::*;
-use todo_core::model::Filter;
+use keel_core::model::Filter;
 
 use crate::icons::{self, Icon};
 use crate::{api, View};

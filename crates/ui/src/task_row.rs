@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use dioxus::prelude::*;
-use todo_core::model::{Label, Priority, Project, Section, Task};
-use todo_core::views::{self, DueBucket};
+use keel_core::model::{Label, Priority, Project, Section, Task};
+use keel_core::views::{self, DueBucket};
 
 use crate::api;
 use crate::editor::{add_from_editor, changes, EditorValues, TaskEditor};

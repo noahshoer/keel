@@ -1,9 +1,9 @@
-use todo_core::commands::{apply, Action, ApplyResult, Command};
-use todo_core::ids::Id;
-use todo_core::model::Task;
-use todo_core::recurrence::Recurrence;
-use todo_core::repository::Repository;
-use todo_storage::SqliteRepo;
+use keel_core::commands::{apply, Action, ApplyResult, Command};
+use keel_core::ids::Id;
+use keel_core::model::Task;
+use keel_core::recurrence::Recurrence;
+use keel_core::repository::Repository;
+use keel_storage::SqliteRepo;
 
 struct H {
     repo: SqliteRepo,

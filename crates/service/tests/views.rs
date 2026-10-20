@@ -1,8 +1,8 @@
 use chrono::NaiveDate;
-use todo_core::commands::{Action, Command};
-use todo_core::ids::Id;
-use todo_core::model::{Due, Priority};
-use todo_service::AppService;
+use keel_core::commands::{Action, Command};
+use keel_core::ids::Id;
+use keel_core::model::{Due, Priority};
+use keel_service::AppService;
 
 fn d(y: i32, m: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(y, m, day).unwrap()
@@ -24,7 +24,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
-        let svc = AppService::open(dir.path().join("todo.db").to_str().unwrap()).unwrap();
+        let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
         let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap().id;
         Fixture { _dir: dir, svc, inbox, n: 0 }
     }
@@ -88,7 +88,7 @@ impl Fixture {
     }
 }
 
-fn names(tasks: Vec<todo_core::model::Task>) -> Vec<String> {
+fn names(tasks: Vec<keel_core::model::Task>) -> Vec<String> {
     tasks.into_iter().map(|t| t.content).collect()
 }
 

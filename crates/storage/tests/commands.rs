@@ -1,7 +1,7 @@
-use todo_core::commands::{apply, Action, Command};
-use todo_core::ids::Id;
-use todo_core::repository::Repository;
-use todo_storage::SqliteRepo;
+use keel_core::commands::{apply, Action, Command};
+use keel_core::ids::Id;
+use keel_core::repository::Repository;
+use keel_storage::SqliteRepo;
 
 fn add_task_cmd(uuid: &str, temp: &str, content: &str, project: &Id) -> Command {
     Command {

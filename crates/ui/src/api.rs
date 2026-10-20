@@ -2,12 +2,12 @@
 //! Requires `app.withGlobalTauri = true` in tauri.conf.json.
 
 use serde::Serialize;
-use todo_core::commands::{Action, ApplyResult, Command, DueEdit};
-use todo_core::ids::Id;
-use todo_core::filter::FilterGroup;
-use todo_core::model::{Due, Filter, Label, Priority, Project, Section, Task};
-use todo_core::recurrence::Recurrence;
-use todo_core::reminders::{PlannedReminder, ReminderSettings};
+use keel_core::commands::{Action, ApplyResult, Command, DueEdit};
+use keel_core::ids::Id;
+use keel_core::filter::FilterGroup;
+use keel_core::model::{Due, Filter, Label, Priority, Project, Section, Task};
+use keel_core::recurrence::Recurrence;
+use keel_core::reminders::{PlannedReminder, ReminderSettings};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(inline_js = r#"

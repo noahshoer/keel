@@ -1,8 +1,8 @@
-use todo_core::commands::{apply, Action, ApplyResult, Command};
-use todo_core::ids::Id;
-use todo_core::model::Project;
-use todo_core::repository::Repository;
-use todo_storage::SqliteRepo;
+use keel_core::commands::{apply, Action, ApplyResult, Command};
+use keel_core::ids::Id;
+use keel_core::model::Project;
+use keel_core::repository::Repository;
+use keel_storage::SqliteRepo;
 
 struct H {
     repo: SqliteRepo,

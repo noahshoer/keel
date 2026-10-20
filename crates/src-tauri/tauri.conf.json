@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "todo-planner",
+  "productName": "Keel",
   "version": "0.1.0",
-  "identifier": "com.nshoe.todoplanner",
+  "identifier": "com.nshoe.keel",
   "build": {
     "frontendDist": "../ui/dist"
   },
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Todo Planner",
+        "title": "Keel",
         "width": 1200,
         "height": 800
       }

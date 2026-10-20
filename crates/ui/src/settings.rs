@@ -3,8 +3,8 @@
 
 use chrono::{NaiveTime, Timelike};
 use dioxus::prelude::*;
-use todo_core::reminders::{PlannedReminder, ReminderSettings};
-use todo_core::views;
+use keel_core::reminders::{PlannedReminder, ReminderSettings};
+use keel_core::views;
 
 use crate::api;
 use crate::icons::{self, Icon};
@@ -111,7 +111,7 @@ pub fn SettingsDialog(on_close: EventHandler<()>) -> Element {
                     save(ReminderSettings { enabled: true, ..s });
                 } else {
                     message.set(Some(
-                        "Notifications are blocked. Allow them for Todo Planner in your system settings, then try again."
+                        "Notifications are blocked. Allow them for Keel in your system settings, then try again."
                             .to_string(),
                     ));
                 }

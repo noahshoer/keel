@@ -1910,6 +1910,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "keel"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "keel-core",
+ "keel-service",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-notification",
+ "time",
+]
+
+[[package]]
+name = "keel-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "ulid",
+]
+
+[[package]]
+name = "keel-service"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "keel-core",
+ "keel-storage",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "keel-storage"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "keel-core",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "keyboard-types"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3837,53 +3884,6 @@ name = "tinyvec"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
-
-[[package]]
-name = "todo-app"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-notification",
- "time",
- "todo-core",
- "todo-service",
-]
-
-[[package]]
-name = "todo-core"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "ulid",
-]
-
-[[package]]
-name = "todo-service"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde_json",
- "tempfile",
- "todo-core",
- "todo-storage",
-]
-
-[[package]]
-name = "todo-storage"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "rusqlite",
- "serde_json",
- "tempfile",
- "todo-core",
-]
 
 [[package]]
 name = "tokio"

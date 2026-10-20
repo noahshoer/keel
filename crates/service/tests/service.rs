@@ -1,9 +1,9 @@
-use todo_core::commands::{Action, Command};
-use todo_service::AppService;
+use keel_core::commands::{Action, Command};
+use keel_service::AppService;
 
 fn temp_service() -> (tempfile::TempDir, AppService) {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("todo.db");
+    let path = dir.path().join("keel.db");
     let svc = AppService::open(path.to_str().unwrap()).expect("open service");
     (dir, svc)
 }
@@ -51,7 +51,7 @@ fn dispatch_task_add_then_list_returns_it() {
 #[test]
 fn seed_inbox_is_idempotent_across_reopen() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("todo.db");
+    let path = dir.path().join("keel.db");
     let p = path.to_str().unwrap();
     {
         let svc = AppService::open(p).unwrap();
