@@ -6,6 +6,7 @@
 //! - Desktop: the plugin can only show immediately, so a background thread
 //!   fires plan entries as they come due while the app is open (each id once).
 
+#[cfg(desktop)]
 use std::collections::HashSet;
 use std::sync::Mutex;
 
@@ -18,6 +19,7 @@ use keel_service::AppService;
 #[derive(Default)]
 pub struct Reminders {
     plan: Mutex<Vec<PlannedReminder>>,
+    #[cfg(desktop)]
     fired: Mutex<HashSet<i32>>,
 }
 
