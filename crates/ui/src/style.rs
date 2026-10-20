@@ -324,6 +324,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .time-input { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--r); padding: 6px 8px;
   font-size: 12.5px; outline: none; background: var(--bg); color: var(--text); }
 .time-input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
+.time-native { position: relative; flex: 1; min-width: 0; display: flex; }
+.time-input.native { -webkit-appearance: none; appearance: none; min-height: 36px; background: var(--bg); text-align: left; }
+.time-input.native::-webkit-date-and-time-value { text-align: left; }
+.time-hint { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted);
+  font-size: 12.5px; pointer-events: none; }
 .time-input.bad { border-color: var(--due-overdue); box-shadow: 0 0 0 3px rgba(209,69,59,.15); }
 
 /* Title with highlighted quick-add phrases: textarea and mirror share one

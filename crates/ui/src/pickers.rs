@@ -39,6 +39,36 @@ pub fn place_popover() {
     let _ = document::eval(PLACE_JS);
 }
 
+/// A native `<input type="time">` value: `Some(None)` when cleared,
+/// `None` when it isn't `HH:MM[:SS]`.
+fn native_time(v: &str) -> Option<Option<NaiveTime>> {
+    if v.is_empty() {
+        return Some(None);
+    }
+    NaiveTime::parse_from_str(v, "%H:%M")
+        .or_else(|_| NaiveTime::parse_from_str(v, "%H:%M:%S"))
+        .ok()
+        .map(Some)
+}
+
+/// True on touch screens (phones), where pickers use native controls.
+#[derive(Clone, Copy)]
+pub struct Touch(pub Signal<bool>);
+
+const TOUCH_JS: &str = "dioxus.send(matchMedia('(pointer: coarse)').matches); await new Promise(() => {});";
+
+/// Provides [`Touch`] to the app (call once, in `App`).
+pub fn provide_touch() {
+    let mut touch = use_context_provider(|| Touch(Signal::new(false))).0;
+    use_hook(move || {
+        spawn(async move {
+            if let Ok(t) = document::eval(TOUCH_JS).recv::<bool>().await {
+                touch.set(t);
+            }
+        });
+    });
+}
+
 /// The due chip's color class for a date (matches task rows).
 pub fn due_class(d: NaiveDate, today: NaiveDate) -> &'static str {
     match views::due_bucket(d, today) {
@@ -104,6 +134,7 @@ fn Scheduler(
     let mut time_text = use_signal(move || time.map(views::time_label).unwrap_or_default());
     let mut time_bad = use_signal(|| false);
     let time_str = time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
+    let touch = use_context::<Touch>().0;
 
     let saturday = today + Duration::days(((5 - today.weekday().num_days_from_monday() as i64) + 7) % 7);
     let next_monday = today + Duration::days(7 - today.weekday().num_days_from_monday() as i64);
@@ -252,6 +283,32 @@ fn Scheduler(
             if with_time {
                 div { class: "sched-time",
                     Icon { svg: icons::clock_small() }
+                    if touch() {
+                        // Phones: the OS time wheel instead of typing. iOS
+                        // shows no placeholder, so an empty field gets a hint.
+                        span { class: "time-native",
+                        if time_str.is_empty() {
+                            span { class: "time-hint", "Add time" }
+                        }
+                        input {
+                            r#type: "time",
+                            class: "time-input native",
+                            value: "{time_str}",
+                            onchange: move |e| match native_time(&e.value()) {
+                                Some(Some(t)) => {
+                                    time_text.set(views::time_label(t));
+                                    // A time without a date means today.
+                                    pick(Some(selected.unwrap_or(today)), t.format("%H:%M").to_string());
+                                }
+                                Some(None) => {
+                                    time_text.set(String::new());
+                                    pick(selected, String::new());
+                                }
+                                None => {}
+                            },
+                        }
+                        }
+                    } else {
                     input {
                         class: if time_bad() { "time-input bad" } else { "time-input" },
                         placeholder: "Add time, e.g. 5pm or 17:30",
@@ -272,6 +329,7 @@ fn Scheduler(
                                 }
                             }
                         },
+                    }
                     }
                     if time.is_some() {
                         button {
@@ -590,5 +648,19 @@ pub fn Menu(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_time_reads_the_time_inputs_value() {
+        let t = |h, m| NaiveTime::from_hms_opt(h, m, 0).unwrap();
+        assert_eq!(native_time("17:30"), Some(Some(t(17, 30))));
+        assert_eq!(native_time("07:05:00"), Some(Some(t(7, 5))), "with seconds");
+        assert_eq!(native_time(""), Some(None), "cleared");
+        assert_eq!(native_time("5pm"), None, "not the input's format");
     }
 }
