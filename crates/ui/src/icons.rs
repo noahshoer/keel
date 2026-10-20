@@ -108,6 +108,48 @@ pub fn subtask() -> String {
     svg(18, "1.6", r#"<path d="M6 4v8a4 4 0 0 0 4 4h8"/><path d="M15 13l3 3-3 3"/>"#)
 }
 
+pub fn hash_small() -> String {
+    svg(14, "2", r#"<path d="M5 9h14M5 15h14M10 4l-2 16M16 4l-2 16"/>"#)
+}
+
+/// A section: a short bar with lines under it.
+pub fn section_small() -> String {
+    svg(14, "2", r#"<path d="M4 6h16M8 12h12M8 18h12"/>"#)
+}
+
+pub fn chevron_left() -> String {
+    svg(16, "2", r#"<path d="M15 6l-6 6 6 6"/>"#)
+}
+
+pub fn chevron_right() -> String {
+    svg(16, "2", r#"<path d="M9 6l6 6-6 6"/>"#)
+}
+
+pub fn chevron_down_small() -> String {
+    svg(12, "2", r#"<path d="M6 9l6 6 6-6"/>"#)
+}
+
+pub fn check_small() -> String {
+    svg(14, "2.4", r#"<path d="M5 12.5l4.5 4.5L19 7.5"/>"#)
+}
+
+pub fn sofa() -> String {
+    svg(16, "1.8", r#"<path d="M5 11V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><path d="M3 13a2 2 0 0 1 4 0v1h10v-1a2 2 0 0 1 4 0v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M6 18v2M18 18v2"/>"#)
+}
+
+pub fn arrow_right() -> String {
+    svg(16, "1.8", r#"<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M8 12h8M13 9l3 3-3 3"/>"#)
+}
+
+pub fn no_date() -> String {
+    svg(16, "1.8", r#"<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>"#)
+}
+
+/// Hamburger: opens the sidebar drawer at narrow widths.
+pub fn menu() -> String {
+    svg(20, "1.8", r#"<path d="M4 7h16M4 12h16M4 17h16"/>"#)
+}
+
 /// Filter: a funnel.
 pub fn funnel() -> String {
     svg(18, "1.6", r#"<path d="M4 5h16l-6 7.5V19l-4-2v-4.5z"/>"#)

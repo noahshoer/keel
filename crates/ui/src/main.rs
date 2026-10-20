@@ -2,6 +2,7 @@ mod editor;
 mod filters;
 mod api;
 mod icons;
+mod pickers;
 mod sidebar;
 mod style;
 mod task_row;
@@ -135,7 +136,15 @@ fn App() -> Element {
     let reload = use_signal(|| 0u32);
     let theme = use_signal(theme::saved);
     let show_completed = use_signal(|| false);
+    // Narrow layouts: the sidebar is a slide-over drawer (CSS ignores this
+    // on wide windows, where the sidebar is always shown).
+    let mut drawer = use_signal(|| false);
     use_hook(|| theme::apply(&theme.peek()));
+    // Picking a view closes the drawer.
+    use_effect(move || {
+        let _ = view();
+        drawer.set(false);
+    });
 
     let data = use_resource(move || async move {
         let _ = reload();
@@ -215,7 +224,10 @@ fn App() -> Element {
 
     rsx! {
         style { dangerous_inner_html: style::css() }
-        div { class: "app",
+        div { class: if drawer() { "app drawer-open" } else { "app" },
+            if drawer() {
+                div { class: "drawer-scrim", onclick: move |_| drawer.set(false) }
+            }
             match state {
                 None => rsx! {
                     main { class: "main", div { class: "content", p { class: "view-sub", "Loading…" } } }
@@ -234,7 +246,7 @@ fn App() -> Element {
                         theme,
                         reload,
                     }
-                    MainPane { view: current, loaded, today, show_completed, reload }
+                    MainPane { view: current, loaded, today, show_completed, drawer, reload }
                 },
             }
         }
@@ -263,9 +275,11 @@ fn MainPane(
     loaded: Loaded,
     today: NaiveDate,
     show_completed: Signal<bool>,
+    drawer: Signal<bool>,
     reload: Signal<u32>,
 ) -> Element {
     let mut show_completed = show_completed;
+    let mut drawer = drawer;
     // Upcoming and filters have no completed list (as in Todoist).
     let can_show_completed = !matches!(view, View::Upcoming | View::Filter(..));
     let toggle_text = if show_completed() { "Hide completed" } else { "Show completed" };
@@ -333,6 +347,13 @@ fn MainPane(
         main { class: "main",
             div { class: "content",
                 div { class: "view-head",
+                    button {
+                        class: "icon-btn menu-btn",
+                        title: "Open menu",
+                        aria_label: "Open menu",
+                        onclick: move |_| drawer.set(true),
+                        Icon { svg: icons::menu() }
+                    }
                     h1 { class: "view-title", "{title}" }
                     if can_show_completed {
                         button {

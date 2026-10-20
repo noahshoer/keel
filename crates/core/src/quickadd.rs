@@ -22,6 +22,28 @@ pub struct QuickAdd {
     pub project_id: Option<Id>,
     pub section_id: Option<Id>,
     pub labels: Vec<String>,
+    /// The recognized phrases, as byte ranges into the input (sorted), for
+    /// highlighting. Empty when nothing was applied.
+    pub spans: Vec<Span>,
+}
+
+/// A recognized phrase in the input (`input[start..end]`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Span {
+    pub start: usize,
+    pub end: usize,
+    pub kind: SpanKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpanKind {
+    Date,
+    Time,
+    Repeat,
+    Priority,
+    Project,
+    Section,
+    Label,
 }
 
 impl QuickAdd {
@@ -49,16 +71,37 @@ struct Token {
     raw: String,
     /// Lower-cased with trailing punctuation removed.
     norm: String,
+    /// Byte range of `raw` in the input.
+    start: usize,
+    end: usize,
 }
 
 fn tokens(input: &str) -> Vec<Token> {
-    input
-        .split_whitespace()
-        .map(|raw| Token {
+    let mut out = Vec::new();
+    let mut start: Option<usize> = None;
+    let mut push = |s: usize, e: usize| {
+        let raw = &input[s..e];
+        out.push(Token {
             raw: raw.to_string(),
             norm: raw.trim_end_matches([',', '.', ';', '!', '?']).to_lowercase(),
-        })
-        .collect()
+            start: s,
+            end: e,
+        });
+    };
+    for (i, c) in input.char_indices() {
+        match (c.is_whitespace(), start) {
+            (true, Some(s)) => {
+                push(s, i);
+                start = None;
+            }
+            (false, None) => start = Some(i),
+            _ => {}
+        }
+    }
+    if let Some(s) = start {
+        push(s, input.len());
+    }
+    out
 }
 
 /// Mon = 0 … Sun = 6.
@@ -246,6 +289,16 @@ fn match_time(t: &[Token], i: usize) -> Option<(usize, NaiveTime)> {
     None
 }
 
+/// A time typed on its own ("5pm", "5:30 pm", "17:00", "noon"), for time
+/// fields; `None` unless the whole text is one time phrase.
+pub fn parse_time(text: &str) -> Option<NaiveTime> {
+    let t = tokens(text);
+    match match_time(&t, 0) {
+        Some((n, time)) if n == t.len() => Some(time),
+        _ => None,
+    }
+}
+
 /// A repeat that may need the task's date to anchor on.
 enum RepeatSpec {
     Rule(Recurrence),
@@ -342,7 +395,11 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
     let mut repeat: Option<RepeatSpec> = None;
     let project_names: Vec<&str> = projects.iter().map(|p| p.name.as_str()).collect();
 
-    let take = |used: &mut [bool], i: usize, n: usize| used[i..i + n].iter_mut().for_each(|u| *u = true);
+    let mut spans: Vec<Span> = Vec::new();
+    let take = |used: &mut [bool], spans: &mut Vec<Span>, i: usize, n: usize, kind: SpanKind| {
+        used[i..i + n].iter_mut().for_each(|u| *u = true);
+        spans.push(Span { start: t[i].start, end: t[i + n - 1].end, kind });
+    };
 
     let mut i = 0;
     while i < t.len() {
@@ -361,7 +418,7 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
             };
             if p.is_some() {
                 q.priority = p;
-                take(&mut used, i, 1);
+                take(&mut used, &mut spans, i, 1, SpanKind::Priority);
                 i += 1;
                 continue;
             }
@@ -369,7 +426,7 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
         if q.project_id.is_none() && t[i].raw.starts_with('#') {
             if let Some((n, pos)) = match_name(&t, i, "#", &project_names) {
                 q.project_id = Some(projects[pos].id.clone());
-                take(&mut used, i, n);
+                take(&mut used, &mut spans, i, n, SpanKind::Project);
                 i += n;
                 continue;
             }
@@ -380,7 +437,7 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
                 if !q.labels.iter().any(|l| l.eq_ignore_ascii_case(&name)) {
                     q.labels.push(name);
                 }
-                take(&mut used, i, 1);
+                take(&mut used, &mut spans, i, 1, SpanKind::Label);
                 i += 1;
                 continue;
             }
@@ -388,7 +445,7 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
         if repeat.is_none() {
             if let Some((n, spec)) = match_repeat(&t, i) {
                 repeat = Some(spec);
-                take(&mut used, i, n);
+                take(&mut used, &mut spans, i, n, SpanKind::Repeat);
                 i += n;
                 continue;
             }
@@ -396,7 +453,7 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
         if q.date.is_none() {
             if let Some((n, date)) = match_date(&t, i, today) {
                 q.date = Some(date);
-                take(&mut used, i, n);
+                take(&mut used, &mut spans, i, n, SpanKind::Date);
                 i += n;
                 continue;
             }
@@ -404,7 +461,7 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
         if q.time.is_none() {
             if let Some((n, time)) = match_time(&t, i) {
                 q.time = Some(time);
-                take(&mut used, i, n);
+                take(&mut used, &mut spans, i, n, SpanKind::Time);
                 i += n;
                 continue;
             }
@@ -424,7 +481,7 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
             if let Some((n, pos)) = match_name(&t, i, "/", &names) {
                 q.section_id = Some(scoped[pos].id.clone());
                 q.project_id.get_or_insert(scope.clone());
-                take(&mut used, i, n);
+                take(&mut used, &mut spans, i, n, SpanKind::Section);
             }
         }
     }
@@ -453,6 +510,8 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
     if q.content.trim().is_empty() {
         return QuickAdd { content: input.trim().to_string(), ..QuickAdd::default() };
     }
+    spans.sort_by_key(|s| s.start);
+    q.spans = spans;
     q
 }
 
@@ -668,6 +727,57 @@ mod tests {
         }
         let q = p("Email Bob tomorrow.");
         assert_eq!((q.date, q.content.as_str()), (Some(d(2026, 10, 20)), "Email Bob"));
+    }
+
+    #[test]
+    fn spans_mark_recognized_text() {
+        use super::SpanKind::*;
+        let input = "Call  mom tomorrow at 5pm p1 #Side Project @phone";
+        let q = p(input);
+        let got: Vec<(&str, super::SpanKind)> =
+            q.spans.iter().map(|s| (&input[s.start..s.end], s.kind)).collect();
+        assert_eq!(
+            got,
+            vec![
+                ("tomorrow", Date),
+                ("at 5pm", Time),
+                ("p1", Priority),
+                ("#Side Project", Project),
+                ("@phone", Label),
+            ]
+        );
+    }
+
+    #[test]
+    fn spans_are_byte_offsets_with_multibyte_text() {
+        let input = "Café ☕ every day";
+        let q = p(input);
+        assert_eq!(q.spans.len(), 1);
+        assert_eq!(&input[q.spans[0].start..q.spans[0].end], "every day");
+        assert_eq!(q.spans[0].kind, super::SpanKind::Repeat);
+    }
+
+    #[test]
+    fn section_span_and_no_spans_when_nothing_applied() {
+        let input = "x /Later";
+        let q = p(input);
+        assert_eq!(&input[q.spans[0].start..q.spans[0].end], "/Later");
+        assert_eq!(q.spans[0].kind, super::SpanKind::Section);
+        assert!(p("tomorrow").spans.is_empty(), "empty-title fallback applies nothing");
+        assert!(p("plain words").spans.is_empty());
+    }
+
+    #[test]
+    fn parse_time_standalone() {
+        use super::parse_time;
+        assert_eq!(parse_time("5pm"), Some(t(17, 0)));
+        assert_eq!(parse_time(" 5:30 PM "), Some(t(17, 30)));
+        assert_eq!(parse_time("17:45"), Some(t(17, 45)));
+        assert_eq!(parse_time("noon"), Some(t(12, 0)));
+        assert_eq!(parse_time("12am"), Some(t(0, 0)));
+        assert_eq!(parse_time("5"), None, "bare hour is ambiguous");
+        assert_eq!(parse_time("5pm tomorrow"), None, "only a time");
+        assert_eq!(parse_time(""), None);
     }
 
     #[test]

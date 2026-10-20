@@ -250,7 +250,6 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chip:focus-within { box-shadow: 0 0 0 3px var(--focus-ring); }
 .chip input, .chip select { border: none; outline: none; background: transparent; font-size: 12px; color: var(--chip-text); }
 .quick-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 6px; font-size: 12px; }
-.quick-label { color: var(--muted); }
 .quick-chip { padding: 2px 8px; border-radius: 999px; background: var(--panel); color: var(--chip-text);
   animation: pop-in .16s var(--ease); }
 .quick-chip.chip-date { color: var(--due-today); }
@@ -275,9 +274,73 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chip-hash { color: var(--muted); font-weight: 600; }
 .chip-btn { cursor: pointer; font-family: inherit; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip-wrap { position: relative; }
-.label-pop { position: absolute; top: 36px; left: 0; z-index: 20; min-width: 230px; padding: 6px;
+.label-pop { min-width: 230px; }
+
+/* Popovers (scheduler, menus, labels): one open per editor; a transparent
+   backdrop behind them closes on click. */
+.pop-backdrop { position: fixed; inset: 0; z-index: 19; }
+.popover { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; padding: 6px;
   background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-lg);
   box-shadow: var(--shadow-lg); animation: pop-in .16s var(--ease); transform-origin: top left; }
+.menu { min-width: 210px; max-height: 320px; overflow-y: auto; }
+.menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: none;
+  background: none; border-radius: var(--r); cursor: pointer; font-size: 13px; text-align: left; color: var(--text); }
+.menu-item:hover { background: var(--hover); }
+.menu-item.indent { padding-left: 30px; }
+.menu-item.checked { font-weight: 600; }
+.menu-icon { display: inline-flex; color: var(--muted); }
+.menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-hint { color: var(--muted); font-size: 12px; }
+.menu-check { display: inline-flex; color: var(--accent); }
+.chip-open { border-color: var(--border-strong); background: var(--chip-hover); }
+.chip-icon { display: inline-flex; }
+.chip-caret { display: inline-flex; color: var(--muted); margin-left: 1px; }
+.pri-1 { color: var(--p1); } .pri-2 { color: var(--p2); } .pri-3 { color: var(--p3); } .pri-4 { color: var(--muted); }
+.loc-inbox { color: var(--inbox); } .loc-project, .loc-section { color: var(--muted); }
+.due-chip.overdue { color: var(--due-overdue); } .due-chip.today { color: var(--due-today); }
+.due-chip.tomorrow { color: var(--due-tomorrow); } .due-chip.week { color: var(--due-week); }
+.due-chip.later { color: var(--due-later); }
+
+/* Scheduler */
+.scheduler { width: 280px; padding: 0; overflow: hidden; }
+.sched-head { padding: 12px 14px; font-weight: 600; font-size: 13px; border-bottom: 1px solid var(--divider); }
+.sched-quick { padding: 6px; border-bottom: 1px solid var(--divider); }
+.q-today { color: var(--due-today); } .q-tomorrow { color: var(--due-tomorrow); }
+.q-weekend { color: var(--p3); } .q-next { color: var(--due-week); } .q-none { color: var(--muted); }
+.sched-cal { padding: 8px 10px 6px; }
+.cal-nav { display: flex; align-items: center; gap: 2px; padding: 0 2px 6px; }
+.cal-title { flex: 1; font-weight: 600; font-size: 13px; }
+.cal-nav .icon-btn:disabled { opacity: .3; cursor: default; background: none; }
+.cal-dot { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid currentColor; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-dow { text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0 4px; }
+.cal-day { height: 32px; border: none; background: none; border-radius: 50%; cursor: pointer; font-size: 12.5px;
+  color: var(--text); font-variant-numeric: tabular-nums; }
+.cal-day:hover { background: var(--hover); }
+.cal-day.other { color: var(--muted); opacity: .6; }
+.cal-day.past { color: var(--muted); opacity: .45; }
+.cal-day.is-today { color: var(--accent); font-weight: 700; }
+.cal-day.selected { background: var(--accent); color: #fff; font-weight: 600; opacity: 1; }
+.sched-time { display: flex; align-items: center; gap: 8px; padding: 8px 12px 10px; border-top: 1px solid var(--divider); color: var(--muted); }
+.time-input { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--r); padding: 6px 8px;
+  font-size: 12.5px; outline: none; background: var(--bg); color: var(--text); }
+.time-input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
+.time-input.bad { border-color: var(--due-overdue); box-shadow: 0 0 0 3px rgba(209,69,59,.15); }
+
+/* Title with highlighted quick-add phrases: textarea and mirror share one
+   grid cell, so the mirror's wrapped text sizes the field. */
+.title-wrap { display: grid; }
+.title-wrap > .title-mirror, .title-wrap > .title-input { grid-area: 1 / 1; margin: 0; padding: 2px 0;
+  font: inherit; font-size: 15px; font-weight: 600; line-height: 22px; letter-spacing: inherit;
+  white-space: pre-wrap; overflow-wrap: anywhere; border: none; }
+.title-mirror { color: transparent; pointer-events: none; user-select: none; }
+.title-input { resize: none; overflow: hidden; background: transparent; outline: none; color: var(--text); }
+.hl { color: transparent; border-radius: 4px; box-shadow: 0 0 0 2px var(--hl-bg); background: var(--hl-bg); }
+.hl-date { --hl-bg: rgba(5,133,39,.14); }
+.hl-repeat { --hl-bg: rgba(105,47,194,.14); }
+.hl-priority { --hl-bg: rgba(209,69,59,.14); }
+.hl-project { --hl-bg: rgba(36,111,224,.14); }
+.hl-label { --hl-bg: rgba(235,137,9,.16); }
 .label-opt { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: var(--r); cursor: pointer; font-size: 13px; }
 .label-opt:hover { background: var(--hover); }
 .label-empty { color: var(--muted); font-size: 12px; padding: 6px 8px; }
@@ -287,6 +350,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 
 /* Completed tasks + sidebar management */
 .view-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.view-head .view-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.view-head .view-toggle { flex-shrink: 0; }
+.menu-btn { display: none; margin-left: -6px; color: var(--subtle); }
 .view-toggle { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; cursor: pointer;
   color: var(--muted); font-size: 13px; padding: 6px 10px; border-radius: var(--r); }
 .view-toggle:hover { background: var(--icon-hover); color: var(--text); }
@@ -343,6 +409,46 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); background-clip: content-box; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* Narrow windows and phones: the sidebar becomes a slide-over drawer (opened
+   by the header's hamburger) and the main pane goes full-bleed. */
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 700px) {
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; width: min(300px, 86vw);
+    background: var(--app-bg); box-shadow: var(--shadow-lg);
+    padding-top: calc(14px + env(safe-area-inset-top)); padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    transform: translateX(-100%); visibility: hidden;
+    transition: transform .26s var(--ease), visibility 0s linear .26s; }
+  .app.drawer-open .sidebar { transform: none; visibility: visible; transition: transform .26s var(--ease); }
+  .drawer-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.36); animation: fade-in .2s var(--ease); }
+  .menu-btn { display: inline-flex; }
+  .main { margin: 0; border-radius: 0; box-shadow: none; }
+  .content { padding: calc(10px + env(safe-area-inset-top)) 16px 80px; }
+  .view-title { font-size: 22px; }
+  .view-toggle { padding: 6px 8px; }
+  .section-title { padding-left: 8px; padding-right: 8px; }
+  /* Parent chevrons sit in the (now thin) gutter. */
+  .chevron { left: -16px; width: 16px; }
+  /* Row actions float over the row instead of reserving width for the title. */
+  .task-row { gap: 10px; padding: 10px 8px 9px; }
+  .task-actions { position: absolute; top: 4px; right: 4px; padding: 2px; border-radius: var(--r);
+    background: var(--row-hover); box-shadow: var(--shadow-sm); pointer-events: none; }
+  .task:hover .task-actions, .task-actions:focus-within { pointer-events: auto; }
+  .task-project { max-width: 38%; overflow: hidden; text-overflow: ellipsis; }
+  .streak-panel { margin-left: 0; gap: 12px; }
+  /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */
+  .editor { padding: 10px 10px 0; }
+  .chips { position: relative; gap: 6px; }
+  .chip { min-width: 0; max-width: 100%; }
+  .chip input, .chip select { min-width: 0; max-width: 100%; }
+  .chip-btn { max-width: 100%; }
+  .chip-wrap { position: static; max-width: 100%; }
+  .popover { max-width: calc(100vw - 16px); }
+  .menu { min-width: min(260px, calc(100vw - 16px)); }
+  .editor-footer { position: sticky; bottom: 0; z-index: 5; background: var(--bg);
+    border-radius: 0 0 var(--r-lg) var(--r-lg); padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  .editor-footer .btn { flex-shrink: 0; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
