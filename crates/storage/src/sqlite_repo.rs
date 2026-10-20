@@ -2,9 +2,9 @@ use std::sync::Mutex;
 
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, Row};
-use todo_core::ids::Id;
-use todo_core::model::{Due, Duration, Filter, Label, Priority, Project, Section, Task, ViewStyle};
-use todo_core::repository::{RepoError, Repository};
+use keel_core::ids::Id;
+use keel_core::model::{Due, Duration, Filter, Label, Priority, Project, Section, Task, ViewStyle};
+use keel_core::repository::{RepoError, Repository};
 
 use crate::migrations;
 

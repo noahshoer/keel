@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use todo_core::model::{Filter, Label, Project};
+use keel_core::model::{Filter, Label, Project};
 
 use crate::filters::{FilterForm, FilterRow};
 use crate::icons::{self, Icon};
@@ -47,7 +47,7 @@ pub fn Sidebar(
         aside { class: "sidebar",
             div { class: "brand",
                 div { class: "brand-mark", "✓" }
-                "Todo Planner"
+                "Keel"
                 button {
                     class: "icon-btn theme-toggle",
                     title: "{theme_title}",

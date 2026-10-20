@@ -13,10 +13,10 @@ use std::collections::HashMap;
 
 use chrono::{Datelike, NaiveDate};
 use dioxus::prelude::*;
-use todo_core::ids::Id;
-use todo_core::filter::FilterGroup;
-use todo_core::model::{Filter, Label, Project, Section, Task};
-use todo_core::views;
+use keel_core::ids::Id;
+use keel_core::filter::FilterGroup;
+use keel_core::model::{Filter, Label, Project, Section, Task};
+use keel_core::views;
 
 use editor::{AddTask, EditorValues};
 use icons::Icon;

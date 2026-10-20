@@ -3,15 +3,15 @@
 //! over this.
 
 use chrono::{Local, NaiveDate, NaiveDateTime};
-use todo_core::commands::{apply_at, ApplyResult, Command};
-use todo_core::ids::Id;
-use todo_core::filter::{self, FilterContext, FilterError, FilterGroup};
-use todo_core::model::{Filter, Label, Project, Section, Task};
-use todo_core::reminders::{self, PlannedReminder, ReminderSettings};
-use todo_core::repository::{RepoError, Repository};
-use todo_core::streak;
-use todo_core::views;
-use todo_storage::SqliteRepo;
+use keel_core::commands::{apply_at, ApplyResult, Command};
+use keel_core::ids::Id;
+use keel_core::filter::{self, FilterContext, FilterError, FilterGroup};
+use keel_core::model::{Filter, Label, Project, Section, Task};
+use keel_core::reminders::{self, PlannedReminder, ReminderSettings};
+use keel_core::repository::{RepoError, Repository};
+use keel_core::streak;
+use keel_core::views;
+use keel_storage::SqliteRepo;
 
 const REMINDER_SETTINGS_KEY: &str = "reminders";
 

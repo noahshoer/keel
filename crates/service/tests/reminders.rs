@@ -1,8 +1,8 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
-use todo_core::commands::{Action, Command};
-use todo_core::model::Due;
-use todo_core::reminders::ReminderSettings;
-use todo_service::AppService;
+use keel_core::commands::{Action, Command};
+use keel_core::model::Due;
+use keel_core::reminders::ReminderSettings;
+use keel_service::AppService;
 
 fn at(d: u32, h: u32, m: u32) -> NaiveDateTime {
     NaiveDate::from_ymd_opt(2026, 10, d).unwrap().and_hms_opt(h, m, 0).unwrap()
@@ -41,7 +41,7 @@ fn add(svc: &AppService, uuid: &str, name: &str, due: &str) {
 #[test]
 fn settings_default_then_persist_across_reopen() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("todo.db");
+    let path = dir.path().join("keel.db");
     let path = path.to_str().unwrap();
     let svc = AppService::open(path).unwrap();
     assert_eq!(svc.reminder_settings().unwrap(), ReminderSettings::default());
@@ -61,7 +61,7 @@ fn settings_default_then_persist_across_reopen() {
 #[test]
 fn plan_uses_stored_settings_and_open_tasks() {
     let dir = tempfile::tempdir().unwrap();
-    let svc = AppService::open(dir.path().join("todo.db").to_str().unwrap()).unwrap();
+    let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
     add(&svc, "u1", "Call mom", "2026-10-19T17:00:00");
     assert!(svc.reminder_plan_at(at(19, 8, 0)).unwrap().is_empty(), "off by default");
 

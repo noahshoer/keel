@@ -5,12 +5,12 @@
 
 use chrono::{Datelike, NaiveDate};
 use dioxus::prelude::*;
-use todo_core::commands::DueEdit;
-use todo_core::ids::Id;
-use todo_core::model::{Label, Priority, Project, Section, Task};
-use todo_core::quickadd::{self, QuickAdd, Span, SpanKind};
-use todo_core::recurrence::Recurrence;
-use todo_core::views;
+use keel_core::commands::DueEdit;
+use keel_core::ids::Id;
+use keel_core::model::{Label, Priority, Project, Section, Task};
+use keel_core::quickadd::{self, QuickAdd, Span, SpanKind};
+use keel_core::recurrence::Recurrence;
+use keel_core::views;
 
 use crate::api::{self, NewTask, TaskPatch};
 use crate::icons::{self, Icon};

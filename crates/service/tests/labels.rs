@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
-use todo_core::commands::{Action, Command};
-use todo_core::ids::Id;
-use todo_service::AppService;
+use keel_core::commands::{Action, Command};
+use keel_core::ids::Id;
+use keel_service::AppService;
 
 fn today() -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, 10, 19).unwrap()
@@ -35,7 +35,7 @@ fn add(svc: &AppService, n: &mut u32, content: &str, project: &Id, labels: &[&st
 #[test]
 fn label_view_spans_projects_and_hides_completed() {
     let dir = tempfile::tempdir().unwrap();
-    let svc = AppService::open(dir.path().join("todo.db").to_str().unwrap()).unwrap();
+    let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
     let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap().id;
     let other = Id::from("OTHER");
     let mut n = 0;

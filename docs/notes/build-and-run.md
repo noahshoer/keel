@@ -4,7 +4,7 @@
 ```
 cargo test
 ```
-Runs `todo-core`, `todo-storage`, `todo-service` (the UI crate is wasm-only and excluded from the host suite).
+Runs `keel-core`, `keel-storage`, `keel-service` (the UI crate is wasm-only and excluded from the host suite).
 
 ## Desktop dev (Windows) — the v1 dev target
 The Dioxus UI (`crates/ui`) is wasm; the Tauri shell (`crates/src-tauri`) serves it.
@@ -14,11 +14,11 @@ The Dioxus UI (`crates/ui`) is wasm; the Tauri shell (`crates/src-tauri`) serves
    cd crates/ui
    dx build --platform web
    ```
-   Output lands in `crates/ui/target/dx/todo-ui/debug/web/public`.
+   Output lands in `crates/ui/target/dx/keel-ui/debug/web/public`.
 2. Stage it where Tauri's `frontendDist` (`../ui/dist`) expects it:
    ```
    rm -rf crates/ui/dist && mkdir crates/ui/dist
-   cp -r crates/ui/target/dx/todo-ui/debug/web/public/* crates/ui/dist/
+   cp -r crates/ui/target/dx/keel-ui/debug/web/public/* crates/ui/dist/
    ```
    (`dist/` is git-ignored; rebuild it from the step above.)
 3. Run the desktop app:

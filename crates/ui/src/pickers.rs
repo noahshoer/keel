@@ -5,7 +5,7 @@
 
 use chrono::{Datelike, Duration, Months, NaiveDate, NaiveTime};
 use dioxus::prelude::*;
-use todo_core::{calendar, quickadd, views};
+use keel_core::{calendar, quickadd, views};
 
 use crate::icons::{self, Icon};
 
