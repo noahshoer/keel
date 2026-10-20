@@ -6,7 +6,7 @@ use chrono::{Local, NaiveDate, NaiveDateTime};
 use keel_core::commands::{apply_at, ApplyResult, Command};
 use keel_core::ids::Id;
 use keel_core::filter::{self, FilterContext, FilterError, FilterGroup};
-use keel_core::model::{Filter, Label, Project, Section, Task};
+use keel_core::model::{Filter, Label, Project, Reminder, Section, Task};
 use keel_core::reminders::{self, PlannedReminder, ReminderSettings};
 use keel_core::repository::{RepoError, Repository};
 use keel_core::search::{self, SearchResults};
@@ -282,7 +282,12 @@ impl AppService {
 
     pub fn reminder_plan_at(&self, now: NaiveDateTime) -> Result<Vec<PlannedReminder>, RepoError> {
         let tasks = self.open_tasks(now.date())?;
-        Ok(reminders::plan(&tasks, &self.reminder_settings()?, now))
+        Ok(reminders::plan(&tasks, &self.repo.list_reminders()?, &self.reminder_settings()?, now))
+    }
+
+    /// Every active task reminder (the UI shows them per task).
+    pub fn list_reminders(&self) -> Result<Vec<Reminder>, RepoError> {
+        self.repo.list_reminders()
     }
 
     pub fn list_projects(&self) -> Result<Vec<Project>, RepoError> {
