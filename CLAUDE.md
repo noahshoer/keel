@@ -34,7 +34,7 @@ Design spec: `docs/superpowers/specs/2026-10-19-todoist-tauri-port-design.md`. E
 
 ## Build, test, run
 
-CI (`.github/workflows/ci.yml`, runs on every push): **Windows** runs the tests, the UI tests and wasm check, the web UI build, and `cargo tauri build --no-bundle`. **iOS** (`macos-26`) runs `cargo tauri ios build --target aarch64-sim --debug --no-sign --ci` plus a device-target Rust build. Verification only: nothing is signed or deployed. Keep `DX_VERSION` / `TAURI_CLI_VERSION` in the workflow in step with the local tools.
+CI (`.github/workflows/ci.yml`, runs on every push): **Windows** runs the tests, the UI tests and wasm check, the web UI build, and `cargo tauri build --no-bundle`. **iOS** (`macos-26`) runs `cargo tauri ios build --target aarch64 --debug --no-sign --ci` (iPhone target; the simulator target fails on the runner's Xcode) plus a simulator Rust build. The web UI is built first in both jobs (the Tauri crate won't compile without `crates/ui/dist`). Verification only: nothing is signed or deployed. Keep `DX_VERSION` / `TAURI_CLI_VERSION` in the workflow in step with the local tools.
 
 ```bash
 cargo test                                   # core + storage + service (UI excluded)

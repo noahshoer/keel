@@ -38,6 +38,14 @@ jobs:
         with:
           tool: dioxus-cli@${{ env.DX_VERSION }},tauri-cli@${{ env.TAURI_CLI_VERSION }}
 
+      # First: tauri::generate_context! needs crates/ui/dist to exist.
+      - name: Build the web UI
+        working-directory: crates/ui
+        run: |
+          dx build --platform web
+          mkdir -p dist
+          cp -r target/dx/keel-ui/debug/web/public/* dist/
+
       - name: Tests (core, storage, service, app)
         run: cargo test
 
@@ -46,13 +54,6 @@ jobs:
         run: |
           cargo test
           cargo check --target wasm32-unknown-unknown
-
-      - name: Build the web UI
-        working-directory: crates/ui
-        run: |
-          dx build --platform web
-          mkdir -p dist
-          cp -r target/dx/keel-ui/debug/web/public/* dist/
 
       - name: Build the desktop app
         working-directory: crates/src-tauri
@@ -82,9 +83,11 @@ jobs:
           mkdir -p dist
           cp -r target/dx/keel-ui/debug/web/public/* dist/
 
-      - name: Build the iOS app (simulator, unsigned)
+      # The device target: with the simulator target, the runner's Xcode
+      # archives for a device anyway and the Rust build step gets no ARCHS.
+      - name: Build the iOS app (iPhone, unsigned)
         working-directory: crates/src-tauri
-        run: cargo tauri ios build --target aarch64-sim --debug --no-sign --ci
+        run: cargo tauri ios build --target aarch64 --debug --no-sign --ci
 
-      - name: Build for an iPhone (Rust, device target)
-        run: cargo build --lib -p keel --target aarch64-apple-ios
+      - name: Build for the simulator (Rust only)
+        run: cargo build --lib -p keel --target aarch64-apple-ios-sim
