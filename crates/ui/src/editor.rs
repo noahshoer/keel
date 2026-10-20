@@ -240,6 +240,9 @@ pub fn TaskEditor(
     /// Parse the title as natural language (add mode) and preview it.
     #[props(default)]
     quick_add: bool,
+    /// Stay open after submitting, reset to `initial` (Todoist's add flow).
+    #[props(default)]
+    keep_open: bool,
     on_submit: EventHandler<EditorValues>,
     on_cancel: EventHandler<()>,
     reload: Signal<u32>,
@@ -247,6 +250,8 @@ pub fn TaskEditor(
     let mut reload = reload;
     let start = initial.clone();
     let mut vals = use_signal(move || start);
+    let blank = initial.clone();
+    let blank = use_signal(move || blank);
     let mut open: OpenPop = use_signal(|| None);
     let mut new_label = use_signal(String::new);
     let v = vals();
@@ -343,13 +348,21 @@ pub fn TaskEditor(
     let title_placeholder: &'static str =
         if quick_add { "Task name — try “Call mom tomorrow 5pm p1 #Home @phone”" } else { "Task name" };
     // Submits once: a fast second Enter (before the editor closes) is ignored.
+    // In keep-open mode the form resets to blank instead (an empty title
+    // can't be submitted, so a second Enter is a no-op there too).
     let mut submitted = use_signal(|| false);
     let mut submit = move || {
         let v = vals();
-        if !submitted() && !v.content.trim().is_empty() {
-            submitted.set(true);
-            on_submit.call(v);
+        if submitted() || v.content.trim().is_empty() {
+            return;
         }
+        if keep_open {
+            vals.set(blank());
+            open.set(None);
+        } else {
+            submitted.set(true);
+        }
+        on_submit.call(v);
     };
 
     rsx! {
@@ -633,10 +646,9 @@ pub fn AddTask(
             keep_label: None,
             submit_text: "Add task".to_string(),
             quick_add: true,
+            keep_open: true,
             on_submit: move |v: EditorValues| {
                 let (p, s, l) = (p2.clone(), s2.clone(), l2.clone());
-                // Close first, so a second Enter can't add the task twice.
-                open.set(false);
                 spawn(async move {
                     add_from_editor(v, p, s, l).await;
                     reload += 1;
