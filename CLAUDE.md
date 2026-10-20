@@ -2,7 +2,7 @@
 
 A standalone, local-first, Todoist-style task app with streaks, written in Rust: **Tauri v2** shell + **Dioxus 0.6** UI compiled to wasm. It's not a Todoist client and has no Todoist dependency; Todoist's UI was the starting reference, and Keel now has its own look (green `#268366` accent, a pine-reflection logo).
 
-Owner: Noah (GitHub `noahshoer`, private repo `noahshoer/keel`). v1 targets **iOS**. Windows desktop is the development target, and everything except the iOS build has been built and tested there.
+Owner: Noah (GitHub `noahshoer`, **public** repo `noahshoer/keel`; anything committed is visible to everyone, so never commit secrets, and keep Todoist reverse-engineering material out of the repo, as history was rewritten on 2026-10-20 to remove it). v1 targets **iOS**, minimum **iOS 26** (`bundle.iOS.minimumSystemVersion`). Windows desktop is the development target, and everything except the iOS build has been built and tested there.
 
 ## Current status / what's next
 
@@ -33,6 +33,8 @@ v1 features done: projects, sections, sub-tasks, labels, filters (query language
 Design spec: `docs/superpowers/specs/2026-10-19-todoist-tauri-port-design.md`. Each phase has a plan in `docs/superpowers/plans/` with its decisions and notes.
 
 ## Build, test, run
+
+CI (`.github/workflows/ci.yml`, runs on every push): **Windows** runs the tests, the UI tests and wasm check, the web UI build, and `cargo tauri build --no-bundle`. **iOS** (`macos-26`) runs `cargo tauri ios build --target aarch64 --debug --no-sign --ci` (iPhone target; the simulator target fails on the runner's Xcode) plus a simulator Rust build. The web UI is built first in both jobs (the Tauri crate won't compile without `crates/ui/dist`). Verification only: nothing is signed or deployed. Keep `DX_VERSION` / `TAURI_CLI_VERSION` in the workflow in step with the local tools.
 
 ```bash
 cargo test                                   # core + storage + service (UI excluded)

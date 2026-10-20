@@ -2,7 +2,7 @@ name: keel
 options:
   bundleIdPrefix: com.nshoe.keel
   deploymentTarget:
-    iOS: 15.0
+    iOS: 26.0
 fileGroups: [../../src]
 configs:
   debug: debug

@@ -1,0 +1,93 @@
+name: CI
+
+# Checks that Keel builds for Windows (desktop + web UI) and iOS. Nothing is
+# signed or deployed. Plan: docs/superpowers/plans/2026-10-20-ci.md
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Match the Mac (see CLAUDE.md: dx 0.7 builds the Dioxus 0.6 UI).
+  DX_VERSION: 0.7.10
+  TAURI_CLI_VERSION: 2.12.3
+
+jobs:
+  windows:
+    name: Windows (tests, web UI, desktop app)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            crates/ui -> target
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: dioxus-cli@${{ env.DX_VERSION }},tauri-cli@${{ env.TAURI_CLI_VERSION }}
+
+      # First: tauri::generate_context! needs crates/ui/dist to exist.
+      - name: Build the web UI
+        working-directory: crates/ui
+        run: |
+          dx build --platform web
+          mkdir -p dist
+          cp -r target/dx/keel-ui/debug/web/public/* dist/
+
+      - name: Tests (core, storage, service, app)
+        run: cargo test
+
+      - name: UI tests and wasm type-check
+        working-directory: crates/ui
+        run: |
+          cargo test
+          cargo check --target wasm32-unknown-unknown
+
+      - name: Build the desktop app
+        working-directory: crates/src-tauri
+        run: cargo tauri build --no-bundle
+
+  ios:
+    name: iOS (Rust + Swift, unsigned)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, aarch64-apple-ios, aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            crates/ui -> target
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: dioxus-cli@${{ env.DX_VERSION }},tauri-cli@${{ env.TAURI_CLI_VERSION }}
+
+      - name: Build the web UI
+        working-directory: crates/ui
+        run: |
+          dx build --platform web
+          mkdir -p dist
+          cp -r target/dx/keel-ui/debug/web/public/* dist/
+
+      # The device target: with the simulator target, the runner's Xcode
+      # archives for a device anyway and the Rust build step gets no ARCHS.
+      - name: Build the iOS app (iPhone, unsigned)
+        working-directory: crates/src-tauri
+        run: cargo tauri ios build --target aarch64 --debug --no-sign --ci
+
+      - name: Build for the simulator (Rust only)
+        run: cargo build --lib -p keel --target aarch64-apple-ios-sim
