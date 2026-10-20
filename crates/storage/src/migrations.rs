@@ -107,6 +107,12 @@ pub fn run(conn: &Connection) -> rusqlite::Result<()> {
             synced     INTEGER NOT NULL DEFAULT 0
         );
 
+        -- Device-local preferences (e.g. notifications); never synced.
+        CREATE TABLE IF NOT EXISTS local_setting (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS streak_event (
             id         TEXT PRIMARY KEY,
             task_id    TEXT NOT NULL,

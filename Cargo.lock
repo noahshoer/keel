@@ -3866,6 +3866,7 @@ name = "todo-service"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "serde_json",
  "tempfile",
  "todo-core",
  "todo-storage",

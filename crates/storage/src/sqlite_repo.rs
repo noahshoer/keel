@@ -81,6 +81,27 @@ impl SqliteRepo {
         Ok(out)
     }
 
+    /// A device-local setting (`local_setting`; never synced).
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>, RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let mut stmt = conn.prepare("SELECT value FROM local_setting WHERE key = ?1").map_err(backend)?;
+        let mut rows = stmt.query(params![key]).map_err(backend)?;
+        match rows.next().map_err(backend)? {
+            Some(row) => Ok(Some(row.get(0).map_err(backend)?)),
+            None => Ok(None),
+        }
+    }
+
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<(), RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        conn.execute(
+            "INSERT INTO local_setting (key, value) VALUES (?1, ?2)              ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        )
+        .map_err(backend)?;
+        Ok(())
+    }
+
     /// Open an in-memory database (used by tests/tools).
     pub fn open_in_memory() -> Result<Self, RepoError> {
         let conn = Connection::open_in_memory().map_err(backend)?;
