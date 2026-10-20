@@ -287,6 +287,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 
 /* Completed tasks + sidebar management */
 .view-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.view-head .view-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.view-head .view-toggle { flex-shrink: 0; }
+.menu-btn { display: none; margin-left: -6px; color: var(--subtle); }
 .view-toggle { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; cursor: pointer;
   color: var(--muted); font-size: 13px; padding: 6px 10px; border-radius: var(--r); }
 .view-toggle:hover { background: var(--icon-hover); color: var(--text); }
@@ -343,6 +346,45 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); background-clip: content-box; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* Narrow windows and phones: the sidebar becomes a slide-over drawer (opened
+   by the header's hamburger) and the main pane goes full-bleed. */
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 700px) {
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; width: min(300px, 86vw);
+    background: var(--app-bg); box-shadow: var(--shadow-lg);
+    padding-top: calc(14px + env(safe-area-inset-top)); padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    transform: translateX(-100%); visibility: hidden;
+    transition: transform .26s var(--ease), visibility 0s linear .26s; }
+  .app.drawer-open .sidebar { transform: none; visibility: visible; transition: transform .26s var(--ease); }
+  .drawer-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.36); animation: fade-in .2s var(--ease); }
+  .menu-btn { display: inline-flex; }
+  .main { margin: 0; border-radius: 0; box-shadow: none; }
+  .content { padding: calc(10px + env(safe-area-inset-top)) 16px 80px; }
+  .view-title { font-size: 22px; }
+  .view-toggle { padding: 6px 8px; }
+  .section-title { padding-left: 8px; padding-right: 8px; }
+  /* Parent chevrons sit in the (now thin) gutter. */
+  .chevron { left: -16px; width: 16px; }
+  /* Row actions float over the row instead of reserving width for the title. */
+  .task-row { gap: 10px; padding: 10px 8px 9px; }
+  .task-actions { position: absolute; top: 4px; right: 4px; padding: 2px; border-radius: var(--r);
+    background: var(--row-hover); box-shadow: var(--shadow-sm); pointer-events: none; }
+  .task:hover .task-actions, .task-actions:focus-within { pointer-events: auto; }
+  .task-project { max-width: 38%; overflow: hidden; text-overflow: ellipsis; }
+  .streak-panel { margin-left: 0; gap: 12px; }
+  /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */
+  .editor { padding: 10px 10px 0; }
+  .chips { position: relative; gap: 6px; }
+  .chip { min-width: 0; max-width: 100%; }
+  .chip input, .chip select { min-width: 0; max-width: 100%; }
+  .chip-btn { max-width: 100%; }
+  .chip-wrap { position: static; max-width: 100%; }
+  .label-pop { top: auto; left: 0; right: 0; min-width: 0; margin-top: 6px; }
+  .editor-footer { position: sticky; bottom: 0; z-index: 5; background: var(--bg);
+    border-radius: 0 0 var(--r-lg) var(--r-lg); padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  .editor-footer .btn { flex-shrink: 0; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

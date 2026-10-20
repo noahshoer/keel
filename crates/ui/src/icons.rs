@@ -108,6 +108,11 @@ pub fn subtask() -> String {
     svg(18, "1.6", r#"<path d="M6 4v8a4 4 0 0 0 4 4h8"/><path d="M15 13l3 3-3 3"/>"#)
 }
 
+/// Hamburger: opens the sidebar drawer at narrow widths.
+pub fn menu() -> String {
+    svg(20, "1.8", r#"<path d="M4 7h16M4 12h16M4 17h16"/>"#)
+}
+
 /// Filter: a funnel.
 pub fn funnel() -> String {
     svg(18, "1.6", r#"<path d="M4 5h16l-6 7.5V19l-4-2v-4.5z"/>"#)
