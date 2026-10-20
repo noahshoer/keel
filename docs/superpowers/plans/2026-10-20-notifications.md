@@ -33,16 +33,16 @@ Settings are device-local (notifications are per device), stored as JSON in a ne
 ---
 
 ## Task 1: `core::reminders`
-- [ ] `ReminderSettings` (serde, Default), `PlannedReminder { id: i32, task_id: Option<Id>, at: NaiveDateTime, title, body }`, `plan(...)`. Tests: timed at due; offset before; offset crossing midnight; date-only uses all_day_time; all_day None skips; past skipped; completed/deleted/undated skipped; horizon + cap + sort; stable ids; disabled → empty; daily summary counts per day and skips zero days. Commit.
+- [x] `ReminderSettings` (serde, Default), `PlannedReminder { id: i32, task_id: Option<Id>, at: NaiveDateTime, title, body }`, `plan(...)`. Tests: timed at due; offset before; offset crossing midnight; date-only uses all_day_time; all_day None skips; past skipped; completed/deleted/undated skipped; horizon + cap + sort; stable ids; disabled → empty; daily summary counts per day and skips zero days. Commit.
 
 ## Task 2: Storage + service
-- [ ] `local_setting` table; `SqliteRepo::{get_setting, set_setting}`; `AppService::{reminder_settings, set_reminder_settings, reminder_plan_at(now)}`. Tests. Commit.
+- [x] `local_setting` table; `SqliteRepo::{get_setting, set_setting}`; `AppService::{reminder_settings, set_reminder_settings, reminder_plan_at(now)}`. Tests. Commit.
 
 ## Task 3: Tauri wiring
-- [ ] Register the plugin; `notifications.rs`: `resync` (mobile schedule / desktop plan), desktop ticker thread; resync after dispatch + settings + startup. IPC: `get_reminder_settings`, `set_reminder_settings`, `notification_permission`, `request_notification_permission`, `test_notification`. Commit.
+- [x] Register the plugin; `notifications.rs`: `resync` (mobile schedule / desktop plan), desktop ticker thread; resync after dispatch + settings + startup. IPC: `get_reminder_settings`, `set_reminder_settings`, `notification_permission`, `request_notification_permission`, `test_notification`. Commit.
 
 ## Task 4: UI
-- [ ] Settings panel (gear in the sidebar header): Notifications toggle (requests permission), "Remind me" (at due time / N min before), "Tasks without a time" (none / time), daily summary (off / time), "Send test notification", permission status. Commit.
+- [x] Settings panel (gear in the sidebar header): Notifications toggle (requests permission), "Remind me" (at due time / N min before), "Tasks without a time" (none / time), daily summary (off / time), "Send test notification", permission status. Commit.
 
 ## Task 5: Mac checklist
-- [ ] `docs/notes/ios-notifications-checklist.md`: `cargo tauri ios init`, run, permission prompt, closed-app delivery, tap opens app.
+- [x] `docs/notes/ios-notifications-checklist.md`: `cargo tauri ios init`, run, permission prompt, closed-app delivery, tap opens app.

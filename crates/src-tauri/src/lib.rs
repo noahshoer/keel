@@ -2,9 +2,13 @@
 //! All domain logic lives in the service/core crates; this layer only
 //! bridges the webview to them.
 
+mod notifications;
+
+use tauri_plugin_notification::NotificationExt;
 use todo_core::commands::{ApplyResult, Command};
 use todo_core::filter::FilterGroup;
 use todo_core::model::{Filter, Label, Project, Section, Task};
+use todo_core::reminders::{PlannedReminder, ReminderSettings};
 use todo_service::AppService;
 
 // `rename_all = "snake_case"` so top-level command arg names stay snake_case
@@ -81,13 +85,65 @@ fn filter_view(state: tauri::State<'_, AppService>, query: String) -> Result<Vec
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn dispatch(state: tauri::State<'_, AppService>, cmd: Command) -> Result<ApplyResult, String> {
-    state.dispatch(cmd).map_err(|e| e.to_string())
+fn dispatch(app: tauri::AppHandle, state: tauri::State<'_, AppService>, cmd: Command) -> Result<ApplyResult, String> {
+    let result = state.dispatch(cmd).map_err(|e| e.to_string())?;
+    // Any change can move a due date: re-plan notifications.
+    notifications::resync(&app);
+    Ok(result)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+fn get_reminder_settings(state: tauri::State<'_, AppService>) -> Result<ReminderSettings, String> {
+    state.reminder_settings().map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+fn set_reminder_settings(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppService>,
+    settings: ReminderSettings,
+) -> Result<(), String> {
+    state.set_reminder_settings(&settings).map_err(|e| e.to_string())?;
+    notifications::resync(&app);
+    Ok(())
+}
+
+/// The next few planned notifications (for the settings panel).
+#[tauri::command(rename_all = "snake_case")]
+fn upcoming_reminders(state: tauri::State<'_, AppService>) -> Result<Vec<PlannedReminder>, String> {
+    let mut plan = state.reminder_plan().map_err(|e| e.to_string())?;
+    plan.truncate(5);
+    Ok(plan)
+}
+
+/// "granted" | "denied" | "prompt".
+#[tauri::command(rename_all = "snake_case")]
+fn notification_permission(app: tauri::AppHandle) -> Result<String, String> {
+    let state = app.notification().permission_state().map_err(|e| e.to_string())?;
+    Ok(notifications::permission_text(state).to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+fn request_notification_permission(app: tauri::AppHandle) -> Result<String, String> {
+    let state = app.notification().request_permission().map_err(|e| e.to_string())?;
+    notifications::resync(&app);
+    Ok(notifications::permission_text(state).to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+fn test_notification(app: tauri::AppHandle) -> Result<(), String> {
+    app.notification()
+        .builder()
+        .title("Todo Planner")
+        .body("Notifications are working.")
+        .show()
+        .map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             use tauri::Manager;
             let dir = app
@@ -99,6 +155,10 @@ pub fn run() {
             let svc = AppService::open(db_path.to_str().expect("utf-8 db path"))
                 .expect("open local store");
             app.manage(svc);
+            app.manage(notifications::Reminders::default());
+            notifications::resync(app.handle());
+            #[cfg(desktop)]
+            notifications::start_ticker(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -116,7 +176,13 @@ pub fn run() {
             list_filters,
             check_filter,
             filter_view,
-            dispatch
+            dispatch,
+            get_reminder_settings,
+            set_reminder_settings,
+            upcoming_reminders,
+            notification_permission,
+            request_notification_permission,
+            test_notification
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

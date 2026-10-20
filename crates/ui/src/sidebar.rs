@@ -33,6 +33,7 @@ pub fn Sidebar(
         _ => icons::monitor(),
     };
     let theme_title = theme::label(&theme_pref());
+    let mut show_settings = use_signal(|| false);
     let mut adding = use_signal(|| false);
     let mut adding_label = use_signal(|| false);
     let mut adding_filter = use_signal(|| false);
@@ -57,6 +58,15 @@ pub fn Sidebar(
                     },
                     Icon { svg: theme_icon.clone() }
                 }
+                button {
+                    class: "icon-btn",
+                    title: "Settings",
+                    onclick: move |_| show_settings.set(true),
+                    Icon { svg: icons::gear() }
+                }
+            }
+            if show_settings() {
+                crate::settings::SettingsDialog { on_close: move |_| show_settings.set(false) }
             }
             div {
                 class: nav_class(current == View::Inbox),

@@ -3,6 +3,7 @@ mod filters;
 mod api;
 mod icons;
 mod pickers;
+mod settings;
 mod sidebar;
 mod style;
 mod task_row;

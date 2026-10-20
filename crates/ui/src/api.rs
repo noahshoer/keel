@@ -7,6 +7,7 @@ use todo_core::ids::Id;
 use todo_core::filter::FilterGroup;
 use todo_core::model::{Due, Filter, Label, Priority, Project, Section, Task};
 use todo_core::recurrence::Recurrence;
+use todo_core::reminders::{PlannedReminder, ReminderSettings};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(inline_js = r#"
@@ -296,4 +297,34 @@ pub async fn update_filter(id: Id, name: String, query: String) -> Result<ApplyR
 
 pub async fn delete_filter(id: Id) -> Result<ApplyResult, String> {
     dispatch(&command(Action::FilterDelete { id }, false)).await
+}
+
+#[derive(Serialize)]
+struct SettingsArg<'a> {
+    settings: &'a ReminderSettings,
+}
+
+pub async fn get_reminder_settings() -> Result<ReminderSettings, String> {
+    invoke("get_reminder_settings", &NoArgs {}).await
+}
+
+pub async fn set_reminder_settings(settings: &ReminderSettings) -> Result<(), String> {
+    invoke::<_, ()>("set_reminder_settings", &SettingsArg { settings }).await
+}
+
+pub async fn upcoming_reminders() -> Result<Vec<PlannedReminder>, String> {
+    invoke("upcoming_reminders", &NoArgs {}).await
+}
+
+/// "granted" | "denied" | "prompt".
+pub async fn notification_permission() -> Result<String, String> {
+    invoke("notification_permission", &NoArgs {}).await
+}
+
+pub async fn request_notification_permission() -> Result<String, String> {
+    invoke("request_notification_permission", &NoArgs {}).await
+}
+
+pub async fn test_notification() -> Result<(), String> {
+    invoke::<_, ()>("test_notification", &NoArgs {}).await
 }
