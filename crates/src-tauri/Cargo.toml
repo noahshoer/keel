@@ -17,5 +17,6 @@ serde_json = "1"
 keel-core = { path = "../core" }
 keel-service = { path = "../service" }
 tauri-plugin-notification = "2"
+tauri-plugin-glass = { path = "../plugin-glass" }
 chrono = "0.4"
 time = "0.3"
