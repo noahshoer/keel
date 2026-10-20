@@ -293,6 +293,49 @@ pub struct Reminder {
     pub is_deleted: bool,
 }
 
+impl Reminder {
+    /// `minutes` before the task's due time (date-only tasks: before the
+    /// all-day reminder time).
+    pub fn relative(task_id: Id, minutes: i64) -> Reminder {
+        Reminder {
+            id: Id::new(),
+            task_id,
+            kind: ReminderType::Relative,
+            due: None,
+            minute_offset: Some(minutes.max(0)),
+            is_deleted: false,
+        }
+    }
+
+    /// At a fixed local date and time.
+    pub fn absolute(task_id: Id, at: chrono::NaiveDateTime) -> Reminder {
+        let date = at.format("%Y-%m-%dT%H:%M:00").to_string();
+        Reminder {
+            id: Id::new(),
+            task_id,
+            kind: ReminderType::Absolute,
+            due: Some(Due {
+                date: date.clone(),
+                timezone: None,
+                string: date,
+                lang: "en".to_string(),
+                is_recurring: false,
+                recurrence: None,
+            }),
+            minute_offset: None,
+            is_deleted: false,
+        }
+    }
+
+    /// The fixed time of an absolute reminder.
+    pub fn at(&self) -> Option<chrono::NaiveDateTime> {
+        let date = &self.due.as_ref()?.date;
+        chrono::NaiveDateTime::parse_from_str(date, "%Y-%m-%dT%H:%M:%S")
+            .or_else(|_| chrono::NaiveDateTime::parse_from_str(date, "%Y-%m-%dT%H:%M"))
+            .ok()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Due, Priority, Task};
