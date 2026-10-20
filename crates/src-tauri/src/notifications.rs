@@ -103,8 +103,9 @@ fn fire_due<R: Runtime>(app: &AppHandle<R>) {
             .collect()
     };
     for r in due {
-        if let Err(e) = app.notification().builder().title(&r.title).body(&r.body).show() {
-            eprintln!("reminders: showing {} failed: {e}", r.id);
+        match app.notification().builder().title(&r.title).body(&r.body).show() {
+            Ok(()) => eprintln!("reminders: showed {} \"{}\" (due {})", r.id, r.title, r.at),
+            Err(e) => eprintln!("reminders: showing {} failed: {e}", r.id),
         }
     }
 }
