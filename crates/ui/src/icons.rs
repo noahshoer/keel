@@ -126,7 +126,7 @@ pub fn bell_small() -> String {
 pub fn logo(size: u32) -> String {
     const PINE: &str = "M32 15 L36 20.6 Q35.2 21 34.3 20.9 L39 26.2 Q37.8 26.7 36.4 26.5 L41.4 31.2         Q32 29.6 22.6 31.2 L27.6 26.5 Q26.2 26.7 25 26.2 L29.7 20.9 Q28.8 21 28 20.6 Z";
     let tree = format!(
-        r##"<path d="{PINE}" transform="translate(32 14.5) scale(.75) translate(-32 -15)" fill="#fff" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><rect x="31" y="26" width="2" height="3" rx=".5" fill="#fff"/>"##
+        r##"<path d="{PINE}" transform="translate(32 14.5) scale(.75) translate(-32 -15)" fill="#fff" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><rect x="31" y="26" width="2" height="6" rx=".5" fill="#fff"/>"##
     );
     format!(
         r##"<svg width="{size}" height="{size}" viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="16" fill="currentColor"/><circle cx="32" cy="32" r="22" stroke="#fff" stroke-width="3"/><g>{tree}</g><g transform="translate(0 64) scale(1 -1)" opacity=".42">{tree}</g><path d="M10.6 32 Q16 30.6 21.5 32 T32.5 32 T43.5 32 T53.4 32" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>"##
