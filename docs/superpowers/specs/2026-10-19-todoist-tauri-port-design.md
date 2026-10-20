@@ -2,13 +2,12 @@
 
 **Date:** 2026-10-19
 **Status:** Draft for approval
-**Reference RE:** `docs/todoist-reverse-engineering.md` (shell), `docs/todoist-layer-b-api-and-model.md` (data model & sync, verified)
 
 ---
 
 ## 1. Intent & why
 
-Build a **standalone, local-first task manager** that reproduces the parts of Todoist the user relies on — **with no paywall** — and then grows features Todoist doesn't offer. It is *not* a Todoist client: it does not touch Todoist's servers, account, or data. We reuse Todoist's **data model and UX as a reference** (reverse-engineered), implementing our own schema, sync, and UI.
+Build a **standalone, local-first task manager** that reproduces the parts of Todoist the user relies on — **with no paywall** — and then grows features Todoist doesn't offer. It is *not* a Todoist client: it does not touch Todoist's servers, account, or data. Todoist's publicly documented data model and its UX serve as a reference; the schema, sync, and UI are our own.
 
 **Why now:** the user hits Todoist's premium wall on everyday features (filters, etc.) and wants capabilities Todoist has never shipped — starting with **habit streaks** on recurring tasks. Owning the whole stack is the only way to add those freely.
 
