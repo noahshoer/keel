@@ -24,16 +24,20 @@
 ---
 
 ## Task 1: Deadlines (core)
-- [ ] Commands (add/update/clear), filter terms, quick-add braces + span. Tests. Commit.
+- [x] Commands (add/update/clear), filter terms, quick-add braces + span. Tests. Commit.
 
 ## Task 2: Reminders (core)
-- [ ] `ReminderAdd/Delete`, repo trait methods, cascade on delete; planner with explicit + deadline reminders + dedupe. Tests. Commit.
+- [x] `ReminderAdd/Delete`, repo trait methods, cascade on delete; planner with explicit + deadline reminders + dedupe. Tests. Commit.
 
 ## Task 3: Storage + service + IPC
-- [ ] SQLite `upsert_reminder`/`list_reminders`/cascade; `AppService::list_reminders`; plan uses them; IPC `list_reminders`. Tests. Commit.
+- [x] SQLite `upsert_reminder`/`list_reminders`/cascade; `AppService::list_reminders`; plan uses them; IPC `list_reminders`. Tests. Commit.
 
 ## Task 4: UI
-- [ ] Deadline chip in editor + rows; Reminders chip/popover (add/remove, presets, custom NL); bell on rows; add-mode drafts. `dx build` clean; preview check. Commit.
+- [x] Deadline chip in editor + rows; Reminders chip/popover (add/remove, presets, custom NL); bell on rows; add-mode drafts. `dx build` clean; preview check. Commit.
 
 ## Task 5: Verify in the real app, merge, push
-- [ ] Drive the desktop app over the WebView debug port: set a deadline, add a "1 min" custom reminder, confirm it fires. Merge, push.
+- [x] Drive the desktop app over the WebView debug port: set a deadline, add a "1 min" custom reminder, confirm it fires. Merge, push.
+
+## Notes
+- Found while verifying in the real app: clicking a form's submit button (Add task / Save / every sidebar form) did a native form submit and reloaded the page — Dioxus' `prevent_default()` in `onsubmit` isn't honored on web. Fixed globally with one capture-phase `submit` listener (`App`), so in-flight work (e.g. saving reminders after the task) is no longer cut off.
+- The custom-reminder field parses "tomorrow 9am" with quick add as if after a title (quick add applies nothing to a phrase that would leave the title empty).

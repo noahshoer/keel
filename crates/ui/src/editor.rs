@@ -14,7 +14,7 @@ use keel_core::views;
 
 use crate::api::{self, NewTask, TaskPatch};
 use crate::icons::{self, Icon};
-use crate::pickers::{DatePicker, Menu, MenuItem, OpenPop};
+use crate::pickers::{DatePicker, DeadlinePicker, Menu, MenuItem, OpenPop, ReminderDraft, ReminderPicker};
 
 /// Everything the editor edits, as form-friendly values.
 #[derive(Clone, PartialEq, Debug)]
@@ -34,6 +34,9 @@ pub struct EditorValues {
     pub labels: Vec<String>,
     /// Only used when adding a sub-task.
     pub parent_id: Option<Id>,
+    /// `YYYY-MM-DD` or empty.
+    pub deadline: String,
+    pub reminders: Vec<ReminderDraft>,
 }
 
 impl EditorValues {
@@ -49,6 +52,8 @@ impl EditorValues {
             section_id,
             labels,
             parent_id: None,
+            deadline: String::new(),
+            reminders: Vec::new(),
         }
     }
 
@@ -65,6 +70,8 @@ impl EditorValues {
             section_id: t.section_id.clone(),
             labels: t.labels.clone(),
             parent_id: t.parent_id.clone(),
+            deadline: t.deadline.clone().unwrap_or_default(),
+            reminders: Vec::new(),
         }
     }
 
@@ -153,6 +160,7 @@ pub fn changes(
         priority: (after.priority != before.priority).then(|| after.priority()),
         project_id: None,
         labels: (after.labels != before.labels).then(|| after.labels.clone()),
+        deadline: (after.deadline != before.deadline).then(|| after.deadline.clone()),
         due: due_changed.then(|| DueEdit {
             date: (!due.is_empty()).then(|| due.clone()),
             recurrence: recurrence_for(&after.repeat, &due, existing),
@@ -200,6 +208,7 @@ fn new_task_from(v: &EditorValues, qa: &QuickAdd) -> NewTask {
         labels,
         section_id,
         parent_id: v.parent_id.clone(),
+        deadline: qa.deadline.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| v.deadline.clone()),
     }
 }
 
@@ -213,7 +222,25 @@ pub async fn add_from_editor(v: EditorValues, projects: Vec<Project>, sections: 
             let _ = api::add_label(name.clone()).await;
         }
     }
-    let _ = api::add_task(task).await;
+    if let Ok(result) = api::add_task(task).await {
+        if let Some(id) = result.id_mapping.values().next() {
+            sync_reminders(id.clone(), &[], &v.reminders).await;
+        }
+    }
+}
+
+/// Saves reminder edits: removes the ones taken out, adds the new ones.
+pub async fn sync_reminders(task_id: Id, before: &[ReminderDraft], after: &[ReminderDraft]) {
+    for old in before {
+        if let Some(id) = &old.id {
+            if !after.iter().any(|a| a.id.as_ref() == Some(id)) {
+                let _ = api::delete_reminder(id.clone()).await;
+            }
+        }
+    }
+    for new in after.iter().filter(|a| a.id.is_none()) {
+        let _ = api::add_reminder(task_id.clone(), new.minute_offset, new.at.clone()).await;
+    }
 }
 
 #[component]
@@ -328,11 +355,16 @@ pub fn TaskEditor(
             for l in &qa.labels {
                 chips.push(("chip-label", format!("@{l}")));
             }
+            if let Some(d) = qa.deadline {
+                chips.push(("chip-deadline", format!("Deadline {}", views::due_label(d, today))));
+            }
             chips
         }
         None => Vec::new(),
     };
 
+    // Relative reminders count back from a due date (typed or picked).
+    let has_due = !v.date.is_empty() || !v.time.is_empty() || qa.as_ref().is_some_and(|q| q.date.is_some());
     let title_placeholder: &'static str =
         if quick_add { "Task name — try “Call mom tomorrow 5pm p1 #Home @phone”" } else { "Task name" };
     // Submits once: a fast second Enter (before the editor closes) is ignored.
@@ -405,6 +437,17 @@ pub fn TaskEditor(
                         v.date = date;
                         v.time = time;
                     }),
+                }
+                DeadlinePicker {
+                    deadline: v.deadline.clone(),
+                    open,
+                    on_change: move |d: String| vals.with_mut(|v| v.deadline = d),
+                }
+                ReminderPicker {
+                    reminders: v.reminders.clone(),
+                    has_due: has_due,
+                    open,
+                    on_change: move |rs: Vec<ReminderDraft>| vals.with_mut(|v| v.reminders = rs),
                 }
                 Menu {
                     id: "priority",
@@ -538,6 +581,7 @@ fn HighlightedTitle(
             SpanKind::Priority => "hl hl-priority",
             SpanKind::Project | SpanKind::Section => "hl hl-project",
             SpanKind::Label => "hl hl-label",
+            SpanKind::Deadline => "hl hl-deadline",
         };
         segments.push((value[s.start..s.end].to_string(), class));
         at = s.end;

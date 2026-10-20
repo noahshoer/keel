@@ -1,10 +1,11 @@
 use chrono::NaiveDate;
 use dioxus::prelude::*;
-use keel_core::model::{Label, Priority, Project, Section, Task};
+use keel_core::model::{Label, Priority, Project, Reminder, Section, Task};
 use keel_core::views::{self, DueBucket};
 
 use crate::api;
-use crate::editor::{add_from_editor, changes, repeat_text, EditorValues, TaskEditor};
+use crate::editor::{add_from_editor, changes, repeat_text, sync_reminders, EditorValues, TaskEditor};
+use crate::pickers::ReminderDraft;
 
 /// Pixels of indentation per sub-task level.
 const INDENT: usize = 28;
@@ -49,10 +50,19 @@ pub fn TaskRow(
     let mut panel = use_signal(|| false);
     let mut editing = use_signal(|| false);
     let mut adding_sub = use_signal(|| false);
+    // All task reminders, shared app-wide (see `App`).
+    let all_reminders = use_context::<Signal<Vec<Reminder>>>();
+    let my_reminders: Vec<ReminderDraft> = all_reminders
+        .read()
+        .iter()
+        .filter(|r| r.task_id == task.id)
+        .map(ReminderDraft::from_reminder)
+        .collect();
     let indent = format!("margin-left: {}px;", depth * INDENT);
 
     if editing() {
-        let before = EditorValues::from_task(&task);
+        let mut before = EditorValues::from_task(&task);
+        before.reminders = my_reminders.clone();
         let existing_rule = task.due.as_ref().and_then(|d| d.recurrence.clone());
         let keep_label = (before.repeat == "keep")
             .then(|| existing_rule.as_ref().map(repeat_text).unwrap_or_default());
@@ -69,12 +79,14 @@ pub fn TaskRow(
                     submit_text: "Save".to_string(),
                     on_submit: move |after: EditorValues| {
                         let (patch, moved) = changes(&before, &after, existing_rule.clone());
+                        let before_reminders = before.reminders.clone();
                         let id = id.clone();
                         editing.set(false);
                         spawn(async move {
                             if let Some((project, section)) = moved {
                                 let _ = api::move_task(id.clone(), project, section).await;
                             }
+                            sync_reminders(id.clone(), &before_reminders, &after.reminders).await;
                             if !patch.is_empty() {
                                 let _ = api::update_task(id, patch).await;
                             }
@@ -97,6 +109,13 @@ pub fn TaskRow(
     let collapsed = task.is_collapsed;
     let id_collapse = task.id.clone();
 
+    let deadline = task
+        .deadline
+        .as_deref()
+        .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+        .map(|d| (if d <= today { "urgent" } else { "set" }, views::due_label(d, today)));
+    let has_reminders = !my_reminders.is_empty();
+    let reminder_title = my_reminders.iter().map(|r| r.label(today)).collect::<Vec<_>>().join(", ");
     let due = views::due_date_of(&task)
         .map(|d| {
             let label = views::due_label(d, today);
@@ -110,7 +129,7 @@ pub fn TaskRow(
     let streak_on = task.streak_enabled;
     let goal = task.streak_goal;
     let goal_value = goal.map(|g| g.to_string()).unwrap_or_default();
-    let show_meta = due.is_some() || streak_on || !task.labels.is_empty();
+    let show_meta = due.is_some() || streak_on || !task.labels.is_empty() || deadline.is_some() || has_reminders;
 
     let id_complete = task.id.clone();
     let id_delete = task.id.clone();
@@ -163,6 +182,17 @@ pub fn TaskRow(
                                     if recurring {
                                         Icon { svg: icons::repeat_small() }
                                     }
+                                }
+                            }
+                            if let Some((cls, label)) = deadline.clone() {
+                                span { class: "deadline {cls}", title: "Deadline",
+                                    Icon { svg: icons::target_small() }
+                                    "{label}"
+                                }
+                            }
+                            if has_reminders {
+                                span { class: "reminder-tag", title: "{reminder_title}",
+                                    Icon { svg: icons::bell_small() }
                                 }
                             }
                             for name in task.labels.iter() {

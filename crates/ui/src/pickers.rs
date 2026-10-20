@@ -91,6 +91,12 @@ fn Scheduler(
     time: Option<NaiveTime>,
     on_change: EventHandler<(String, String)>,
     open: OpenPop,
+    /// Show the time field (off for deadlines).
+    #[props(default = true)]
+    with_time: bool,
+    /// Header when nothing is picked.
+    #[props(default = "No date")]
+    empty_text: &'static str,
 ) -> Element {
     let mut open = open;
     let today = crate::today();
@@ -113,7 +119,7 @@ fn Scheduler(
     let weeks = calendar::month_weeks(m);
     let header = match selected {
         Some(d) => views::due_label(d, today),
-        None => "No date".to_string(),
+        None => empty_text.to_string(),
     };
 
     let pick = move |d: Option<NaiveDate>, t: String| {
@@ -243,39 +249,251 @@ fn Scheduler(
                     }
                 }
             }
-            div { class: "sched-time",
-                Icon { svg: icons::clock_small() }
-                input {
-                    class: if time_bad() { "time-input bad" } else { "time-input" },
-                    placeholder: "Add time, e.g. 5pm or 17:30",
-                    value: "{time_text}",
-                    oninput: move |e| {
-                        time_bad.set(false);
-                        time_text.set(e.value());
-                    },
-                    onblur: move |_| {
-                        commit_blur();
-                    },
-                    onkeydown: move |e| {
-                        if e.key() == Key::Enter {
-                            e.prevent_default();
-                            e.stop_propagation();
-                            if commit_key() {
-                                open.set(None);
+            if with_time {
+                div { class: "sched-time",
+                    Icon { svg: icons::clock_small() }
+                    input {
+                        class: if time_bad() { "time-input bad" } else { "time-input" },
+                        placeholder: "Add time, e.g. 5pm or 17:30",
+                        value: "{time_text}",
+                        oninput: move |e| {
+                            time_bad.set(false);
+                            time_text.set(e.value());
+                        },
+                        onblur: move |_| {
+                            commit_blur();
+                        },
+                        onkeydown: move |e| {
+                            if e.key() == Key::Enter {
+                                e.prevent_default();
+                                e.stop_propagation();
+                                if commit_key() {
+                                    open.set(None);
+                                }
+                            }
+                        },
+                    }
+                    if time.is_some() {
+                        button {
+                            r#type: "button",
+                            class: "icon-btn",
+                            title: "Remove time",
+                            onclick: move |_| {
+                                time_text.set(String::new());
+                                pick(selected, String::new());
+                            },
+                            "×"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The deadline chip + date-only scheduler. `deadline` is `YYYY-MM-DD` or empty.
+#[component]
+pub fn DeadlinePicker(deadline: String, open: OpenPop, on_change: EventHandler<String>) -> Element {
+    let mut open = open;
+    let today = crate::today();
+    let selected = NaiveDate::parse_from_str(&deadline, "%Y-%m-%d").ok();
+    let is_open = open() == Some("deadline");
+    let (text, class) = match selected {
+        Some(d) => (views::due_label(d, today), if d <= today { "deadline-chip urgent" } else { "deadline-chip set" }),
+        None => ("Deadline".to_string(), "deadline-chip"),
+    };
+    rsx! {
+        div { class: "chip-wrap",
+            button {
+                r#type: "button",
+                class: "chip chip-btn {class}",
+                class: if is_open { "chip-open" },
+                title: "Deadline: the date it must be done by",
+                onclick: move |_| open.set(if is_open { None } else { Some("deadline") }),
+                Icon { svg: icons::target_small() }
+                "{text}"
+            }
+            if is_open {
+                Scheduler {
+                    selected,
+                    time: None,
+                    with_time: false,
+                    empty_text: "No deadline",
+                    on_change: move |(date, _): (String, String)| on_change.call(date),
+                    open,
+                }
+            }
+        }
+    }
+}
+
+/// A reminder being edited: saved ones have an `id`; new ones don't yet.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReminderDraft {
+    pub id: Option<keel_core::ids::Id>,
+    /// Minutes before the due time (relative).
+    pub minute_offset: Option<i64>,
+    /// `YYYY-MM-DDTHH:MM` (absolute).
+    pub at: Option<String>,
+}
+
+impl ReminderDraft {
+    pub fn from_reminder(r: &keel_core::model::Reminder) -> Self {
+        let relative = r.kind == keel_core::model::ReminderType::Relative;
+        ReminderDraft {
+            id: Some(r.id.clone()),
+            minute_offset: if relative { r.minute_offset } else { None },
+            at: if relative { None } else { r.at().map(|a| a.format("%Y-%m-%dT%H:%M").to_string()) },
+        }
+    }
+
+    /// "At time of task", "30 min before", "Tuesday 9 AM".
+    pub fn label(&self, today: NaiveDate) -> String {
+        if let Some(m) = self.minute_offset {
+            return offset_text(m);
+        }
+        match self.at.as_deref().and_then(|a| chrono::NaiveDateTime::parse_from_str(a, "%Y-%m-%dT%H:%M").ok()) {
+            Some(at) => format!("{} {}", views::due_label(at.date(), today), views::time_label(at.time())),
+            None => "Reminder".to_string(),
+        }
+    }
+}
+
+/// "At time of task", "10 min before", "1 hour before", "1 day before".
+pub fn offset_text(m: i64) -> String {
+    match m {
+        0 => "At time of task".to_string(),
+        m if m % 1440 == 0 => {
+            let d = m / 1440;
+            format!("{d} day{} before", if d == 1 { "" } else { "s" })
+        }
+        m if m % 60 == 0 => {
+            let h = m / 60;
+            format!("{h} hour{} before", if h == 1 { "" } else { "s" })
+        }
+        m => format!("{m} min before"),
+    }
+}
+
+/// The reminders chip + popover: current reminders (removable), presets
+/// relative to the due time, and a custom time typed in plain words.
+#[component]
+pub fn ReminderPicker(
+    reminders: Vec<ReminderDraft>,
+    /// Whether the task has a due date (relative presets need one).
+    has_due: bool,
+    open: OpenPop,
+    on_change: EventHandler<Vec<ReminderDraft>>,
+) -> Element {
+    let mut open = open;
+    let today = crate::today();
+    let is_open = open() == Some("reminders");
+    let mut custom = use_signal(String::new);
+    let mut custom_bad = use_signal(|| false);
+    let text = match reminders.len() {
+        0 => "Reminders".to_string(),
+        1 => reminders[0].label(today),
+        n => format!("{n} reminders"),
+    };
+    let current = reminders.clone();
+    let add = move |draft: ReminderDraft| {
+        let mut next = current.clone();
+        if !next.iter().any(|r| r.minute_offset == draft.minute_offset && r.at == draft.at) {
+            next.push(draft);
+        }
+        on_change.call(next);
+    };
+    let add_for_custom = add.clone();
+    let mut add_custom = move || {
+        // Parsed as if after a title ("x …"): quick add applies nothing to a
+        // phrase that would leave the title empty.
+        let q = keel_core::quickadd::parse(&format!("x {}", custom()), crate::today(), &[], &[]);
+        match (q.date, q.time) {
+            (Some(d), Some(t)) => {
+                let at = d.and_time(t).format("%Y-%m-%dT%H:%M").to_string();
+                add_for_custom(ReminderDraft { id: None, minute_offset: None, at: Some(at) });
+                custom.set(String::new());
+                custom_bad.set(false);
+            }
+            _ => custom_bad.set(true),
+        }
+    };
+    let presets = [0i64, 10, 30, 60, 1440];
+
+    rsx! {
+        div { class: "chip-wrap",
+            button {
+                r#type: "button",
+                class: if reminders.is_empty() { "chip chip-btn" } else { "chip chip-btn reminder-chip" },
+                class: if is_open { "chip-open" },
+                title: "Reminders",
+                onclick: move |_| open.set(if is_open { None } else { Some("reminders") }),
+                Icon { svg: icons::bell_small() }
+                "{text}"
+            }
+            if is_open {
+                div { class: "popover menu reminder-pop",
+                    onmounted: move |_| place_popover(),
+                    if reminders.is_empty() {
+                        div { class: "label-empty", "No reminders yet" }
+                    }
+                    for (i, r) in reminders.iter().enumerate() {
+                        {
+                            let rest: Vec<ReminderDraft> =
+                                reminders.iter().enumerate().filter(|(j, _)| *j != i).map(|(_, r)| r.clone()).collect();
+                            rsx! {
+                                div { key: "{i}", class: "reminder-item",
+                                    span { class: "menu-icon", Icon { svg: icons::bell_small() } }
+                                    span { class: "menu-label", "{r.label(today)}" }
+                                    button {
+                                        r#type: "button",
+                                        class: "icon-btn",
+                                        title: "Remove reminder",
+                                        onclick: move |_| on_change.call(rest.clone()),
+                                        "×"
+                                    }
+                                }
                             }
                         }
-                    },
-                }
-                if time.is_some() {
-                    button {
-                        r#type: "button",
-                        class: "icon-btn",
-                        title: "Remove time",
-                        onclick: move |_| {
-                            time_text.set(String::new());
-                            pick(selected, String::new());
+                    }
+                    div { class: "menu-divider" }
+                    if !has_due {
+                        div { class: "label-empty", "Give the task a date to use these:" }
+                    }
+                    for m in presets {
+                        {
+                            let add = add.clone();
+                            rsx! {
+                                button {
+                                    key: "p{m}",
+                                    r#type: "button",
+                                    class: "menu-item",
+                                    disabled: !has_due,
+                                    onclick: move |_| add(ReminderDraft { id: None, minute_offset: Some(m), at: None }),
+                                    span { class: "menu-icon", Icon { svg: icons::plus(14) } }
+                                    span { class: "menu-label", "{offset_text(m)}" }
+                                }
+                            }
+                        }
+                    }
+                    input {
+                        class: if custom_bad() { "label-new bad" } else { "label-new" },
+                        placeholder: "Custom, e.g. tomorrow 9am, then Enter",
+                        value: "{custom}",
+                        oninput: move |e| {
+                            custom_bad.set(false);
+                            custom.set(e.value());
                         },
-                        "×"
+                        onkeydown: move |e| {
+                            if e.key() == Key::Enter {
+                                e.prevent_default();
+                                e.stop_propagation();
+                                add_custom();
+                            }
+                        },
+                    }
+                    if custom_bad() {
+                        div { class: "filter-problem", "Needs a time, like “friday 3pm” or “in 2 days at 9am”." }
                     }
                 }
             }

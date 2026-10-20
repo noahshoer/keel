@@ -78,7 +78,7 @@ pub fn FilterForm(
                 div { class: "filter-problem", "{msg}" }
             } else {
                 div { class: "filter-hint",
-                    "today · overdue · 7 days · p1 · #Project · /Section · @label · no date · search: word · due before: +3 days — combine with & | ! ( ) and , for separate lists"
+                    "today · overdue · 7 days · p1 · #Project · /Section · @label · no date · search: word · due before: +3 days · deadline before: +7 days · no deadline — combine with & | ! ( ) and , for separate lists"
                 }
             }
             div { class: "confirm-actions",

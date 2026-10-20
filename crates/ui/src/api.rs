@@ -5,7 +5,7 @@ use serde::Serialize;
 use keel_core::commands::{Action, ApplyResult, Command, DueEdit};
 use keel_core::ids::Id;
 use keel_core::filter::FilterGroup;
-use keel_core::model::{Due, Filter, Label, Priority, Project, Section, Task};
+use keel_core::model::{Due, Filter, Label, Priority, Project, Reminder, Section, Task};
 use keel_core::recurrence::Recurrence;
 use keel_core::reminders::{PlannedReminder, ReminderSettings};
 use keel_core::search::SearchResults;
@@ -112,6 +112,8 @@ pub struct NewTask {
     pub section_id: Option<Id>,
     /// Set when adding a sub-task.
     pub parent_id: Option<Id>,
+    /// `YYYY-MM-DD`, or empty for no deadline.
+    pub deadline: String,
 }
 
 pub async fn add_task(t: NewTask) -> Result<ApplyResult, String> {
@@ -135,7 +137,7 @@ pub async fn add_task(t: NewTask) -> Result<ApplyResult, String> {
             parent_id: t.parent_id,
             section_id: t.section_id,
             recurrence: t.recurrence,
-            deadline: None,
+            deadline: (!t.deadline.is_empty()).then_some(t.deadline),
         },
         true,
     ))
@@ -171,6 +173,8 @@ pub struct TaskPatch {
     pub project_id: Option<Id>,
     pub labels: Option<Vec<String>>,
     pub due: Option<DueEdit>,
+    /// `Some("")` clears the deadline.
+    pub deadline: Option<String>,
 }
 
 impl TaskPatch {
@@ -181,6 +185,7 @@ impl TaskPatch {
             && self.project_id.is_none()
             && self.labels.is_none()
             && self.due.is_none()
+            && self.deadline.is_none()
     }
 }
 
@@ -195,6 +200,7 @@ pub async fn update_task(id: Id, p: TaskPatch) -> Result<ApplyResult, String> {
             labels: p.labels,
             is_collapsed: None,
             due: p.due,
+            deadline: p.deadline,
         },
         false,
     ))
@@ -265,6 +271,7 @@ pub async fn set_collapsed(id: Id, collapsed: bool) -> Result<ApplyResult, Strin
             labels: None,
             due: None,
             is_collapsed: Some(collapsed),
+            deadline: None,
         },
         false,
     ))
@@ -333,4 +340,17 @@ pub async fn test_notification() -> Result<(), String> {
 
 pub async fn search(query: &str) -> Result<SearchResults, String> {
     invoke("search", &QueryArg { query }).await
+}
+
+pub async fn list_reminders() -> Result<Vec<Reminder>, String> {
+    invoke("list_reminders", &NoArgs {}).await
+}
+
+/// `minute_offset` before the due time, or at `at` (`YYYY-MM-DDTHH:MM`).
+pub async fn add_reminder(task_id: Id, minute_offset: Option<i64>, at: Option<String>) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::ReminderAdd { task_id, minute_offset, at }, true)).await
+}
+
+pub async fn delete_reminder(id: Id) -> Result<ApplyResult, String> {
+    dispatch(&command(Action::ReminderDelete { id }, false)).await
 }

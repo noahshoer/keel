@@ -16,7 +16,7 @@ use chrono::{Datelike, NaiveDate};
 use dioxus::prelude::*;
 use keel_core::ids::Id;
 use keel_core::filter::FilterGroup;
-use keel_core::model::{Filter, Label, Project, Section, Task};
+use keel_core::model::{Filter, Label, Project, Reminder, Section, Task};
 use keel_core::views;
 
 use editor::{AddTask, EditorValues};
@@ -159,10 +159,17 @@ fn App() -> Element {
     let reload = use_signal(|| 0u32);
     let theme = use_signal(theme::saved);
     let show_completed = use_signal(|| false);
+    // Task reminders, read by every task row (refreshed with each load).
+    let mut reminders = use_context_provider(|| Signal::new(Vec::<Reminder>::new()));
     // Narrow layouts: the sidebar is a slide-over drawer (CSS ignores this
     // on wide windows, where the sidebar is always shown).
     let mut drawer = use_signal(|| false);
     use_hook(|| theme::apply(&theme.peek()));
+    // Forms here are handled in Rust; never let the browser submit one (a
+    // native submit reloads the page and cuts off work still in flight).
+    use_hook(|| {
+        let _ = document::eval("document.addEventListener('submit', (e) => e.preventDefault(), true);");
+    });
     // "/" (when not typing) or Ctrl/Cmd+K opens Search and focuses the box.
     use_hook(move || {
         spawn(async move {
@@ -192,6 +199,7 @@ fn App() -> Element {
             sections.extend(api::list_sections(p.id.as_str()).await?);
         }
         let labels = api::list_labels().await?;
+        reminders.set(api::list_reminders().await?);
         let filters = api::list_filters().await?;
         let today_tasks = api::today_view().await?;
         let today_count = today_tasks.len();
