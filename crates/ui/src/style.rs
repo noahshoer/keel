@@ -52,7 +52,7 @@ const LIGHT: &str = r#"
   --row-hover: #f7f5f3;
   --icon-hover: rgba(0,0,0,.06);
   --active-bg: #ffffff;
-  --active-text: #c53a2d;
+  --active-text: #1d6b53;
   --border: #e3e3e3;
   --border-strong: #c9c9c9;
   --chip-border: #e8e8e8;
@@ -63,9 +63,9 @@ const LIGHT: &str = r#"
   --btn-cancel: #f2f2f2;
   --btn-cancel-hover: #e7e7e7;
   --btn-cancel-text: #444444;
-  --accent: #dc4c3e;
-  --accent-hover: #c3392c;
-  --focus-ring: rgba(220,76,62,.18);
+  --accent: #268366;
+  --accent-hover: #1e6b53;
+  --focus-ring: rgba(38,131,102,.2);
   --shadow-sm: 0 1px 2px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
   --shadow-md: 0 4px 14px rgba(0,0,0,.07), 0 1px 3px rgba(0,0,0,.05);
   --shadow-lg: 0 12px 32px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06);
@@ -97,7 +97,7 @@ const DARK: &str = r#"
   --row-hover: #292929;
   --icon-hover: rgba(255,255,255,.08);
   --active-bg: #2b2b2b;
-  --active-text: #ff8a7f;
+  --active-text: #6fcfaa;
   --border: #3a3a3a;
   --border-strong: #585858;
   --chip-border: #3a3a3a;
@@ -108,9 +108,9 @@ const DARK: &str = r#"
   --btn-cancel: #2f2f2f;
   --btn-cancel-hover: #3a3a3a;
   --btn-cancel-text: #e0e0e0;
-  --accent: #dc4c3e;
-  --accent-hover: #e86a5e;
-  --focus-ring: rgba(255,112,102,.22);
+  --accent: #2a9474;
+  --accent-hover: #35ad88;
+  --focus-ring: rgba(53,173,136,.25);
   --shadow-sm: 0 1px 2px rgba(0,0,0,.35);
   --shadow-md: 0 4px 14px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.3);
   --shadow-lg: 0 12px 32px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.35);
@@ -153,8 +153,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Sidebar (sits on the app background; the main pane floats beside it) */
 .sidebar { width: 272px; flex-shrink: 0; background: var(--sidebar); padding: 14px 10px 14px 12px; overflow-y: auto; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; padding: 6px 8px 18px; }
-.brand-mark { width: 28px; height: 28px; border-radius: 9px; background: var(--accent); color: #fff;
-  display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: var(--shadow-sm); }
+.brand-mark { width: 28px; height: 28px; flex-shrink: 0; display: flex; color: var(--accent); filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.12)); }
 .brand .theme-toggle { margin-left: auto; }
 .nav-item { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: var(--r-md);
   cursor: pointer; color: var(--text); user-select: none; margin-bottom: 1px; }
