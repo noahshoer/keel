@@ -278,6 +278,19 @@ pub async fn add_from_editor(v: EditorValues, projects: Vec<Project>, sections: 
     }
 }
 
+/// Saves an edited task: the move (with its sub-tree), reminder changes,
+/// then the field changes.
+pub async fn save_edit(id: Id, before: EditorValues, after: EditorValues, existing: Option<Recurrence>) {
+    let (patch, moved) = changes(&before, &after, existing);
+    if let Some((project, section)) = moved {
+        let _ = api::move_task(id.clone(), project, section).await;
+    }
+    sync_reminders(id.clone(), &before.reminders, &after.reminders).await;
+    if !patch.is_empty() {
+        let _ = api::update_task(id, patch).await;
+    }
+}
+
 /// Saves reminder edits: removes the ones taken out, adds the new ones.
 pub async fn sync_reminders(task_id: Id, before: &[ReminderDraft], after: &[ReminderDraft]) {
     for old in before {
@@ -718,5 +731,23 @@ pub fn AddTask(
             on_cancel: move |_| open.set(false),
             reload,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn edit_changes_leave_quick_add_text_alone() {
+        let mut task = Task::new("Buy p1 batteries #2", Id::from("P-IN"));
+        task.id = Id::from("T-1");
+        let before = EditorValues::from_task(&task);
+        let mut after = before.clone();
+        after.priority = "1".to_string();
+        let (patch, moved) = changes(&before, &after, None);
+        assert_eq!(patch.content, None);
+        assert_eq!(patch.priority, Some(Priority::P1));
+        assert_eq!(moved, None);
     }
 }

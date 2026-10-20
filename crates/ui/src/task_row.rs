@@ -4,7 +4,7 @@ use keel_core::model::{Label, Priority, Project, Reminder, Section, Task};
 use keel_core::views::{self, DueBucket};
 
 use crate::api;
-use crate::editor::{add_from_editor, changes, repeat_text, sync_reminders, EditorValues, TaskEditor};
+use crate::editor::{add_from_editor, repeat_text, save_edit, EditorValues, TaskEditor};
 use crate::pickers::ReminderDraft;
 
 /// Pixels of indentation per sub-task level.
@@ -78,18 +78,10 @@ pub fn TaskRow(
                     keep_label,
                     submit_text: "Save".to_string(),
                     on_submit: move |after: EditorValues| {
-                        let (patch, moved) = changes(&before, &after, existing_rule.clone());
-                        let before_reminders = before.reminders.clone();
-                        let id = id.clone();
+                        let (id, before, rule) = (id.clone(), before.clone(), existing_rule.clone());
                         editing.set(false);
                         spawn(async move {
-                            if let Some((project, section)) = moved {
-                                let _ = api::move_task(id.clone(), project, section).await;
-                            }
-                            sync_reminders(id.clone(), &before_reminders, &after.reminders).await;
-                            if !patch.is_empty() {
-                                let _ = api::update_task(id, patch).await;
-                            }
+                            save_edit(id, before, after, rule).await;
                             reload += 1;
                         });
                     },
