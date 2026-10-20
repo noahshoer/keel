@@ -83,6 +83,18 @@ pub struct ImportPlan {
     pub kept_as_text: usize,
 }
 
+/// What an import created (shown to the user).
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ImportSummary {
+    pub project_id: crate::ids::Id,
+    pub project_name: String,
+    pub tasks: usize,
+    pub sections: usize,
+    pub labels_created: usize,
+    pub comments: usize,
+    pub kept_as_text: usize,
+}
+
 /// Reads an export into items.
 pub fn parse(text: &str) -> Result<Vec<TodoistItem>, ImportError> {
     let rows = super::csv::parse(text);
