@@ -144,6 +144,50 @@ pub fn repeat_text(rule: &Recurrence) -> String {
     }
 }
 
+/// The Labels chip's text.
+pub(crate) fn labels_text(labels: &[String]) -> String {
+    if labels.is_empty() { "Labels".to_string() } else { labels.join(", ") }
+}
+
+/// The Priority chip's text ("4" is no priority).
+pub(crate) fn priority_text(priority: &str) -> String {
+    if priority == "4" { "Priority".to_string() } else { format!("P{priority}") }
+}
+
+/// The repeat choices as (value, label); week/month options name the day
+/// they repeat on, and "keep" appears when the task has a custom rule.
+pub(crate) fn repeat_options(date: &str, keep_label: Option<&str>, today: NaiveDate) -> Vec<(&'static str, String)> {
+    let anchor = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap_or(today);
+    let mut opts = vec![
+        ("none", "No repeat".to_string()),
+        ("daily", "Every day".to_string()),
+        ("weekdays", "Every weekday (Mon – Fri)".to_string()),
+        ("weekly", format!("Every week on {}", anchor.format("%A"))),
+        ("monthly", format!("Every month on the {}", ordinal(anchor.day() as u8))),
+    ];
+    if let Some(text) = keep_label {
+        opts.push(("keep", text.to_string()));
+    }
+    opts
+}
+
+/// The Repeat chip's text for the chosen option.
+pub(crate) fn repeat_chip_text(repeat: &str, opts: &[(&'static str, String)]) -> String {
+    opts.iter()
+        .find(|(value, _)| *value == repeat && *value != "none")
+        .map(|(_, label)| label.clone())
+        .unwrap_or_else(|| "Repeat".to_string())
+}
+
+/// "Project" or "Project / Section" for the location chip.
+pub(crate) fn location_text(project_id: &Id, section_id: Option<&Id>, projects: &[Project], sections: &[Section]) -> String {
+    let Some(p) = projects.iter().find(|p| &p.id == project_id) else { return "Inbox".to_string() };
+    match section_id.and_then(|s| sections.iter().find(|x| &x.id == s && x.project_id == p.id)) {
+        Some(s) => format!("{} / {}", p.name, s.name),
+        None => p.name.clone(),
+    }
+}
+
 /// Field changes between `before` and `after`, plus a move when the
 /// project/section changed (moves are a separate command that also carries
 /// the sub-tree).
@@ -173,7 +217,12 @@ pub fn changes(
 
 /// Parses the editor's title as quick add.
 fn parse_title(v: &EditorValues, projects: &[Project], sections: &[Section]) -> QuickAdd {
-    let mut qa = quickadd::parse(&v.content, crate::today(), projects, sections);
+    parse_title_at(v, projects, sections, crate::today())
+}
+
+/// [`parse_title`] relative to `today` (testable off the browser).
+pub(crate) fn parse_title_at(v: &EditorValues, projects: &[Project], sections: &[Section], today: NaiveDate) -> QuickAdd {
+    let mut qa = quickadd::parse(&v.content, today, projects, sections);
     // A bare /Section resolves within the Inbox; carry its project along.
     if qa.project_id.is_none() {
         if let Some(s) = qa.section_id.as_ref().and_then(|id| sections.iter().find(|s| &s.id == id)) {
@@ -271,25 +320,19 @@ pub fn TaskEditor(
     let mut new_label = use_signal(String::new);
     let v = vals();
     let can_submit = !v.content.trim().is_empty();
-    let label_text = if v.labels.is_empty() { "Labels".to_string() } else { v.labels.join(", ") };
+    let label_text = labels_text(&v.labels);
     let today = crate::today();
 
     // Project / section menu: each project, then its sections indented.
     let location = v.location();
     let mut location_items = Vec::new();
-    let mut location_text = String::from("Inbox");
+    let location_text = location_text(&v.project_id, v.section_id.as_ref(), &projects, &sections);
     for p in projects.iter() {
         let icon = if p.is_inbox { icons::inbox() } else { icons::hash_small() };
         let class = if p.is_inbox { "loc-inbox" } else { "loc-project" };
         location_items.push(MenuItem::new(p.id.to_string(), p.name.clone()).icon(icon, class));
-        if location == p.id.to_string() {
-            location_text = p.name.clone();
-        }
         for s in sections.iter().filter(|s| s.project_id == p.id) {
             let value = format!("{}|{}", p.id, s.id);
-            if location == value {
-                location_text = format!("{} / {}", p.name, s.name);
-            }
             location_items.push(MenuItem::new(value, s.name.clone()).icon(icons::section_small(), "loc-section").indented());
         }
     }
@@ -305,25 +348,11 @@ pub fn TaskEditor(
         .iter()
         .map(|p| MenuItem::new(*p, format!("Priority {p}")).icon(icons::flag_small(), flag_class(p)))
         .collect();
-    let priority_text = if v.priority == "4" { "Priority".to_string() } else { format!("P{}", v.priority) };
+    let priority_text = priority_text(&v.priority);
 
-    // Repeat menu; week/month options name the day they repeat on.
-    let anchor = NaiveDate::parse_from_str(&v.date, "%Y-%m-%d").unwrap_or(today);
-    let mut repeat_items = vec![
-        MenuItem::new("none", "No repeat"),
-        MenuItem::new("daily", "Every day"),
-        MenuItem::new("weekdays", "Every weekday (Mon – Fri)"),
-        MenuItem::new("weekly", format!("Every week on {}", anchor.format("%A"))),
-        MenuItem::new("monthly", format!("Every month on the {}", ordinal(anchor.day() as u8))),
-    ];
-    if let Some(text) = keep_label.clone() {
-        repeat_items.push(MenuItem::new("keep", text));
-    }
-    let repeat_text_chip = repeat_items
-        .iter()
-        .find(|i| i.value == v.repeat && i.value != "none")
-        .map(|i| i.label.clone())
-        .unwrap_or_else(|| "Repeat".to_string());
+    let repeat_opts = repeat_options(&v.date, keep_label.as_deref(), today);
+    let repeat_text_chip = repeat_chip_text(&v.repeat, &repeat_opts);
+    let repeat_items: Vec<MenuItem> = repeat_opts.into_iter().map(|(value, label)| MenuItem::new(value, label)).collect();
 
     // Live quick-add parse: highlighted spans in the title + preview chips.
     let qa = quick_add.then(|| parse_title(&v, &projects, &sections));

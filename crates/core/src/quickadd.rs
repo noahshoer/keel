@@ -80,6 +80,20 @@ struct Token {
     end: usize,
 }
 
+/// `input` without the recognized phrases of the given kinds, with the
+/// leftover whitespace collapsed. Used when a value is picked by hand: the
+/// pick replaces whatever was typed for it.
+pub fn strip_spans(input: &str, spans: &[Span], kinds: &[SpanKind]) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut at = 0;
+    for s in spans.iter().filter(|s| kinds.contains(&s.kind)) {
+        out.push_str(&input[at..s.start]);
+        at = s.end;
+    }
+    out.push_str(&input[at..]);
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn tokens(input: &str) -> Vec<Token> {
     let mut out = Vec::new();
     let mut start: Option<usize> = None;
@@ -678,7 +692,7 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
 
 #[cfg(test)]
 mod tests {
-    use super::{parse, QuickAdd};
+    use super::{parse, strip_spans, QuickAdd, SpanKind};
     use crate::ids::Id;
     use crate::model::{Priority, Project, Section};
     use crate::recurrence::Recurrence;
@@ -1050,5 +1064,32 @@ mod tests {
         assert_eq!(q.project_id, Some(Id::from("P-WORK")));
         assert_eq!(q.section_id, Some(Id::from("S-NEXT")));
         assert_eq!(q.labels, vec!["phone".to_string()]);
+    }
+
+    #[test]
+    fn strip_spans_removes_every_span_of_the_kinds() {
+        let input = "@home call mom @phone";
+        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Label]), "call mom");
+        let input = "call mom tomorrow 5pm";
+        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Date, SpanKind::Time]), "call mom");
+    }
+
+    #[test]
+    fn strip_spans_leaves_unrecognized_repeats_as_text() {
+        // Only the first date is applied; the second "tomorrow" is title text.
+        let input = "tomorrow call mom tomorrow";
+        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Date]), "call mom tomorrow");
+    }
+
+    #[test]
+    fn strip_spans_keeps_other_kinds() {
+        let input = "call mom tomorrow p1";
+        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Priority]), "call mom tomorrow");
+    }
+
+    #[test]
+    fn strip_spans_collapses_spaces() {
+        let input = "a  p1  b";
+        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Priority]), "a b");
     }
 }

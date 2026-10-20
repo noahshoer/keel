@@ -82,6 +82,30 @@ pub fn due_class(d: NaiveDate, today: NaiveDate) -> &'static str {
 
 /// The scheduler chip + popover. `date` is `YYYY-MM-DD` or empty; `time` is
 /// `HH:MM` or empty.
+/// The Date chip's text and due class ("" when no date is set).
+pub fn date_chip(date: Option<NaiveDate>, time: Option<NaiveTime>, today: NaiveDate) -> (String, &'static str) {
+    match (date, time) {
+        (Some(d), Some(t)) => (format!("{} {}", views::due_label(d, today), views::time_label(t)), due_class(d, today)),
+        (Some(d), None) => (views::due_label(d, today), due_class(d, today)),
+        (None, Some(t)) => (format!("Today {}", views::time_label(t)), "today"),
+        (None, None) => ("Date".to_string(), ""),
+    }
+}
+
+/// The Deadline chip's text.
+pub fn deadline_text(deadline: Option<NaiveDate>, today: NaiveDate) -> String {
+    deadline.map(|d| views::due_label(d, today)).unwrap_or_else(|| "Deadline".to_string())
+}
+
+/// The Reminders chip's text.
+pub fn reminders_text(reminders: &[ReminderDraft], today: NaiveDate) -> String {
+    match reminders.len() {
+        0 => "Reminders".to_string(),
+        1 => reminders[0].label(today),
+        n => format!("{n} reminders"),
+    }
+}
+
 #[component]
 pub fn DatePicker(date: String, time: String, open: OpenPop, on_change: EventHandler<(String, String)>) -> Element {
     let mut open = open;
@@ -90,12 +114,7 @@ pub fn DatePicker(date: String, time: String, open: OpenPop, on_change: EventHan
     let current_time = NaiveTime::parse_from_str(&time, "%H:%M").ok();
     let is_open = open() == Some("date");
 
-    let (chip_text, chip_class) = match (selected, current_time) {
-        (Some(d), Some(t)) => (format!("{} {}", views::due_label(d, today), views::time_label(t)), due_class(d, today)),
-        (Some(d), None) => (views::due_label(d, today), due_class(d, today)),
-        (None, Some(t)) => (format!("Today {}", views::time_label(t)), "today"),
-        (None, None) => ("Date".to_string(), ""),
-    };
+    let (chip_text, chip_class) = date_chip(selected, current_time, today);
 
     rsx! {
         div { class: "chip-wrap",
@@ -356,9 +375,11 @@ pub fn DeadlinePicker(deadline: String, open: OpenPop, on_change: EventHandler<S
     let today = crate::today();
     let selected = NaiveDate::parse_from_str(&deadline, "%Y-%m-%d").ok();
     let is_open = open() == Some("deadline");
-    let (text, class) = match selected {
-        Some(d) => (views::due_label(d, today), if d <= today { "deadline-chip urgent" } else { "deadline-chip set" }),
-        None => ("Deadline".to_string(), "deadline-chip"),
+    let text = deadline_text(selected, today);
+    let class = match selected {
+        Some(d) if d <= today => "deadline-chip urgent",
+        Some(_) => "deadline-chip set",
+        None => "deadline-chip",
     };
     rsx! {
         div { class: "chip-wrap",
@@ -386,7 +407,8 @@ pub fn DeadlinePicker(deadline: String, open: OpenPop, on_change: EventHandler<S
 }
 
 /// A reminder being edited: saved ones have an `id`; new ones don't yet.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReminderDraft {
     pub id: Option<keel_core::ids::Id>,
     /// Minutes before the due time (relative).
@@ -448,11 +470,7 @@ pub fn ReminderPicker(
     let is_open = open() == Some("reminders");
     let mut custom = use_signal(String::new);
     let mut custom_bad = use_signal(|| false);
-    let text = match reminders.len() {
-        0 => "Reminders".to_string(),
-        1 => reminders[0].label(today),
-        n => format!("{n} reminders"),
-    };
+    let text = reminders_text(&reminders, today);
     let current = reminders.clone();
     let add = move |draft: ReminderDraft| {
         let mut next = current.clone();

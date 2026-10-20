@@ -1,6 +1,7 @@
 mod editor;
 mod filters;
 mod gestures;
+mod glass;
 mod api;
 mod icons;
 mod pickers;
