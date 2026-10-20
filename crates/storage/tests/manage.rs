@@ -30,6 +30,7 @@ impl H {
             parent_id: None,
             section_id: None,
             recurrence: None,
+            deadline: None,
         })
         .id_mapping["t"]
             .clone()

@@ -35,6 +35,7 @@ impl H {
             parent_id: parent.cloned(),
             section_id: section.cloned(),
             recurrence,
+            deadline: None,
         })
         .id_mapping["t"]
             .clone()
@@ -109,6 +110,7 @@ fn update_project_clears_section_and_moves_children() {
         labels: None,
         due: None,
         is_collapsed: None,
+        deadline: None,
     });
     for id in [&parent, &child] {
         let t = h.get(id);
@@ -145,6 +147,7 @@ fn collapse_flag_persists() {
         labels: None,
         due: None,
         is_collapsed: Some(true),
+        deadline: None,
     });
     assert!(h.get(&id).is_collapsed);
 }

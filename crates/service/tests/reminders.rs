@@ -31,6 +31,7 @@ fn add(svc: &AppService, uuid: &str, name: &str, due: &str) {
                 parent_id: None,
                 section_id: None,
                 recurrence: None,
+                deadline: None,
             },
         },
         NaiveDate::from_ymd_opt(2026, 10, 19).unwrap(),

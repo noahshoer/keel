@@ -135,6 +135,7 @@ pub async fn add_task(t: NewTask) -> Result<ApplyResult, String> {
             parent_id: t.parent_id,
             section_id: t.section_id,
             recurrence: t.recurrence,
+            deadline: None,
         },
         true,
     ))

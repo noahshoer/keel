@@ -60,6 +60,9 @@ pub enum Action {
         /// the first scheduled day on or after today.
         #[serde(default)]
         recurrence: Option<Recurrence>,
+        /// "Must be done by" date (`YYYY-MM-DD`), separate from the due.
+        #[serde(default)]
+        deadline: Option<String>,
     },
     /// Patch a task: every field is optional; omitted fields are unchanged.
     TaskUpdate {
@@ -80,6 +83,9 @@ pub enum Action {
         /// Collapse/expand the task's sub-tasks.
         #[serde(default)]
         is_collapsed: Option<bool>,
+        /// `None` keeps the deadline; `Some("")` clears it.
+        #[serde(default)]
+        deadline: Option<String>,
     },
     /// Move a task (and its whole sub-tree) to a project, optionally a section.
     TaskMove {
@@ -187,6 +193,11 @@ impl Action {
     }
 }
 
+/// `YYYY-MM-DD` when `s` is a real date (anything else, e.g. "", gives `None`).
+fn valid_date(s: &str) -> Option<String> {
+    NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok().map(iso)
+}
+
 /// Human text for a rule, stored in `Due.string` (Todoist-style).
 fn describe(rule: &Recurrence) -> String {
     rule.describe()
@@ -257,8 +268,10 @@ pub fn apply_at<R: Repository>(
             parent_id,
             section_id,
             recurrence,
+            deadline,
         } => {
             let mut task = Task::new(content, project_id);
+            task.deadline = deadline.as_deref().and_then(valid_date);
             if let Some(d) = description {
                 task.description = d;
             }
@@ -362,6 +375,7 @@ pub fn apply_at<R: Repository>(
             labels,
             due,
             is_collapsed,
+            deadline,
         } => {
             // A project change is a move: the sub-tree follows and the
             // section (which belongs to the old project) is cleared.
@@ -385,6 +399,9 @@ pub fn apply_at<R: Repository>(
                 }
                 if let Some(l) = labels {
                     task.labels = l;
+                }
+                if let Some(d) = deadline {
+                    task.deadline = valid_date(&d);
                 }
                 if let Some(edit) = due {
                     let old_rule = task.due.as_ref().and_then(|d| d.recurrence.clone());
@@ -635,6 +652,7 @@ mod tests {
                 parent_id: None,
                 section_id: None,
                 recurrence: None,
+                deadline: None,
             },
         };
         let v: serde_json::Value = serde_json::to_value(&cmd).unwrap();

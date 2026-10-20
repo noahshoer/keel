@@ -38,6 +38,7 @@ fn completed_streak_task(today: NaiveDate) -> (tempfile::TempDir, AppService, Id
                     parent_id: None,
                     section_id: None,
                     recurrence: Some(Recurrence::Daily),
+                    deadline: None,
                 },
             ),
             today,

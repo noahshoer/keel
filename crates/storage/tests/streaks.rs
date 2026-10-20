@@ -28,6 +28,7 @@ fn add(content: &str, project: &Id, recurrence: Option<Recurrence>) -> Action {
         parent_id: None,
         section_id: None,
         recurrence,
+        deadline: None,
     }
 }
 

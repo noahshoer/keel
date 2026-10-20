@@ -46,6 +46,7 @@ fn delete_label_strips_it_from_tasks() {
             parent_id: None,
             section_id: None,
             recurrence: None,
+            deadline: None,
         },
     )
     .id_mapping["t"]

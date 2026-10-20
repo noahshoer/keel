@@ -22,6 +22,8 @@ pub struct QuickAdd {
     pub project_id: Option<Id>,
     pub section_id: Option<Id>,
     pub labels: Vec<String>,
+    /// From `{oct 30}`: the "must be done by" date.
+    pub deadline: Option<NaiveDate>,
     /// The recognized phrases, as byte ranges into the input (sorted), for
     /// highlighting. Empty when nothing was applied.
     pub spans: Vec<Span>,
@@ -44,6 +46,7 @@ pub enum SpanKind {
     Project,
     Section,
     Label,
+    Deadline,
 }
 
 impl QuickAdd {
@@ -64,6 +67,7 @@ impl QuickAdd {
             && self.project_id.is_none()
             && self.section_id.is_none()
             && self.labels.is_empty()
+            && self.deadline.is_none()
     }
 }
 
@@ -316,6 +320,18 @@ enum RepeatSpec {
     Yearly(Option<(u32, u32)>),
 }
 
+/// A `{date}` group starting at token `i` (closed within a few words), whose
+/// inside is exactly one date phrase: (tokens consumed, date).
+fn match_deadline(input: &str, t: &[Token], i: usize, today: NaiveDate) -> Option<(usize, NaiveDate)> {
+    let close = (i..t.len().min(i + 5)).find(|&j| t[j].raw.ends_with('}'))?;
+    let inner = input.get(t[i].start + 1..t[close].end - 1)?;
+    let words = tokens(inner);
+    match match_date(&words, 0, today) {
+        Some((n, date)) if n == words.len() => Some((close - i + 1, date)),
+        _ => None,
+    }
+}
+
 /// Vocabulary of repeat phrases (numbers, ordinals, weekdays, months, units).
 fn repeat_word(word: &str) -> bool {
     word.parse::<u32>().is_ok()
@@ -524,6 +540,15 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
             continue;
         }
         let norm = t[i].norm.as_str();
+        // "{oct 30}" — a deadline (Todoist's brace syntax).
+        if q.deadline.is_none() && t[i].raw.starts_with('{') {
+            if let Some((n, date)) = match_deadline(input, &t, i, today) {
+                q.deadline = Some(date);
+                take(&mut used, &mut spans, i, n, SpanKind::Deadline);
+                i += n;
+                continue;
+            }
+        }
         if q.priority.is_none() {
             let p = match norm {
                 "p1" => Some(Priority::P1),
@@ -940,6 +965,29 @@ mod tests {
         let q = p(input);
         let got: Vec<&str> = q.spans.iter().map(|s| &input[s.start..s.end]).collect();
         assert_eq!(got, vec!["every other week on mon and thu", "at 7am"]);
+    }
+
+    #[test]
+    fn deadline_in_braces() {
+        let input = "Ship report tomorrow {oct 30} p1";
+        let q = p(input);
+        assert_eq!(q.content, "Ship report");
+        assert_eq!(q.deadline, Some(d(2026, 10, 30)));
+        assert_eq!(q.date, Some(d(2026, 10, 20)), "due and deadline are separate");
+        let deadline_spans: Vec<&str> = q
+            .spans
+            .iter()
+            .filter(|s| s.kind == super::SpanKind::Deadline)
+            .map(|s| &input[s.start..s.end])
+            .collect();
+        assert_eq!(deadline_spans, vec!["{oct 30}"]);
+        assert_eq!(p("x {friday}").deadline, Some(d(2026, 10, 23)));
+        assert_eq!(p("x {next week}").deadline, Some(d(2026, 10, 26)));
+        // Not a date, or unclosed: stays text.
+        let q = p("x {someday}");
+        assert_eq!((q.deadline, q.content.as_str()), (None, "x {someday}"));
+        let q = p("x {oct 30");
+        assert_eq!(q.deadline, None);
     }
 
     #[test]
