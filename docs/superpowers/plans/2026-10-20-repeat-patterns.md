@@ -37,10 +37,10 @@
 ---
 
 ## Task 1: Engine
-- [ ] Variants + `contains`/`next_after`/`prev_before` (bounded scans for the complex ones) + `describe()`. Property test: for every variant and many dates, `next_after(d)` is the first `contains` day after `d` and `prev_before` mirrors it. Commit.
+- [x] Variants + `contains`/`next_after`/`prev_before` (bounded scans for the complex ones) + `describe()`. Property test: for every variant and many dates, `next_after(d)` is the first `contains` day after `d` and `prev_before` mirrors it. Commit.
 
 ## Task 2: Parser
-- [ ] `match_repeat` forms above; anchors from the parsed date (else today); first occurrence on/after the anchor. Tests per phrase + no-misread cases + spans. Commit.
+- [x] `match_repeat` forms above; anchors from the parsed date (else today); first occurrence on/after the anchor. Tests per phrase + no-misread cases + spans. Commit.
 
 ## Task 3: Wire-up
-- [ ] `commands::describe` → `Recurrence::describe`; editor chip text + "keep" option label from `describe`. `dx build` clean; verify in preview. Commit, merge, push.
+- [x] `commands::describe` → `Recurrence::describe`; editor chip text + "keep" option label from `describe`. `dx build` clean; verify in preview. Commit, merge, push.

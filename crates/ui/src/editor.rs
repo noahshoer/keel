@@ -123,29 +123,17 @@ fn recurrence_for(choice: &str, date: &str, existing: Option<Recurrence>) -> Opt
     }
 }
 
-const DAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
 fn ordinal(n: u8) -> String {
-    let suffix = match (n % 10, n % 100) {
-        (1, 11) | (2, 12) | (3, 13) => "th",
-        (1, _) => "st",
-        (2, _) => "nd",
-        (3, _) => "rd",
-        _ => "th",
-    };
-    format!("{n}{suffix}")
+    keel_core::recurrence::ordinal(n as u32)
 }
 
-/// Human text for a repeat rule (preview chip).
-fn repeat_text(rule: &Recurrence) -> String {
-    match rule {
-        Recurrence::Daily => "Every day".to_string(),
-        Recurrence::Weekly(days) if days == &vec![0, 1, 2, 3, 4] => "Every weekday".to_string(),
-        Recurrence::Weekly(days) => {
-            let names: Vec<&str> = days.iter().filter_map(|d| DAYS.get(*d as usize).copied()).collect();
-            format!("Every {}", names.join(", "))
-        }
-        Recurrence::MonthlyDay(d) => format!("Every month on the {}", ordinal(*d)),
+/// Human text for a repeat rule ("Every other week on Wed").
+pub fn repeat_text(rule: &Recurrence) -> String {
+    let text = rule.describe();
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => text,
     }
 }
 
