@@ -7,5 +7,6 @@ pub mod quickadd;
 pub mod recurrence;
 pub mod reminders;
 pub mod repository;
+pub mod search;
 pub mod streak;
 pub mod views;

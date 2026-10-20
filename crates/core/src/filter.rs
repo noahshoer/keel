@@ -334,9 +334,7 @@ fn term_matches(term: &Term, task: &Task, ctx: &FilterContext) -> bool {
             .and_then(|s| ctx.sections.get(s))
             .is_some_and(|n| lower_eq(n, name)),
         Term::Label(name) => task.labels.iter().any(|l| lower_eq(l, name)),
-        Term::Search(text) => {
-            task.content.to_lowercase().contains(text) || task.description.to_lowercase().contains(text)
-        }
+        Term::Search(text) => crate::search::matches(task, &crate::search::words(text)),
         Term::DueBefore(r) => due.is_some_and(|d| d < r.resolve(today)),
         Term::DueAfter(r) => due.is_some_and(|d| d > r.resolve(today)),
         Term::DueOn(r) => due == Some(r.resolve(today)),
@@ -460,6 +458,7 @@ mod tests {
         let mut t = task("Buy Milk");
         t.description = "from the corner shop".into();
         assert!(m("search: milk", &t) && m("search: corner", &t) && !m("search: bread", &t));
+        assert!(m("search: milk shop", &t), "every word, anywhere (same matcher as the Search view)");
     }
 
     #[test]
