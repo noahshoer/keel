@@ -246,6 +246,16 @@ fn match_time(t: &[Token], i: usize) -> Option<(usize, NaiveTime)> {
     None
 }
 
+/// A time typed on its own ("5pm", "5:30 pm", "17:00", "noon"), for time
+/// fields; `None` unless the whole text is one time phrase.
+pub fn parse_time(text: &str) -> Option<NaiveTime> {
+    let t = tokens(text);
+    match match_time(&t, 0) {
+        Some((n, time)) if n == t.len() => Some(time),
+        _ => None,
+    }
+}
+
 /// A repeat that may need the task's date to anchor on.
 enum RepeatSpec {
     Rule(Recurrence),
@@ -668,6 +678,19 @@ mod tests {
         }
         let q = p("Email Bob tomorrow.");
         assert_eq!((q.date, q.content.as_str()), (Some(d(2026, 10, 20)), "Email Bob"));
+    }
+
+    #[test]
+    fn parse_time_standalone() {
+        use super::parse_time;
+        assert_eq!(parse_time("5pm"), Some(t(17, 0)));
+        assert_eq!(parse_time(" 5:30 PM "), Some(t(17, 30)));
+        assert_eq!(parse_time("17:45"), Some(t(17, 45)));
+        assert_eq!(parse_time("noon"), Some(t(12, 0)));
+        assert_eq!(parse_time("12am"), Some(t(0, 0)));
+        assert_eq!(parse_time("5"), None, "bare hour is ambiguous");
+        assert_eq!(parse_time("5pm tomorrow"), None, "only a time");
+        assert_eq!(parse_time(""), None);
     }
 
     #[test]

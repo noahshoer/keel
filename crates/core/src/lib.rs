@@ -1,3 +1,4 @@
+pub mod calendar;
 pub mod commands;
 pub mod filter;
 pub mod ids;
