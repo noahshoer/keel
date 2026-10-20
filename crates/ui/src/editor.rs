@@ -342,9 +342,12 @@ pub fn TaskEditor(
 
     let title_placeholder: &'static str =
         if quick_add { "Task name — try “Call mom tomorrow 5pm p1 #Home @phone”" } else { "Task name" };
-    let submit = move || {
+    // Submits once: a fast second Enter (before the editor closes) is ignored.
+    let mut submitted = use_signal(|| false);
+    let mut submit = move || {
         let v = vals();
-        if !v.content.trim().is_empty() {
+        if !submitted() && !v.content.trim().is_empty() {
+            submitted.set(true);
             on_submit.call(v);
         }
     };
@@ -610,7 +613,6 @@ pub fn AddTask(
 ) -> Element {
     let mut reload = reload;
     let mut open = use_signal(|| false);
-    let mut generation = use_signal(|| 0u32);
 
     if !open() {
         return rsx! {
@@ -624,7 +626,6 @@ pub fn AddTask(
     let (p2, s2, l2) = (projects.clone(), sections.clone(), labels.clone());
     rsx! {
         TaskEditor {
-            key: "{generation}",
             initial: defaults.clone(),
             projects,
             sections,
@@ -634,10 +635,10 @@ pub fn AddTask(
             quick_add: true,
             on_submit: move |v: EditorValues| {
                 let (p, s, l) = (p2.clone(), s2.clone(), l2.clone());
+                // Close first, so a second Enter can't add the task twice.
+                open.set(false);
                 spawn(async move {
                     add_from_editor(v, p, s, l).await;
-                    // Remount a fresh editor (Todoist keeps it open for the next task).
-                    generation += 1;
                     reload += 1;
                 });
             },

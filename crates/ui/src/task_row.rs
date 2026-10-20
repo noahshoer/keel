@@ -70,6 +70,7 @@ pub fn TaskRow(
                     on_submit: move |after: EditorValues| {
                         let (patch, moved) = changes(&before, &after, existing_rule.clone());
                         let id = id.clone();
+                        editing.set(false);
                         spawn(async move {
                             if let Some((project, section)) = moved {
                                 let _ = api::move_task(id.clone(), project, section).await;
@@ -77,7 +78,6 @@ pub fn TaskRow(
                             if !patch.is_empty() {
                                 let _ = api::update_task(id, patch).await;
                             }
-                            editing.set(false);
                             reload += 1;
                         });
                     },
@@ -259,9 +259,9 @@ pub fn TaskRow(
                     quick_add: true,
                     on_submit: move |v: EditorValues| {
                         let (p, s, l) = (sub_projects.clone(), sub_sections.clone(), sub_labels.clone());
+                        adding_sub.set(false);
                         spawn(async move {
                             add_from_editor(v, p, s, l).await;
-                            adding_sub.set(false);
                             reload += 1;
                         });
                     },
