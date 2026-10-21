@@ -368,6 +368,17 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
    right) and the list (+ bottom right); keep their spots clear. */
 .native-glass .menu-btn { display: none; }
 .native-glass .content { padding-top: calc(env(safe-area-inset-top) + 60px); padding-bottom: 120px; }
+/* Touch: Todoist-sized rows (a little shorter) with a bigger check circle,
+   whose tap area reaches past it to ~44px. */
+@media (pointer: coarse) {
+  .task-row { gap: 14px; padding: 14px 8px 13px; }
+  .task-content { font-size: 17px; line-height: 23px; }
+  .task-desc { font-size: 14px; line-height: 19px; margin-top: 3px; }
+  .task-meta { font-size: 14px; margin-top: 6px; gap: 12px; }
+  .check { position: relative; width: 24px; height: 24px; min-width: 24px; margin-top: 0; border-width: 1.75px; }
+  .check::after { content: ''; position: absolute; inset: -10px; }
+  .task-project { font-size: 13px; }
+}
 /* Touch: a long press shows a task's actions; no text selection or callout. */
 @media (hover: none) { .task-row { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
 .view-head .view-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
