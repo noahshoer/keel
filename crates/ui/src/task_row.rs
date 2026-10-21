@@ -133,187 +133,192 @@ pub fn TaskRow(
     let id_toggle = task.id.clone();
     let id_goal = task.id.clone();
 
+    // One root per row: keyed rows with several roots (the row plus the
+    // sub-task editor's placeholder) broke Dioxus' moves when a priority
+    // change reordered the list, and the page went blank.
     rsx! {
-        div { class: "task", style: "{indent}",
-            div { class: "task-row",
-                if has_children {
+        div { class: "task-slot",
+            div { class: "task", style: "{indent}",
+                div { class: "task-row",
+                    if has_children {
+                        button {
+                            class: if collapsed { "chevron collapsed" } else { "chevron" },
+                            title: if collapsed { "Show sub-tasks" } else { "Hide sub-tasks" },
+                            onclick: move |_| {
+                                let id = id_collapse.clone();
+                                spawn(async move {
+                                    let _ = api::set_collapsed(id, !collapsed).await;
+                                    reload += 1;
+                                });
+                            },
+                            Icon { svg: icons::chevron() }
+                        }
+                    }
                     button {
-                        class: if collapsed { "chevron collapsed" } else { "chevron" },
-                        title: if collapsed { "Show sub-tasks" } else { "Hide sub-tasks" },
+                        class: check_class(task.priority),
+                        title: "Complete task",
                         onclick: move |_| {
-                            let id = id_collapse.clone();
+                            let id = id_complete.clone();
                             spawn(async move {
-                                let _ = api::set_collapsed(id, !collapsed).await;
+                                let _ = api::complete_task(id).await;
                                 reload += 1;
                             });
                         },
-                        Icon { svg: icons::chevron() }
+                        Icon { svg: icons::check() }
                     }
-                }
-                button {
-                    class: check_class(task.priority),
-                    title: "Complete task",
-                    onclick: move |_| {
-                        let id = id_complete.clone();
-                        spawn(async move {
-                            let _ = api::complete_task(id).await;
-                            reload += 1;
-                        });
-                    },
-                    Icon { svg: icons::check() }
-                }
-                div {
-                    class: "task-body",
-                    title: "Edit task",
-                    onclick: {
-                        let (task, mine) = (task.clone(), my_reminders.clone());
-                        let (p, s, l) = native_lists.clone();
-                        move |_| {
-                            if (glass.native)() {
-                                glass.edit(&task, mine.clone(), p.clone(), s.clone(), l.clone(), reload);
-                            } else {
-                                editing.set(true);
-                            }
-                        }
-                    },
-                    div { class: "task-content", "{task.content}" }
-                    if !task.description.is_empty() {
-                        div { class: "task-desc", "{task.description}" }
-                    }
-                    if show_meta {
-                        div { class: "task-meta",
-                            if let Some((cls, label)) = due.clone() {
-                                span { class: cls,
-                                    Icon { svg: icons::calendar_small() }
-                                    "{label}"
-                                    if recurring {
-                                        Icon { svg: icons::repeat_small() }
-                                    }
-                                }
-                            }
-                            if let Some((cls, label)) = deadline.clone() {
-                                span { class: "deadline {cls}", title: "Deadline",
-                                    Icon { svg: icons::target_small() }
-                                    "{label}"
-                                }
-                            }
-                            if has_reminders {
-                                span { class: "reminder-tag", title: "{reminder_title}",
-                                    Icon { svg: icons::bell_small() }
-                                }
-                            }
-                            for name in task.labels.iter() {
-                                span { key: "{name}", class: "label-tag",
-                                    Icon { svg: icons::tag_small() }
-                                    "{name}"
-                                }
-                            }
-                            if streak_on {
-                                span { class: "streak", title: "Current streak", "🔥 {task.streak_current}" }
-                            }
-                        }
-                    }
-                }
-                div { class: "task-actions",
-                    button {
-                        class: "icon-btn",
-                        title: "Add sub-task",
+                    div {
+                        class: "task-body",
+                        title: "Edit task",
                         onclick: {
-                            let defaults = native_sub.clone();
+                            let (task, mine) = (task.clone(), my_reminders.clone());
                             let (p, s, l) = native_lists.clone();
                             move |_| {
                                 if (glass.native)() {
-                                    glass.add(defaults.clone(), p.clone(), s.clone(), l.clone(), reload);
+                                    glass.edit(&task, mine.clone(), p.clone(), s.clone(), l.clone(), reload);
                                 } else {
-                                    adding_sub.set(true);
+                                    editing.set(true);
                                 }
                             }
                         },
-                        Icon { svg: icons::subtask() }
-                    }
-                    if recurring {
-                        button {
-                            class: "icon-btn",
-                            title: "Streak",
-                            onclick: move |_| panel.set(!panel()),
-                            "🔥"
+                        div { class: "task-content", "{task.content}" }
+                        if !task.description.is_empty() {
+                            div { class: "task-desc", "{task.description}" }
                         }
-                    }
-                    button {
-                        class: "icon-btn",
-                        title: "Delete task",
-                        onclick: move |_| {
-                            let id = id_delete.clone();
-                            spawn(async move {
-                                let _ = api::delete_task(id).await;
-                                reload += 1;
-                            });
-                        },
-                        Icon { svg: icons::trash() }
-                    }
-                }
-                if let Some(name) = project_name.clone() {
-                    span { class: "task-project", "{name}" }
-                }
-            }
-            if panel() && recurring {
-                div { class: "streak-panel",
-                    if streak_on {
-                        span { class: "stat", "Current " b { "🔥 {task.streak_current}" } }
-                        span { class: "stat", "Best " b { "{task.streak_best}" } }
-                        label {
-                            "Goal "
-                            input {
-                                r#type: "number",
-                                min: "1",
-                                value: "{goal_value}",
-                                onchange: move |e| {
-                                    let id = id_goal.clone();
-                                    let new_goal = e.value().trim().parse::<i64>().ok().filter(|g| *g > 0);
-                                    spawn(async move {
-                                        let _ = api::set_streak(id, true, new_goal).await;
-                                        reload += 1;
-                                    });
-                                },
+                        if show_meta {
+                            div { class: "task-meta",
+                                if let Some((cls, label)) = due.clone() {
+                                    span { class: cls,
+                                        Icon { svg: icons::calendar_small() }
+                                        "{label}"
+                                        if recurring {
+                                            Icon { svg: icons::repeat_small() }
+                                        }
+                                    }
+                                }
+                                if let Some((cls, label)) = deadline.clone() {
+                                    span { class: "deadline {cls}", title: "Deadline",
+                                        Icon { svg: icons::target_small() }
+                                        "{label}"
+                                    }
+                                }
+                                if has_reminders {
+                                    span { class: "reminder-tag", title: "{reminder_title}",
+                                        Icon { svg: icons::bell_small() }
+                                    }
+                                }
+                                for name in task.labels.iter() {
+                                    span { key: "{name}", class: "label-tag",
+                                        Icon { svg: icons::tag_small() }
+                                        "{name}"
+                                    }
+                                }
+                                if streak_on {
+                                    span { class: "streak", title: "Current streak", "🔥 {task.streak_current}" }
+                                }
                             }
                         }
-                    } else {
-                        span { "Track how many times in a row you complete this." }
                     }
-                    button {
-                        class: if streak_on { "btn btn-cancel" } else { "btn btn-add" },
-                        onclick: move |_| {
-                            let id = id_toggle.clone();
-                            spawn(async move {
-                                let _ = api::set_streak(id, !streak_on, goal).await;
-                                reload += 1;
-                            });
-                        },
-                        if streak_on { "Stop tracking" } else { "Track streak" }
+                    div { class: "task-actions",
+                        button {
+                            class: "icon-btn",
+                            title: "Add sub-task",
+                            onclick: {
+                                let defaults = native_sub.clone();
+                                let (p, s, l) = native_lists.clone();
+                                move |_| {
+                                    if (glass.native)() {
+                                        glass.add(defaults.clone(), p.clone(), s.clone(), l.clone(), reload);
+                                    } else {
+                                        adding_sub.set(true);
+                                    }
+                                }
+                            },
+                            Icon { svg: icons::subtask() }
+                        }
+                        if recurring {
+                            button {
+                                class: "icon-btn",
+                                title: "Streak",
+                                onclick: move |_| panel.set(!panel()),
+                                "🔥"
+                            }
+                        }
+                        button {
+                            class: "icon-btn",
+                            title: "Delete task",
+                            onclick: move |_| {
+                                let id = id_delete.clone();
+                                spawn(async move {
+                                    let _ = api::delete_task(id).await;
+                                    reload += 1;
+                                });
+                            },
+                            Icon { svg: icons::trash() }
+                        }
+                    }
+                    if let Some(name) = project_name.clone() {
+                        span { class: "task-project", "{name}" }
+                    }
+                }
+                if panel() && recurring {
+                    div { class: "streak-panel",
+                        if streak_on {
+                            span { class: "stat", "Current " b { "🔥 {task.streak_current}" } }
+                            span { class: "stat", "Best " b { "{task.streak_best}" } }
+                            label {
+                                "Goal "
+                                input {
+                                    r#type: "number",
+                                    min: "1",
+                                    value: "{goal_value}",
+                                    onchange: move |e| {
+                                        let id = id_goal.clone();
+                                        let new_goal = e.value().trim().parse::<i64>().ok().filter(|g| *g > 0);
+                                        spawn(async move {
+                                            let _ = api::set_streak(id, true, new_goal).await;
+                                            reload += 1;
+                                        });
+                                    },
+                                }
+                            }
+                        } else {
+                            span { "Track how many times in a row you complete this." }
+                        }
+                        button {
+                            class: if streak_on { "btn btn-cancel" } else { "btn btn-add" },
+                            onclick: move |_| {
+                                let id = id_toggle.clone();
+                                spawn(async move {
+                                    let _ = api::set_streak(id, !streak_on, goal).await;
+                                    reload += 1;
+                                });
+                            },
+                            if streak_on { "Stop tracking" } else { "Track streak" }
+                        }
                     }
                 }
             }
-        }
-        if adding_sub() {
-            div { style: "{sub_indent}",
-                TaskEditor {
-                    initial: sub_defaults,
-                    projects,
-                    sections,
-                    labels,
-                    keep_label: None,
-                    submit_text: "Add sub-task".to_string(),
-                    quick_add: true,
-                    on_submit: move |v: EditorValues| {
-                        let (p, s, l) = (sub_projects.clone(), sub_sections.clone(), sub_labels.clone());
-                        adding_sub.set(false);
-                        spawn(async move {
-                            add_from_editor(v, p, s, l).await;
-                            reload += 1;
-                        });
-                    },
-                    on_cancel: move |_| adding_sub.set(false),
-                    reload,
+            if adding_sub() {
+                div { style: "{sub_indent}",
+                    TaskEditor {
+                        initial: sub_defaults,
+                        projects,
+                        sections,
+                        labels,
+                        keep_label: None,
+                        submit_text: "Add sub-task".to_string(),
+                        quick_add: true,
+                        on_submit: move |v: EditorValues| {
+                            let (p, s, l) = (sub_projects.clone(), sub_sections.clone(), sub_labels.clone());
+                            adding_sub.set(false);
+                            spawn(async move {
+                                add_from_editor(v, p, s, l).await;
+                                reload += 1;
+                            });
+                        },
+                        on_cancel: move |_| adding_sub.set(false),
+                        reload,
+                    }
                 }
             }
         }

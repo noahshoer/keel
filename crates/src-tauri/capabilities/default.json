@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "What the Keel web UI may call",
   "windows": ["main"],
-  "permissions": ["core:default", "glass:default"]
+  "permissions": ["core:default", "notification:default", "glass:default"]
 }

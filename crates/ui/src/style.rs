@@ -192,6 +192,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .section-title .muted { color: var(--muted); font-weight: 400; font-size: 13px; }
 
 /* Task rows: a soft list, rounded highlight on hover */
+.task-slot { display: contents; }
 .task { border-radius: var(--r-md); }
 .task-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 10px 9px; border-radius: var(--r-md); }
 @media (hover: hover) { .task:not(.completed) .task-row:hover { background: var(--row-hover); } }

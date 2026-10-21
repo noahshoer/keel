@@ -21,7 +21,11 @@ enum Demo {
       if selector.hasPrefix("@") {
         model.button(String(selector.dropFirst()))
       } else {
-        webview.evaluateJavaScript("document.querySelector('\(selector)')?.click()")
+        // "last:<selector>" clicks the last match.
+        let js = selector.hasPrefix("last:")
+          ? "[...document.querySelectorAll('\(selector.dropFirst(5))')].pop()?.click()"
+          : "document.querySelector('\(selector)')?.click()"
+        webview.evaluateJavaScript(js)
       }
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
         if let chip { model.picker = chip }
