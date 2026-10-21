@@ -36,7 +36,7 @@ enum Demo {
         if let chip { model.picker = chip }
         if !text.isEmpty, let field = TitleField.AutoFocusField.current {
           field.text = text
-          field.sendActions(for: .editingChanged)
+          field.delegate?.textViewDidChange?(field)
         }
         if let p = pickPriority {
           DispatchQueue.main.asyncAfter(deadline: .now() + 1) {

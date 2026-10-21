@@ -15,15 +15,21 @@ func highlightColor(_ kind: String) -> UIColor {
   }
 }
 
-/// The title, with quick-add phrases highlighted from the spans the web UI sends.
+/// The title, with quick-add phrases highlighted from the spans the web UI
+/// sends. It wraps onto more lines as it grows (the card keeps its width),
+/// and Return submits rather than adding a line break.
 struct TitleField: UIViewRepresentable {
   @ObservedObject var model: CardModel
 
+  static let font = UIFont.systemFont(ofSize: 17, weight: .semibold)
+
   /// Takes focus as soon as it's on screen, so the keyboard opens with the
   /// card (calling it from `makeUIView` was too early on the phone).
-  final class AutoFocusField: UITextField {
+  final class AutoFocusField: UITextView {
     /// The field on screen, for `Demo`.
     static weak var current: AutoFocusField?
+    let placeholder = UILabel()
+
     override func didMoveToWindow() {
       super.didMoveToWindow()
       if window != nil { AutoFocusField.current = self }
@@ -41,52 +47,86 @@ struct TitleField: UIViewRepresentable {
       if becomeFirstResponder() || attempt >= 20 { return }
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.focus(attempt: attempt + 1) }
     }
+
+    func syncPlaceholder() { placeholder.isHidden = !text.isEmpty }
   }
 
-  func makeUIView(context: Context) -> UITextField {
+  func makeUIView(context: Context) -> AutoFocusField {
     let f = AutoFocusField()
-    f.font = .systemFont(ofSize: 17, weight: .semibold)
+    f.font = TitleField.font
+    f.backgroundColor = .clear
+    f.isScrollEnabled = false
+    f.textContainerInset = .zero
+    f.textContainer.lineFragmentPadding = 0
     f.returnKeyType = .done
     f.delegate = context.coordinator
-    f.setContentHuggingPriority(.required, for: .vertical)
-    f.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .editingChanged)
+    f.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    f.placeholder.font = TitleField.font
+    f.placeholder.textColor = .placeholderText
+    f.placeholder.translatesAutoresizingMaskIntoConstraints = false
+    f.addSubview(f.placeholder)
+    NSLayoutConstraint.activate([
+      f.placeholder.leadingAnchor.constraint(equalTo: f.leadingAnchor),
+      f.placeholder.topAnchor.constraint(equalTo: f.topAnchor),
+    ])
     return f
   }
 
-  func updateUIView(_ f: UITextField, context: Context) {
+  /// Height for the offered width: the text wraps instead of widening.
+  func sizeThatFits(_ proposal: ProposedViewSize, uiView: AutoFocusField, context: Context) -> CGSize? {
+    let width = proposal.width ?? uiView.bounds.width
+    let fit = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+    return CGSize(width: width, height: max(fit.height, TitleField.font.lineHeight))
+  }
+
+  func updateUIView(_ f: AutoFocusField, context: Context) {
     guard let state = model.state else { return }
-    f.placeholder = state.mode == .add ? "e.g. Call mom tomorrow 5pm p1 #Home" : "Task name"
+    f.placeholder.text = state.mode == .add ? "e.g. Call mom tomorrow 5pm p1 #Home" : "Task name"
     let c = context.coordinator
     if c.token != model.resetToken {
       c.token = model.resetToken
       f.text = state.title
     }
+    defer { f.syncPlaceholder() }
     // Typing got ahead of this state; the next one will match.
     guard f.text == state.title else { return }
     let text = NSMutableAttributedString(
-      string: state.title, attributes: [.font: f.font!, .foregroundColor: UIColor.label])
+      string: state.title, attributes: [.font: TitleField.font, .foregroundColor: UIColor.label])
     let length = (state.title as NSString).length
     for s in state.spans where s.start < s.end && s.end <= length {
       text.addAttribute(.backgroundColor, value: highlightColor(s.kind), range: NSRange(location: s.start, length: s.end - s.start))
     }
-    let selection = f.selectedTextRange
+    // Rewriting the text mid-composition (marked text) would break typing.
+    guard f.markedTextRange == nil else { return }
+    let selection = f.selectedRange
     f.attributedText = text
-    f.selectedTextRange = selection
+    f.selectedRange = selection
+    f.typingAttributes = [.font: TitleField.font, .foregroundColor: UIColor.label]
   }
 
   func makeCoordinator() -> Coordinator { Coordinator(model: model) }
 
-  final class Coordinator: NSObject, UITextFieldDelegate {
+  final class Coordinator: NSObject, UITextViewDelegate {
     let model: CardModel
     var token = -1
     init(model: CardModel) { self.model = model }
 
-    @objc func changed(_ f: UITextField) {
-      model.send(.title(f.text ?? ""))
+    func textViewDidChange(_ v: UITextView) {
+      (v as? AutoFocusField)?.syncPlaceholder()
+      model.send(.title(v.text))
     }
 
-    func textFieldShouldReturn(_ f: UITextField) -> Bool {
-      if model.state?.canSubmit == true { model.send(.submit) }
+    /// Return submits; pasted line breaks become spaces (titles are one line).
+    func textView(_ v: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+      if text == "\n" {
+        if model.state?.canSubmit == true { model.send(.submit) }
+        return false
+      }
+      guard text.contains(where: \.isNewline) else { return true }
+      let flat = text.components(separatedBy: .newlines).joined(separator: " ")
+      v.textStorage.replaceCharacters(in: range, with: NSAttributedString(string: flat, attributes: v.typingAttributes))
+      v.selectedRange = NSRange(location: range.location + (flat as NSString).length, length: 0)
+      textViewDidChange(v)
       return false
     }
   }
