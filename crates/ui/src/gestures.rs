@@ -51,10 +51,11 @@ document.addEventListener('touchend', (ev) => {
 await new Promise(() => {});
 "#;
 
-/// Long press on a task row (touch only) marks the task `.pressed`, which
-/// shows its actions (add sub-task, streak, delete) and swallows the click
-/// that ends the press. A plain tap opens the task, as on desktop; the
-/// hover-only reveal is mouse-only (see `style.rs`).
+/// Long press on a task row (touch only). On iPhone it fires
+/// `keel-long-press` with the task id, and the native action menu opens
+/// (`glass.rs`); the row is highlighted while held. Elsewhere it marks the
+/// task `.pressed`, which shows its row actions. A plain tap opens the task,
+/// as on desktop; the hover-only reveal is mouse-only (see `style.rs`).
 pub const LONG_PRESS_JS: &str = r#"
 const HOLD_MS = 450, SLOP = 10;
 // After a long press, ignore only a click that follows right away: iOS
@@ -68,8 +69,13 @@ document.addEventListener('touchstart', (ev) => {
   origin = { x: t.clientX, y: t.clientY };
   timer = setTimeout(() => {
     clear();
-    row.closest('.task')?.classList.add('pressed');
+    const task = row.closest('.task');
+    task?.classList.add('pressed');
     pressedAt = Date.now();
+    if (document.body.classList.contains('native-glass') && task?.dataset.taskId) {
+      document.dispatchEvent(new CustomEvent('keel-long-press', { detail: task.dataset.taskId }));
+      setTimeout(clear, 400);
+    }
   }, HOLD_MS);
 }, { passive: true });
 document.addEventListener('touchmove', (ev) => {

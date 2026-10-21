@@ -140,7 +140,6 @@ struct DateSheet: View {
         .tint(keelGreen)
       }
       Section("Time") {
-        Color.clear.frame(height: 0).id("time-top")
         if let time {
           DatePicker(
             "Time",
@@ -151,18 +150,18 @@ struct DateSheet: View {
           )
           .datePickerStyle(.wheel)
           .labelsHidden()
+          .id("time-wheel")
           Button("No time", role: .destructive) { pick(.date(date: picker.date, time: "")) }
         } else {
           Button("Add time") {
             pick(.date(date: picker.date.isEmpty ? dayFormat.string(from: Date()) : picker.date, time: "09:00"))
           }
         }
-        Color.clear.frame(height: 0).id("time-bottom")
       }
     }
     // Adding a time puts the wheel below the fold; bring it into view.
     .onChange(of: picker.time.isEmpty) { _, empty in
-      if !empty { withAnimation { proxy.scrollTo("time-bottom", anchor: .bottom) } }
+      if !empty { withAnimation { proxy.scrollTo("time-wheel", anchor: .bottom) } }
     }
     }
     .navigationTitle("Date")

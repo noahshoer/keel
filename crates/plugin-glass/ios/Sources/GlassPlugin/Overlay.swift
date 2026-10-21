@@ -39,6 +39,18 @@ struct OverlayView: View {
         FloatingButtons(model: model)
       }
     }
+    .confirmationDialog(
+      model.actionMenu?.title ?? "",
+      isPresented: Binding(get: { model.actionMenu != nil }, set: { if !$0 { model.actionMenu = nil } }),
+      titleVisibility: .visible,
+      presenting: model.actionMenu
+    ) { menu in
+      ForEach(menu.items, id: \.id) { item in
+        Button(item.label, role: item.destructive ? .destructive : nil) {
+          model.chooseAction(menu.taskId, item.id)
+        }
+      }
+    }
   }
 }
 

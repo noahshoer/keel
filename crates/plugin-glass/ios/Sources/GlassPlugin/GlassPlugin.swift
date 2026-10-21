@@ -7,6 +7,12 @@ class StateArgs: Decodable {
   let state: CardState
 }
 
+class ActionsArgs: Decodable {
+  let taskId: String
+  let title: String
+  let items: [ActionMenu.Item]
+}
+
 class ButtonsArgs: Decodable {
   let visible: Bool
   let add: Bool
@@ -25,6 +31,12 @@ class GlassPlugin: Plugin {
     model.send = { [weak self] event in
       guard let data = try? JSONEncoder().encode(event), let json = String(data: data, encoding: .utf8) else { return }
       self?.trigger("card", data: ["json": json])
+    }
+    model.chooseAction = { [weak self] taskId, action in
+      guard let data = try? JSONSerialization.data(withJSONObject: ["taskId": taskId, "action": action]),
+        let json = String(data: data, encoding: .utf8)
+      else { return }
+      self?.trigger("action", data: ["json": json])
     }
     model.button = { [weak self] name in
       self?.trigger("button", data: ["name": name])
@@ -49,6 +61,14 @@ class GlassPlugin: Plugin {
 
   @objc public func hide(_ invoke: Invoke) throws {
     DispatchQueue.main.async { self.model.hide() }
+    invoke.resolve()
+  }
+
+  @objc public func actions(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(ActionsArgs.self)
+    DispatchQueue.main.async {
+      self.model.actionMenu = ActionMenu(taskId: args.taskId, title: args.title, items: args.items)
+    }
     invoke.resolve()
   }
 

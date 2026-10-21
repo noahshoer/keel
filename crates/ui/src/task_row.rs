@@ -51,6 +51,20 @@ pub fn TaskRow(
     let mut editing = use_signal(|| false);
     let mut adding_sub = use_signal(|| false);
     let glass = crate::glass::use_glass();
+    // iPhone: a long press on this row opens the native action menu, and
+    // the choice comes back here.
+    let menu_id = task.id.clone();
+    let menu_title = task.content.clone();
+    let menu_recurring = task.due.as_ref().is_some_and(|d| d.is_recurring);
+    use_effect(move || {
+        let mut pressed = glass.pressed;
+        if pressed().as_ref() == Some(&menu_id) {
+            pressed.set(None);
+            let (id, title) = (menu_id.clone(), menu_title.clone());
+            let items = crate::glass::task_actions(menu_recurring);
+            spawn(async move { api::glass_actions(&id, &title, items).await });
+        }
+    });
     // All task reminders, shared app-wide (see `App`).
     let all_reminders = use_context::<Signal<Vec<Reminder>>>();
     let my_reminders: Vec<ReminderDraft> = all_reminders
@@ -64,6 +78,28 @@ pub fn TaskRow(
     let native_lists = (projects.clone(), sections.clone(), labels.clone());
     let mut native_sub = EditorValues::blank(task.project_id.clone(), task.section_id.clone(), String::new(), Vec::new());
     native_sub.parent_id = Some(task.id.clone());
+    {
+        let (task_id, defaults, (p, s, l)) = (task.id.clone(), native_sub.clone(), native_lists.clone());
+        use_effect(move || {
+            let mut chosen = glass.chosen;
+            let Some(c) = chosen().filter(|c| c.task_id == task_id) else { return };
+            chosen.set(None);
+            match c.action {
+                crate::glass::TaskAction::SubTask => glass.add(defaults.clone(), p.clone(), s.clone(), l.clone(), reload),
+                crate::glass::TaskAction::Streak => {
+                    let open = *panel.peek();
+                    panel.set(!open);
+                }
+                crate::glass::TaskAction::Delete => {
+                    let id = task_id.clone();
+                    spawn(async move {
+                        let _ = api::delete_task(id).await;
+                        reload += 1;
+                    });
+                }
+            }
+        });
+    }
 
     if editing() {
         let mut before = EditorValues::from_task(&task);
@@ -138,7 +174,7 @@ pub fn TaskRow(
     // change reordered the list, and the page went blank.
     rsx! {
         div { class: "task-slot",
-            div { class: "task", style: "{indent}",
+            div { class: "task", style: "{indent}", "data-task-id": "{task.id}",
                 div { class: "task-row",
                     if has_children {
                         button {

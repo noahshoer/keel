@@ -167,7 +167,23 @@ enum CardEvent: Encodable {
   }
 }
 
+/// A long-pressed task's menu (`plugin:glass|actions`).
+struct ActionMenu: Codable, Equatable {
+  struct Item: Codable, Equatable {
+    let id: String
+    let label: String
+    let destructive: Bool
+  }
+  let taskId: String
+  let title: String
+  let items: [Item]
+}
+
 final class CardModel: ObservableObject {
+  @Published var actionMenu: ActionMenu?
+  /// Set by the plugin: reports the chosen action.
+  var chooseAction: (String, String) -> Void = { _, _ in }
+
   /// nil while the card is closed.
   @Published var state: CardState?
   /// Bumped by `show`: the fields take the state's text even if the user

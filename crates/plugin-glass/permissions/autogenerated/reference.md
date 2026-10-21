@@ -9,6 +9,7 @@ Everything the Keel web UI uses
 - `allow-update`
 - `allow-hide`
 - `allow-buttons`
+- `allow-actions`
 - `allow-register-listener`
 - `allow-remove-listener`
 
@@ -20,6 +21,32 @@ Everything the Keel web UI uses
 <th>Description</th>
 </tr>
 
+
+<tr>
+<td>
+
+`glass:allow-actions`
+
+</td>
+<td>
+
+Enables the actions command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`glass:deny-actions`
+
+</td>
+<td>
+
+Denies the actions command without any pre-configured scope.
+
+</td>
+</tr>
 
 <tr>
 <td>

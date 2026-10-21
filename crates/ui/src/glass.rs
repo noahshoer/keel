@@ -401,6 +401,56 @@ pub enum ButtonAction {
     Search,
 }
 
+/// What a task's long-press menu can do (the desktop's row actions).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TaskAction {
+    SubTask,
+    Streak,
+    Delete,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ActionItem {
+    pub id: TaskAction,
+    pub label: String,
+    pub destructive: bool,
+}
+
+/// The menu a long press on a task opens: the same actions as the row's
+/// hover buttons on desktop.
+pub fn task_actions(recurring: bool) -> Vec<ActionItem> {
+    let item = |id, label: &str, destructive| ActionItem { id, label: label.to_string(), destructive };
+    let mut items = vec![item(TaskAction::SubTask, "Add sub-task", false)];
+    if recurring {
+        items.push(item(TaskAction::Streak, "Streak", false));
+    }
+    items.push(item(TaskAction::Delete, "Delete task", true));
+    items
+}
+
+/// The menu choice Swift reports.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChosenAction {
+    pub task_id: Id,
+    pub action: TaskAction,
+}
+
+/// Forwards long presses on task rows (the task id) and the action menu's
+/// choices (a `ChosenAction` as JSON) to Rust.
+const PRESS_JS: &str = r#"
+document.addEventListener('keel-long-press', (e) => dioxus.send({ press: e.detail }));
+await window.__TAURI__.core.addPluginListener('glass', 'action', (e) => dioxus.send({ chosen: e.json }));
+await new Promise(() => {});
+"#;
+
+#[derive(Deserialize)]
+struct PressMsg {
+    press: Option<String>,
+    chosen: Option<String>,
+}
+
 /// Which floating buttons show (`plugin:glass|buttons`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct ButtonsState {
@@ -430,13 +480,22 @@ pub fn button_action(name: &str) -> Option<ButtonAction> {
 pub struct Glass {
     pub native: Signal<bool>,
     session: Signal<Option<CardSession>>,
+    /// The task whose row was long-pressed (its row opens the menu).
+    pub pressed: Signal<Option<Id>>,
+    /// The menu choice, for the row it belongs to.
+    pub chosen: Signal<Option<ChosenAction>>,
 }
 
 /// Provides [`Glass`] (call once, in `App`): asks the plugin whether it's
 /// there and, if so, starts handling its events. `on_button` gets the
 /// floating buttons' taps, except Add, which is handled here.
 pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
-    let glass = use_context_provider(|| Glass { native: Signal::new(false), session: Signal::new(None) });
+    let glass = use_context_provider(|| Glass {
+        native: Signal::new(false),
+        session: Signal::new(None),
+        pressed: Signal::new(None),
+        chosen: Signal::new(None),
+    });
     use_hook(move || {
         spawn(async move {
             if !api::glass_available().await {
@@ -444,6 +503,18 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
             }
             let mut native = glass.native;
             native.set(true);
+            spawn(async move {
+                let (mut pressed, mut chosen) = (glass.pressed, glass.chosen);
+                let mut presses = document::eval(PRESS_JS);
+                while let Ok(msg) = presses.recv::<PressMsg>().await {
+                    if let Some(id) = msg.press {
+                        pressed.set(Some(Id::from(id)));
+                    }
+                    if let Some(c) = msg.chosen.and_then(|j| serde_json::from_str::<ChosenAction>(&j).ok()) {
+                        chosen.set(Some(c));
+                    }
+                }
+            });
             spawn(async move {
                 let mut taps = document::eval(BUTTONS_JS);
                 while let Ok(name) = taps.recv::<String>().await {
@@ -750,5 +821,19 @@ mod tests {
         assert_eq!(floating_buttons(false, false), ButtonsState { visible: true, add: true, searching: false });
         assert_eq!(floating_buttons(true, false), ButtonsState { visible: true, add: false, searching: true });
         assert!(!floating_buttons(false, true).visible, "hidden while the drawer is open");
+    }
+
+    #[test]
+    fn long_press_offers_the_row_actions() {
+        let ids = |r| task_actions(r).into_iter().map(|a| a.id).collect::<Vec<_>>();
+        assert_eq!(ids(false), vec![TaskAction::SubTask, TaskAction::Delete]);
+        assert_eq!(ids(true), vec![TaskAction::SubTask, TaskAction::Streak, TaskAction::Delete]);
+        assert!(task_actions(false).last().unwrap().destructive);
+    }
+
+    #[test]
+    fn chosen_actions_deserialize_from_swift_json() {
+        let c: ChosenAction = serde_json::from_str(r#"{"taskId":"T-1","action":"subTask"}"#).unwrap();
+        assert_eq!(c, ChosenAction { task_id: Id::from("T-1"), action: TaskAction::SubTask });
     }
 }

@@ -295,6 +295,18 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the actions command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-actions",
+          "markdownDescription": "Enables the actions command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the actions command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-actions",
+          "markdownDescription": "Denies the actions command without any pre-configured scope."
+        },
+        {
           "description": "Enables the buttons command without any pre-configured scope.",
           "type": "string",
           "const": "allow-buttons",
@@ -379,10 +391,10 @@
           "markdownDescription": "Denies the update command without any pre-configured scope."
         },
         {
-          "description": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-register-listener`\n- `allow-remove-listener`",
+          "description": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-actions`\n- `allow-register-listener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-register-listener`\n- `allow-remove-listener`"
+          "markdownDescription": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-actions`\n- `allow-register-listener`\n- `allow-remove-listener`"
         }
       ]
     }
