@@ -9,6 +9,8 @@ class StateArgs: Decodable {
 
 class ButtonsArgs: Decodable {
   let visible: Bool
+  let add: Bool
+  let searching: Bool
 }
 
 /// Draws Keel's Liquid Glass composer, editor, pickers and floating buttons
@@ -52,7 +54,11 @@ class GlassPlugin: Plugin {
 
   @objc public func buttons(_ invoke: Invoke) throws {
     let args = try invoke.parseArgs(ButtonsArgs.self)
-    DispatchQueue.main.async { self.model.buttonsVisible = args.visible }
+    DispatchQueue.main.async {
+      self.model.buttonsVisible = args.visible
+      self.model.addVisible = args.add
+      self.model.searching = args.searching
+    }
     invoke.resolve()
   }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 // Mirrors `ui::glass` (Rust). The web UI computes every value shown here.
 
@@ -21,6 +22,24 @@ struct ChipState: Codable, Equatable {
   let id: ChipId
   let label: String
   let set: Bool
+  /// "p1".."p3" for the priority flag colors; nil means Keel green.
+  let tone: String?
+
+  var color: Color { tone.map(priorityTone) ?? keelGreen }
+}
+
+/// The web's `--p1`..`--p3` flag colors, light and dark.
+func priorityTone(_ tone: String) -> Color {
+  let (light, dark): (UInt32, UInt32) =
+    switch tone {
+    case "p1": (0xd1453b, 0xff7066)
+    case "p2": (0xeb8909, 0xff9a14)
+    default: (0x246fe0, 0x5297ff)
+    }
+  func ui(_ hex: UInt32) -> UIColor {
+    UIColor(red: CGFloat(hex >> 16 & 0xff) / 255, green: CGFloat(hex >> 8 & 0xff) / 255, blue: CGFloat(hex & 0xff) / 255, alpha: 1)
+  }
+  return Color(UIColor { $0.userInterfaceStyle == .dark ? ui(dark) : ui(light) })
 }
 
 struct ReminderDraft: Codable, Equatable {
@@ -157,6 +176,10 @@ final class CardModel: ObservableObject {
   @Published var description = ""
   @Published var picker: ChipId?
   @Published var buttonsVisible = false
+  /// The + shows (views with an "Add task" row).
+  @Published var addVisible = true
+  /// In Search, the search button closes it.
+  @Published var searching = false
 
   /// Window-space frames of the controls that take touches while the card is closed.
   var hitRects: [String: CGRect] = [:]
@@ -189,4 +212,9 @@ final class CardModel: ObservableObject {
   }
 }
 
-let keelGreen = Color(red: 0x26 / 255, green: 0x83 / 255, blue: 0x66 / 255)
+/// Keel's accent (the web `--accent`), lighter in dark mode for contrast.
+let keelGreen = Color(UIColor {
+  $0.userInterfaceStyle == .dark
+    ? UIColor(red: 0x35 / 255, green: 0xad / 255, blue: 0x88 / 255, alpha: 1)
+    : UIColor(red: 0x26 / 255, green: 0x83 / 255, blue: 0x66 / 255, alpha: 1)
+})

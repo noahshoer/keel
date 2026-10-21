@@ -45,7 +45,7 @@ pub enum ChipId {
 pub struct GlassSpan {
     pub start: usize,
     pub end: usize,
-    /// date | time | repeat | priority | project | section | label | deadline
+    /// date | time | repeat | priority-1..3 | project | section | label | deadline
     pub kind: String,
 }
 
@@ -55,6 +55,8 @@ pub struct ChipState {
     pub label: String,
     /// Has a value (drawn tinted).
     pub set: bool,
+    /// A color other than Keel green: "p1".."p3" for the priority flags.
+    pub tone: Option<String>,
 }
 
 /// What the pickers need to show the current values and the choices.
@@ -139,6 +141,25 @@ pub enum Pick {
     Deadline { date: String },
     Repeat { value: String },
     Location { project_id: Id, section_id: Option<Id> },
+}
+
+/// How the card is refreshed after an action.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Refresh {
+    /// Highlights and chips only; the field keeps what's typed.
+    Update,
+    /// The title changed under the field (a pick removed a typed phrase).
+    Replace,
+}
+
+/// A pick that rewrote the title must replace the field's text: an update
+/// would be dropped as stale, since the field still shows the old title.
+pub fn refresh_for(ev: &GlassEvent, before: &str, after: &str) -> Refresh {
+    match ev {
+        GlassEvent::Title { .. } => Refresh::Update,
+        _ if before != after => Refresh::Replace,
+        _ => Refresh::Update,
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -226,7 +247,10 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
                 .map(|s| GlassSpan {
                     start: utf16_at(&v.content, s.start),
                     end: utf16_at(&v.content, s.end),
-                    kind: kind_name(s.kind).to_string(),
+                    kind: match (s.kind, qa.priority) {
+                        (SpanKind::Priority, Some(p)) => format!("priority-{}", 5 - p.to_api()),
+                        (k, _) => kind_name(k).to_string(),
+                    },
                 })
                 .collect()
         })
@@ -240,10 +264,11 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
     let repeat_label = typed_rule.map(repeat_text).unwrap_or_else(|| repeat_chip_text(&shown.repeat, &opts));
     let at_inbox = ctx.projects.iter().any(|p| p.is_inbox && p.id == shown.project_id) && shown.section_id.is_none();
 
-    let chip = |id, label: String, set| ChipState { id, label, set };
+    let chip = |id, label: String, set| ChipState { id, label, set, tone: None };
+    let priority_tone = matches!(shown.priority.as_str(), "1" | "2" | "3").then(|| format!("p{}", shown.priority));
     let chips = vec![
         chip(ChipId::Date, date_chip(date, time, ctx.today).0, date.is_some() || time.is_some()),
-        chip(ChipId::Priority, priority_text(&shown.priority), shown.priority != "4"),
+        ChipState { tone: priority_tone, ..chip(ChipId::Priority, priority_text(&shown.priority), shown.priority != "4") },
         chip(ChipId::Labels, labels_text(&shown.labels), !shown.labels.is_empty()),
         chip(ChipId::Reminders, reminders_text(&shown.reminders, ctx.today), !shown.reminders.is_empty()),
         chip(ChipId::Deadline, deadline_text(deadline, ctx.today), deadline.is_some()),
@@ -376,6 +401,20 @@ pub enum ButtonAction {
     Search,
 }
 
+/// Which floating buttons show (`plugin:glass|buttons`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct ButtonsState {
+    pub visible: bool,
+    /// The + (views with an "Add task" row; not Search).
+    pub add: bool,
+    /// In Search, the search button closes it instead.
+    pub searching: bool,
+}
+
+pub fn floating_buttons(searching: bool, drawer_open: bool) -> ButtonsState {
+    ButtonsState { visible: !drawer_open, add: !searching, searching }
+}
+
 pub fn button_action(name: &str) -> Option<ButtonAction> {
     match name {
         "fab" => Some(ButtonAction::AddTask),
@@ -481,11 +520,16 @@ impl Glass {
 
     async fn handle(mut self, ev: GlassEvent) {
         let Some(mut s) = self.session.peek().clone() else { return };
+        let before = s.values.content.clone();
         match apply_event(&mut s.values, &ev, s.mode, &s.ctx) {
             Outcome::Changed => {
                 let state = card_state(&s.values, s.mode, &s.ctx);
+                let refresh = refresh_for(&ev, &before, &s.values.content);
                 self.session.set(Some(s));
-                api::glass_update(&state).await;
+                match refresh {
+                    Refresh::Update => api::glass_update(&state).await,
+                    Refresh::Replace => api::glass_show(&state).await,
+                }
             }
             Outcome::Cancel => {
                 self.session.set(None);
@@ -681,5 +725,30 @@ mod tests {
         assert_eq!(button_action("menu"), Some(ButtonAction::OpenMenu));
         assert_eq!(button_action("search"), Some(ButtonAction::Search));
         assert_eq!(button_action("other"), None);
+    }
+
+    #[test]
+    fn a_pick_that_rewrites_the_title_replaces_the_field_text() {
+        let pick = GlassEvent::Pick { pick: Pick::Priority { value: "1".into() } };
+        assert_eq!(refresh_for(&pick, "call p1", "call"), Refresh::Replace);
+        assert_eq!(refresh_for(&pick, "call", "call"), Refresh::Update);
+        // Typing never replaces the field (it's already showing the text).
+        assert_eq!(refresh_for(&GlassEvent::Title { text: "call".into() }, "cal", "call"), Refresh::Update);
+    }
+
+    #[test]
+    fn priority_spans_and_chip_carry_the_flag_level() {
+        let s = card_state(&blank("call p2"), CardMode::Add, &ctx());
+        assert_eq!(s.spans[0].kind, "priority-2");
+        assert_eq!(chip(&s, ChipId::Priority).tone.as_deref(), Some("p2"));
+        assert_eq!(chip(&s, ChipId::Date).tone, None);
+        assert_eq!(chip(&card_state(&blank("x"), CardMode::Add, &ctx()), ChipId::Priority).tone, None);
+    }
+
+    #[test]
+    fn search_swaps_the_search_button_for_close_and_drops_add() {
+        assert_eq!(floating_buttons(false, false), ButtonsState { visible: true, add: true, searching: false });
+        assert_eq!(floating_buttons(true, false), ButtonsState { visible: true, add: false, searching: true });
+        assert!(!floating_buttons(false, true).visible, "hidden while the drawer is open");
     }
 }

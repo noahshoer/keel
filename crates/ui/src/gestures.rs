@@ -1,4 +1,5 @@
-//! Touch swipes that open and close the sidebar drawer on narrow layouts.
+//! Touch gestures: swipes open and close the sidebar drawer on narrow
+//! layouts, and a long press on a task shows its row actions.
 
 use serde::Deserialize;
 
@@ -48,6 +49,38 @@ document.addEventListener('touchend', (ev) => {
   start = null;
 }, { passive: true });
 await new Promise(() => {});
+"#;
+
+/// Long press on a task row (touch only) marks the task `.pressed`, which
+/// shows its actions (add sub-task, streak, delete) and swallows the click
+/// that ends the press. A plain tap opens the task, as on desktop; the
+/// hover-only reveal is mouse-only (see `style.rs`).
+pub const LONG_PRESS_JS: &str = r#"
+const HOLD_MS = 450, SLOP = 10;
+let timer = null, origin = null, swallow = false;
+const clear = () => document.querySelectorAll('.task.pressed').forEach((t) => t.classList.remove('pressed'));
+document.addEventListener('touchstart', (ev) => {
+  const row = ev.target.closest?.('.task-row');
+  if (!row || ev.target.closest('.task-actions')) { if (!ev.target.closest?.('.task-actions')) clear(); return; }
+  const t = ev.touches[0];
+  origin = { x: t.clientX, y: t.clientY };
+  timer = setTimeout(() => {
+    clear();
+    row.closest('.task')?.classList.add('pressed');
+    swallow = true;
+    navigator.vibrate?.(10);
+  }, HOLD_MS);
+}, { passive: true });
+document.addEventListener('touchmove', (ev) => {
+  if (!timer || !origin) return;
+  const t = ev.touches[0];
+  if (Math.abs(t.clientX - origin.x) > SLOP || Math.abs(t.clientY - origin.y) > SLOP) { clearTimeout(timer); timer = null; }
+}, { passive: true });
+document.addEventListener('touchend', () => { clearTimeout(timer); timer = null; }, { passive: true });
+document.addEventListener('click', (ev) => {
+  if (swallow) { swallow = false; ev.stopPropagation(); ev.preventDefault(); }
+}, true);
+document.addEventListener('contextmenu', (ev) => { if (ev.target.closest?.('.task-row')) ev.preventDefault(); });
 "#;
 
 #[cfg(test)]

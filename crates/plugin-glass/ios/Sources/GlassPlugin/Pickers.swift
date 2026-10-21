@@ -33,12 +33,7 @@ private func combine(_ day: Date, _ time: Date) -> Date {
 }
 
 func priorityColor(_ p: String) -> Color {
-  switch p {
-  case "1": return .red
-  case "2": return .orange
-  case "3": return .blue
-  default: return .secondary
-  }
+  ["1", "2", "3"].contains(p) ? priorityTone("p\(p)") : .secondary
 }
 
 /// Priority and Repeat are short lists: native menus straight off the chip.
@@ -71,7 +66,7 @@ struct ChipMenu: View {
     } label: {
       ChipLabel(chip: chip)
     }
-    .glassEffect(chip.set ? .regular.tint(keelGreen.opacity(0.18)).interactive() : .regular.interactive(), in: .capsule)
+    .glassEffect(chip.set ? .regular.tint(chip.color.opacity(0.18)).interactive() : .regular.interactive(), in: .capsule)
   }
 }
 

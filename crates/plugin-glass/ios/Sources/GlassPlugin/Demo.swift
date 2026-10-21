@@ -14,6 +14,8 @@ enum Demo {
     let text = parts.count > 1 ? parts[1] : ""
     let submit = parts.count > 2 && parts[2] == "1"
     let chip = parts.count > 3 ? ChipId(rawValue: parts[3]) : nil
+    // "priority=1": picks a priority (then submits, if asked).
+    let pickPriority = parts.count > 4 && parts[4].hasPrefix("priority=") ? String(parts[4].dropFirst(9)) : nil
     DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
       // "@fab", "@menu", "@search" tap a floating button instead.
       if selector.hasPrefix("@") {
@@ -23,9 +25,17 @@ enum Demo {
       }
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
         if let chip { model.picker = chip }
-        guard !text.isEmpty, let field = TitleField.AutoFocusField.current else { return }
-        field.text = text
-        field.sendActions(for: .editingChanged)
+        if !text.isEmpty, let field = TitleField.AutoFocusField.current {
+          field.text = text
+          field.sendActions(for: .editingChanged)
+        }
+        if let p = pickPriority {
+          DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            model.send(.pick(.priority(p)))
+            if submit { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { model.send(.submit) } }
+          }
+          return
+        }
         if submit {
           DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { model.send(.submit) }
         }

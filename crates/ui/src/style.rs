@@ -194,13 +194,16 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Task rows: a soft list, rounded highlight on hover */
 .task { border-radius: var(--r-md); }
 .task-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 10px 9px; border-radius: var(--r-md); }
-.task:not(.completed) .task-row:hover { background: var(--row-hover); }
+@media (hover: hover) { .task:not(.completed) .task-row:hover { background: var(--row-hover); } }
+.task.pressed .task-row { background: var(--row-hover); }
 .check { width: 19px; height: 19px; min-width: 19px; margin-top: 1px; border-radius: 50%; padding: 0;
   border: 1.5px solid var(--p4); background: transparent; color: var(--muted); cursor: pointer;
   display: flex; align-items: center; justify-content: center; }
 .check .icon { opacity: 0; transform: scale(.6); transition: opacity .16s var(--ease), transform .16s var(--ease); }
-.check:hover .icon { opacity: 1; transform: scale(1); }
-.check:hover { background: var(--hover); }
+@media (hover: hover) {
+  .check:hover .icon { opacity: 1; transform: scale(1); }
+  .check:hover { background: var(--hover); }
+}
 .check:active { transform: scale(.82); }
 .check.p1 { border: 2px solid var(--p1); background: var(--p1-bg); color: var(--p1); }
 .check.p2 { border: 2px solid var(--p2); background: var(--p2-bg); color: var(--p2); }
@@ -219,7 +222,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .task-project { font-size: 12px; color: var(--muted); white-space: nowrap; align-self: flex-end; padding-bottom: 2px; }
 .task-actions { display: flex; gap: 2px; opacity: 0; transform: translateX(4px); }
 .task-actions { transition: opacity .16s var(--ease), transform .16s var(--ease); }
-.task:hover .task-actions { opacity: 1; transform: none; }
+/* Mouse: hover shows a task's actions. Touch: a long press does (gestures.rs);
+   a hover reveal on iPhone would cost every tap on a task an extra tap. */
+@media (hover: hover) { .task:hover .task-actions { opacity: 1; transform: none; pointer-events: auto; } }
+.task.pressed .task-actions { opacity: 1; transform: none; }
 .streak-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin: 2px 0 10px 40px;
   padding: 12px 14px; background: var(--panel); border-radius: var(--r-lg); font-size: 13px;
   animation: pop-in .18s var(--ease); }
@@ -515,7 +521,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .task-row { gap: 10px; padding: 10px 8px 9px; }
   .task-actions { position: absolute; top: 4px; right: 4px; padding: 2px; border-radius: var(--r);
     background: var(--row-hover); box-shadow: var(--shadow-sm); pointer-events: none; }
-  .task:hover .task-actions, .task-actions:focus-within { pointer-events: auto; }
+  .task.pressed .task-actions, .task-actions:focus-within { pointer-events: auto; }
   .task-project { max-width: 38%; overflow: hidden; text-overflow: ellipsis; }
   .streak-panel { margin-left: 0; gap: 12px; }
   /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */

@@ -156,6 +156,7 @@ fn date_groups(view: &View, tasks: Vec<Task>, today: NaiveDate) -> Vec<Group> {
 #[component]
 fn App() -> Element {
     let mut view = use_signal(|| View::Today);
+    let mut last_view = use_signal(|| View::Today);
     // Kept across visits to the Search view.
     let search_query = use_signal(String::new);
     let reload = use_signal(|| 0u32);
@@ -185,19 +186,31 @@ fn App() -> Element {
     // iPhone: the native glass card and floating buttons.
     let glass = glass::provide(move |action| match action {
         glass::ButtonAction::OpenMenu => drawer.set(true),
-        glass::ButtonAction::Search => view.set(View::Search),
+        // In Search the button closes it, back to where you were.
+        glass::ButtonAction::Search => {
+            let next = if *view.peek() == View::Search { last_view.peek().clone() } else { View::Search };
+            view.set(next);
+        }
         glass::ButtonAction::AddTask => {}
     });
     // The floating buttons step aside while the drawer is open.
     use_effect(move || {
-        let visible = (glass.native)() && !drawer();
+        let state = glass::floating_buttons(view() == View::Search, drawer());
         if (glass.native)() {
-            spawn(async move { api::glass_buttons(visible).await });
+            spawn(async move { api::glass_buttons(state).await });
+        }
+    });
+    // Where closing Search goes back to.
+    use_effect(move || {
+        let v = view();
+        if v != View::Search {
+            last_view.set(v);
         }
     });
     // Touch: swipe right opens the drawer, swipe left closes it.
     use_hook(move || {
         spawn(async move {
+            let _ = document::eval(gestures::LONG_PRESS_JS);
             let mut swipes = document::eval(gestures::SWIPE_JS);
             while let Ok(s) = swipes.recv::<gestures::Swipe>().await {
                 let open_now = *drawer.peek();

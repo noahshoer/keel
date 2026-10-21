@@ -396,12 +396,7 @@ pub async fn glass_hide() {
     let _ = invoke::<_, ()>("plugin:glass|hide", &NoArgs {}).await;
 }
 
-#[derive(Serialize)]
-struct VisibleArg {
-    visible: bool,
-}
-
 /// Shows or hides the floating glass buttons.
-pub async fn glass_buttons(visible: bool) {
-    let _ = invoke::<_, ()>("plugin:glass|buttons", &VisibleArg { visible }).await;
+pub async fn glass_buttons(state: crate::glass::ButtonsState) {
+    let _ = invoke::<_, ()>("plugin:glass|buttons", &state).await;
 }

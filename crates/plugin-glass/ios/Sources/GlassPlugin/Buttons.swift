@@ -11,11 +11,12 @@ struct FloatingButtons: View {
       HStack {
         round("line.3.horizontal", key: "menu", label: "Open menu")
         Spacer()
-        round("magnifyingglass", key: "search", label: "Search")
+        round(model.searching ? "xmark" : "magnifyingglass", key: "search", label: model.searching ? "Close search" : "Search")
       }
       .padding(.leading, 6)
       .padding(.trailing, 12)
       Spacer()
+      if model.addVisible {
       HStack {
         Spacer()
         Button {
@@ -33,6 +34,7 @@ struct FloatingButtons: View {
       }
       .padding(.trailing, 20)
       .padding(.bottom, 12)
+      }
     }
   }
 

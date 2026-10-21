@@ -6,7 +6,9 @@ func highlightColor(_ kind: String) -> UIColor {
   switch kind {
   case "date", "time": return UIColor(red: 5 / 255, green: 133 / 255, blue: 39 / 255, alpha: 0.18)
   case "repeat", "deadline": return UIColor(red: 105 / 255, green: 47 / 255, blue: 194 / 255, alpha: 0.18)
-  case "priority": return UIColor(red: 209 / 255, green: 69 / 255, blue: 59 / 255, alpha: 0.18)
+  case "priority-1", "priority": return UIColor(red: 209 / 255, green: 69 / 255, blue: 59 / 255, alpha: 0.2)
+  case "priority-2": return UIColor(red: 235 / 255, green: 137 / 255, blue: 9 / 255, alpha: 0.22)
+  case "priority-3": return UIColor(red: 36 / 255, green: 111 / 255, blue: 224 / 255, alpha: 0.2)
   case "project", "section": return UIColor(red: 36 / 255, green: 111 / 255, blue: 224 / 255, alpha: 0.18)
   case "label": return UIColor(red: 235 / 255, green: 137 / 255, blue: 9 / 255, alpha: 0.2)
   default: return .clear
@@ -112,7 +114,7 @@ struct ChipLabel: View {
   var body: some View {
     Label(chip.label, systemImage: chipIcon(chip.id))
       .font(.subheadline.weight(chip.set ? .semibold : .regular))
-      .foregroundStyle(chip.set ? keelGreen : Color.primary)
+      .foregroundStyle(chip.set ? chip.color : Color.primary)
       .lineLimit(1)
       .padding(.horizontal, 12)
       .padding(.vertical, 8)
@@ -128,7 +130,7 @@ struct ChipButton: View {
       ChipLabel(chip: chip)
     }
     .buttonStyle(.plain)
-    .glassEffect(chip.set ? .regular.tint(keelGreen.opacity(0.18)).interactive() : .regular.interactive(), in: .capsule)
+    .glassEffect(chip.set ? .regular.tint(chip.color.opacity(0.18)).interactive() : .regular.interactive(), in: .capsule)
   }
 }
 
