@@ -378,11 +378,12 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .check { position: relative; width: 24px; height: 24px; min-width: 24px; margin-top: 0; border-width: 1.75px; }
   .check::after { content: ''; position: absolute; inset: -10px; }
   .task-project { font-size: 13px; }
-  /* The add row: a thin outlined bar, set apart from tasks without looking
-     like a pressed-row highlight. */
-  .add-task-row { margin-top: 6px; padding: 13px 15px; gap: 14px; border-radius: 16px;
-    border: 1.5px solid color-mix(in srgb, var(--text) 16%, transparent); color: var(--muted); }
-  .add-task-row .plus { width: 24px; height: 24px; background: var(--accent); color: #fff; }
+  /* The add row, Reminders-style: a blank next task with a dotted circle,
+     lined up with the task circles above it. */
+  .add-task-row { padding: 14px 8px 13px; gap: 10px; font-size: 17px; }
+  .add-task-row .plus { box-sizing: border-box; width: 24px; height: 24px; min-width: 24px;
+    background: transparent; border: 2px dotted color-mix(in srgb, var(--text) 35%, transparent); }
+  .add-task-row .plus svg { display: none; }
 }
 /* Touch: a long press shows a task's actions; no text selection or callout. */
 @media (hover: none) { .task-row { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
