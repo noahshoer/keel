@@ -57,7 +57,9 @@ await new Promise(() => {});
 /// hover-only reveal is mouse-only (see `style.rs`).
 pub const LONG_PRESS_JS: &str = r#"
 const HOLD_MS = 450, SLOP = 10;
-let timer = null, origin = null, swallow = false;
+// After a long press, ignore only a click that follows right away: iOS
+// often sends none, and a flag left set would eat the next real tap.
+let timer = null, origin = null, pressedAt = 0;
 const clear = () => document.querySelectorAll('.task.pressed').forEach((t) => t.classList.remove('pressed'));
 document.addEventListener('touchstart', (ev) => {
   const row = ev.target.closest?.('.task-row');
@@ -67,8 +69,7 @@ document.addEventListener('touchstart', (ev) => {
   timer = setTimeout(() => {
     clear();
     row.closest('.task')?.classList.add('pressed');
-    swallow = true;
-    navigator.vibrate?.(10);
+    pressedAt = Date.now();
   }, HOLD_MS);
 }, { passive: true });
 document.addEventListener('touchmove', (ev) => {
@@ -76,9 +77,14 @@ document.addEventListener('touchmove', (ev) => {
   const t = ev.touches[0];
   if (Math.abs(t.clientX - origin.x) > SLOP || Math.abs(t.clientY - origin.y) > SLOP) { clearTimeout(timer); timer = null; }
 }, { passive: true });
-document.addEventListener('touchend', () => { clearTimeout(timer); timer = null; }, { passive: true });
+const stop = () => { clearTimeout(timer); timer = null; };
+document.addEventListener('touchend', stop, { passive: true });
+document.addEventListener('touchcancel', stop, { passive: true });
 document.addEventListener('click', (ev) => {
-  if (swallow) { swallow = false; ev.stopPropagation(); ev.preventDefault(); }
+  if (pressedAt && Date.now() - pressedAt < 700 && !ev.target.closest?.('.task-actions')) {
+    ev.stopPropagation(); ev.preventDefault();
+  }
+  pressedAt = 0;
 }, true);
 document.addEventListener('contextmenu', (ev) => { if (ev.target.closest?.('.task-row')) ev.preventDefault(); });
 "#;

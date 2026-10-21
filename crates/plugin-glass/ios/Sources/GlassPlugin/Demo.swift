@@ -17,7 +17,12 @@ enum Demo {
     // "priority=1": picks a priority (then submits, if asked).
     let pickPriority = parts.count > 4 && parts[4].hasPrefix("priority=") ? String(parts[4].dropFirst(9)) : nil
     DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-      // "@fab", "@menu", "@search" tap a floating button instead.
+      // "js:<code>" runs page JavaScript; "@fab", "@menu", "@search" tap a
+      // floating button instead of clicking.
+      if selector.hasPrefix("js:") {
+        webview.evaluateJavaScript(String(selector.dropFirst(3)))
+        return
+      }
       if selector.hasPrefix("@") {
         model.button(String(selector.dropFirst()))
       } else {

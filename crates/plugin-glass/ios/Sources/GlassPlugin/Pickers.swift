@@ -109,6 +109,7 @@ struct DateSheet: View {
   var body: some View {
     let day = dayFormat.date(from: picker.date)
     let time = timeFormat.date(from: picker.time)
+    ScrollViewReader { proxy in
     List {
       Section {
         ForEach(picker.quickDates, id: \.label) { q in
@@ -139,6 +140,7 @@ struct DateSheet: View {
         .tint(keelGreen)
       }
       Section("Time") {
+        Color.clear.frame(height: 0).id("time-top")
         if let time {
           DatePicker(
             "Time",
@@ -155,7 +157,13 @@ struct DateSheet: View {
             pick(.date(date: picker.date.isEmpty ? dayFormat.string(from: Date()) : picker.date, time: "09:00"))
           }
         }
+        Color.clear.frame(height: 0).id("time-bottom")
       }
+    }
+    // Adding a time puts the wheel below the fold; bring it into view.
+    .onChange(of: picker.time.isEmpty) { _, empty in
+      if !empty { withAnimation { proxy.scrollTo("time-bottom", anchor: .bottom) } }
+    }
     }
     .navigationTitle("Date")
     .navigationBarTitleDisplayMode(.inline)

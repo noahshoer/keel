@@ -366,9 +366,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .view-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 /* iPhone: native glass buttons float over the header (menu left, search
    right) and the list (+ bottom right); keep their spots clear. */
-.native-glass .menu-btn { visibility: hidden; margin-right: 8px; }
-.native-glass .view-head { padding-right: 52px; }
-.native-glass .content { padding-bottom: 120px; }
+.native-glass .menu-btn { display: none; }
+.native-glass .content { padding-top: calc(env(safe-area-inset-top) + 60px); padding-bottom: 120px; }
+/* Touch: a long press shows a task's actions; no text selection or callout. */
+@media (hover: none) { .task-row { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
 .view-head .view-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .view-head .view-toggle { flex-shrink: 0; }
 .menu-btn { display: none; margin-left: -6px; color: var(--subtle); }
