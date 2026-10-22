@@ -217,7 +217,7 @@ struct CardView: View {
   @State private var drag: CGFloat = 0
 
   var body: some View {
-    if let state = model.state {
+    if let state = model.state ?? model.shown {
       ZStack(alignment: .bottom) {
         // Catches taps outside the card.
         Color.black.opacity(0.001)

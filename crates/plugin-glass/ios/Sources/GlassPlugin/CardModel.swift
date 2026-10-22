@@ -239,7 +239,12 @@ final class CardModel: ObservableObject {
 
   var isOpen: Bool { state != nil }
 
+  /// The last state shown: the card keeps drawing it while it slides away
+  /// after `state` is cleared.
+  var shown: CardState?
+
   func show(_ s: CardState) {
+    shown = s
     state = s
     description = s.description
     resetToken += 1
@@ -247,11 +252,16 @@ final class CardModel: ObservableObject {
 
   func update(_ s: CardState) {
     guard state != nil else { return }
+    shown = s
     state = s
   }
 
+  /// Slides the card down off screen (the way it came up).
   func hide() {
-    state = nil
+    guard state != nil else { return }
+    withAnimation(.easeIn(duration: 0.22)) {
+      state = nil
+    }
     picker = nil
   }
 

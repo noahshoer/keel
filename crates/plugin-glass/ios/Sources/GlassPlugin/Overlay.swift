@@ -35,6 +35,7 @@ struct OverlayView: View {
       Color.clear
       if model.isOpen {
         CardView(model: model)
+          .transition(.move(edge: .bottom).combined(with: .opacity))
       } else if model.buttonsVisible {
         FloatingButtons(model: model)
       }
