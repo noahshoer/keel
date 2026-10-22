@@ -179,7 +179,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .icon { display: inline-flex; align-items: center; justify-content: center; }
 .icon-btn { border: none; background: none; cursor: pointer; color: var(--muted); padding: 5px; border-radius: var(--r);
   display: inline-flex; align-items: center; justify-content: center; }
-.icon-btn:hover { background: var(--icon-hover); color: var(--text); }
+@media (hover: hover) { .icon-btn:hover { background: var(--icon-hover); color: var(--text); } }
 .icon-btn:active { transform: scale(.92); }
 
 /* Main pane: a rounded card floating on the app background */
@@ -262,7 +262,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; }
 .chip { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px;
   border: 1px solid var(--chip-border); border-radius: var(--r); font-size: 12px; color: var(--subtle); background: var(--chip-bg); }
-.chip:hover { background: var(--chip-hover); border-color: var(--border-strong); }
+@media (hover: hover) { .chip:hover { background: var(--chip-hover); border-color: var(--border-strong); } }
 .chip:focus-within { box-shadow: 0 0 0 3px var(--focus-ring); }
 .chip input, .chip select { border: none; outline: none; background: transparent; font-size: 12px; color: var(--chip-text); }
 .quick-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 6px; font-size: 12px; }
@@ -278,9 +278,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .btn { border: none; border-radius: var(--r); padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .btn:active:not(:disabled) { transform: scale(.97); }
 .btn-cancel { background: var(--btn-cancel); color: var(--btn-cancel-text); }
-.btn-cancel:hover { background: var(--btn-cancel-hover); }
+@media (hover: hover) { .btn-cancel:hover { background: var(--btn-cancel-hover); } }
 .btn-add { background: var(--accent); color: #fff; box-shadow: var(--shadow-sm); }
-.btn-add:hover { background: var(--accent-hover); box-shadow: var(--shadow-md); }
+@media (hover: hover) { .btn-add:hover { background: var(--accent-hover); box-shadow: var(--shadow-md); } }
 .btn-add:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
 
 /* Labels + editor pickers */
@@ -301,7 +301,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .menu { min-width: 210px; max-height: 320px; overflow-y: auto; }
 .menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: none;
   background: none; border-radius: var(--r); cursor: pointer; font-size: 13px; text-align: left; color: var(--text); }
-.menu-item:hover { background: var(--hover); }
+@media (hover: hover) { .menu-item:hover { background: var(--hover); } }
 .menu-item.indent { padding-left: 30px; }
 .menu-item.checked { font-weight: 600; }
 .menu-icon { display: inline-flex; color: var(--muted); }
@@ -332,7 +332,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .cal-dow { text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0 4px; }
 .cal-day { height: 32px; border: none; background: none; border-radius: 50%; cursor: pointer; font-size: 12.5px;
   color: var(--text); font-variant-numeric: tabular-nums; }
-.cal-day:hover { background: var(--hover); }
+@media (hover: hover) { .cal-day:hover { background: var(--hover); } }
 .cal-day.other { color: var(--muted); opacity: .6; }
 .cal-day.past { color: var(--muted); opacity: .45; }
 .cal-day.is-today { color: var(--accent); font-weight: 700; }
@@ -363,7 +363,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .hl-project { --hl-bg: rgba(36,111,224,.14); }
 .hl-label { --hl-bg: rgba(235,137,9,.16); }
 .label-opt { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: var(--r); cursor: pointer; font-size: 13px; }
-.label-opt:hover { background: var(--hover); }
+@media (hover: hover) { .label-opt:hover { background: var(--hover); } }
 .label-empty { color: var(--muted); font-size: 12px; padding: 6px 8px; }
 .label-new { width: 100%; margin-top: 6px; padding: 7px 8px; font-size: 12px; border: 1px solid var(--border);
   border-radius: var(--r); outline: none; background: var(--bg); }
@@ -415,7 +415,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .menu-btn { display: none; margin-left: -6px; color: var(--subtle); }
 .view-toggle { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; cursor: pointer;
   color: var(--muted); font-size: 13px; padding: 6px 10px; border-radius: var(--r); }
-.view-toggle:hover { background: var(--icon-hover); color: var(--text); }
+@media (hover: hover) { .view-toggle:hover { background: var(--icon-hover); color: var(--text); } }
 .check.done { background: var(--muted); border: 1.5px solid var(--muted); color: var(--bg); }
 .check.done .icon { opacity: 1; transform: none; }
 .task.completed { animation: fade-up .2s var(--ease); }
@@ -439,7 +439,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chevron { position: absolute; left: -22px; top: 10px; width: 20px; height: 20px; padding: 0;
   border: none; background: none; color: var(--muted); cursor: pointer; border-radius: var(--r-sm);
   display: flex; align-items: center; justify-content: center; transition: transform .18s var(--ease), background-color .16s; }
-.chevron:hover { background: var(--icon-hover); color: var(--text); }
+@media (hover: hover) { .chevron:hover { background: var(--icon-hover); color: var(--text); } }
 .chevron.collapsed { transform: rotate(-90deg); }
 .section-block { margin-top: 18px; }
 .section-row { position: relative; }
@@ -589,6 +589,12 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+/* Touch: tapped controls keep WebKit's sticky :hover, so hover styles are
+   mouse-only (above); a brief press state gives touch its feedback. */
+@media (hover: none) {
+  .icon-btn:active, .view-toggle:active, .chevron:active { background: var(--icon-hover); }
+  .chip:active, .menu-item:active, .cal-day:active, .label-opt:active { background: var(--hover); }
 }
 "#;
 
