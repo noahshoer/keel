@@ -596,6 +596,45 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .icon-btn:active, .view-toggle:active, .chevron:active { background: var(--icon-hover); }
   .chip:active, .menu-item:active, .cal-day:active, .label-opt:active { background: var(--hover); }
 }
+/* Completing a task (completion.rs): the circle fills with the priority
+   color and the chosen Keel mark, then the row switches off like an old TV
+   (squash to a bright line, shrink to a dot) and the gap closes. */
+.check .icon svg.done-mark { width: 13px; height: 13px; }
+.check.p1 { --fill: var(--p1); }
+.check.p2 { --fill: var(--p2); }
+.check.p3 { --fill: var(--p3); }
+.task.completing .check { background: var(--fill, var(--accent)); border-color: var(--fill, var(--accent)); color: #fff;
+  animation: check-pop .32s cubic-bezier(.3, 1.6, .5, 1); }
+.task.completing .check .icon { opacity: 1; transform: scale(1);
+  transition: opacity .18s .06s, transform .3s .06s cubic-bezier(.3, 1.6, .5, 1); }
+.task.completing .task-content { color: var(--muted); transition: color .3s .1s; }
+@keyframes check-pop { 0% { transform: scale(.8); } 60% { transform: scale(1.14); } 100% { transform: scale(1); } }
+.task.switch-off { overflow: hidden; transform-origin: center; pointer-events: none;
+  animation: tv-off .5s cubic-bezier(.6, .05, .4, 1) forwards, row-collapse .22s ease .28s forwards; }
+@keyframes tv-off {
+  0%   { transform: scale(1, 1);     filter: brightness(1);   opacity: 1; }
+  45%  { transform: scale(1, .03);   filter: brightness(2.6); opacity: 1; }
+  80%  { transform: scale(.25, .03); filter: brightness(3);   opacity: .9; }
+  100% { transform: scale(0, .03);   filter: brightness(3);   opacity: 0; }
+}
+@keyframes row-collapse { from { max-height: 400px; } to { max-height: 0; margin-top: 0; margin-bottom: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .task.completing .check { animation: none; }
+  .task.switch-off { animation: fade-away .4s ease forwards; }
+  @keyframes fade-away { to { opacity: 0; } }
+}
+@media (pointer: coarse) { .check .icon svg.done-mark { width: 16px; height: 16px; } }
+
+/* Settings → Appearance → Completion mark. */
+.completion-setting { flex-wrap: wrap; gap: 12px; }
+.mark-choices { display: flex; gap: 8px; }
+.mark-choice { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 10px; min-width: 76px;
+  border: 1px solid var(--border); border-radius: var(--r-md); background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.mark-choice.chosen { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 1px var(--accent) inset; }
+.mark-dot { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center; }
+.mark-dot svg { width: 17px; height: 17px; }
+.mark-name { font-size: 12px; }
 "#;
 
 /// The full stylesheet: light by default, dark when the OS prefers it (unless

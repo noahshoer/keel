@@ -51,6 +51,11 @@ pub fn TaskRow(
     let mut editing = use_signal(|| false);
     let mut adding_sub = use_signal(|| false);
     let glass = crate::glass::use_glass();
+    // Completing: 0 idle, 1 circle filled, 2 switching off. A tap while
+    // filled cancels (`gen` invalidates the pending steps).
+    let completion_icon = use_context::<Signal<crate::completion::CompletionIcon>>();
+    let mut phase = use_signal(|| 0u8);
+    let mut gen = use_signal(|| 0u32);
     // All task reminders, shared app-wide (see `App`).
     let all_reminders = use_context::<Signal<Vec<Reminder>>>();
     let my_reminders: Vec<ReminderDraft> = all_reminders
@@ -160,7 +165,10 @@ pub fn TaskRow(
     // change reordered the list, and the page went blank.
     rsx! {
         div { class: "task-slot",
-            div { class: "task", style: "{indent}", "data-menu-id": "{task.id}",
+            div {
+                class: match phase() { 1 => "task completing", 2 => "task completing switch-off", _ => "task" },
+                style: "{indent}",
+                "data-menu-id": "{task.id}",
                 div { class: "task-row",
                     if has_children {
                         button {
@@ -180,13 +188,36 @@ pub fn TaskRow(
                         class: check_class(task.priority),
                         title: "Complete task",
                         onclick: move |_| {
+                            use crate::completion::{sleep, FILL_MS, OFF_MS};
+                            match phase() {
+                                1 => {
+                                    gen += 1;
+                                    phase.set(0);
+                                    return;
+                                }
+                                2 => return,
+                                _ => {}
+                            }
+                            gen += 1;
+                            let mine = gen();
+                            phase.set(1);
                             let id = id_complete.clone();
                             spawn(async move {
+                                sleep(FILL_MS).await;
+                                if gen() != mine {
+                                    return;
+                                }
+                                phase.set(2);
+                                sleep(OFF_MS).await;
+                                if gen() != mine {
+                                    return;
+                                }
                                 let _ = api::complete_task(id).await;
+                                phase.set(0);
                                 reload += 1;
                             });
                         },
-                        Icon { svg: icons::check() }
+                        Icon { svg: completion_icon().svg() }
                     }
                     div {
                         class: "task-body",

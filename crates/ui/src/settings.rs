@@ -79,6 +79,37 @@ fn delivery_note(when_closed: bool) -> &'static str {
     }
 }
 
+/// Which mark fills a task's circle when it's completed (this device).
+#[component]
+fn CompletionSetting() -> Element {
+    use crate::completion::{self, CompletionIcon};
+    let mut chosen = use_context::<Signal<CompletionIcon>>();
+    rsx! {
+        div { class: "setting-row completion-setting",
+            div { class: "setting-text",
+                div { class: "setting-name", "Completion mark" }
+                div { class: "setting-hint", "Fills the circle when you complete a task" }
+            }
+            div { class: "mark-choices",
+                for icon in CompletionIcon::ALL {
+                    button {
+                        key: "{icon.key()}",
+                        class: if chosen() == icon { "mark-choice chosen" } else { "mark-choice" },
+                        title: "{icon.label()}",
+                        aria_pressed: "{chosen() == icon}",
+                        onclick: move |_| {
+                            completion::save(icon);
+                            chosen.set(icon);
+                        },
+                        span { class: "mark-dot", dangerous_inner_html: "{icon.svg()}" }
+                        span { class: "mark-name", "{icon.label()}" }
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[component]
 pub fn SettingsDialog(on_close: EventHandler<()>, reload: Signal<u32>) -> Element {
     let mut reload = reload;
@@ -284,6 +315,8 @@ pub fn SettingsDialog(on_close: EventHandler<()>, reload: Signal<u32>) -> Elemen
                         }
                     }
                 }
+                h3 { class: "modal-section", "Appearance" }
+                CompletionSetting {}
                 h3 { class: "modal-section", "Import" }
                 div { class: "setting-row",
                     div { class: "setting-text",
