@@ -224,10 +224,13 @@ fn App() -> Element {
             }
         });
     });
-    // Picking a view closes the drawer.
+    // Picking a view closes the drawer once that view's data has loaded:
+    // the page swaps under the drawer, then the drawer slides away to reveal
+    // it (closing first showed the old page snap to the new one).
+    let mut closing_for = use_signal(|| None::<View>);
     use_effect(move || {
-        let _ = view();
-        drawer.set(false);
+        let v = view();
+        closing_for.set(Some(v));
     });
 
     let data = use_resource(move || async move {
@@ -306,6 +309,26 @@ fn App() -> Element {
         })
     });
 
+    // Each time a different view's data lands, the page fades in again
+    // (`swaps` alternates the animation so it restarts).
+    let mut swaps = use_signal(|| (None::<View>, 0u32));
+    use_effect(move || {
+        let loaded_view = match &*data.read() {
+            Some(Ok(l)) => Some(l.view.clone()),
+            Some(Err(_)) => closing_for.peek().clone(),
+            None => None,
+        };
+        let Some(lv) = loaded_view else { return };
+        if closing_for.peek().as_ref() == Some(&lv) {
+            closing_for.set(None);
+            drawer.set(false);
+        }
+        if swaps.peek().0.as_ref() != Some(&lv) {
+            let n = swaps.peek().1 + 1;
+            swaps.set((Some(lv), n));
+        }
+    });
+
     let today = today();
     let state = (*data.read()).clone();
 
@@ -333,7 +356,7 @@ fn App() -> Element {
                         theme,
                         reload,
                     }
-                    MainPane { view: loaded.view.clone(), loaded, today, show_completed, drawer, search_query, reload }
+                    MainPane { view: loaded.view.clone(), loaded, today, show_completed, drawer, search_query, reload, swap: swaps().1 }
                 },
             }
         }
@@ -365,6 +388,9 @@ fn MainPane(
     drawer: Signal<bool>,
     search_query: Signal<String>,
     reload: Signal<u32>,
+    /// Bumped when a different view lands; alternates the fade-in.
+    #[props(default)]
+    swap: u32,
 ) -> Element {
     let mut show_completed = show_completed;
     let mut drawer = drawer;
@@ -435,7 +461,7 @@ fn MainPane(
 
     rsx! {
         main { class: "main",
-            div { key: "{view_key}", class: "content",
+            div { class: if swap % 2 == 0 { "content view-in-a" } else { "content view-in-b" },
                 div { class: "view-head",
                     button {
                         class: "icon-btn menu-btn",

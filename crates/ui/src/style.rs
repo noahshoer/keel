@@ -185,7 +185,13 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Main pane: a rounded card floating on the app background */
 .main { flex: 1; overflow-y: auto; background: var(--bg); margin: 8px 8px 8px 0;
   border-radius: var(--r-lg); box-shadow: var(--shadow-md); }
-.content { max-width: 820px; margin: 0 auto; padding: 40px 48px 96px; animation: fade-up .22s var(--ease); }
+.content { max-width: 820px; margin: 0 auto; padding: 40px 48px 96px; }
+/* A view fades in when it lands; two identical animations alternate so a
+   switch restarts it (main.rs `swap`). */
+@keyframes view-in-a { from { opacity: 0; } to { opacity: 1; } }
+@keyframes view-in-b { from { opacity: 0; } to { opacity: 1; } }
+.content.view-in-a { animation: view-in-a .2s var(--ease); }
+.content.view-in-b { animation: view-in-b .2s var(--ease); }
 .view-title { font-size: 26px; font-weight: 700; margin: 0 0 2px; letter-spacing: -0.02em; }
 .view-sub { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
 .section-title { display: flex; align-items: baseline; gap: 6px; font-weight: 650; font-size: 14px;
@@ -524,13 +530,18 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
    by the header's hamburger) and the main pane goes full-bleed. */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 700px) {
-  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; width: min(300px, 86vw);
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; width: min(360px, 88vw);
     background: var(--app-bg); box-shadow: var(--shadow-lg);
     padding-top: calc(14px + env(safe-area-inset-top)); padding-bottom: calc(14px + env(safe-area-inset-bottom));
     transform: translateX(-100%); visibility: hidden;
     transition: transform .26s var(--ease), visibility 0s linear .26s; }
   .app.drawer-open .sidebar { transform: none; visibility: visible; transition: transform .26s var(--ease); }
-  .drawer-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.36); animation: fade-in .2s var(--ease); }
+  .drawer-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.45); animation: fade-in .2s var(--ease); }
+  /* Parallax: the page sits a little to the right while the drawer is open
+     and glides back as it closes (`translate`, so it composes with the
+     fade-in's animation). */
+  .content { transition: translate .26s var(--ease); }
+  .app.drawer-open .content { translate: 28px 0; }
   .menu-btn { display: inline-flex; }
   .main { margin: 0; border-radius: 0; box-shadow: none; }
   .content { padding: calc(10px + env(safe-area-inset-top)) 16px 80px; }
