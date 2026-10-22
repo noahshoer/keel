@@ -8,6 +8,19 @@ import WebKit
 /// Does nothing unless the variable is set.
 enum Demo {
   static func run(webview: WKWebView, model: CardModel) {
+    // KEEL_GLASS_ANSWER="a|b": answers the first prompt that opens (fields in order).
+    if let answer = ProcessInfo.processInfo.environment["KEEL_GLASS_ANSWER"] {
+      func poll(_ n: Int) {
+        if let p = model.prompt {
+          model.prompt = nil
+          model.promptClosedAt = Date()
+          model.answerPrompt(p.id, answer.components(separatedBy: "|"))
+        } else if n < 60 {
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { poll(n + 1) }
+        }
+      }
+      poll(0)
+    }
     guard let spec = ProcessInfo.processInfo.environment["KEEL_GLASS_DEMO"] else { return }
     let parts = spec.components(separatedBy: "|")
     let selector = parts.first ?? ".add-task-row"

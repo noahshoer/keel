@@ -10,6 +10,7 @@ Everything the Keel web UI uses
 - `allow-hide`
 - `allow-buttons`
 - `allow-actions`
+- `allow-prompt`
 - `allow-register-listener`
 - `allow-remove-listener`
 
@@ -122,6 +123,32 @@ Enables the is_available command without any pre-configured scope.
 <td>
 
 Denies the is_available command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`glass:allow-prompt`
+
+</td>
+<td>
+
+Enables the prompt command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`glass:deny-prompt`
+
+</td>
+<td>
+
+Denies the prompt command without any pre-configured scope.
 
 </td>
 </tr>

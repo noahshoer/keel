@@ -189,8 +189,29 @@ struct DrawerButton: Codable, Equatable {
   let h: CGFloat
 }
 
+/// A native text prompt (`plugin:glass|prompt`).
+struct PromptState: Codable, Equatable {
+  struct Field: Codable, Equatable {
+    let placeholder: String
+    let value: String
+  }
+  let id: String
+  let title: String
+  let message: String
+  let fields: [Field]
+  let confirm: String
+}
+
 final class CardModel: ObservableObject {
   @Published var actionMenu: ActionMenu?
+  @Published var prompt: PromptState?
+  /// The prompt's field values as typed.
+  @Published var promptValues: [String] = []
+  /// Set by the plugin: reports a prompt's answer (nil values = cancelled).
+  var answerPrompt: (String, [String]?) -> Void = { _, _ in }
+  /// When the last prompt closed: a new one presented while the old alert
+  /// is still animating away is dropped by SwiftUI, so it waits.
+  var promptClosedAt = Date.distantPast
   /// Set by the plugin: reports the chosen action.
   var chooseAction: (String, String) -> Void = { _, _ in }
 

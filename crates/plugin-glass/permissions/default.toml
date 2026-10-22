@@ -7,6 +7,7 @@ permissions = [
   "allow-hide",
   "allow-buttons",
   "allow-actions",
+  "allow-prompt",
   "allow-register-listener",
   "allow-remove-listener",
 ]

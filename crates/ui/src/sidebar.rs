@@ -1,7 +1,8 @@
 use dioxus::prelude::*;
 use keel_core::model::{Filter, Label, Project};
 
-use crate::filters::{FilterForm, FilterRow};
+use crate::filters::{checked_filter, filter_prompt, FilterForm, FilterRow};
+use crate::glass::{answer_text, use_prompt_answer, Prompt};
 use crate::icons::{self, Icon};
 use crate::{api, theme, View};
 
@@ -39,6 +40,42 @@ pub fn Sidebar(
     use_effect(move || {
         let mut open = glass.settings_open;
         open.set(show_settings());
+    });
+    // iPhone: the + buttons ask with a native prompt (a web form there gets
+    // no keyboard and lingers in the drawer).
+    use_prompt_answer("new-project".into(), move |values| {
+        if let Some(n) = answer_text(&values, 0) {
+            spawn(async move {
+                let _ = api::add_project(n).await;
+                reload += 1;
+            });
+        }
+    });
+    use_prompt_answer("new-label".into(), move |values| {
+        if let Some(n) = answer_text(&values, 0) {
+            spawn(async move {
+                let _ = api::add_label(n).await;
+                reload += 1;
+            });
+        }
+    });
+    use_prompt_answer("new-filter".into(), move |values| {
+        spawn(async move {
+            match checked_filter(&values).await {
+                Ok((name, query)) => {
+                    if let Ok(res) = api::add_filter(name.clone(), query.clone()).await {
+                        if let Some(id) = res.id_mapping.values().next().cloned() {
+                            view.set(View::Filter(id, name, query));
+                        }
+                    }
+                    reload += 1;
+                }
+                Err(problem) => {
+                    let (n, q) = (values.first().cloned().unwrap_or_default(), values.get(1).cloned().unwrap_or_default());
+                    glass.ask(filter_prompt("new-filter", "New filter", "Add", &n, &q, &problem));
+                }
+            }
+        });
     });
     let mut adding = use_signal(|| false);
     let mut adding_label = use_signal(|| false);
@@ -105,7 +142,13 @@ pub fn Sidebar(
                 button {
                     class: "icon-btn",
                     title: "Add project",
-                    onclick: move |_| adding.set(!adding()),
+                    onclick: move |_| {
+                        if (glass.native)() {
+                            glass.ask(Prompt::new("new-project", "New project", "Add").field("Project name", ""));
+                        } else {
+                            adding.set(!adding());
+                        }
+                    },
                     Icon { svg: icons::plus(16) }
                 }
             }
@@ -142,7 +185,13 @@ pub fn Sidebar(
                 button {
                     class: "icon-btn",
                     title: "Add label",
-                    onclick: move |_| adding_label.set(!adding_label()),
+                    onclick: move |_| {
+                        if (glass.native)() {
+                            glass.ask(Prompt::new("new-label", "New label", "Add").field("Label name", ""));
+                        } else {
+                            adding_label.set(!adding_label());
+                        }
+                    },
                     Icon { svg: icons::plus(16) }
                 }
             }
@@ -179,7 +228,13 @@ pub fn Sidebar(
                 button {
                     class: "icon-btn",
                     title: "Add filter",
-                    onclick: move |_| adding_filter.set(!adding_filter()),
+                    onclick: move |_| {
+                        if (glass.native)() {
+                            glass.ask(filter_prompt("new-filter", "New filter", "Add", "", "", ""));
+                        } else {
+                            adding_filter.set(!adding_filter());
+                        }
+                    },
                     Icon { svg: icons::plus(16) }
                 }
             }
@@ -243,19 +298,24 @@ fn ManagedRow(
     let start_name = name.clone();
     // iPhone: a long press offers Rename and Delete (the desktop's hover
     // buttons); Delete still asks below.
+    // Rename is a native prompt there: a web field gets no keyboard.
+    let rename_id = format!("rename:{menu_id}");
     {
-        let start = name.clone();
+        let glass = crate::glass::use_glass();
+        let (pid, start, title) = (rename_id.clone(), name.clone(), format!("Rename {kind}"));
         crate::glass::use_row_menu(menu_id.clone(), name.clone(), crate::glass::nav_actions("Rename"), move |action| {
             match action {
-                crate::glass::TaskAction::Rename => {
-                    draft.set(start.clone());
-                    mode.set(RowMode::Renaming);
-                }
+                crate::glass::TaskAction::Rename => glass.ask(Prompt::new(&pid, &title, "Save").field("Name", &start)),
                 crate::glass::TaskAction::Delete => mode.set(RowMode::ConfirmDelete),
                 _ => {}
             }
         });
     }
+    use_prompt_answer(rename_id, move |values| {
+        if let Some(n) = answer_text(&values, 0) {
+            on_rename.call(n);
+        }
+    });
     let warning = if kind == "project" {
         format!("Delete “{name}” and all its tasks?")
     } else {

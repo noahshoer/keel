@@ -42,6 +42,27 @@ struct OverlayView: View {
         DrawerButtons(model: model)
       }
     }
+    .alert(
+      model.prompt?.title ?? "",
+      isPresented: Binding(get: { model.prompt != nil }, set: { if !$0 { model.prompt = nil } }),
+      presenting: model.prompt
+    ) { prompt in
+      ForEach(Array(prompt.fields.enumerated()), id: \.offset) { i, field in
+        TextField(field.placeholder, text: Binding(
+          get: { i < model.promptValues.count ? model.promptValues[i] : "" },
+          set: { if i < model.promptValues.count { model.promptValues[i] = $0 } }))
+      }
+      Button("Cancel", role: .cancel) {
+        model.promptClosedAt = Date()
+        model.answerPrompt(prompt.id, nil)
+      }
+      Button(prompt.confirm) {
+        model.promptClosedAt = Date()
+        model.answerPrompt(prompt.id, model.promptValues)
+      }
+    } message: { prompt in
+      if !prompt.message.isEmpty { Text(prompt.message) }
+    }
     .confirmationDialog(
       model.actionMenu?.title ?? "",
       isPresented: Binding(get: { model.actionMenu != nil }, set: { if !$0 { model.actionMenu = nil } }),

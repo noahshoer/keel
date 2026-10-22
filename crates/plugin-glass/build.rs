@@ -8,6 +8,7 @@ const COMMANDS: &[&str] = &[
     "hide",
     "buttons",
     "actions",
+    "prompt",
     "register_listener",
     "remove_listener",
 ];

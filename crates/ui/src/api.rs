@@ -409,6 +409,16 @@ pub async fn glass_actions(target: &str, title: &str, items: Vec<crate::glass::A
     let _ = invoke::<_, ()>("plugin:glass|actions", &ActionsArg { target, title, items }).await;
 }
 
+#[derive(Serialize)]
+struct PromptArg<'a> {
+    prompt: &'a crate::glass::Prompt,
+}
+
+/// Shows a native text prompt (answered through the `prompt` event).
+pub async fn glass_prompt(prompt: &crate::glass::Prompt) {
+    let _ = invoke::<_, ()>("plugin:glass|prompt", &PromptArg { prompt }).await;
+}
+
 /// Shows or hides the floating glass buttons.
 pub async fn glass_buttons(state: crate::glass::ButtonsState) {
     let _ = invoke::<_, ()>("plugin:glass|buttons", &state).await;

@@ -479,11 +479,75 @@ pub fn use_row_menu(
     });
 }
 
-/// Forwards long presses on task rows (the task id) and the action menu's
-/// choices (a `ChosenAction` as JSON) to Rust.
+/// A native text prompt (a glass alert with one or two fields). On iPhone
+/// it replaces the web forms that focus a field from code, which iOS
+/// answers with no keyboard.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Prompt {
+    /// Echoed in the answer, so the right caller handles it.
+    pub id: String,
+    pub title: String,
+    /// Shown under the title (e.g. why a filter query was rejected).
+    pub message: String,
+    pub fields: Vec<PromptField>,
+    /// The confirm button's label.
+    pub confirm: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct PromptField {
+    pub placeholder: String,
+    pub value: String,
+}
+
+impl Prompt {
+    pub fn new(id: &str, title: &str, confirm: &str) -> Self {
+        Prompt { id: id.into(), title: title.into(), message: String::new(), fields: Vec::new(), confirm: confirm.into() }
+    }
+
+    pub fn field(mut self, placeholder: &str, value: &str) -> Self {
+        self.fields.push(PromptField { placeholder: placeholder.into(), value: value.into() });
+        self
+    }
+
+    pub fn message(mut self, message: &str) -> Self {
+        self.message = message.into();
+        self
+    }
+}
+
+/// What came back: the fields' values, or None when cancelled.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct PromptAnswer {
+    pub id: String,
+    pub values: Option<Vec<String>>,
+}
+
+/// Field `i` of an answer, trimmed; None when missing or blank.
+pub fn answer_text(values: &[String], i: usize) -> Option<String> {
+    values.get(i).map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
+}
+
+/// Calls `on_answer` with the values when the prompt `id` is answered
+/// (not when it's cancelled).
+pub fn use_prompt_answer(id: String, mut on_answer: impl FnMut(Vec<String>) + 'static) {
+    let glass = use_glass();
+    use_effect(move || {
+        let mut answer = glass.answer;
+        let Some(a) = answer().filter(|a| a.id == id) else { return };
+        answer.set(None);
+        if let Some(values) = a.values {
+            on_answer(values);
+        }
+    });
+}
+
+/// Forwards long presses on task rows (the task id), the action menu's
+/// choices (a `ChosenAction` as JSON) and prompt answers to Rust.
 const PRESS_JS: &str = r#"
 document.addEventListener('keel-long-press', (e) => dioxus.send({ press: e.detail }));
 await window.__TAURI__.core.addPluginListener('glass', 'action', (e) => dioxus.send({ chosen: e.json }));
+await window.__TAURI__.core.addPluginListener('glass', 'prompt', (e) => dioxus.send({ answer: e.json }));
 await new Promise(() => {});
 "#;
 
@@ -491,6 +555,7 @@ await new Promise(() => {});
 struct PressMsg {
     press: Option<String>,
     chosen: Option<String>,
+    answer: Option<String>,
 }
 
 /// Which floating buttons show (`plugin:glass|buttons`).
@@ -611,6 +676,8 @@ pub struct Glass {
     pub drawer_rects: Signal<Vec<WebRect>>,
     /// The settings dialog is open (the drawer's glass buttons step aside).
     pub settings_open: Signal<bool>,
+    /// The latest prompt answer, for the caller whose id it carries.
+    pub answer: Signal<Option<PromptAnswer>>,
 }
 
 /// Provides [`Glass`] (call once, in `App`): asks the plugin whether it's
@@ -624,6 +691,7 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
         chosen: Signal::new(None),
         drawer_rects: Signal::new(Vec::new()),
         settings_open: Signal::new(false),
+        answer: Signal::new(None),
     });
     use_hook(move || {
         spawn(async move {
@@ -633,7 +701,7 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
             let mut native = glass.native;
             native.set(true);
             spawn(async move {
-                let (mut pressed, mut chosen) = (glass.pressed, glass.chosen);
+                let (mut pressed, mut chosen, mut answer) = (glass.pressed, glass.chosen, glass.answer);
                 let mut presses = document::eval(PRESS_JS);
                 while let Ok(msg) = presses.recv::<PressMsg>().await {
                     if let Some(id) = msg.press {
@@ -641,6 +709,9 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
                     }
                     if let Some(c) = msg.chosen.and_then(|j| serde_json::from_str::<ChosenAction>(&j).ok()) {
                         chosen.set(Some(c));
+                    }
+                    if let Some(a) = msg.answer.and_then(|j| serde_json::from_str::<PromptAnswer>(&j).ok()) {
+                        answer.set(Some(a));
                     }
                 }
             });
@@ -723,6 +794,11 @@ impl Glass {
             ctx,
             reload,
         });
+    }
+
+    /// Shows a native prompt; the answer arrives through `use_prompt_answer`.
+    pub fn ask(self, prompt: Prompt) {
+        spawn(async move { api::glass_prompt(&prompt).await });
     }
 
     /// Measures the drawer's header buttons once it has slid in (iPhone).
@@ -1027,5 +1103,26 @@ mod tests {
         let mut s = floating_buttons(false, false);
         s.theme = "dark".into();
         assert_eq!(serde_json::to_value(&s).unwrap()["theme"], "dark");
+    }
+
+    #[test]
+    fn prompts_serialize_for_swift_and_answers_come_back() {
+        let p = Prompt::new("new-project", "New project", "Add").field("Project name", "");
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["id"], "new-project");
+        assert_eq!(v["confirm"], "Add");
+        assert_eq!(v["fields"][0]["placeholder"], "Project name");
+        assert_eq!(v["message"], "");
+        let a: PromptAnswer = serde_json::from_str(r#"{"id":"new-project","values":["Groceries"]}"#).unwrap();
+        assert_eq!(a, PromptAnswer { id: "new-project".into(), values: Some(vec!["Groceries".into()]) });
+        let cancel: PromptAnswer = serde_json::from_str(r#"{"id":"new-project","values":null}"#).unwrap();
+        assert_eq!(cancel.values, None);
+    }
+
+    #[test]
+    fn a_prompt_answer_is_trimmed_and_blank_means_nothing() {
+        assert_eq!(answer_text(&["  Groceries ".to_string()], 0), Some("Groceries".to_string()));
+        assert_eq!(answer_text(&["   ".to_string()], 0), None);
+        assert_eq!(answer_text(&[], 0), None);
     }
 }

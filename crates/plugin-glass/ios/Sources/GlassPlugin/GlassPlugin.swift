@@ -14,6 +14,10 @@ class ActionsArgs: Decodable {
   let items: [ActionMenu.Item]
 }
 
+class PromptArgs: Decodable {
+  let prompt: PromptState
+}
+
 class ButtonsArgs: Decodable {
   let visible: Bool
   let add: Bool
@@ -42,6 +46,13 @@ class GlassPlugin: Plugin {
         let json = String(data: data, encoding: .utf8)
       else { return }
       self?.trigger("action", data: ["json": json])
+    }
+    model.answerPrompt = { [weak self] id, values in
+      let body: [String: Any] = ["id": id, "values": values.map { $0 as Any } ?? NSNull()]
+      guard let data = try? JSONSerialization.data(withJSONObject: body),
+        let json = String(data: data, encoding: .utf8)
+      else { return }
+      self?.trigger("prompt", data: ["json": json])
     }
     model.button = { [weak self] name in
       self?.trigger("button", data: ["name": name])
@@ -73,6 +84,18 @@ class GlassPlugin: Plugin {
     let args = try invoke.parseArgs(ActionsArgs.self)
     DispatchQueue.main.async {
       self.model.actionMenu = ActionMenu(target: args.target, title: args.title, items: args.items)
+    }
+    invoke.resolve()
+  }
+
+  @objc public func prompt(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(PromptArgs.self)
+    DispatchQueue.main.async {
+      let wait = max(0, 0.45 - Date().timeIntervalSince(self.model.promptClosedAt))
+      DispatchQueue.main.asyncAfter(deadline: .now() + wait) {
+        self.model.promptValues = args.prompt.fields.map(\.value)
+        self.model.prompt = args.prompt
+      }
     }
     invoke.resolve()
   }

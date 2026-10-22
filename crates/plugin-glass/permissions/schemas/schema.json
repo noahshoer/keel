@@ -343,6 +343,18 @@
           "markdownDescription": "Denies the is_available command without any pre-configured scope."
         },
         {
+          "description": "Enables the prompt command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-prompt",
+          "markdownDescription": "Enables the prompt command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the prompt command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-prompt",
+          "markdownDescription": "Denies the prompt command without any pre-configured scope."
+        },
+        {
           "description": "Enables the register_listener command without any pre-configured scope.",
           "type": "string",
           "const": "allow-register-listener",
@@ -391,10 +403,10 @@
           "markdownDescription": "Denies the update command without any pre-configured scope."
         },
         {
-          "description": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-actions`\n- `allow-register-listener`\n- `allow-remove-listener`",
+          "description": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-actions`\n- `allow-prompt`\n- `allow-register-listener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-actions`\n- `allow-register-listener`\n- `allow-remove-listener`"
+          "markdownDescription": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-actions`\n- `allow-prompt`\n- `allow-register-listener`\n- `allow-remove-listener`"
         }
       ]
     }
