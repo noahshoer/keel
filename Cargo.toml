@@ -3,3 +3,8 @@ resolver = "2"
 members = ["crates/core", "crates/storage", "crates/service", "crates/src-tauri", "crates/plugin-glass"]
 # The Dioxus UI is wasm-only (built with `dx`); excluded so host `cargo test` stays green and fast.
 exclude = ["crates/ui"]
+
+# A patched tauri-plugin-notification (iOS crash when a notification from an
+# earlier run is tapped); see crates/vendor/tauri-plugin-notification/KEEL_PATCH.md.
+[patch.crates-io]
+tauri-plugin-notification = { path = "crates/vendor/tauri-plugin-notification" }
