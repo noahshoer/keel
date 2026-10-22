@@ -9,6 +9,7 @@ Owner: Noah (GitHub `noahshoer`, **public** repo `noahshoer/keel`; anything comm
 **iOS runs in the simulator** (iPhone 16, iOS 18.6, 2026-10-20). All checks in [docs/notes/ios-notifications-checklist.md](docs/notes/ios-notifications-checklist.md) pass. `crates/src-tauri/gen/apple` is committed. Fixes from that run:
 - `tauri-plugin-notification` 2.7 on iOS reads `Schedule::At` as device-local time (upstream #3256), so `notifications::plugin_date` sends the local time labeled UTC. Its `pending()` and `cancel_all()` always fail, so the scheduled ids are kept in `local_setting` (`AppService::scheduled_reminder_ids`) and cancelled with `cancel(ids)`. Upstream issue draft (not yet filed): `docs/notes/upstream-notification-ios-issue.md`.
 - The viewport has `maximum-scale=1, user-scalable=no`; otherwise iOS zooms into any focused input under 16px.
+- Tapping a notification from an earlier run crashed the app (plugin force-unwrap). Fixed with a vendored, patched `tauri-plugin-notification` in `crates/vendor/` (`[patch.crates-io]`). Not yet confirmed on the phone; see [docs/notes/ios-notification-tap-crash.md](docs/notes/ios-notification-tap-crash.md) if it recurs.
 - Run `cargo tauri icon` on the Mac; the iOS icon set is only written when `gen/apple` exists.
 
 **Keel runs on Noah's iPhone** (2026-10-20; personal team `SMD3LL6NFU` in `tauri.conf.json`). Phone-only additions: swipe right/left opens/closes the drawer (`ui::gestures`), and the settings note describes only the current device (`reminders_when_closed` command).
