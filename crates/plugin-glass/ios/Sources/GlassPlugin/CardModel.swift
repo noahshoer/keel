@@ -256,10 +256,13 @@ final class CardModel: ObservableObject {
     state = s
   }
 
-  /// Slides the card down off screen (the way it came up).
+  /// Slides the card down off screen together with the keyboard: the
+  /// keyboard is dismissed first (it otherwise waits for the card to be
+  /// gone), and the card leaves over the keyboard's own ~0.25 s.
   func hide() {
     guard state != nil else { return }
-    withAnimation(.easeIn(duration: 0.22)) {
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    withAnimation(.easeOut(duration: 0.25)) {
       state = nil
     }
     picker = nil
