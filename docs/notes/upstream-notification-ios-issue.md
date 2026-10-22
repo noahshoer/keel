@@ -38,6 +38,14 @@ n.cancel(vec![1])?;    // works
 
 Persist the ids passed to `.id(...)` when scheduling, and call `cancel(ids)` before rescheduling.
 
+### Also: tapping a notification from an earlier run crashes the app
+
+`NotificationHandler.toActiveNotification` (`ios/Sources/NotificationHandler.swift`) force-unwraps `notificationsMap[request.identifier]!`. That map is in memory and only holds notifications scheduled by the current process. When the user taps a notification scheduled by an earlier run, the app cold-launches, `didReceive(response:)` runs with an empty map, and the app crashes (`EXC_BREAKPOINT`, inside `-[_UISceneUserNotificationsBSActionsHandler _respondToActions:…]`). `willPresent` uses the same helper, so a foreground delivery of such a notification can crash too.
+
+Steps: schedule a notification for a minute ahead, kill the app, tap the notification.
+
+Fix: make the lookup optional (`notificationsMap[...]` then `?.sound ?? ""` / `?.attachments`). We ship exactly that as a vendored patch.
+
 ### Related
 
 - #3256: iOS `Schedule::At` ignores the time zone (parsed with a literal `'Z'` and no `timeZone`). We hit it in the same app; its workaround is to send the local wall clock labeled as UTC.
@@ -46,4 +54,4 @@ Persist the ids passed to `.id(...)` when scheduling, and call `cancel(ids)` bef
 ### Environment
 
 - `tauri-plugin-notification` 2.7.0 (Rust API, no JS)
-- tauri-cli 2.12.3, Xcode 16.4, iOS 18.6 simulator, macOS (arm64)
+- tauri-cli 2.12.3, Xcode 16.4, iOS 18.6 simulator, macOS (arm64); the tap crash on an iPhone with iOS 26 and Xcode 27.1
