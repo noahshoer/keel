@@ -41,6 +41,8 @@ fn font_faces() -> String {
 
 const LIGHT: &str = r#"
   color-scheme: light;
+  --hl-a: .22; --hl-date: 5,133,39; --hl-repeat: 105,47,194; --hl-project: 36,111,224; --hl-label: 235,137,9;
+  --hl-p1: 209,69,59; --hl-p2: 235,137,9; --hl-p3: 36,111,224; --hl-p4: 120,120,120;
   --app-bg: #f5f3f0;
   --bg: #ffffff;
   --sidebar: transparent;
@@ -86,6 +88,8 @@ const LIGHT: &str = r#"
 
 const DARK: &str = r#"
   color-scheme: dark;
+  --hl-a: .36; --hl-date: 46,190,96; --hl-repeat: 160,110,240; --hl-project: 82,151,255; --hl-label: 255,170,60;
+  --hl-p1: 255,112,102; --hl-p2: 255,154,20; --hl-p3: 82,151,255; --hl-p4: 160,160,160;
   --app-bg: #161616;
   --bg: #212121;
   --sidebar: transparent;
@@ -356,12 +360,19 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   white-space: pre-wrap; overflow-wrap: anywhere; border: none; }
 .title-mirror { color: transparent; pointer-events: none; user-select: none; }
 .title-input { resize: none; overflow: hidden; background: transparent; outline: none; color: var(--text); }
-.hl { color: transparent; border-radius: 4px; box-shadow: 0 0 0 2px var(--hl-bg); background: var(--hl-bg); }
-.hl-date { --hl-bg: rgba(5,133,39,.14); }
-.hl-repeat { --hl-bg: rgba(105,47,194,.14); }
-.hl-priority { --hl-bg: rgba(209,69,59,.14); }
-.hl-project { --hl-bg: rgba(36,111,224,.14); }
-.hl-label { --hl-bg: rgba(235,137,9,.16); }
+/* Quick-add highlights, Todoist-style: a strong tint with rounded ends
+   (colors per theme in LIGHT/DARK; priorities use their flag colors). */
+.hl { --hl-bg: rgba(var(--hl-rgb), var(--hl-a)); color: transparent; border-radius: 6px;
+  box-shadow: 0 0 0 1.5px var(--hl-bg); background: var(--hl-bg);
+  -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.hl-date { --hl-rgb: var(--hl-date); }
+.hl-repeat { --hl-rgb: var(--hl-repeat); }
+.hl-p1 { --hl-rgb: var(--hl-p1); }
+.hl-p2 { --hl-rgb: var(--hl-p2); }
+.hl-p3 { --hl-rgb: var(--hl-p3); }
+.hl-p4 { --hl-rgb: var(--hl-p4); }
+.hl-project { --hl-rgb: var(--hl-project); }
+.hl-label { --hl-rgb: var(--hl-label); }
 .label-opt { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: var(--r); cursor: pointer; font-size: 13px; }
 @media (hover: hover) { .label-opt:hover { background: var(--hover); } }
 .label-empty { color: var(--muted); font-size: 12px; padding: 6px 8px; }
@@ -475,7 +486,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .deadline-chip.urgent { color: var(--due-overdue); }
 .reminder-chip { color: var(--accent); }
 .quick-chip.chip-deadline { color: var(--due-week); }
-.hl-deadline { --hl-bg: rgba(105,47,194,.14); }
+.hl-deadline { --hl-rgb: var(--hl-repeat); }
 .reminder-pop { min-width: 250px; }
 .reminder-item { display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 8px; font-size: 13px; }
 .reminder-item .icon-btn { font-size: 16px; line-height: 1; width: 26px; height: 26px; }

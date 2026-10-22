@@ -1,17 +1,38 @@
 import SwiftUI
 import UIKit
 
-/// Background tint behind each kind of highlighted phrase (the web `.hl-*` colors).
+/// Background tint behind each kind of highlighted phrase: the web's
+/// `--hl-*` colors (style.rs), stronger in dark mode, like Todoist.
 func highlightColor(_ kind: String) -> UIColor {
-  switch kind {
-  case "date", "time": return UIColor(red: 5 / 255, green: 133 / 255, blue: 39 / 255, alpha: 0.18)
-  case "repeat", "deadline": return UIColor(red: 105 / 255, green: 47 / 255, blue: 194 / 255, alpha: 0.18)
-  case "priority-1", "priority": return UIColor(red: 209 / 255, green: 69 / 255, blue: 59 / 255, alpha: 0.2)
-  case "priority-2": return UIColor(red: 235 / 255, green: 137 / 255, blue: 9 / 255, alpha: 0.22)
-  case "priority-3": return UIColor(red: 36 / 255, green: 111 / 255, blue: 224 / 255, alpha: 0.2)
-  case "project", "section": return UIColor(red: 36 / 255, green: 111 / 255, blue: 224 / 255, alpha: 0.18)
-  case "label": return UIColor(red: 235 / 255, green: 137 / 255, blue: 9 / 255, alpha: 0.2)
-  default: return .clear
+  let (light, dark): ((CGFloat, CGFloat, CGFloat), (CGFloat, CGFloat, CGFloat)) =
+    switch kind {
+    case "date", "time": ((5, 133, 39), (46, 190, 96))
+    case "repeat", "deadline": ((105, 47, 194), (160, 110, 240))
+    case "priority-1", "priority": ((209, 69, 59), (255, 112, 102))
+    case "priority-2", "label": ((235, 137, 9), (255, 154, 20))
+    case "priority-3", "project", "section": ((36, 111, 224), (82, 151, 255))
+    default: ((120, 120, 120), (160, 160, 160))
+    }
+  return UIColor { traits in
+    let dk = traits.userInterfaceStyle == .dark
+    let (r, g, b) = dk ? dark : light
+    return UIColor(red: r / 255, green: g / 255, blue: b / 255, alpha: dk ? 0.36 : 0.22)
+  }
+}
+
+/// Draws text backgrounds (the highlights) as rounded, slightly padded
+/// pills instead of TextKit's square boxes.
+final class RoundedHighlightLayoutManager: NSLayoutManager {
+  override func fillBackgroundRectArray(
+    _ rectArray: UnsafePointer<CGRect>, count rectCount: Int, forCharacterRange charRange: NSRange, color: UIColor
+  ) {
+    color.setFill()
+    for i in 0..<rectCount {
+      // A little air around the phrase, but not across the space between
+      // two neighbouring phrases.
+      let r = rectArray[i].insetBy(dx: -1.5, dy: -1)
+      UIBezierPath(roundedRect: r, cornerRadius: 6).fill()
+    }
   }
 }
 
@@ -29,6 +50,19 @@ struct TitleField: UIViewRepresentable {
     /// The field on screen, for `Demo`.
     static weak var current: AutoFocusField?
     let placeholder = UILabel()
+
+    /// TextKit 1 with a layout manager that rounds the highlights.
+    init() {
+      let storage = NSTextStorage()
+      let layout = RoundedHighlightLayoutManager()
+      storage.addLayoutManager(layout)
+      let container = NSTextContainer(size: CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+      container.widthTracksTextView = true
+      layout.addTextContainer(container)
+      super.init(frame: .zero, textContainer: container)
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
 
     override func didMoveToWindow() {
       super.didMoveToWindow()
@@ -56,6 +90,8 @@ struct TitleField: UIViewRepresentable {
     f.font = TitleField.font
     f.backgroundColor = .clear
     f.isScrollEnabled = false
+    // A highlight at the start of a line reaches just past the text edge.
+    f.clipsToBounds = false
     f.textContainerInset = .zero
     f.textContainer.lineFragmentPadding = 0
     f.returnKeyType = .done

@@ -620,7 +620,13 @@ fn HighlightedTitle(
         let class = match s.kind {
             SpanKind::Date | SpanKind::Time => "hl hl-date",
             SpanKind::Repeat => "hl hl-repeat",
-            SpanKind::Priority => "hl hl-priority",
+            // The flag's color: the level is the phrase's digit ("p2", "!!2").
+            SpanKind::Priority => match value[s.start..s.end].chars().rev().find(|c| c.is_ascii_digit()) {
+                Some('1') => "hl hl-p1",
+                Some('2') => "hl hl-p2",
+                Some('3') => "hl hl-p3",
+                _ => "hl hl-p4",
+            },
             SpanKind::Project | SpanKind::Section => "hl hl-project",
             SpanKind::Label => "hl hl-label",
             SpanKind::Deadline => "hl hl-deadline",
