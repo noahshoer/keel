@@ -87,6 +87,10 @@ fn main() {
 
 #[derive(Clone, PartialEq)]
 struct Loaded {
+    /// The view this data was loaded for. The pane shows this, not the
+    /// view just picked, so a switch swaps title and tasks together instead
+    /// of flashing the new title over the old (empty-looking) task list.
+    view: View,
     projects: Vec<Project>,
     /// Sections of every project (for grouping and the editor's location picker).
     sections: Vec<Section>,
@@ -288,6 +292,7 @@ fn App() -> Element {
             Vec::new()
         };
         Ok::<Loaded, String>(Loaded {
+            view: v,
             projects,
             sections,
             labels,
@@ -302,7 +307,6 @@ fn App() -> Element {
     });
 
     let today = today();
-    let current = view();
     let state = (*data.read()).clone();
 
     rsx! {
@@ -329,7 +333,7 @@ fn App() -> Element {
                         theme,
                         reload,
                     }
-                    MainPane { view: current, loaded, today, show_completed, drawer, search_query, reload }
+                    MainPane { view: loaded.view.clone(), loaded, today, show_completed, drawer, search_query, reload }
                 },
             }
         }
@@ -431,7 +435,7 @@ fn MainPane(
 
     rsx! {
         main { class: "main",
-            div { class: "content",
+            div { key: "{view_key}", class: "content",
                 div { class: "view-head",
                     button {
                         class: "icon-btn menu-btn",
