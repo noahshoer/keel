@@ -226,6 +226,8 @@ fn ManagedRow(
     icon_class: String,
     active: bool,
     kind: String,
+    /// `project:<id>` / `label:<id>`: the long-press menu's target (iPhone).
+    menu_id: String,
     on_open: EventHandler<()>,
     on_rename: EventHandler<String>,
     on_delete: EventHandler<()>,
@@ -233,6 +235,21 @@ fn ManagedRow(
     let mut mode = use_signal(|| RowMode::Normal);
     let mut draft = use_signal(String::new);
     let start_name = name.clone();
+    // iPhone: a long press offers Rename and Delete (the desktop's hover
+    // buttons); Delete still asks below.
+    {
+        let start = name.clone();
+        crate::glass::use_row_menu(menu_id.clone(), name.clone(), crate::glass::nav_actions("Rename"), move |action| {
+            match action {
+                crate::glass::TaskAction::Rename => {
+                    draft.set(start.clone());
+                    mode.set(RowMode::Renaming);
+                }
+                crate::glass::TaskAction::Delete => mode.set(RowMode::ConfirmDelete),
+                _ => {}
+            }
+        });
+    }
     let warning = if kind == "project" {
         format!("Delete “{name}” and all its tasks?")
     } else {
@@ -287,6 +304,7 @@ fn ManagedRow(
         RowMode::Normal => rsx! {
             div {
                 class: nav_class(active),
+                "data-menu-id": "{menu_id}",
                 onclick: move |_| on_open.call(()),
                 span { class: "nav-icon {icon_class}", {icon} }
                 span { class: "nav-name", "{name}" }
@@ -330,6 +348,7 @@ fn NavProject(project: Project, active: bool, view: Signal<View>, reload: Signal
             icon_class: "hash".to_string(),
             active,
             kind: "project".to_string(),
+            menu_id: format!("project:{}", project.id),
             on_open: move |_| view.set(open_target.clone()),
             on_rename: move |new_name: String| {
                 let id = id_rename.clone();
@@ -372,6 +391,7 @@ fn NavLabel(label: Label, active: bool, view: Signal<View>, reload: Signal<u32>)
             icon_class: "label".to_string(),
             active,
             kind: "label".to_string(),
+            menu_id: format!("label:{}", label.id),
             on_open: move |_| view.set(open_target.clone()),
             on_rename: move |new_name: String| {
                 let id = id_rename.clone();

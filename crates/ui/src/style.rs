@@ -157,7 +157,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .brand .theme-toggle { margin-left: auto; }
 .nav-item { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: var(--r-md);
   cursor: pointer; color: var(--text); user-select: none; margin-bottom: 1px; }
-.nav-item:hover { background: var(--hover); }
+@media (hover: hover) { .nav-item:hover { background: var(--hover); } }
+.nav-item.pressed { background: var(--hover); }
 .nav-item:active { transform: scale(.985); }
 .nav-item.active { background: var(--active-bg); color: var(--active-text); box-shadow: var(--shadow-sm); font-weight: 500; }
 .nav-item .count { margin-left: auto; color: var(--muted); font-size: 12px; }
@@ -386,7 +387,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .add-task-row .plus svg { display: none; }
 }
 /* Touch: a long press shows a task's actions; no text selection or callout. */
-@media (hover: none) { .task-row { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
+@media (hover: none) { .task-row, .nav-item { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
 .view-head .view-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .view-head .view-toggle { flex-shrink: 0; }
 .menu-btn { display: none; margin-left: -6px; color: var(--subtle); }
@@ -401,7 +402,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .done-when { color: var(--muted); }
 .nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-actions { display: none; gap: 0; }
-.nav-item:hover .nav-actions { display: inline-flex; }
+/* Mouse: hover shows a row's rename/delete. Touch: a long press opens a menu
+   (gestures.rs); a hover reveal would cost every tap an extra tap. */
+@media (hover: hover) { .nav-item:hover .nav-actions { display: inline-flex; } }
 .nav-actions .icon-btn { padding: 3px; }
 .confirm-box { margin: 4px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md);
   background: var(--bg); box-shadow: var(--shadow-md); animation: pop-in .16s var(--ease); }

@@ -47,7 +47,7 @@ struct OverlayView: View {
     ) { menu in
       ForEach(menu.items, id: \.id) { item in
         Button(item.label, role: item.destructive ? .destructive : nil) {
-          model.chooseAction(menu.taskId, item.id)
+          model.chooseAction(menu.target, item.id)
         }
       }
     }

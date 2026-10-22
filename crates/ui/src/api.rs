@@ -399,14 +399,14 @@ pub async fn glass_hide() {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ActionsArg<'a> {
-    task_id: &'a Id,
+    target: &'a str,
     title: &'a str,
     items: Vec<crate::glass::ActionItem>,
 }
 
-/// Opens the native action menu for a long-pressed task.
-pub async fn glass_actions(task_id: &Id, title: &str, items: Vec<crate::glass::ActionItem>) {
-    let _ = invoke::<_, ()>("plugin:glass|actions", &ActionsArg { task_id, title, items }).await;
+/// Opens the native action menu for a long-pressed row.
+pub async fn glass_actions(target: &str, title: &str, items: Vec<crate::glass::ActionItem>) {
+    let _ = invoke::<_, ()>("plugin:glass|actions", &ActionsArg { target, title, items }).await;
 }
 
 /// Shows or hides the floating glass buttons.

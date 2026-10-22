@@ -51,29 +51,31 @@ document.addEventListener('touchend', (ev) => {
 await new Promise(() => {});
 "#;
 
-/// Long press on a task row (touch only). On iPhone it fires
-/// `keel-long-press` with the task id, and the native action menu opens
-/// (`glass.rs`); the row is highlighted while held. Elsewhere it marks the
-/// task `.pressed`, which shows its row actions. A plain tap opens the task,
-/// as on desktop; the hover-only reveal is mouse-only (see `style.rs`).
+/// Long press on a task row or a sidebar row (touch only). On iPhone it
+/// fires `keel-long-press` with the row's `data-menu-id`, and the native
+/// action menu opens (`glass::use_row_menu`); the row is highlighted while
+/// held. Elsewhere it marks a task `.pressed`, which shows its row actions.
+/// A plain tap opens the row, as on desktop; hover reveals are mouse-only
+/// (see `style.rs`).
 pub const LONG_PRESS_JS: &str = r#"
 const HOLD_MS = 450, SLOP = 10;
 // After a long press, ignore only a click that follows right away: iOS
 // often sends none, and a flag left set would eat the next real tap.
 let timer = null, origin = null, pressedAt = 0;
-const clear = () => document.querySelectorAll('.task.pressed').forEach((t) => t.classList.remove('pressed'));
+const ROWS = '.task-row, .nav-item', ACTIONS = '.task-actions, .nav-actions';
+const clear = () => document.querySelectorAll('.pressed').forEach((t) => t.classList.remove('pressed'));
 document.addEventListener('touchstart', (ev) => {
-  const row = ev.target.closest?.('.task-row');
-  if (!row || ev.target.closest('.task-actions')) { if (!ev.target.closest?.('.task-actions')) clear(); return; }
+  const row = ev.target.closest?.(ROWS);
+  if (!row || ev.target.closest(ACTIONS)) { if (!ev.target.closest?.(ACTIONS)) clear(); return; }
   const t = ev.touches[0];
   origin = { x: t.clientX, y: t.clientY };
   timer = setTimeout(() => {
     clear();
-    const task = row.closest('.task');
-    task?.classList.add('pressed');
+    const holder = row.closest('[data-menu-id]');
+    (row.closest('.task') || row).classList.add('pressed');
     pressedAt = Date.now();
-    if (document.body.classList.contains('native-glass') && task?.dataset.taskId) {
-      document.dispatchEvent(new CustomEvent('keel-long-press', { detail: task.dataset.taskId }));
+    if (document.body.classList.contains('native-glass') && holder) {
+      document.dispatchEvent(new CustomEvent('keel-long-press', { detail: holder.dataset.menuId }));
       setTimeout(clear, 400);
     }
   }, HOLD_MS);
@@ -87,12 +89,12 @@ const stop = () => { clearTimeout(timer); timer = null; };
 document.addEventListener('touchend', stop, { passive: true });
 document.addEventListener('touchcancel', stop, { passive: true });
 document.addEventListener('click', (ev) => {
-  if (pressedAt && Date.now() - pressedAt < 700 && !ev.target.closest?.('.task-actions')) {
+  if (pressedAt && Date.now() - pressedAt < 700 && !ev.target.closest?.(ACTIONS)) {
     ev.stopPropagation(); ev.preventDefault();
   }
   pressedAt = 0;
 }, true);
-document.addEventListener('contextmenu', (ev) => { if (ev.target.closest?.('.task-row')) ev.preventDefault(); });
+document.addEventListener('contextmenu', (ev) => { if (ev.target.closest?.(ROWS)) ev.preventDefault(); });
 "#;
 
 #[cfg(test)]

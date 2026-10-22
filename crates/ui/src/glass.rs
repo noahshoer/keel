@@ -401,13 +401,15 @@ pub enum ButtonAction {
     Search,
 }
 
-/// What a task's long-press menu can do (the desktop's row actions).
+/// What a row's long-press menu can do (the desktop's hover actions).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TaskAction {
     SubTask,
     Streak,
     Delete,
+    /// Sidebar rows: rename a project or label, edit a filter.
+    Rename,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -429,12 +431,49 @@ pub fn task_actions(recurring: bool) -> Vec<ActionItem> {
     items
 }
 
-/// The menu choice Swift reports.
+/// The menu for a sidebar row (project, label or filter); Delete still
+/// goes through the row's inline confirm.
+pub fn nav_actions(rename_label: &str) -> Vec<ActionItem> {
+    vec![
+        ActionItem { id: TaskAction::Rename, label: rename_label.to_string(), destructive: false },
+        ActionItem { id: TaskAction::Delete, label: "Delete".to_string(), destructive: true },
+    ]
+}
+
+/// The menu choice Swift reports. `target` is the row's menu id: a task id,
+/// or `project:<id>` / `label:<id>` / `filter:<id>` for sidebar rows.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChosenAction {
-    pub task_id: Id,
+    pub target: String,
     pub action: TaskAction,
+}
+
+/// Gives a row a long-press menu on iPhone: when the row tagged
+/// `data-menu-id={menu_id}` is long-pressed, Swift shows `items` titled
+/// `title`, and the choice comes back to `on_choose`.
+pub fn use_row_menu(
+    menu_id: String,
+    title: String,
+    items: Vec<ActionItem>,
+    mut on_choose: impl FnMut(TaskAction) + 'static,
+) {
+    let glass = use_glass();
+    let id = menu_id.clone();
+    use_effect(move || {
+        let mut pressed = glass.pressed;
+        if pressed().as_deref() == Some(id.as_str()) {
+            pressed.set(None);
+            let (id, title, items) = (id.clone(), title.clone(), items.clone());
+            spawn(async move { api::glass_actions(&id, &title, items).await });
+        }
+    });
+    use_effect(move || {
+        let mut chosen = glass.chosen;
+        let Some(c) = chosen().filter(|c| c.target == menu_id) else { return };
+        chosen.set(None);
+        on_choose(c.action);
+    });
 }
 
 /// Forwards long presses on task rows (the task id) and the action menu's
@@ -480,8 +519,8 @@ pub fn button_action(name: &str) -> Option<ButtonAction> {
 pub struct Glass {
     pub native: Signal<bool>,
     session: Signal<Option<CardSession>>,
-    /// The task whose row was long-pressed (its row opens the menu).
-    pub pressed: Signal<Option<Id>>,
+    /// The menu id of the row that was long-pressed (its row opens the menu).
+    pub pressed: Signal<Option<String>>,
     /// The menu choice, for the row it belongs to.
     pub chosen: Signal<Option<ChosenAction>>,
 }
@@ -508,7 +547,7 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
                 let mut presses = document::eval(PRESS_JS);
                 while let Ok(msg) = presses.recv::<PressMsg>().await {
                     if let Some(id) = msg.press {
-                        pressed.set(Some(Id::from(id)));
+                        pressed.set(Some(id));
                     }
                     if let Some(c) = msg.chosen.and_then(|j| serde_json::from_str::<ChosenAction>(&j).ok()) {
                         chosen.set(Some(c));
@@ -833,7 +872,17 @@ mod tests {
 
     #[test]
     fn chosen_actions_deserialize_from_swift_json() {
-        let c: ChosenAction = serde_json::from_str(r#"{"taskId":"T-1","action":"subTask"}"#).unwrap();
-        assert_eq!(c, ChosenAction { task_id: Id::from("T-1"), action: TaskAction::SubTask });
+        let c: ChosenAction = serde_json::from_str(r#"{"target":"T-1","action":"subTask"}"#).unwrap();
+        assert_eq!(c, ChosenAction { target: "T-1".to_string(), action: TaskAction::SubTask });
+    }
+
+    #[test]
+    fn sidebar_rows_offer_rename_and_delete() {
+        let items = nav_actions("Rename");
+        let ids: Vec<TaskAction> = items.iter().map(|a| a.id).collect();
+        assert_eq!(ids, vec![TaskAction::Rename, TaskAction::Delete]);
+        assert_eq!(items[0].label, "Rename");
+        assert!(items[1].destructive && !items[0].destructive);
+        assert_eq!(nav_actions("Edit filter")[0].label, "Edit filter");
     }
 }

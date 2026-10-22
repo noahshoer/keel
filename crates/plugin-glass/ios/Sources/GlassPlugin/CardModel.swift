@@ -167,14 +167,14 @@ enum CardEvent: Encodable {
   }
 }
 
-/// A long-pressed task's menu (`plugin:glass|actions`).
+/// A long-pressed row's menu (`plugin:glass|actions`).
 struct ActionMenu: Codable, Equatable {
   struct Item: Codable, Equatable {
     let id: String
     let label: String
     let destructive: Bool
   }
-  let taskId: String
+  let target: String
   let title: String
   let items: [Item]
 }

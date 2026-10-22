@@ -106,6 +106,15 @@ pub fn FilterRow(filter: Filter, active: bool, view: Signal<View>, reload: Signa
     let id_save = filter.id.clone();
     let id_delete = filter.id.clone();
     let class = if active { "nav-item active" } else { "nav-item" };
+    let menu_id = format!("filter:{}", filter.id);
+    // iPhone: a long press offers Edit and Delete (the desktop's hover buttons).
+    crate::glass::use_row_menu(menu_id.clone(), filter.name.clone(), crate::glass::nav_actions("Edit filter"), move |action| {
+        match action {
+            crate::glass::TaskAction::Rename => mode.set(RowMode::Editing),
+            crate::glass::TaskAction::Delete => mode.set(RowMode::ConfirmDelete),
+            _ => {}
+        }
+    });
 
     match mode() {
         RowMode::Editing => rsx! {
@@ -154,6 +163,7 @@ pub fn FilterRow(filter: Filter, active: bool, view: Signal<View>, reload: Signa
         RowMode::Normal => rsx! {
             div {
                 class,
+                "data-menu-id": "{menu_id}",
                 title: "{filter.query}",
                 onclick: move |_| view.set(open.clone()),
                 span { class: "nav-icon filter", Icon { svg: icons::funnel() } }
