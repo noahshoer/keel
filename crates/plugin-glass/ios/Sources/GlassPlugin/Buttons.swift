@@ -46,7 +46,8 @@ struct FloatingButtons: View {
       }
       .padding(.horizontal, 14)
       Spacer()
-      if model.addVisible {
+      // The + steps aside while the card is open (the card covers it).
+      if model.addVisible && !model.isOpen {
       HStack {
         Spacer()
         Button {

@@ -33,11 +33,15 @@ struct OverlayView: View {
   var body: some View {
     ZStack {
       Color.clear
+      // The menu and search buttons stay in view under an open card, inert
+      // (a tap there lands on the card's tap-outside layer and closes it).
+      if model.buttonsVisible {
+        FloatingButtons(model: model)
+          .allowsHitTesting(!model.isOpen)
+      }
       if model.isOpen {
         CardView(model: model)
           .transition(.move(edge: .bottom).combined(with: .opacity))
-      } else if model.buttonsVisible {
-        FloatingButtons(model: model)
       }
       if !model.isOpen {
         DrawerButtons(model: model)
