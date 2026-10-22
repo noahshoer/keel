@@ -385,6 +385,18 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .check { position: relative; width: 24px; height: 24px; min-width: 24px; margin-top: 0; border-width: 1.75px; }
   .check::after { content: ''; position: absolute; inset: -10px; }
   .task-project { font-size: 13px; }
+  /* Sidebar: bigger rows, icons and logo to match the task rows. */
+  .brand { font-size: 20px; gap: 12px; padding: 6px 8px 20px; }
+  .brand-mark, .brand-mark svg { width: 40px; height: 40px; }
+  .brand .icon-btn svg { width: 22px; height: 22px; }
+  .nav-item { height: 46px; gap: 12px; font-size: 17px; margin-bottom: 2px; }
+  .nav-icon { width: 28px; height: 28px; }
+  .nav-icon svg { width: 22px; height: 22px; }
+  .nav-icon.hash { font-size: 19px; }
+  .nav-item .count { font-size: 15px; }
+  .section-head { font-size: 13px; padding: 22px 10px 8px; }
+  .section-head .icon-btn svg { width: 20px; height: 20px; }
+  .project-input { font-size: 16px; padding: 10px 12px; }
   /* The add row, Reminders-style: a blank next task with a dotted circle,
      lined up with the task circles above it. */
   .add-task-row { padding: 14px 8px 13px; gap: 10px; font-size: 17px; }
