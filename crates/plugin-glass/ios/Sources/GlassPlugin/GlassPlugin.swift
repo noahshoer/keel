@@ -19,6 +19,7 @@ class ButtonsArgs: Decodable {
   let add: Bool
   let searching: Bool
   let drawer: [DrawerButton]
+  let theme: String
 }
 
 /// Draws Keel's Liquid Glass composer, editor, pickers and floating buttons
@@ -28,8 +29,10 @@ class ButtonsArgs: Decodable {
 class GlassPlugin: Plugin {
   let model = CardModel()
   var hosting: UIViewController?
+  weak var webview: WKWebView?
 
   public override func load(webview: WKWebView) {
+    self.webview = webview
     model.send = { [weak self] event in
       guard let data = try? JSONEncoder().encode(event), let json = String(data: data, encoding: .utf8) else { return }
       self?.trigger("card", data: ["json": json])
@@ -77,12 +80,29 @@ class GlassPlugin: Plugin {
   @objc public func buttons(_ invoke: Invoke) throws {
     let args = try invoke.parseArgs(ButtonsArgs.self)
     DispatchQueue.main.async {
+      self.applyTheme(args.theme)
       self.model.buttonsVisible = args.visible
       self.model.addVisible = args.add
       self.model.searching = args.searching
       withAnimation(.easeOut(duration: 0.18)) { self.model.drawerButtons = args.drawer }
     }
     invoke.resolve()
+  }
+}
+
+extension GlassPlugin {
+  /// Native views (glass, the card, pickers, menus, the keyboard) follow
+  /// Keel's theme instead of the phone's: the window gets an override, or
+  /// none for "system".
+  func applyTheme(_ theme: String) {
+    let style: UIUserInterfaceStyle =
+      switch theme {
+      case "light": .light
+      case "dark": .dark
+      default: .unspecified
+      }
+    guard let window = webview?.window ?? hosting?.view.window else { return }
+    if window.overrideUserInterfaceStyle != style { window.overrideUserInterfaceStyle = style }
   }
 }
 

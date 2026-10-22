@@ -504,10 +504,13 @@ pub struct ButtonsState {
     /// Glass stand-ins for the drawer's theme and settings buttons, while
     /// the drawer is open.
     pub drawer: Vec<DrawerButton>,
+    /// Keel's theme ("system" / "light" / "dark"): the native views follow
+    /// it rather than the phone's setting.
+    pub theme: String,
 }
 
 pub fn floating_buttons(searching: bool, drawer_open: bool) -> ButtonsState {
-    ButtonsState { visible: !drawer_open, add: !searching, searching, drawer: Vec::new() }
+    ButtonsState { visible: !drawer_open, add: !searching, searching, drawer: Vec::new(), theme: "system".to_string() }
 }
 
 /// Where the page drew one of the drawer's header buttons (CSS px, which
@@ -948,7 +951,8 @@ mod tests {
 
     #[test]
     fn search_swaps_the_search_button_for_close_and_drops_add() {
-        let state = |visible, add, searching| ButtonsState { visible, add, searching, drawer: Vec::new() };
+        let state =
+            |visible, add, searching| ButtonsState { visible, add, searching, drawer: Vec::new(), theme: "system".into() };
         assert_eq!(floating_buttons(false, false), state(true, true, false));
         assert_eq!(floating_buttons(true, false), state(true, false, true));
         assert!(!floating_buttons(false, true).visible, "hidden while the drawer is open");
@@ -992,5 +996,13 @@ mod tests {
         assert_eq!(drawer_buttons(&rects, "system")[0].symbol, "desktopcomputer");
         assert_eq!(button_action("theme"), Some(ButtonAction::Theme));
         assert_eq!(button_action("settings"), Some(ButtonAction::Settings));
+    }
+
+    #[test]
+    fn buttons_carry_the_app_theme() {
+        assert_eq!(floating_buttons(false, false).theme, "system");
+        let mut s = floating_buttons(false, false);
+        s.theme = "dark".into();
+        assert_eq!(serde_json::to_value(&s).unwrap()["theme"], "dark");
     }
 }

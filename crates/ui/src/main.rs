@@ -200,6 +200,7 @@ fn App() -> Element {
     // The floating buttons step aside while the drawer is open.
     use_effect(move || {
         let mut state = glass::floating_buttons(view() == View::Search, drawer());
+        state.theme = theme();
         if drawer() {
             state.drawer = glass::drawer_buttons(&(glass.drawer_rects)(), &theme());
         }
