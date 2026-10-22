@@ -197,11 +197,17 @@ fn App() -> Element {
         }
         glass::ButtonAction::AddTask | glass::ButtonAction::Theme | glass::ButtonAction::Settings => {}
     });
+    // Measure the drawer's header buttons each time it opens.
+    use_effect(move || {
+        if drawer() {
+            glass.measure_drawer();
+        }
+    });
     // The floating buttons step aside while the drawer is open.
     use_effect(move || {
         let mut state = glass::floating_buttons(view() == View::Search, drawer());
         state.theme = theme();
-        if drawer() {
+        if drawer() && !(glass.settings_open)() {
             state.drawer = glass::drawer_buttons(&(glass.drawer_rects)(), &theme());
         }
         if (glass.native)() {

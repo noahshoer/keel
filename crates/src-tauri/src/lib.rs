@@ -86,8 +86,12 @@ fn filter_view(state: tauri::State<'_, AppService>, query: String) -> Result<Vec
     state.filter_view(&query).map_err(|e| e.to_string())
 }
 
+// Commands that reach a mobile plugin (notifications) are async: a sync
+// command runs on the main thread and blocks it until the plugin's Swift
+// answers, which deadlocked with any plugin call (e.g. the glass buttons)
+// that needed the main thread to deliver its own result.
 #[tauri::command(rename_all = "snake_case")]
-fn dispatch(app: tauri::AppHandle, state: tauri::State<'_, AppService>, cmd: Command) -> Result<ApplyResult, String> {
+async fn dispatch(app: tauri::AppHandle, state: tauri::State<'_, AppService>, cmd: Command) -> Result<ApplyResult, String> {
     let result = state.dispatch(cmd).map_err(|e| e.to_string())?;
     // Any change can move a due date: re-plan notifications.
     notifications::resync(&app);
@@ -100,7 +104,7 @@ fn search(state: tauri::State<'_, AppService>, query: String) -> Result<SearchRe
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn import_todoist_csv(
+async fn import_todoist_csv(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppService>,
     project_name: String,
@@ -122,7 +126,7 @@ fn get_reminder_settings(state: tauri::State<'_, AppService>) -> Result<Reminder
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn set_reminder_settings(
+async fn set_reminder_settings(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppService>,
     settings: ReminderSettings,
@@ -142,7 +146,7 @@ fn upcoming_reminders(state: tauri::State<'_, AppService>) -> Result<Vec<Planned
 
 /// "granted" | "denied" | "prompt".
 #[tauri::command(rename_all = "snake_case")]
-fn notification_permission(app: tauri::AppHandle) -> Result<String, String> {
+async fn notification_permission(app: tauri::AppHandle) -> Result<String, String> {
     let state = app.notification().permission_state().map_err(|e| e.to_string())?;
     Ok(notifications::permission_text(state).to_string())
 }
@@ -155,14 +159,14 @@ fn reminders_when_closed() -> bool {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn request_notification_permission(app: tauri::AppHandle) -> Result<String, String> {
+async fn request_notification_permission(app: tauri::AppHandle) -> Result<String, String> {
     let state = app.notification().request_permission().map_err(|e| e.to_string())?;
     notifications::resync(&app);
     Ok(notifications::permission_text(state).to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn test_notification(app: tauri::AppHandle) -> Result<(), String> {
+async fn test_notification(app: tauri::AppHandle) -> Result<(), String> {
     app.notification()
         .builder()
         .title("Keel")

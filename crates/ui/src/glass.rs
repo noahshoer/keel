@@ -553,26 +553,32 @@ pub fn drawer_buttons(rects: &[WebRect], theme: &str) -> Vec<DrawerButton> {
         .collect()
 }
 
-/// Reports where the drawer's theme and settings buttons sit while the
-/// drawer is open (after it slides in, and as it scrolls), and an empty
-/// list when it closes or a dialog covers it.
-const DRAWER_JS: &str = r#"
-const SPOTS = [['theme', '.brand .theme-toggle'], ['settings', '.brand .settings-btn']];
-let last = '', timer = null;
-const isOpen = () => document.querySelector('.app')?.classList.contains('drawer-open') && !document.querySelector('.modal-scrim');
-const send = () => {
-  const rects = isOpen() ? SPOTS.map(([id, sel]) => {
-    const r = document.querySelector(sel)?.getBoundingClientRect();
-    return r && { id, x: r.x, y: r.y, w: r.width, h: r.height };
-  }).filter(Boolean) : [];
-  const key = JSON.stringify(rects);
-  if (key !== last) { last = key; dioxus.send(rects); }
-};
-const later = (ms) => { clearTimeout(timer); timer = setTimeout(send, ms); };
-new MutationObserver(() => (isOpen() ? later(300) : send()))
-  .observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
-document.addEventListener('scroll', () => later(16), true);
+/// Measures the drawer's theme and settings buttons: once when asked (`go`
+/// is sent after the drawer opens), and again whenever the drawer itself
+/// scrolls. (An earlier version watched every DOM change and fed back into
+/// rendering when the settings dialog opened, freezing the page.)
+const MEASURE_FN: &str = r#"
+const measure = () => [['theme', '.brand .theme-toggle'], ['settings', '.brand .settings-btn']].map(([id, sel]) => {
+  const r = document.querySelector(sel)?.getBoundingClientRect();
+  return r && { id, x: r.x, y: r.y, w: r.width, h: r.height };
+}).filter(Boolean);
+"#;
+
+/// Re-measures whenever the drawer itself scrolls.
+const DRAWER_SCROLL_JS: &str = r#"
+let timer = null;
+document.addEventListener('scroll', (ev) => {
+  if (!ev.target.classList?.contains('sidebar')) return;
+  clearTimeout(timer);
+  timer = setTimeout(() => dioxus.send(measure()), 16);
+}, true);
 await new Promise(() => {});
+"#;
+
+/// One reading, once the drawer has finished sliding in.
+const DRAWER_ONCE_JS: &str = r#"
+await new Promise((r) => setTimeout(r, 320));
+dioxus.send(measure());
 "#;
 
 /// Taps the web button a glass stand-in covers.
@@ -603,6 +609,8 @@ pub struct Glass {
     pub chosen: Signal<Option<ChosenAction>>,
     /// Where the drawer's header buttons sit (empty while it's closed).
     pub drawer_rects: Signal<Vec<WebRect>>,
+    /// The settings dialog is open (the drawer's glass buttons step aside).
+    pub settings_open: Signal<bool>,
 }
 
 /// Provides [`Glass`] (call once, in `App`): asks the plugin whether it's
@@ -615,6 +623,7 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
         pressed: Signal::new(None),
         chosen: Signal::new(None),
         drawer_rects: Signal::new(Vec::new()),
+        settings_open: Signal::new(false),
     });
     use_hook(move || {
         spawn(async move {
@@ -637,7 +646,7 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
             });
             spawn(async move {
                 let mut rects = glass.drawer_rects;
-                let mut spots = document::eval(DRAWER_JS);
+                let mut spots = document::eval(&format!("{MEASURE_FN}{DRAWER_SCROLL_JS}"));
                 while let Ok(r) = spots.recv::<Vec<WebRect>>().await {
                     rects.set(r);
                 }
@@ -713,6 +722,20 @@ impl Glass {
             existing,
             ctx,
             reload,
+        });
+    }
+
+    /// Measures the drawer's header buttons once it has slid in (iPhone).
+    pub fn measure_drawer(self) {
+        if !*self.native.peek() {
+            return;
+        }
+        let mut rects = self.drawer_rects;
+        spawn(async move {
+            let mut once = document::eval(&format!("{MEASURE_FN}{DRAWER_ONCE_JS}"));
+            if let Ok(r) = once.recv::<Vec<WebRect>>().await {
+                rects.set(r);
+            }
         });
     }
 

@@ -52,6 +52,7 @@ cd crates/src-tauri && cargo tauri dev       # desktop app (serves crates/ui/dis
 
 - Workflow per phase: write a short plan in `docs/superpowers/plans/` → feature branch → **TDD** (failing test first) → commit per task → merge `--no-ff` to `main` → push. Noah prefers you build without asking for routine decisions; ask about genuinely personal choices (names, visual direction), ideally with visual options.
 - Tauri commands use `#[tauri::command(rename_all = "snake_case")]`, and the frontend sends snake_case args.
+- A command that calls into a mobile plugin (anything touching `app.notification()`, including `notifications::resync`) **must be `async`**. A sync command runs on the main thread and blocks it waiting for Swift, which deadlocks against any other plugin call that needs the main thread. That froze the app when Settings opened next to a glass-plugin call.
 - Commands are idempotent (uuid) with temp-id → id mapping. Add new `Action` variants (never change existing serialized shapes); new fields are `#[serde(default)]`. Adding a field to `TaskAdd`/`TaskUpdate` means updating struct literals in tests too.
 - `Recurrence` variants are append-only (stored as JSON in `Due`). Consumers only use `contains` / `next_after` / `prev_before`.
 - Quick add: an unrecognized `every …` phrase stays text as a whole (no silent misreads). A title that would become empty applies nothing.

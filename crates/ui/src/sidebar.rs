@@ -34,6 +34,12 @@ pub fn Sidebar(
     };
     let theme_title = theme::label(&theme_pref());
     let mut show_settings = use_signal(|| false);
+    // The drawer's glass buttons (iPhone) hide while settings is open.
+    let glass = crate::glass::use_glass();
+    use_effect(move || {
+        let mut open = glass.settings_open;
+        open.set(show_settings());
+    });
     let mut adding = use_signal(|| false);
     let mut adding_label = use_signal(|| false);
     let mut adding_filter = use_signal(|| false);
