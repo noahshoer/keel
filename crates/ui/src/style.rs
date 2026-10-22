@@ -621,7 +621,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .task.completing .task-content { color: var(--muted); transition: color .3s .1s; }
 @keyframes check-pop { 0% { transform: scale(.8); } 60% { transform: scale(1.14); } 100% { transform: scale(1); } }
 .task.switch-off { overflow: hidden; transform-origin: center; pointer-events: none;
-  animation: tv-off .5s cubic-bezier(.6, .05, .4, 1) forwards, row-collapse .22s ease .28s forwards; }
+  animation: tv-off .38s cubic-bezier(.6, .05, .4, 1) forwards, row-collapse .18s ease .2s forwards; }
 @keyframes tv-off {
   0%   { transform: scale(1, 1);     filter: brightness(1);   opacity: 1; }
   45%  { transform: scale(1, .03);   filter: brightness(2.6); opacity: 1; }

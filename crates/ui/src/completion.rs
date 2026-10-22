@@ -5,9 +5,9 @@
 use wasm_bindgen::prelude::*;
 
 /// How long the filled circle shows before the row switches off.
-pub const FILL_MS: u32 = 450;
+pub const FILL_MS: u32 = 350;
 /// The switch-off animation (`.task.switch-off` in style.rs).
-pub const OFF_MS: u32 = 500;
+pub const OFF_MS: u32 = 380;
 
 /// The mark drawn in a completed circle.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
