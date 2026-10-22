@@ -38,6 +38,9 @@ struct OverlayView: View {
       } else if model.buttonsVisible {
         FloatingButtons(model: model)
       }
+      if !model.isOpen {
+        DrawerButtons(model: model)
+      }
     }
     .confirmationDialog(
       model.actionMenu?.title ?? "",

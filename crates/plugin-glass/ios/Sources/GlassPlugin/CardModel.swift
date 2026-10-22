@@ -179,6 +179,16 @@ struct ActionMenu: Codable, Equatable {
   let items: [Item]
 }
 
+/// One of the drawer's header buttons, at the spot the page drew it.
+struct DrawerButton: Codable, Equatable {
+  let id: String
+  let symbol: String
+  let x: CGFloat
+  let y: CGFloat
+  let w: CGFloat
+  let h: CGFloat
+}
+
 final class CardModel: ObservableObject {
   @Published var actionMenu: ActionMenu?
   /// Set by the plugin: reports the chosen action.
@@ -196,6 +206,8 @@ final class CardModel: ObservableObject {
   @Published var addVisible = true
   /// In Search, the search button closes it.
   @Published var searching = false
+  /// Glass stand-ins for the open drawer's header buttons.
+  @Published var drawerButtons: [DrawerButton] = []
 
   /// Window-space frames of the controls that take touches while the card is closed.
   var hitRects: [String: CGRect] = [:]

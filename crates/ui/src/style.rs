@@ -374,6 +374,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* iPhone: native glass buttons float over the header (menu left, search
    right) and the list (+ bottom right); keep their spots clear. */
 .native-glass .menu-btn { display: none; }
+/* iPhone: glass stand-ins cover the drawer's theme and settings buttons
+   (glass::DRAWER_JS); the web ones stay in place, invisible, to be tapped. */
+.native-glass .brand .icon-btn { visibility: hidden; }
+.native-glass .brand .settings-btn { margin-left: 10px; }
 .native-glass .content { padding-top: calc(env(safe-area-inset-top) + 60px); padding-bottom: 120px; }
 /* Touch: Todoist-sized rows (a little shorter) with a bigger check circle,
    whose tap area reaches past it to ~44px. */

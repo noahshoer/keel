@@ -59,7 +59,7 @@ pub fn Sidebar(
                     Icon { svg: theme_icon.clone() }
                 }
                 button {
-                    class: "icon-btn",
+                    class: "icon-btn settings-btn",
                     title: "Settings",
                     onclick: move |_| show_settings.set(true),
                     Icon { svg: icons::gear() }

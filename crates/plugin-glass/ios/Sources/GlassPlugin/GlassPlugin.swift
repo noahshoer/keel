@@ -1,4 +1,5 @@
 import SwiftRs
+import SwiftUI
 import Tauri
 import UIKit
 import WebKit
@@ -17,6 +18,7 @@ class ButtonsArgs: Decodable {
   let visible: Bool
   let add: Bool
   let searching: Bool
+  let drawer: [DrawerButton]
 }
 
 /// Draws Keel's Liquid Glass composer, editor, pickers and floating buttons
@@ -78,6 +80,7 @@ class GlassPlugin: Plugin {
       self.model.buttonsVisible = args.visible
       self.model.addVisible = args.add
       self.model.searching = args.searching
+      withAnimation(.easeOut(duration: 0.18)) { self.model.drawerButtons = args.drawer }
     }
     invoke.resolve()
   }

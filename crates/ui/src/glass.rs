@@ -399,6 +399,9 @@ pub enum ButtonAction {
     AddTask,
     OpenMenu,
     Search,
+    /// The drawer's theme switcher and settings (taps on the web buttons).
+    Theme,
+    Settings,
 }
 
 /// What a row's long-press menu can do (the desktop's hover actions).
@@ -491,17 +494,87 @@ struct PressMsg {
 }
 
 /// Which floating buttons show (`plugin:glass|buttons`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ButtonsState {
     pub visible: bool,
     /// The + (views with an "Add task" row; not Search).
     pub add: bool,
     /// In Search, the search button closes it instead.
     pub searching: bool,
+    /// Glass stand-ins for the drawer's theme and settings buttons, while
+    /// the drawer is open.
+    pub drawer: Vec<DrawerButton>,
 }
 
 pub fn floating_buttons(searching: bool, drawer_open: bool) -> ButtonsState {
-    ButtonsState { visible: !drawer_open, add: !searching, searching }
+    ButtonsState { visible: !drawer_open, add: !searching, searching, drawer: Vec::new() }
+}
+
+/// Where the page drew one of the drawer's header buttons (CSS px, which
+/// are points on iOS), as `DRAWER_JS` measures it.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct WebRect {
+    pub id: String,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+/// A native glass button drawn over the matching web one.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct DrawerButton {
+    pub id: String,
+    /// SF Symbol name.
+    pub symbol: String,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+/// The drawer's header buttons as glass: the theme switcher shows the
+/// current preference's symbol, settings a gear.
+pub fn drawer_buttons(rects: &[WebRect], theme: &str) -> Vec<DrawerButton> {
+    rects
+        .iter()
+        .map(|r| {
+            let symbol = match (r.id.as_str(), theme) {
+                ("theme", "light") => "sun.max",
+                ("theme", "dark") => "moon",
+                ("theme", _) => "desktopcomputer",
+                _ => "gearshape",
+            };
+            DrawerButton { id: r.id.clone(), symbol: symbol.to_string(), x: r.x, y: r.y, w: r.w, h: r.h }
+        })
+        .collect()
+}
+
+/// Reports where the drawer's theme and settings buttons sit while the
+/// drawer is open (after it slides in, and as it scrolls), and an empty
+/// list when it closes or a dialog covers it.
+const DRAWER_JS: &str = r#"
+const SPOTS = [['theme', '.brand .theme-toggle'], ['settings', '.brand .settings-btn']];
+let last = '', timer = null;
+const isOpen = () => document.querySelector('.app')?.classList.contains('drawer-open') && !document.querySelector('.modal-scrim');
+const send = () => {
+  const rects = isOpen() ? SPOTS.map(([id, sel]) => {
+    const r = document.querySelector(sel)?.getBoundingClientRect();
+    return r && { id, x: r.x, y: r.y, w: r.width, h: r.height };
+  }).filter(Boolean) : [];
+  const key = JSON.stringify(rects);
+  if (key !== last) { last = key; dioxus.send(rects); }
+};
+const later = (ms) => { clearTimeout(timer); timer = setTimeout(send, ms); };
+new MutationObserver(() => (isOpen() ? later(300) : send()))
+  .observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+document.addEventListener('scroll', () => later(16), true);
+await new Promise(() => {});
+"#;
+
+/// Taps the web button a glass stand-in covers.
+fn click_js(selector: &str) -> String {
+    format!("document.querySelector('{selector}')?.click();")
 }
 
 pub fn button_action(name: &str) -> Option<ButtonAction> {
@@ -509,6 +582,8 @@ pub fn button_action(name: &str) -> Option<ButtonAction> {
         "fab" => Some(ButtonAction::AddTask),
         "menu" => Some(ButtonAction::OpenMenu),
         "search" => Some(ButtonAction::Search),
+        "theme" => Some(ButtonAction::Theme),
+        "settings" => Some(ButtonAction::Settings),
         _ => None,
     }
 }
@@ -523,6 +598,8 @@ pub struct Glass {
     pub pressed: Signal<Option<String>>,
     /// The menu choice, for the row it belongs to.
     pub chosen: Signal<Option<ChosenAction>>,
+    /// Where the drawer's header buttons sit (empty while it's closed).
+    pub drawer_rects: Signal<Vec<WebRect>>,
 }
 
 /// Provides [`Glass`] (call once, in `App`): asks the plugin whether it's
@@ -534,6 +611,7 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
         session: Signal::new(None),
         pressed: Signal::new(None),
         chosen: Signal::new(None),
+        drawer_rects: Signal::new(Vec::new()),
     });
     use_hook(move || {
         spawn(async move {
@@ -555,11 +633,24 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
                 }
             });
             spawn(async move {
+                let mut rects = glass.drawer_rects;
+                let mut spots = document::eval(DRAWER_JS);
+                while let Ok(r) = spots.recv::<Vec<WebRect>>().await {
+                    rects.set(r);
+                }
+            });
+            spawn(async move {
                 let mut taps = document::eval(BUTTONS_JS);
                 while let Ok(name) = taps.recv::<String>().await {
                     match button_action(&name) {
                         Some(ButtonAction::AddTask) => {
                             let _ = document::eval(ADD_JS);
+                        }
+                        Some(ButtonAction::Theme) => {
+                            let _ = document::eval(&click_js(".brand .theme-toggle"));
+                        }
+                        Some(ButtonAction::Settings) => {
+                            let _ = document::eval(&click_js(".brand .settings-btn"));
                         }
                         Some(action) => on_button(action),
                         None => {}
@@ -857,8 +948,9 @@ mod tests {
 
     #[test]
     fn search_swaps_the_search_button_for_close_and_drops_add() {
-        assert_eq!(floating_buttons(false, false), ButtonsState { visible: true, add: true, searching: false });
-        assert_eq!(floating_buttons(true, false), ButtonsState { visible: true, add: false, searching: true });
+        let state = |visible, add, searching| ButtonsState { visible, add, searching, drawer: Vec::new() };
+        assert_eq!(floating_buttons(false, false), state(true, true, false));
+        assert_eq!(floating_buttons(true, false), state(true, false, true));
         assert!(!floating_buttons(false, true).visible, "hidden while the drawer is open");
     }
 
@@ -884,5 +976,21 @@ mod tests {
         assert_eq!(items[0].label, "Rename");
         assert!(items[1].destructive && !items[0].destructive);
         assert_eq!(nav_actions("Edit filter")[0].label, "Edit filter");
+    }
+
+    #[test]
+    fn drawer_buttons_take_the_measured_spots_and_theme_symbol() {
+        let rects = vec![
+            WebRect { id: "theme".into(), x: 250.0, y: 60.0, w: 36.0, h: 36.0 },
+            WebRect { id: "settings".into(), x: 300.0, y: 60.0, w: 36.0, h: 36.0 },
+        ];
+        let b = drawer_buttons(&rects, "dark");
+        assert_eq!(b[0].symbol, "moon");
+        assert_eq!(b[1].symbol, "gearshape");
+        assert_eq!((b[1].x, b[1].y, b[1].w), (300.0, 60.0, 36.0));
+        assert_eq!(drawer_buttons(&rects, "light")[0].symbol, "sun.max");
+        assert_eq!(drawer_buttons(&rects, "system")[0].symbol, "desktopcomputer");
+        assert_eq!(button_action("theme"), Some(ButtonAction::Theme));
+        assert_eq!(button_action("settings"), Some(ButtonAction::Settings));
     }
 }

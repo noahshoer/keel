@@ -195,11 +195,14 @@ fn App() -> Element {
             let next = if *view.peek() == View::Search { last_view.peek().clone() } else { View::Search };
             view.set(next);
         }
-        glass::ButtonAction::AddTask => {}
+        glass::ButtonAction::AddTask | glass::ButtonAction::Theme | glass::ButtonAction::Settings => {}
     });
     // The floating buttons step aside while the drawer is open.
     use_effect(move || {
-        let state = glass::floating_buttons(view() == View::Search, drawer());
+        let mut state = glass::floating_buttons(view() == View::Search, drawer());
+        if drawer() {
+            state.drawer = glass::drawer_buttons(&(glass.drawer_rects)(), &theme());
+        }
         if (glass.native)() {
             spawn(async move { api::glass_buttons(state).await });
         }
