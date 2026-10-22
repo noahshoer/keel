@@ -56,6 +56,17 @@ pub fn TaskRow(
     let completion_icon = use_context::<Signal<crate::completion::CompletionIcon>>();
     let mut phase = use_signal(|| 0u8);
     let mut gen = use_signal(|| 0u32);
+    // After completing, the row stays switched off until the reload drops
+    // it (resetting first flashed it back in). A repeating task stays in
+    // project views with a new due date; that new date brings it back.
+    let mut done_due = use_signal(|| None::<String>);
+    let due_now = task.due.as_ref().map(|d| d.date.clone()).unwrap_or_default();
+    use_effect(use_reactive!(|due_now| {
+        if done_due.peek().as_ref().is_some_and(|d| *d != due_now) {
+            done_due.set(None);
+            phase.set(0);
+        }
+    }));
     // All task reminders, shared app-wide (see `App`).
     let all_reminders = use_context::<Signal<Vec<Reminder>>>();
     let my_reminders: Vec<ReminderDraft> = all_reminders
@@ -202,6 +213,7 @@ pub fn TaskRow(
                             let mine = gen();
                             phase.set(1);
                             let id = id_complete.clone();
+                            let due = due_now.clone();
                             spawn(async move {
                                 sleep(FILL_MS).await;
                                 if gen() != mine {
@@ -212,8 +224,8 @@ pub fn TaskRow(
                                 if gen() != mine {
                                     return;
                                 }
+                                done_due.set(Some(due));
                                 let _ = api::complete_task(id).await;
-                                phase.set(0);
                                 reload += 1;
                             });
                         },
