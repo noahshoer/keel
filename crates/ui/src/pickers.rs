@@ -187,9 +187,15 @@ pub fn quick_dates(today: NaiveDate) -> Vec<(&'static str, String, NaiveDate)> {
     ]
 }
 
+/// Rows in the looping month wheel: five copies of the twelve months.
+const MONTH_LOOP_ROWS: usize = 60;
+
 /// Drives the month / year wheels: scrolls each to its value, then reports
-/// the row that settles in the band (`[column, row]`). A tap on a row spins
-/// it there. Rows are 36px, matching `.wheel-item`.
+/// the row that settles in the band (`[column, row]`; the month column's
+/// rows count across its copies, read modulo 12). A tap on a row spins it
+/// there. When the month wheel settles outside its middle copy (rows
+/// 24–35), it jumps to the same month there, so it never runs out. Rows are
+/// 36px, matching `.wheel-item`.
 const WHEEL_JS: &str = r#"
 requestAnimationFrame(() => {
   const cols = document.querySelectorAll('.wheel .wheel-col');
@@ -201,7 +207,11 @@ requestAnimationFrame(() => {
     col.addEventListener('scroll', () => {
       clearTimeout(t);
       t = setTimeout(() => {
-        const i = Math.round(col.scrollTop / 36);
+        let i = Math.round(col.scrollTop / 36);
+        if (c === 0 && (i < 24 || i > 35)) {
+          i = 24 + (i % 12);
+          col.scrollTop = i * 36;
+        }
         if (i !== last) { last = i; dioxus.send([c, i]); }
       }, 110);
     });
@@ -252,7 +262,7 @@ fn Scheduler(
         let at = years.iter().position(|v| *v == y).unwrap_or(0);
         wheel_years.set(years.clone());
         spawn(async move {
-            let js = WHEEL_JS.replace("$M", &(mo - 1).to_string()).replace("$Y", &at.to_string());
+            let js = WHEEL_JS.replace("$M", &(24 + mo - 1).to_string()).replace("$Y", &at.to_string());
             let mut e = document::eval(&js);
             while let Ok((col, i)) = e.recv::<(u8, usize)>().await {
                 let (y, mo) = *month.peek();
@@ -400,9 +410,16 @@ fn Scheduler(
                     // stand in for the day grid while open.
                     div { class: "wheel",
                         div { class: "wheel-band" }
+                        // Five copies of the months, so the wheel loops
+                        // (WHEEL_JS keeps it on the middle copy).
                         div { class: "wheel-col", "data-col": "0",
-                            for (i, name) in calendar::MONTHS.iter().enumerate() {
-                                div { key: "{i}", class: if i as u32 + 1 == mo { "wheel-item on" } else { "wheel-item" }, "data-i": "{i}", "{name}" }
+                            for i in 0..MONTH_LOOP_ROWS {
+                                div {
+                                    key: "{i}",
+                                    class: if i as u32 % 12 + 1 == mo { "wheel-item on" } else { "wheel-item" },
+                                    "data-i": "{i}",
+                                    "{calendar::MONTHS[i % 12]}"
+                                }
                             }
                         }
                         div { class: "wheel-col", "data-col": "1",

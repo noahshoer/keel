@@ -359,11 +359,13 @@ struct MonthCalendar: View {
   /// from Rust too.
   private func wheels(_ cal: MonthViewData) -> some View {
     HStack(spacing: 0) {
+      // The months loop like Calendar's: many copies, read back as the
+      // middle one (identical rows, so the jump back can't be seen).
       Picker("Month", selection: Binding(
-        get: { cal.month },
-        set: { send(.calendarMonth(year: cal.year, month: $0)) }
+        get: { monthLoopMiddle + cal.month - 1 },
+        set: { send(.calendarMonth(year: cal.year, month: $0 % 12 + 1)) }
       )) {
-        ForEach(picker.months.indices, id: \.self) { i in Text(picker.months[i]).tag(i + 1) }
+        ForEach(0..<monthLoopMiddle * 2, id: \.self) { i in Text(picker.months[i % 12]).tag(i) }
       }
       .pickerStyle(.wheel)
       .frame(maxWidth: .infinity)
@@ -379,6 +381,10 @@ struct MonthCalendar: View {
     }
     .transition(.opacity)
   }
+
+  /// The month wheel's middle copy starts at this row (50 copies of 12 on
+  /// each side: farther than anyone spins in one go).
+  private let monthLoopMiddle = 600
 
   private func dayCell(_ cell: MonthViewData.Day) -> some View {
     let fill = priorityTone(picker.selectedTone ?? "due-today")
