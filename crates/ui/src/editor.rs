@@ -274,7 +274,14 @@ pub(crate) fn parse_title_at(v: &EditorValues, projects: &[Project], sections: &
 /// The new task described by the editor values with the quick-add parse
 /// applied on top (text wins over chips for the fields it mentions).
 fn new_task_from(v: &EditorValues, qa: &QuickAdd) -> NewTask {
-    let date = qa.due_string().unwrap_or_else(|| v.due_string());
+    // A typed date wins; a picked time goes with it unless a time was typed.
+    let date = match (qa.date, qa.time) {
+        (Some(d), None) => match chrono::NaiveTime::parse_from_str(&v.time, "%H:%M") {
+            Ok(t) => format!("{}T{}", d.format("%Y-%m-%d"), t.format("%H:%M:00")),
+            Err(_) => d.format("%Y-%m-%d").to_string(),
+        },
+        _ => qa.due_string().unwrap_or_else(|| v.due_string()),
+    };
     let recurrence = qa.recurrence.clone().or_else(|| recurrence_for(&v.repeat, &date, None));
     let mut labels = v.labels.clone();
     for l in &qa.labels {
@@ -863,5 +870,17 @@ mod tests {
         assert_eq!(patch.content, None);
         assert_eq!(patch.priority, Some(Priority::P1));
         assert_eq!(moved, None);
+    }
+
+    #[test]
+    fn a_picked_time_is_saved_with_a_typed_date() {
+        let today = NaiveDate::from_ymd_opt(2026, 10, 19).unwrap();
+        let mut v = EditorValues::blank(Id::from("P-IN"), None, String::new(), Vec::new());
+        v.content = "water plants every monday".into();
+        v.date = "2026-10-19".into();
+        v.time = "17:00".into();
+        let task = new_task_from(&v, &parse_title_at(&v, &[], &[], today));
+        assert_eq!(task.date, "2026-10-19T17:00:00");
+        assert!(task.recurrence.is_some(), "the repeat is kept");
     }
 }

@@ -267,7 +267,10 @@ fn merged(v: &EditorValues, qa: &QuickAdd) -> EditorValues {
     let mut m = v.clone();
     if let Some(d) = qa.date {
         m.date = d.format("%Y-%m-%d").to_string();
-        m.time = qa.time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
+        // A typed time wins; otherwise the picked one stays.
+        if let Some(t) = qa.time {
+            m.time = t.format("%H:%M").to_string();
+        }
     }
     if let Some(p) = qa.priority {
         m.priority = (5 - p.to_api()).to_string();
@@ -446,7 +449,17 @@ pub fn apply_event(v: &mut EditorValues, ev: &GlassEvent, mode: CardMode, ctx: &
         GlassEvent::Pick { pick } => {
             if mode == CardMode::Add {
                 let qa = parse_title_at(v, &ctx.projects, &ctx.sections, ctx.today);
-                v.content = strip_spans(&v.content, &qa.spans, kinds_for(pick));
+                let mut kinds = kinds_for(pick).to_vec();
+                // A different day replaces a typed repeat too (it set the
+                // date); a time for the same day keeps it.
+                if let Pick::Date { date, .. } = pick {
+                    let shown = qa.date.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| v.date.clone());
+                    if *date != shown {
+                        kinds.push(SpanKind::Repeat);
+                    }
+                }
+                // Through `with_title`, so un-highlighted ranges move with the text.
+                *v = with_title(v, strip_spans(&v.content, &qa.spans, &kinds));
             }
             match pick {
                 Pick::Date { date, time } => (v.date, v.time) = (date.clone(), time.clone()),
@@ -1359,5 +1372,44 @@ mod tests {
         let tones: Vec<&str> = p.quick_dates.iter().map(|q| q.tone.as_str()).collect();
         // Today (Mon 19), Tomorrow, This weekend (Sat 24), Next week (Mon 26).
         assert_eq!(tones, vec!["due-today", "due-tomorrow", "due-week", "due-later"]);
+    }
+
+    fn pick_date(v: &mut EditorValues, date: &str, time: &str) {
+        let pick = Pick::Date { date: date.into(), time: time.into() };
+        apply_event(v, &GlassEvent::Pick { pick }, CardMode::Add, &ctx());
+    }
+
+    #[test]
+    fn a_time_pick_keeps_a_typed_repeat() {
+        // "every monday" starts on Monday the 19th; adding a time keeps both.
+        let mut v = blank("water plants every monday");
+        pick_date(&mut v, "2026-10-19", "17:00");
+        assert_eq!(v.content, "water plants every monday");
+        let p = card_state(&v, CardMode::Add, &ctx()).picker;
+        assert_eq!((p.date.as_str(), p.time.as_str()), ("2026-10-19", "17:00"));
+    }
+
+    #[test]
+    fn a_different_day_replaces_a_typed_repeat() {
+        let mut v = blank("water plants every monday");
+        pick_date(&mut v, "2026-10-23", "");
+        assert_eq!(v.content, "water plants");
+        let p = card_state(&v, CardMode::Add, &ctx()).picker;
+        assert_eq!(p.date, "2026-10-23", "the pick isn't overridden");
+    }
+
+    #[test]
+    fn a_pick_moves_the_plain_ranges_with_the_text() {
+        // "today" is kept as text, "tomorrow" is typed in front, then a pick
+        // removes "tomorrow" again.
+        let mut v = blank("buy today milk");
+        apply_event(&mut v, &GlassEvent::Unhighlight { at: 9 }, CardMode::Add, &ctx());
+        apply_event(&mut v, &GlassEvent::Title { text: "tomorrow buy today milk".into() }, CardMode::Add, &ctx());
+        assert_eq!(card_state(&v, CardMode::Add, &ctx()).spans.len(), 1, "only tomorrow");
+        pick_date(&mut v, "2026-10-23", "");
+        assert_eq!(v.content, "buy today milk");
+        let s = card_state(&v, CardMode::Add, &ctx());
+        assert!(s.spans.is_empty(), "\"today\" stays text");
+        assert_eq!(s.picker.date, "2026-10-23");
     }
 }
