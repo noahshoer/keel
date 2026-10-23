@@ -597,8 +597,9 @@ fn match_name(t: &[Token], i: usize, sigil: &str, names: &[&str]) -> Option<(usi
     None
 }
 
-/// Parses a quick-add title. Unknown projects/sections stay in the title; if
-/// stripping would leave no title, nothing is applied.
+/// Parses a quick-add title. Unknown projects/sections stay in the title. A
+/// phrase on its own is still recognized (`content` is then empty); the
+/// editors won't save until there's a name besides it, as in Todoist.
 pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Section]) -> QuickAdd {
     let t = tokens(input);
     let mut used = vec![false; t.len()];
@@ -747,9 +748,6 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
         .map(|(tok, _)| tok.raw.as_str())
         .collect::<Vec<_>>()
         .join(" ");
-    if q.content.trim().is_empty() {
-        return QuickAdd { content: input.trim().to_string(), ..QuickAdd::default() };
-    }
     spans.sort_by_key(|s| s.start);
     q.spans = spans;
     q
@@ -944,10 +942,16 @@ mod tests {
     }
 
     #[test]
-    fn empty_title_falls_back_to_plain_text() {
+    fn a_phrase_alone_is_still_recognized() {
+        // Todoist-style: the phrase highlights as soon as it's typed; the
+        // editors refuse to save until there's a name besides it.
         let q = p("tomorrow");
-        assert_eq!(q.content, "tomorrow");
-        assert_eq!(q.date, None, "nothing is applied when it would leave no title");
+        assert_eq!(q.content, "");
+        assert_eq!(q.date, Some(d(2026, 10, 20)));
+        assert_eq!(q.spans.len(), 1);
+        for input in ["This weekend", "This Weekend", "weekend"] {
+            assert_eq!(p(input).date, Some(d(2026, 10, 24)), "{input}");
+        }
     }
 
     #[test]
@@ -1103,7 +1107,7 @@ mod tests {
         let q = p(input);
         assert_eq!(&input[q.spans[0].start..q.spans[0].end], "/Later");
         assert_eq!(q.spans[0].kind, super::SpanKind::Section);
-        assert!(p("tomorrow").spans.is_empty(), "empty-title fallback applies nothing");
+        assert_eq!(p("tomorrow").spans.len(), 1, "a phrase alone still highlights");
         assert!(p("plain words").spans.is_empty());
     }
 
@@ -1194,4 +1198,14 @@ mod tests {
         assert_eq!(shift_plain("x today", "x toda", &[(2, 7)]), vec![]);
         assert_eq!(shift_plain("x today", "x tOday", &[(2, 7)]), vec![]);
     }
+
+    #[test]
+    fn this_weekend_in_any_case() {
+        for input in ["x this weekend", "x This weekend", "x This Weekend", "x THIS WEEKEND", "x weekend", "x Weekend"] {
+            let q = p(input);
+            assert_eq!(q.date, Some(d(2026, 10, 24)), "{input}");
+            assert_eq!(q.content, "x", "{input}");
+        }
+    }
+
 }

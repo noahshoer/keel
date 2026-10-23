@@ -55,7 +55,7 @@ cd crates/src-tauri && cargo tauri dev       # desktop app (serves crates/ui/dis
 - A command that calls into a mobile plugin (anything touching `app.notification()`, including `notifications::resync`) **must be `async`**. A sync command runs on the main thread and blocks it waiting for Swift, which deadlocks against any other plugin call that needs the main thread. That froze the app when Settings opened next to a glass-plugin call.
 - Commands are idempotent (uuid) with temp-id → id mapping. Add new `Action` variants (never change existing serialized shapes); new fields are `#[serde(default)]`. Adding a field to `TaskAdd`/`TaskUpdate` means updating struct literals in tests too.
 - `Recurrence` variants are append-only (stored as JSON in `Due`). Consumers only use `contains` / `next_after` / `prev_before`.
-- Quick add: an unrecognized `every …` phrase stays text as a whole (no silent misreads). A title that would become empty applies nothing.
+- Quick add: an unrecognized `every …` phrase stays text as a whole (no silent misreads). A phrase on its own still highlights and applies (Todoist-style), but the editors won't save until there's a name besides it (`editor::has_name`, `CardState.can_submit`).
 - UI: one popover open per editor (`OpenPop`), fixed-positioned on mount by `pickers::place_popover`. Task reminders are shared through Dioxus context (`Signal<Vec<Reminder>>`). A global capture-phase `submit` listener in `App` prevents native form submits, because Dioxus' `prevent_default()` isn't honored on submit and the page would reload.
 - On Windows the working tree is CRLF (`core.autocrlf=true`). Use exact-string edits; shell regex edits across lines are fragile.
 

@@ -366,7 +366,10 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
         description: v.description.clone(),
         spans,
         chips,
-        can_submit: !v.content.trim().is_empty(),
+        can_submit: match &qa {
+            Some(qa) => !qa.content.trim().is_empty(),
+            None => !v.content.trim().is_empty(),
+        },
         picker,
     }
 }
@@ -889,7 +892,7 @@ impl Glass {
                 api::glass_hide().await;
             }
             Outcome::Submit => {
-                if s.values.content.trim().is_empty() {
+                if !card_state(&s.values, s.mode, &s.ctx).can_submit {
                     return;
                 }
                 let mut reload = s.reload;
@@ -1225,5 +1228,16 @@ mod tests {
         let p = card_state(&v, CardMode::Add, &ctx()).picker;
         assert_eq!(&p.repeat_days[..2], &["2026-10-21", "2026-10-28"]);
         assert!(card_state(&blank("x tomorrow"), CardMode::Add, &ctx()).picker.repeat_days.is_empty());
+    }
+
+    #[test]
+    fn a_phrase_alone_highlights_but_cant_be_sent() {
+        let s = card_state(&blank("This Weekend"), CardMode::Add, &ctx());
+        assert_eq!(s.spans.len(), 1);
+        assert!(chip(&s, ChipId::Date).set);
+        assert!(!s.can_submit, "no name yet");
+        assert!(card_state(&blank("Clean This Weekend"), CardMode::Add, &ctx()).can_submit);
+        // Editing doesn't parse, so a title like that is just a name.
+        assert!(card_state(&blank("This Weekend"), CardMode::Edit, &ctx()).can_submit);
     }
 }

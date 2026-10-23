@@ -238,6 +238,17 @@ fn parse_title(v: &EditorValues, projects: &[Project], sections: &[Section]) -> 
     parse_title_at(v, projects, sections, crate::today())
 }
 
+/// Whether the title has a name to save: with quick add, something besides
+/// the recognized phrases ("This weekend" alone highlights but can't be
+/// added yet).
+pub(crate) fn has_name(v: &EditorValues, quick_add: bool, projects: &[Project], sections: &[Section], today: NaiveDate) -> bool {
+    if quick_add {
+        !parse_title_at(v, projects, sections, today).content.trim().is_empty()
+    } else {
+        !v.content.trim().is_empty()
+    }
+}
+
 /// The values after the title is retyped: kept-plain phrases follow the
 /// text, or are dropped when the edit touches them.
 pub(crate) fn with_title(v: &EditorValues, text: String) -> EditorValues {
@@ -391,7 +402,7 @@ pub fn TaskEditor(
     let mut open: OpenPop = use_signal(|| None);
     let mut new_label = use_signal(String::new);
     let v = vals();
-    let can_submit = !v.content.trim().is_empty();
+    let can_submit = has_name(&v, quick_add, &projects, &sections, crate::today());
     let label_text = labels_text(&v.labels);
     let today = crate::today();
 
@@ -479,9 +490,13 @@ pub fn TaskEditor(
     // In keep-open mode the form resets to blank instead (an empty title
     // can't be submitted, so a second Enter is a no-op there too).
     let mut submitted = use_signal(|| false);
+    // The lists quick add resolves #project and /section against (a signal,
+    // so `submit` stays Copy).
+    let lists = use_signal(|| (projects.clone(), sections.clone()));
     let mut submit = move || {
         let v = vals();
-        if submitted() || v.content.trim().is_empty() {
+        let (p, s) = lists();
+        if submitted() || !has_name(&v, quick_add, &p, &s, crate::today()) {
             return;
         }
         if keep_open {
