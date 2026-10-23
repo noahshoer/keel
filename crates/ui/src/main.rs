@@ -51,6 +51,56 @@ pub enum View {
     Search,
 }
 
+/// How the page changes when the view does: Search slides in over the page
+/// and back out, like an iOS push / pop; everything else fades.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Motion {
+    Fade,
+    Push,
+    Pop,
+}
+
+pub fn view_motion(from: &View, to: &View) -> Motion {
+    match (from == &View::Search, to == &View::Search) {
+        (false, true) => Motion::Push,
+        (true, false) => Motion::Pop,
+        _ => Motion::Fade,
+    }
+}
+
+/// The page left behind by a push / pop: `keelGhost(dir)` takes a still copy
+/// of the page as the view changes (it's still showing then), laid over the
+/// main pane — under it for a push, over it for a pop. `keelGhostGo()` sets
+/// it moving once the new view lands, and it removes itself after.
+const GHOST_JS: &str = r#"
+window.keelGhost = (dir) => {
+  document.querySelectorAll('.view-ghost').forEach((g) => g.remove());
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const app = document.querySelector('.app'), main = app?.querySelector('.main');
+  const content = main?.querySelector('.content');
+  if (!content) return;
+  const a = app.getBoundingClientRect(), m = main.getBoundingClientRect(), c = content.getBoundingClientRect();
+  const ghost = document.createElement('div');
+  ghost.className = 'view-ghost ' + dir;
+  ghost.style.cssText = `left:${m.left - a.left}px;top:${m.top - a.top}px;width:${m.width}px;height:${m.height}px;` +
+    `border-radius:${getComputedStyle(main).borderRadius}`;
+  const copy = content.cloneNode(true);
+  copy.classList.remove('view-in-a', 'view-in-b', 'view-pop');
+  copy.style.cssText = `position:absolute;margin:0;top:${c.top - m.top}px;left:${c.left - m.left}px;width:${c.width}px`;
+  ghost.appendChild(copy);
+  app.appendChild(ghost);
+  // In case the new view never lands.
+  setTimeout(() => ghost.remove(), 2000);
+};
+window.keelGhostGo = () => {
+  document.querySelectorAll('.view-ghost:not(.go)').forEach((g) => {
+    g.classList.add('go');
+    g.addEventListener('animationend', () => g.remove());
+    setTimeout(() => g.remove(), 1500);
+  });
+};
+"#;
+
 /// Sends `true` to Rust on "/" (outside text fields) or Ctrl/Cmd+K, then
 /// focuses the search box once the Search view has rendered.
 const SEARCH_SHORTCUT_JS: &str = r#"
@@ -223,6 +273,23 @@ fn App() -> Element {
             spawn(async move { api::glass_buttons(state).await });
         }
     });
+    // Search slides in and out: a still copy of the page being left is
+    // taken as soon as the view changes (before the new one loads).
+    use_hook(|| {
+        let _ = document::eval(GHOST_JS);
+    });
+    let mut requested = use_signal(|| None::<View>);
+    use_effect(move || {
+        let v = view();
+        let before = requested.peek().clone();
+        requested.set(Some(v.clone()));
+        let dir = match before.map(|b| view_motion(&b, &v)) {
+            Some(Motion::Push) => "push",
+            Some(Motion::Pop) => "pop",
+            _ => return,
+        };
+        let _ = document::eval(&format!("window.keelGhost && keelGhost('{dir}');"));
+    });
     // Where closing Search goes back to.
     use_effect(move || {
         let v = view();
@@ -330,7 +397,7 @@ fn App() -> Element {
 
     // Each time a different view's data lands, the page fades in again
     // (`swaps` alternates the animation so it restarts).
-    let mut swaps = use_signal(|| (None::<View>, 0u32));
+    let mut swaps = use_signal(|| (None::<View>, 0u32, Motion::Fade));
     use_effect(move || {
         let loaded_view = match &*data.read() {
             Some(Ok(l)) => Some(l.view.clone()),
@@ -343,8 +410,13 @@ fn App() -> Element {
             drawer.set(false);
         }
         if swaps.peek().0.as_ref() != Some(&lv) {
-            let n = swaps.peek().1 + 1;
-            swaps.set((Some(lv), n));
+            let (before, n, _) = swaps.peek().clone();
+            let motion = before.as_ref().map_or(Motion::Fade, |b| view_motion(b, &lv));
+            swaps.set((Some(lv), n + 1, motion));
+            if motion != Motion::Fade {
+                // After the new page renders: the left-behind copy moves off.
+                let _ = document::eval("requestAnimationFrame(() => window.keelGhostGo && keelGhostGo());");
+            }
         }
     });
 
@@ -375,7 +447,7 @@ fn App() -> Element {
                         theme,
                         reload,
                     }
-                    MainPane { view: loaded.view.clone(), loaded, today, show_completed, drawer, search_query, reload, swap: swaps().1 }
+                    MainPane { view: loaded.view.clone(), loaded, today, show_completed, drawer, search_query, reload, swap: swaps().1, motion: swaps().2 }
                 },
             }
         }
@@ -410,6 +482,7 @@ fn MainPane(
     /// Bumped when a different view lands; alternates the fade-in.
     #[props(default)]
     swap: u32,
+    motion: Motion,
 ) -> Element {
     let mut show_completed = show_completed;
     let mut drawer = drawer;
@@ -479,8 +552,14 @@ fn MainPane(
     let groups = if date_view { date_groups(&view, loaded.tasks.clone(), today) } else { Vec::new() };
 
     rsx! {
-        main { class: "main",
-            div { class: if swap % 2 == 0 { "content view-in-a" } else { "content view-in-b" },
+        main { class: if motion == Motion::Push { "main view-push" } else { "main" },
+            div {
+                class: match motion {
+                    Motion::Pop => "content view-pop",
+                    Motion::Push => "content",
+                    Motion::Fade if swap % 2 == 0 => "content view-in-a",
+                    Motion::Fade => "content view-in-b",
+                },
                 div { class: "view-head",
                     button {
                         class: "icon-btn menu-btn",
@@ -851,5 +930,18 @@ fn AddSection(project_id: Id, reload: Signal<u32>) -> Element {
                 },
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod motion_tests {
+    use super::*;
+
+    #[test]
+    fn search_pushes_in_and_pops_out() {
+        assert_eq!(view_motion(&View::Today, &View::Search), Motion::Push);
+        assert_eq!(view_motion(&View::Search, &View::Inbox), Motion::Pop);
+        assert_eq!(view_motion(&View::Today, &View::Inbox), Motion::Fade);
+        assert_eq!(view_motion(&View::Search, &View::Search), Motion::Fade);
     }
 }

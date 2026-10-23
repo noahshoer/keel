@@ -200,6 +200,22 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 @keyframes view-in-b { from { opacity: 0; } to { opacity: 1; } }
 .content.view-in-a { animation: view-in-a .2s var(--ease); }
 .content.view-in-b { animation: view-in-b .2s var(--ease); }
+/* Search slides in over the page and back out, like an iOS push / pop. The
+   page being left is a still copy (.view-ghost, from GHOST_JS): under the
+   main pane for a push, over it for a pop. */
+.app { position: relative; overflow-x: clip; }
+.main { position: relative; z-index: 1; }
+.main.view-push { animation: view-push .36s cubic-bezier(.32,.72,0,1); }
+.content.view-pop { animation: view-under .36s cubic-bezier(.32,.72,0,1); }
+@keyframes view-push { from { transform: translateX(100%); box-shadow: -10px 0 30px rgba(0,0,0,.25); } to { transform: none; } }
+@keyframes view-under { from { transform: translateX(-24%); opacity: .6; } to { transform: none; opacity: 1; } }
+.view-ghost { position: absolute; z-index: 0; overflow: hidden; background: var(--bg); pointer-events: none; }
+.view-ghost.pop { z-index: 2; box-shadow: -10px 0 30px rgba(0,0,0,.25); }
+.view-ghost.push.go { animation: ghost-under .36s cubic-bezier(.32,.72,0,1) forwards; }
+.view-ghost.pop.go { animation: ghost-off .36s cubic-bezier(.32,.72,0,1) forwards; }
+@keyframes ghost-under { to { transform: translateX(-24%); opacity: .6; } }
+@keyframes ghost-off { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .main.view-push, .content.view-pop { animation: none; } }
 .view-title { font-size: 26px; font-weight: 700; margin: 0 0 2px; letter-spacing: -0.02em; }
 .view-sub { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
 .section-title { display: flex; align-items: baseline; gap: 6px; font-weight: 650; font-size: 14px;
