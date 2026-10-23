@@ -670,6 +670,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .wheel-item { height: 36px; line-height: 36px; text-align: center; scroll-snap-align: center; cursor: pointer;
   font-size: 16px; color: var(--text); }
 .wheel-item.on { font-weight: 600; }
+/* The looping month wheel: twelve rows that WHEEL_JS moves around the band. */
+.wheel-col.loop { overflow: hidden; padding: 0; touch-action: none; cursor: grab; user-select: none; }
+.wheel-col.loop .wheel-item { position: absolute; left: 0; right: 0; top: 72px; will-change: transform; }
 "#;
 
 /// The full stylesheet: light by default, dark when the OS prefers it (unless

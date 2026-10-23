@@ -187,39 +187,102 @@ pub fn quick_dates(today: NaiveDate) -> Vec<(&'static str, String, NaiveDate)> {
     ]
 }
 
-/// Rows in the looping month wheel: five copies of the twelve months.
-const MONTH_LOOP_ROWS: usize = 60;
-
-/// Drives the month / year wheels: scrolls each to its value, then reports
-/// the row that settles in the band (`[column, row]`; the month column's
-/// rows count across its copies, read modulo 12). A tap on a row spins it
-/// there. When the month wheel settles outside its middle copy (rows
-/// 24–35), it jumps to the same month there, so it never runs out. Rows are
-/// 36px, matching `.wheel-item`.
+/// Drives the month / year wheels and reports the row that settles in the
+/// band as `[column, row]`. Rows are 36px, matching `.wheel-item`.
+///
+/// The month wheel loops with only its twelve rows: `pos` is the (fractional)
+/// month at the band, and each row is moved to its distance from it, wrapped
+/// to -6…6, so December sits above January. Dragging, the mouse wheel and a
+/// tap move `pos`; a flick coasts, then it snaps to a month. The year wheel is
+/// a plain snap-scrolling list.
 const WHEEL_JS: &str = r#"
 requestAnimationFrame(() => {
-  const cols = document.querySelectorAll('.wheel .wheel-col');
-  [$M, $Y].forEach((start, c) => {
-    const col = cols[c];
-    if (!col) return;
-    col.scrollTop = start * 36;
-    let last = start, t;
-    col.addEventListener('scroll', () => {
+  const H = 36;
+  const [months, years] = document.querySelectorAll('.wheel .wheel-col');
+  if (months) {
+    const rows = [...months.querySelectorAll('.wheel-item')], n = rows.length;
+    let pos = $M, last = $M, anim = 0, snapT;
+    const wrap = (i) => ((i % n) + n) % n;
+    const draw = () => rows.forEach((el, i) => {
+      let d = wrap(i - pos);
+      if (d > n / 2) d -= n;
+      el.style.transform = `translateY(${d * H}px)`;
+      el.style.visibility = Math.abs(d) > 3 ? 'hidden' : '';
+    });
+    const settle = () => {
+      pos = wrap(Math.round(pos));
+      draw();
+      if (pos !== last) { last = pos; dioxus.send([0, pos]); }
+    };
+    const glide = (to, ms) => {
+      cancelAnimationFrame(anim);
+      const from = pos, t0 = performance.now();
+      const step = (t) => {
+        const k = Math.min(1, (t - t0) / ms);
+        pos = from + (to - from) * (1 - Math.pow(1 - k, 3));
+        draw();
+        if (k < 1) anim = requestAnimationFrame(step); else settle();
+      };
+      anim = requestAnimationFrame(step);
+    };
+    let y0 = null, yPrev = 0, tPrev = 0, v = 0, moved = 0;
+    months.addEventListener('pointerdown', (e) => {
+      cancelAnimationFrame(anim);
+      try { months.setPointerCapture(e.pointerId); } catch (_) {}
+      y0 = yPrev = e.clientY; tPrev = performance.now(); v = 0; moved = 0;
+    });
+    months.addEventListener('pointermove', (e) => {
+      if (y0 === null) return;
+      const t = performance.now(), dy = e.clientY - yPrev;
+      pos -= dy / H;
+      moved += Math.abs(dy);
+      v = dy / Math.max(1, t - tPrev);
+      yPrev = e.clientY; tPrev = t;
+      draw();
+    });
+    const release = (e) => {
+      if (y0 === null) return;
+      y0 = null;
+      if (moved < 4) {
+        // A tap: spin the tapped month to the band.
+        const it = document.elementFromPoint(e.clientX, e.clientY)?.closest('.wheel-col.loop .wheel-item');
+        if (it) {
+          let d = wrap(Number(it.dataset.i) - pos);
+          if (d > n / 2) d -= n;
+          glide(pos + d, 260);
+          return;
+        }
+      }
+      // A flick coasts about a third of a second's worth.
+      glide(Math.round(pos - (v * 320) / H), 420);
+    };
+    months.addEventListener('pointerup', release);
+    months.addEventListener('pointercancel', release);
+    months.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      cancelAnimationFrame(anim);
+      pos += e.deltaY / H;
+      draw();
+      clearTimeout(snapT);
+      snapT = setTimeout(() => glide(Math.round(pos), 160), 110);
+    }, { passive: false });
+    draw();
+  }
+  if (years) {
+    years.scrollTop = $Y * H;
+    let last = $Y, t;
+    years.addEventListener('scroll', () => {
       clearTimeout(t);
       t = setTimeout(() => {
-        let i = Math.round(col.scrollTop / 36);
-        if (c === 0 && (i < 24 || i > 35)) {
-          i = 24 + (i % 12);
-          col.scrollTop = i * 36;
-        }
-        if (i !== last) { last = i; dioxus.send([c, i]); }
+        const i = Math.round(years.scrollTop / H);
+        if (i !== last) { last = i; dioxus.send([1, i]); }
       }, 110);
     });
-    col.addEventListener('click', (e) => {
+    years.addEventListener('click', (e) => {
       const it = e.target.closest('.wheel-item');
-      if (it) col.scrollTo({ top: Number(it.dataset.i) * 36, behavior: 'smooth' });
+      if (it) years.scrollTo({ top: Number(it.dataset.i) * H, behavior: 'smooth' });
     });
-  });
+  }
 });
 "#;
 
@@ -262,7 +325,7 @@ fn Scheduler(
         let at = years.iter().position(|v| *v == y).unwrap_or(0);
         wheel_years.set(years.clone());
         spawn(async move {
-            let js = WHEEL_JS.replace("$M", &(24 + mo - 1).to_string()).replace("$Y", &at.to_string());
+            let js = WHEEL_JS.replace("$M", &(mo - 1).to_string()).replace("$Y", &at.to_string());
             let mut e = document::eval(&js);
             while let Ok((col, i)) = e.recv::<(u8, usize)>().await {
                 let (y, mo) = *month.peek();
@@ -410,15 +473,15 @@ fn Scheduler(
                     // stand in for the day grid while open.
                     div { class: "wheel",
                         div { class: "wheel-band" }
-                        // Five copies of the months, so the wheel loops
-                        // (WHEEL_JS keeps it on the middle copy).
-                        div { class: "wheel-col", "data-col": "0",
-                            for i in 0..MONTH_LOOP_ROWS {
+                        // The twelve months, looping: WHEEL_JS places each
+                        // row around the band (no copies).
+                        div { class: "wheel-col loop", "data-col": "0",
+                            for (i, name) in calendar::MONTHS.iter().enumerate() {
                                 div {
                                     key: "{i}",
-                                    class: if i as u32 % 12 + 1 == mo { "wheel-item on" } else { "wheel-item" },
+                                    class: if i as u32 + 1 == mo { "wheel-item on" } else { "wheel-item" },
                                     "data-i": "{i}",
-                                    "{calendar::MONTHS[i % 12]}"
+                                    "{name}"
                                 }
                             }
                         }

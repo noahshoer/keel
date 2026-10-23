@@ -360,18 +360,14 @@ struct MonthCalendar: View {
   /// from Rust too.
   private func wheels(_ cal: MonthViewData) -> some View {
     HStack(spacing: 0) {
-      LoopingMonthWheel(months: picker.months, month: cal.month) { month in
-        send(.calendarMonth(year: cal.year, month: month))
+      WheelColumn(titles: picker.months, selected: cal.month - 1, loops: true) { i in
+        send(.calendarMonth(year: cal.year, month: i + 1))
       }
       .frame(maxWidth: .infinity)
-      Picker("Year", selection: Binding(
-        get: { cal.year },
-        set: { send(.calendarMonth(year: $0, month: cal.month)) }
-      )) {
-        // String(_:) so a year doesn't get a thousands separator.
-        ForEach(picker.years, id: \.self) { year in Text(String(year)).tag(year) }
+      // String(_:) so a year doesn't get a thousands separator.
+      WheelColumn(titles: picker.years.map { String($0) }, selected: picker.years.firstIndex(of: cal.year) ?? 0) { i in
+        send(.calendarMonth(year: picker.years[i], month: cal.month))
       }
-      .pickerStyle(.wheel)
       .frame(maxWidth: .infinity)
     }
     .transition(.opacity)
@@ -397,52 +393,64 @@ struct MonthCalendar: View {
   }
 }
 
-/// The month wheel, looping like Calendar's. One list of twelve months; the
-/// wheel's rows only point into it (`row % 12`). UIPickerView asks for a
-/// row's title just as it scrolls into view and reuses the few on screen,
-/// so its many rows cost nothing. After every stop it jumps back to the same
-/// month in the middle (identical rows, so the jump can't be seen), so no
-/// fling ever reaches an end.
-struct LoopingMonthWheel: UIViewRepresentable {
-  let months: [String]
-  /// 1-based.
-  let month: Int
+/// One wheel column, drawn by UIPickerView (the month and year wheels both
+/// use it, so they look the same). With `loops`, the wheel loops like
+/// Calendar's month wheel: `titles` is the only list, and the rows just point
+/// into it (`row % count`). UIPickerView asks for a row's title only as it
+/// scrolls into view and reuses the few on screen, so the extra rows cost
+/// nothing. After every stop it jumps back to the same title in the middle
+/// (identical rows, so the jump can't be seen), so no fling reaches an end.
+struct WheelColumn: UIViewRepresentable {
+  let titles: [String]
+  /// Index into `titles`.
+  let selected: Int
+  var loops = false
   let onChange: (Int) -> Void
 
-  static let rows = 12 * 1000
-  static let middle = 12 * 500
+  /// How many times a looping wheel's rows go around.
+  static let laps = 1000
 
   func makeUIView(context: Context) -> UIPickerView {
     let wheel = UIPickerView()
     wheel.dataSource = context.coordinator
     wheel.delegate = context.coordinator
     wheel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-    wheel.selectRow(Self.middle + month - 1, inComponent: 0, animated: false)
+    wheel.selectRow(context.coordinator.middleRow(selected), inComponent: 0, animated: false)
     return wheel
   }
 
   func updateUIView(_ wheel: UIPickerView, context: Context) {
-    context.coordinator.parent = self
-    // The month changed elsewhere (the arrows): show it.
-    if wheel.selectedRow(inComponent: 0) % 12 != month - 1 {
-      wheel.selectRow(Self.middle + month - 1, inComponent: 0, animated: false)
+    let c = context.coordinator
+    let changedTitles = c.parent.titles != titles
+    c.parent = self
+    if changedTitles { wheel.reloadAllComponents() }
+    // Moved elsewhere (the arrows), or the list changed: show the value.
+    if changedTitles || c.index(wheel.selectedRow(inComponent: 0)) != selected {
+      wheel.selectRow(c.middleRow(selected), inComponent: 0, animated: false)
     }
   }
 
   func makeCoordinator() -> Coordinator { Coordinator(self) }
 
   final class Coordinator: NSObject, UIPickerViewDataSource, UIPickerViewDelegate {
-    var parent: LoopingMonthWheel
-    init(_ parent: LoopingMonthWheel) { self.parent = parent }
+    var parent: WheelColumn
+    init(_ parent: WheelColumn) { self.parent = parent }
+
+    private var count: Int { max(parent.titles.count, 1) }
+    func index(_ row: Int) -> Int { row % count }
+    /// The row showing `index`: in the middle lap when looping.
+    func middleRow(_ index: Int) -> Int { parent.loops ? count * (WheelColumn.laps / 2) + index : index }
 
     func numberOfComponents(in _: UIPickerView) -> Int { 1 }
-    func pickerView(_: UIPickerView, numberOfRowsInComponent _: Int) -> Int { LoopingMonthWheel.rows }
+    func pickerView(_: UIPickerView, numberOfRowsInComponent _: Int) -> Int {
+      parent.loops ? count * WheelColumn.laps : parent.titles.count
+    }
     func pickerView(_: UIPickerView, titleForRow row: Int, forComponent _: Int) -> String? {
-      parent.months[row % 12]
+      parent.titles.isEmpty ? nil : parent.titles[index(row)]
     }
     func pickerView(_ wheel: UIPickerView, didSelectRow row: Int, inComponent _: Int) {
-      wheel.selectRow(LoopingMonthWheel.middle + row % 12, inComponent: 0, animated: false)
-      parent.onChange(row % 12 + 1)
+      if parent.loops { wheel.selectRow(middleRow(index(row)), inComponent: 0, animated: false) }
+      parent.onChange(index(row))
     }
   }
 }
