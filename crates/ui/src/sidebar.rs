@@ -113,7 +113,7 @@ pub fn Sidebar(
             }
             div {
                 class: nav_class(current == View::Search),
-                title: "Search (/ or Ctrl+K)",
+                title: crate::platform::search_tooltip(crate::platform::current()),
                 onclick: move |_| view.set(View::Search),
                 span { class: "nav-icon search", Icon { svg: icons::search() } }
                 "Search"

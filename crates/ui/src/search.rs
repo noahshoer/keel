@@ -70,7 +70,7 @@ pub fn SearchPane(
         if q.trim().is_empty() {
             div { class: "empty",
                 div { class: "big", "Search your tasks" }
-                div { "Every word must match, in any order. Press / or Ctrl+K anytime to search." }
+                div { {crate::platform::search_hint(crate::platform::current())} }
             }
         } else {
             match found {

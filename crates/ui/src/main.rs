@@ -6,6 +6,7 @@ mod api;
 mod completion;
 mod icons;
 mod pickers;
+mod platform;
 mod search;
 mod settings;
 mod sidebar;
