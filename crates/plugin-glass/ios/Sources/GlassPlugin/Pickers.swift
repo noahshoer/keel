@@ -340,14 +340,23 @@ struct MonthCalendar: View {
       if choosing {
         wheels(cal)
       } else {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
-        LazyVGrid(columns: columns, spacing: 6) {
-          ForEach(cal.weekdays.indices, id: \.self) { i in
-            Text(cal.weekdays[i]).font(.caption.weight(.semibold)).foregroundStyle(Color.secondary)
+        // An eager Grid, not a LazyVGrid: a lazy grid inside a List row
+        // re-checks which cells are visible on every scroll offset, which
+        // dropped most frames while the sheet scrolled.
+        Grid(horizontalSpacing: 0, verticalSpacing: 6) {
+          GridRow {
+            ForEach(cal.weekdays.indices, id: \.self) { i in
+              Text(cal.weekdays[i]).font(.caption.weight(.semibold)).foregroundStyle(Color.secondary)
+                .frame(maxWidth: .infinity)
+            }
           }
           // Rows with none of the month's days (a sixth week) are left out.
-          ForEach(cal.weeks.filter { $0.contains(where: \.inMonth) }.flatMap { $0 }, id: \.date) { cell in
-            if cell.inMonth { dayCell(cell) } else { Color.clear.frame(height: 38) }
+          ForEach(cal.weeks.filter { $0.contains(where: \.inMonth) }, id: \.first!.date) { week in
+            GridRow {
+              ForEach(week, id: \.date) { cell in
+                if cell.inMonth { dayCell(cell) } else { Color.clear.frame(height: 38) }
+              }
+            }
           }
         }
       }
