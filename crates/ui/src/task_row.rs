@@ -4,7 +4,7 @@ use keel_core::model::{Label, Priority, Project, Reminder, Section, Task};
 use keel_core::views::{self, DueBucket};
 
 use crate::api;
-use crate::editor::{add_from_editor, changes, repeat_text, sync_reminders, EditorValues, TaskEditor};
+use crate::editor::{add_from_editor, repeat_text, save_edit, EditorValues, TaskEditor};
 use crate::pickers::ReminderDraft;
 
 /// Pixels of indentation per sub-task level.
@@ -50,6 +50,23 @@ pub fn TaskRow(
     let mut panel = use_signal(|| false);
     let mut editing = use_signal(|| false);
     let mut adding_sub = use_signal(|| false);
+    let glass = crate::glass::use_glass();
+    // Completing: 0 idle, 1 circle filled, 2 switching off. A tap while
+    // filled cancels (`gen` invalidates the pending steps).
+    let completion_icon = use_context::<Signal<crate::completion::CompletionIcon>>();
+    let mut phase = use_signal(|| 0u8);
+    let mut gen = use_signal(|| 0u32);
+    // After completing, the row stays switched off until the reload drops
+    // it (resetting first flashed it back in). A repeating task stays in
+    // project views with a new due date; that new date brings it back.
+    let mut done_due = use_signal(|| None::<String>);
+    let due_now = task.due.as_ref().map(|d| d.date.clone()).unwrap_or_default();
+    use_effect(use_reactive!(|due_now| {
+        if done_due.peek().as_ref().is_some_and(|d| *d != due_now) {
+            done_due.set(None);
+            phase.set(0);
+        }
+    }));
     // All task reminders, shared app-wide (see `App`).
     let all_reminders = use_context::<Signal<Vec<Reminder>>>();
     let my_reminders: Vec<ReminderDraft> = all_reminders
@@ -59,6 +76,32 @@ pub fn TaskRow(
         .map(ReminderDraft::from_reminder)
         .collect();
     let indent = format!("margin-left: {}px;", depth * INDENT);
+    // For the native card (iPhone): what editing and "Add sub-task" open with.
+    let native_lists = (projects.clone(), sections.clone(), labels.clone());
+    let mut native_sub = EditorValues::blank(task.project_id.clone(), task.section_id.clone(), String::new(), Vec::new());
+    native_sub.parent_id = Some(task.id.clone());
+    // iPhone: a long press opens the native action menu (the desktop's
+    // hover buttons).
+    {
+        let (task_id, defaults, (p, s, l)) = (task.id.clone(), native_sub.clone(), native_lists.clone());
+        let recurring = task.due.as_ref().is_some_and(|d| d.is_recurring);
+        let items = crate::glass::task_actions(recurring);
+        crate::glass::use_row_menu(task.id.to_string(), task.content.clone(), items, move |action| match action {
+            crate::glass::TaskAction::SubTask => glass.add(defaults.clone(), p.clone(), s.clone(), l.clone(), reload),
+            crate::glass::TaskAction::Streak => {
+                let open = *panel.peek();
+                panel.set(!open);
+            }
+            crate::glass::TaskAction::Delete => {
+                let id = task_id.clone();
+                spawn(async move {
+                    let _ = api::delete_task(id).await;
+                    reload += 1;
+                });
+            }
+            crate::glass::TaskAction::Rename => {}
+        });
+    }
 
     if editing() {
         let mut before = EditorValues::from_task(&task);
@@ -76,20 +119,13 @@ pub fn TaskRow(
                     sections,
                     labels,
                     keep_label,
+                    existing: existing_rule.clone(),
                     submit_text: "Save".to_string(),
                     on_submit: move |after: EditorValues| {
-                        let (patch, moved) = changes(&before, &after, existing_rule.clone());
-                        let before_reminders = before.reminders.clone();
-                        let id = id.clone();
+                        let (id, before, rule) = (id.clone(), before.clone(), existing_rule.clone());
                         editing.set(false);
                         spawn(async move {
-                            if let Some((project, section)) = moved {
-                                let _ = api::move_task(id.clone(), project, section).await;
-                            }
-                            sync_reminders(id.clone(), &before_reminders, &after.reminders).await;
-                            if !patch.is_empty() {
-                                let _ = api::update_task(id, patch).await;
-                            }
+                            let _ = save_edit(id, before, after, rule).await;
                             reload += 1;
                         });
                     },
@@ -136,167 +172,224 @@ pub fn TaskRow(
     let id_toggle = task.id.clone();
     let id_goal = task.id.clone();
 
+    // One root per row: keyed rows with several roots (the row plus the
+    // sub-task editor's placeholder) broke Dioxus' moves when a priority
+    // change reordered the list, and the page went blank.
     rsx! {
-        div { class: "task", style: "{indent}",
-            div { class: "task-row",
-                if has_children {
+        div { class: "task-slot",
+            div {
+                class: match phase() { 1 => "task completing", 2 => "task completing switch-off", _ => "task" },
+                style: "{indent}",
+                "data-menu-id": "{task.id}",
+                div { class: "task-row",
+                    if has_children {
+                        button {
+                            class: if collapsed { "chevron collapsed" } else { "chevron" },
+                            title: if collapsed { "Show sub-tasks" } else { "Hide sub-tasks" },
+                            onclick: move |_| {
+                                let id = id_collapse.clone();
+                                spawn(async move {
+                                    let _ = api::set_collapsed(id, !collapsed).await;
+                                    reload += 1;
+                                });
+                            },
+                            Icon { svg: icons::chevron() }
+                        }
+                    }
                     button {
-                        class: if collapsed { "chevron collapsed" } else { "chevron" },
-                        title: if collapsed { "Show sub-tasks" } else { "Hide sub-tasks" },
+                        class: check_class(task.priority),
+                        title: "Complete task",
                         onclick: move |_| {
-                            let id = id_collapse.clone();
+                            use crate::completion::{sleep, FILL_MS, OFF_MS};
+                            match phase() {
+                                1 => {
+                                    gen += 1;
+                                    phase.set(0);
+                                    return;
+                                }
+                                2 => return,
+                                _ => {}
+                            }
+                            gen += 1;
+                            let mine = gen();
+                            phase.set(1);
+                            let id = id_complete.clone();
+                            let due = due_now.clone();
                             spawn(async move {
-                                let _ = api::set_collapsed(id, !collapsed).await;
+                                sleep(FILL_MS).await;
+                                if gen() != mine {
+                                    return;
+                                }
+                                phase.set(2);
+                                sleep(OFF_MS).await;
+                                if gen() != mine {
+                                    return;
+                                }
+                                // Hidden before the save so the reload can't flash it
+                                // back; if the save fails, the row returns unchecked.
+                                done_due.set(Some(due));
+                                if api::complete_task(id).await.is_err() {
+                                    done_due.set(None);
+                                    phase.set(0);
+                                }
                                 reload += 1;
                             });
                         },
-                        Icon { svg: icons::chevron() }
+                        Icon { svg: completion_icon().svg() }
                     }
-                }
-                button {
-                    class: check_class(task.priority),
-                    title: "Complete task",
-                    onclick: move |_| {
-                        let id = id_complete.clone();
-                        spawn(async move {
-                            let _ = api::complete_task(id).await;
-                            reload += 1;
-                        });
-                    },
-                    Icon { svg: icons::check() }
-                }
-                div {
-                    class: "task-body",
-                    title: "Edit task",
-                    onclick: move |_| editing.set(true),
-                    div { class: "task-content", "{task.content}" }
-                    if !task.description.is_empty() {
-                        div { class: "task-desc", "{task.description}" }
-                    }
-                    if show_meta {
-                        div { class: "task-meta",
-                            if let Some((cls, label)) = due.clone() {
-                                span { class: cls,
-                                    Icon { svg: icons::calendar_small() }
-                                    "{label}"
-                                    if recurring {
-                                        Icon { svg: icons::repeat_small() }
+                    div {
+                        class: "task-body",
+                        title: "Edit task",
+                        onclick: {
+                            let (task, mine) = (task.clone(), my_reminders.clone());
+                            let (p, s, l) = native_lists.clone();
+                            move |_| {
+                                if (glass.native)() {
+                                    glass.edit(&task, mine.clone(), p.clone(), s.clone(), l.clone(), reload);
+                                } else {
+                                    editing.set(true);
+                                }
+                            }
+                        },
+                        div { class: "task-content", "{task.content}" }
+                        if !task.description.is_empty() {
+                            div { class: "task-desc", "{task.description}" }
+                        }
+                        if show_meta {
+                            div { class: "task-meta",
+                                if let Some((cls, label)) = due.clone() {
+                                    span { class: cls,
+                                        Icon { svg: icons::calendar_small() }
+                                        "{label}"
+                                        if recurring {
+                                            Icon { svg: icons::repeat_small() }
+                                        }
                                     }
                                 }
-                            }
-                            if let Some((cls, label)) = deadline.clone() {
-                                span { class: "deadline {cls}", title: "Deadline",
-                                    Icon { svg: icons::target_small() }
-                                    "{label}"
+                                if let Some((cls, label)) = deadline.clone() {
+                                    span { class: "deadline {cls}", title: "Deadline",
+                                        Icon { svg: icons::target_small() }
+                                        "{label}"
+                                    }
                                 }
-                            }
-                            if has_reminders {
-                                span { class: "reminder-tag", title: "{reminder_title}",
-                                    Icon { svg: icons::bell_small() }
+                                if has_reminders {
+                                    span { class: "reminder-tag", title: "{reminder_title}",
+                                        Icon { svg: icons::bell_small() }
+                                    }
                                 }
-                            }
-                            for name in task.labels.iter() {
-                                span { key: "{name}", class: "label-tag",
-                                    Icon { svg: icons::tag_small() }
-                                    "{name}"
+                                for name in task.labels.iter() {
+                                    span { key: "{name}", class: "label-tag",
+                                        Icon { svg: icons::tag_small() }
+                                        "{name}"
+                                    }
                                 }
-                            }
-                            if streak_on {
-                                span { class: "streak", title: "Current streak", "🔥 {task.streak_current}" }
+                                if streak_on {
+                                    span { class: "streak", title: "Current streak", "🔥 {task.streak_current}" }
+                                }
                             }
                         }
                     }
-                }
-                div { class: "task-actions",
-                    button {
-                        class: "icon-btn",
-                        title: "Add sub-task",
-                        onclick: move |_| adding_sub.set(true),
-                        Icon { svg: icons::subtask() }
-                    }
-                    if recurring {
+                    div { class: "task-actions",
                         button {
                             class: "icon-btn",
-                            title: "Streak",
-                            onclick: move |_| panel.set(!panel()),
-                            "🔥"
+                            title: "Add sub-task",
+                            onclick: {
+                                let defaults = native_sub.clone();
+                                let (p, s, l) = native_lists.clone();
+                                move |_| {
+                                    if (glass.native)() {
+                                        glass.add(defaults.clone(), p.clone(), s.clone(), l.clone(), reload);
+                                    } else {
+                                        adding_sub.set(true);
+                                    }
+                                }
+                            },
+                            Icon { svg: icons::subtask() }
                         }
-                    }
-                    button {
-                        class: "icon-btn",
-                        title: "Delete task",
-                        onclick: move |_| {
-                            let id = id_delete.clone();
-                            spawn(async move {
-                                let _ = api::delete_task(id).await;
-                                reload += 1;
-                            });
-                        },
-                        Icon { svg: icons::trash() }
-                    }
-                }
-                if let Some(name) = project_name.clone() {
-                    span { class: "task-project", "{name}" }
-                }
-            }
-            if panel() && recurring {
-                div { class: "streak-panel",
-                    if streak_on {
-                        span { class: "stat", "Current " b { "🔥 {task.streak_current}" } }
-                        span { class: "stat", "Best " b { "{task.streak_best}" } }
-                        label {
-                            "Goal "
-                            input {
-                                r#type: "number",
-                                min: "1",
-                                value: "{goal_value}",
-                                onchange: move |e| {
-                                    let id = id_goal.clone();
-                                    let new_goal = e.value().trim().parse::<i64>().ok().filter(|g| *g > 0);
-                                    spawn(async move {
-                                        let _ = api::set_streak(id, true, new_goal).await;
-                                        reload += 1;
-                                    });
-                                },
+                        if recurring {
+                            button {
+                                class: "icon-btn",
+                                title: "Streak",
+                                onclick: move |_| panel.set(!panel()),
+                                "🔥"
                             }
                         }
-                    } else {
-                        span { "Track how many times in a row you complete this." }
+                        button {
+                            class: "icon-btn",
+                            title: "Delete task",
+                            onclick: move |_| {
+                                let id = id_delete.clone();
+                                spawn(async move {
+                                    let _ = api::delete_task(id).await;
+                                    reload += 1;
+                                });
+                            },
+                            Icon { svg: icons::trash() }
+                        }
                     }
-                    button {
-                        class: if streak_on { "btn btn-cancel" } else { "btn btn-add" },
-                        onclick: move |_| {
-                            let id = id_toggle.clone();
-                            spawn(async move {
-                                let _ = api::set_streak(id, !streak_on, goal).await;
-                                reload += 1;
-                            });
-                        },
-                        if streak_on { "Stop tracking" } else { "Track streak" }
+                    if let Some(name) = project_name.clone() {
+                        span { class: "task-project", "{name}" }
+                    }
+                }
+                if panel() && recurring {
+                    div { class: "streak-panel",
+                        if streak_on {
+                            span { class: "stat", "Current " b { "🔥 {task.streak_current}" } }
+                            span { class: "stat", "Best " b { "{task.streak_best}" } }
+                            label {
+                                "Goal "
+                                input {
+                                    r#type: "number",
+                                    min: "1",
+                                    value: "{goal_value}",
+                                    onchange: move |e| {
+                                        let id = id_goal.clone();
+                                        let new_goal = e.value().trim().parse::<i64>().ok().filter(|g| *g > 0);
+                                        spawn(async move {
+                                            let _ = api::set_streak(id, true, new_goal).await;
+                                            reload += 1;
+                                        });
+                                    },
+                                }
+                            }
+                        } else {
+                            span { "Track how many times in a row you complete this." }
+                        }
+                        button {
+                            class: if streak_on { "btn btn-cancel" } else { "btn btn-add" },
+                            onclick: move |_| {
+                                let id = id_toggle.clone();
+                                spawn(async move {
+                                    let _ = api::set_streak(id, !streak_on, goal).await;
+                                    reload += 1;
+                                });
+                            },
+                            if streak_on { "Stop tracking" } else { "Track streak" }
+                        }
                     }
                 }
             }
-        }
-        if adding_sub() {
-            div { style: "{sub_indent}",
-                TaskEditor {
-                    initial: sub_defaults,
-                    projects,
-                    sections,
-                    labels,
-                    keep_label: None,
-                    submit_text: "Add sub-task".to_string(),
-                    quick_add: true,
-                    on_submit: move |v: EditorValues| {
-                        let (p, s, l) = (sub_projects.clone(), sub_sections.clone(), sub_labels.clone());
-                        adding_sub.set(false);
-                        spawn(async move {
-                            add_from_editor(v, p, s, l).await;
-                            reload += 1;
-                        });
-                    },
-                    on_cancel: move |_| adding_sub.set(false),
-                    reload,
+            if adding_sub() {
+                div { style: "{sub_indent}",
+                    TaskEditor {
+                        initial: sub_defaults,
+                        projects,
+                        sections,
+                        labels,
+                        keep_label: None,
+                        submit_text: "Add sub-task".to_string(),
+                        quick_add: true,
+                        on_submit: move |v: EditorValues| {
+                            let (p, s, l) = (sub_projects.clone(), sub_sections.clone(), sub_labels.clone());
+                            adding_sub.set(false);
+                            spawn(async move {
+                                let _ = add_from_editor(v, p, s, l).await;
+                                reload += 1;
+                            });
+                        },
+                        on_cancel: move |_| adding_sub.set(false),
+                        reload,
+                    }
                 }
             }
         }

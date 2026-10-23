@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the Keel web UI may call",
+  "windows": ["main"],
+  "permissions": ["core:default", "notification:default", "glass:default"]
+}

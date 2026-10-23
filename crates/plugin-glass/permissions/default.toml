@@ -1,0 +1,13 @@
+[default]
+description = "Everything the Keel web UI uses"
+permissions = [
+  "allow-is-available",
+  "allow-show",
+  "allow-update",
+  "allow-hide",
+  "allow-buttons",
+  "allow-actions",
+  "allow-prompt",
+  "allow-register-listener",
+  "allow-remove-listener",
+]

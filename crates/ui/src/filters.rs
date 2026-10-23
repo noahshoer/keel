@@ -4,6 +4,7 @@
 use dioxus::prelude::*;
 use keel_core::model::Filter;
 
+use crate::glass::{answer_text, use_prompt_answer, Prompt};
 use crate::icons::{self, Icon};
 use crate::{api, View};
 
@@ -97,6 +98,21 @@ enum RowMode {
 }
 
 /// A filter in the sidebar: click to open; hover to edit or delete.
+/// The native filter prompt (iPhone): name and query, with `problem` shown
+/// when a query was rejected.
+pub fn filter_prompt(id: &str, title: &str, confirm: &str, name: &str, query: &str, problem: &str) -> Prompt {
+    Prompt::new(id, title, confirm).field("Name", name).field("Query, e.g. today & p1", query).message(problem)
+}
+
+/// Checks a prompt's filter answer. Ok((name, query)) when both are set
+/// and the query parses; Err(message) to ask again.
+pub async fn checked_filter(values: &[String]) -> Result<(String, String), String> {
+    let (Some(name), Some(query)) = (answer_text(values, 0), answer_text(values, 1)) else {
+        return Err("A filter needs a name and a query.".to_string());
+    };
+    api::check_filter(&query).await.map(|_| (name, query))
+}
+
 #[component]
 pub fn FilterRow(filter: Filter, active: bool, view: Signal<View>, reload: Signal<u32>) -> Element {
     let mut view = view;
@@ -106,6 +122,42 @@ pub fn FilterRow(filter: Filter, active: bool, view: Signal<View>, reload: Signa
     let id_save = filter.id.clone();
     let id_delete = filter.id.clone();
     let class = if active { "nav-item active" } else { "nav-item" };
+    let menu_id = format!("filter:{}", filter.id);
+    let glass = crate::glass::use_glass();
+    // iPhone: a long press offers Edit and Delete (the desktop's hover
+    // buttons); Edit is a native prompt (a web form gets no keyboard).
+    let edit_id = format!("edit:{menu_id}");
+    {
+        let (pid, name, query) = (edit_id.clone(), filter.name.clone(), filter.query.clone());
+        crate::glass::use_row_menu(menu_id.clone(), filter.name.clone(), crate::glass::nav_actions("Edit filter"), move |action| {
+            match action {
+                crate::glass::TaskAction::Rename => glass.ask(filter_prompt(&pid, "Edit filter", "Save", &name, &query, "")),
+                crate::glass::TaskAction::Delete => mode.set(RowMode::ConfirmDelete),
+                _ => {}
+            }
+        });
+    }
+    {
+        let (pid, id) = (edit_id.clone(), filter.id.clone());
+        use_prompt_answer(edit_id, move |values| {
+            let (pid, id) = (pid.clone(), id.clone());
+            spawn(async move {
+                match checked_filter(&values).await {
+                    Ok((name, query)) => {
+                        let _ = api::update_filter(id.clone(), name.clone(), query.clone()).await;
+                        if matches!(view(), View::Filter(ref open, _, _) if *open == id) {
+                            view.set(View::Filter(id, name, query));
+                        }
+                        reload += 1;
+                    }
+                    Err(problem) => {
+                        let (n, q) = (values.first().cloned().unwrap_or_default(), values.get(1).cloned().unwrap_or_default());
+                        glass.ask(filter_prompt(&pid, "Edit filter", "Save", &n, &q, &problem));
+                    }
+                }
+            });
+        });
+    }
 
     match mode() {
         RowMode::Editing => rsx! {
@@ -154,6 +206,7 @@ pub fn FilterRow(filter: Filter, active: bool, view: Signal<View>, reload: Signa
         RowMode::Normal => rsx! {
             div {
                 class,
+                "data-menu-id": "{menu_id}",
                 title: "{filter.query}",
                 onclick: move |_| view.set(open.clone()),
                 span { class: "nav-icon filter", Icon { svg: icons::funnel() } }

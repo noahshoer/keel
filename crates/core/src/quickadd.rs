@@ -80,6 +80,81 @@ struct Token {
     end: usize,
 }
 
+/// `input` without the recognized phrases of the given kinds, with the
+/// leftover whitespace collapsed. Used when a value is picked by hand: the
+/// pick replaces whatever was typed for it.
+pub fn strip_spans(input: &str, spans: &[Span], kinds: &[SpanKind]) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut at = 0;
+    for s in spans.iter().filter(|s| kinds.contains(&s.kind)) {
+        out.push_str(&input[at..s.start]);
+        at = s.end;
+    }
+    out.push_str(&input[at..]);
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// [`parse`], leaving the `plain` byte ranges alone: phrases the user
+/// turned back into text (backspace right after a highlight, as in
+/// Todoist). They're masked with filler of the same byte length, so every
+/// other offset is unchanged, and the title is rebuilt from `input`.
+pub fn parse_keeping(
+    input: &str,
+    today: NaiveDate,
+    projects: &[Project],
+    sections: &[Section],
+    plain: &[(usize, usize)],
+) -> QuickAdd {
+    if plain.is_empty() {
+        return parse(input, today, projects, sections);
+    }
+    let masked: String = input
+        .char_indices()
+        .map(|(i, c)| {
+            let kept = plain.iter().any(|&(a, b)| i >= a && i < b);
+            if kept && !c.is_whitespace() { "\u{1}".repeat(c.len_utf8()) } else { c.to_string() }
+        })
+        .collect();
+    let (mut q, used) = parse_tokens(&masked, today, projects, sections);
+    // The title is the words the parser didn't use, as in `parse`, taken from
+    // the real text. Masking keeps every word boundary, so the words line up.
+    q.content = unused_words(&tokens(input), &used);
+    q
+}
+
+/// The title left after parsing: the unused words, single-spaced.
+fn unused_words(tokens: &[Token], used: &[bool]) -> String {
+    tokens.iter().zip(used).filter(|(_, used)| !**used).map(|(tok, _)| tok.raw.as_str()).collect::<Vec<_>>().join(" ")
+}
+
+/// Moves `plain` ranges through an edit from `old` to `new`: ranges before
+/// or after the changed stretch stay with their text; a range the edit
+/// touches is dropped, so the phrase is read again.
+pub fn shift_plain(old: &str, new: &str, plain: &[(usize, usize)]) -> Vec<(usize, usize)> {
+    let mut prefix = old.bytes().zip(new.bytes()).take_while(|(a, b)| a == b).count();
+    while !old.is_char_boundary(prefix) || !new.is_char_boundary(prefix) {
+        prefix -= 1;
+    }
+    let max_suffix = old.len().min(new.len()) - prefix;
+    let mut suffix = old.bytes().rev().zip(new.bytes().rev()).take(max_suffix).take_while(|(a, b)| a == b).count();
+    while !old.is_char_boundary(old.len() - suffix) || !new.is_char_boundary(new.len() - suffix) {
+        suffix -= 1;
+    }
+    let (old_end, delta) = (old.len() - suffix, new.len() as isize - old.len() as isize);
+    plain
+        .iter()
+        .filter_map(|&(a, b)| {
+            if b <= prefix {
+                Some((a, b))
+            } else if a >= old_end {
+                Some(((a as isize + delta) as usize, (b as isize + delta) as usize))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 fn tokens(input: &str) -> Vec<Token> {
     let mut out = Vec::new();
     let mut start: Option<usize> = None;
@@ -518,9 +593,15 @@ fn match_name(t: &[Token], i: usize, sigil: &str, names: &[&str]) -> Option<(usi
     None
 }
 
-/// Parses a quick-add title. Unknown projects/sections stay in the title; if
-/// stripping would leave no title, nothing is applied.
+/// Parses a quick-add title. Unknown projects/sections stay in the title. A
+/// phrase on its own is still recognized (`content` is then empty); the
+/// editors won't save until there's a name besides it, as in Todoist.
 pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Section]) -> QuickAdd {
+    parse_tokens(input, today, projects, sections).0
+}
+
+/// `parse`, also returning which of `input`'s words it used.
+fn parse_tokens(input: &str, today: NaiveDate, projects: &[Project], sections: &[Section]) -> (QuickAdd, Vec<bool>) {
     let t = tokens(input);
     let mut used = vec![false; t.len()];
     let mut q = QuickAdd::default();
@@ -661,24 +742,15 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
         q.date = Some(today);
     }
 
-    q.content = t
-        .iter()
-        .zip(&used)
-        .filter(|(_, used)| !**used)
-        .map(|(tok, _)| tok.raw.as_str())
-        .collect::<Vec<_>>()
-        .join(" ");
-    if q.content.trim().is_empty() {
-        return QuickAdd { content: input.trim().to_string(), ..QuickAdd::default() };
-    }
+    q.content = unused_words(&t, &used);
     spans.sort_by_key(|s| s.start);
     q.spans = spans;
-    q
+    (q, used)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse, QuickAdd};
+    use super::{parse, parse_keeping, shift_plain, strip_spans, QuickAdd, SpanKind};
     use crate::ids::Id;
     use crate::model::{Priority, Project, Section};
     use crate::recurrence::Recurrence;
@@ -865,10 +937,16 @@ mod tests {
     }
 
     #[test]
-    fn empty_title_falls_back_to_plain_text() {
+    fn a_phrase_alone_is_still_recognized() {
+        // Todoist-style: the phrase highlights as soon as it's typed; the
+        // editors refuse to save until there's a name besides it.
         let q = p("tomorrow");
-        assert_eq!(q.content, "tomorrow");
-        assert_eq!(q.date, None, "nothing is applied when it would leave no title");
+        assert_eq!(q.content, "");
+        assert_eq!(q.date, Some(d(2026, 10, 20)));
+        assert_eq!(q.spans.len(), 1);
+        for input in ["This weekend", "This Weekend", "weekend"] {
+            assert_eq!(p(input).date, Some(d(2026, 10, 24)), "{input}");
+        }
     }
 
     #[test]
@@ -1024,7 +1102,7 @@ mod tests {
         let q = p(input);
         assert_eq!(&input[q.spans[0].start..q.spans[0].end], "/Later");
         assert_eq!(q.spans[0].kind, super::SpanKind::Section);
-        assert!(p("tomorrow").spans.is_empty(), "empty-title fallback applies nothing");
+        assert_eq!(p("tomorrow").spans.len(), 1, "a phrase alone still highlights");
         assert!(p("plain words").spans.is_empty());
     }
 
@@ -1050,5 +1128,89 @@ mod tests {
         assert_eq!(q.project_id, Some(Id::from("P-WORK")));
         assert_eq!(q.section_id, Some(Id::from("S-NEXT")));
         assert_eq!(q.labels, vec!["phone".to_string()]);
+    }
+
+    #[test]
+    fn strip_spans_removes_every_span_of_the_kinds() {
+        let input = "@home call mom @phone";
+        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Label]), "call mom");
+        let input = "call mom tomorrow 5pm";
+        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Date, SpanKind::Time]), "call mom");
+    }
+
+    #[test]
+    fn strip_spans_leaves_unrecognized_repeats_as_text() {
+        // Only the first date is applied; the second "tomorrow" is title text.
+        let input = "tomorrow call mom tomorrow";
+        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Date]), "call mom tomorrow");
+    }
+
+    #[test]
+    fn strip_spans_keeps_other_kinds() {
+        let input = "call mom tomorrow p1";
+        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Priority]), "call mom tomorrow");
+    }
+
+    #[test]
+    fn strip_spans_collapses_spaces() {
+        let input = "a  p1  b";
+        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Priority]), "a b");
+    }
+
+    fn pk(input: &str, plain: &[(usize, usize)]) -> QuickAdd {
+        parse_keeping(input, today(), &projects(), &sections(), plain)
+    }
+
+    #[test]
+    fn a_kept_phrase_stays_plain_text() {
+        let q = pk("call mom today", &[(9, 14)]);
+        assert_eq!(q.date, None);
+        assert_eq!(q.content, "call mom today");
+        assert!(q.spans.is_empty());
+    }
+
+    #[test]
+    fn other_phrases_still_parse_around_a_kept_one() {
+        let q = pk("buy today paper p1 tomorrow", &[(4, 9)]);
+        assert_eq!(q.priority, Some(Priority::P1));
+        assert_eq!(q.date, Some(d(2026, 10, 20)));
+        assert_eq!(q.content, "buy today paper");
+        assert!(q.spans.iter().all(|s| s.start >= 9));
+    }
+
+    #[test]
+    fn no_kept_phrases_is_a_plain_parse() {
+        assert_eq!(pk("call mom today", &[]), p("call mom today"));
+    }
+
+    #[test]
+    fn kept_ranges_follow_edits_around_them() {
+        // Typing after the kept word: it stays put.
+        assert_eq!(shift_plain("x today", "x today 5pm", &[(2, 7)]), vec![(2, 7)]);
+        // Typing before it: it moves along.
+        assert_eq!(shift_plain("x today", "abc x today", &[(2, 7)]), vec![(6, 11)]);
+        // Editing inside it: it's forgotten (read again).
+        assert_eq!(shift_plain("x today", "x toda", &[(2, 7)]), vec![]);
+        assert_eq!(shift_plain("x today", "x tOday", &[(2, 7)]), vec![]);
+    }
+
+    #[test]
+    fn this_weekend_in_any_case() {
+        for input in ["x this weekend", "x This weekend", "x This Weekend", "x THIS WEEKEND", "x weekend", "x Weekend"] {
+            let q = p(input);
+            assert_eq!(q.date, Some(d(2026, 10, 24)), "{input}");
+            assert_eq!(q.content, "x", "{input}");
+        }
+    }
+
+
+    #[test]
+    fn kept_text_is_spaced_like_parse() {
+        // Kept as text with no other phrase: whitespace collapses, as in parse.
+        assert_eq!(pk("call  mom   today", &[(12, 17)]).content, "call mom today");
+        // With another phrase recognized too.
+        let q = pk("call  mom today   tomorrow", &[(10, 15)]);
+        assert_eq!(q.content, "call mom today");
+        assert_eq!(q.date, Some(d(2026, 10, 20)));
     }
 }

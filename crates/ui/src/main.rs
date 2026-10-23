@@ -1,9 +1,12 @@
 mod editor;
 mod filters;
 mod gestures;
+mod glass;
 mod api;
+mod completion;
 mod icons;
 mod pickers;
+mod platform;
 mod search;
 mod settings;
 mod sidebar;
@@ -48,6 +51,56 @@ pub enum View {
     Search,
 }
 
+/// How the page changes when the view does: Search slides in over the page
+/// and back out, like an iOS push / pop; everything else fades.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Motion {
+    Fade,
+    Push,
+    Pop,
+}
+
+pub fn view_motion(from: &View, to: &View) -> Motion {
+    match (from == &View::Search, to == &View::Search) {
+        (false, true) => Motion::Push,
+        (true, false) => Motion::Pop,
+        _ => Motion::Fade,
+    }
+}
+
+/// The page left behind by a push / pop: `keelGhost(dir)` takes a still copy
+/// of the page as the view changes (it's still showing then), laid over the
+/// main pane — under it for a push, over it for a pop. `keelGhostGo()` sets
+/// it moving once the new view lands, and it removes itself after.
+const GHOST_JS: &str = r#"
+window.keelGhost = (dir) => {
+  document.querySelectorAll('.view-ghost').forEach((g) => g.remove());
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const app = document.querySelector('.app'), main = app?.querySelector('.main');
+  const content = main?.querySelector('.content');
+  if (!content) return;
+  const a = app.getBoundingClientRect(), m = main.getBoundingClientRect(), c = content.getBoundingClientRect();
+  const ghost = document.createElement('div');
+  ghost.className = 'view-ghost ' + dir;
+  ghost.style.cssText = `left:${m.left - a.left}px;top:${m.top - a.top}px;width:${m.width}px;height:${m.height}px;` +
+    `border-radius:${getComputedStyle(main).borderRadius}`;
+  const copy = content.cloneNode(true);
+  copy.classList.remove('view-in-a', 'view-in-b', 'view-pop');
+  copy.style.cssText = `position:absolute;margin:0;top:${c.top - m.top}px;left:${c.left - m.left}px;width:${c.width}px`;
+  ghost.appendChild(copy);
+  app.appendChild(ghost);
+  // In case the new view never lands.
+  setTimeout(() => ghost.remove(), 2000);
+};
+window.keelGhostGo = () => {
+  document.querySelectorAll('.view-ghost:not(.go)').forEach((g) => {
+    g.classList.add('go');
+    g.addEventListener('animationend', () => g.remove());
+    setTimeout(() => g.remove(), 1500);
+  });
+};
+"#;
+
 /// Sends `true` to Rust on "/" (outside text fields) or Ctrl/Cmd+K, then
 /// focuses the search box once the Search view has rendered.
 const SEARCH_SHORTCUT_JS: &str = r#"
@@ -86,6 +139,10 @@ fn main() {
 
 #[derive(Clone, PartialEq)]
 struct Loaded {
+    /// The view this data was loaded for. The pane shows this, not the
+    /// view just picked, so a switch swaps title and tasks together instead
+    /// of flashing the new title over the old (empty-looking) task list.
+    view: View,
     projects: Vec<Project>,
     /// Sections of every project (for grouping and the editor's location picker).
     sections: Vec<Section>,
@@ -155,6 +212,7 @@ fn date_groups(view: &View, tasks: Vec<Task>, today: NaiveDate) -> Vec<Group> {
 #[component]
 fn App() -> Element {
     let mut view = use_signal(|| View::Today);
+    let mut last_view = use_signal(|| View::Today);
     // Kept across visits to the Search view.
     let search_query = use_signal(String::new);
     let reload = use_signal(|| 0u32);
@@ -163,10 +221,17 @@ fn App() -> Element {
     // Task reminders, read by every task row (refreshed with each load).
     let mut reminders = use_context_provider(|| Signal::new(Vec::<Reminder>::new()));
     pickers::provide_touch();
+    pickers::provide_week_start();
+    // The mark a completed circle fills with (a per-device setting).
+    use_context_provider(|| Signal::new(completion::saved()));
     // Narrow layouts: the sidebar is a slide-over drawer (CSS ignores this
     // on wide windows, where the sidebar is always shown).
     let mut drawer = use_signal(|| false);
     use_hook(|| theme::apply(&theme.peek()));
+    // Quick add: Backspace right after a highlight un-highlights it.
+    use_hook(|| {
+        let _ = document::eval(editor::UNHIGHLIGHT_KEY_JS);
+    });
     // Forms here are handled in Rust; never let the browser submit one (a
     // native submit reloads the page and cuts off work still in flight).
     use_hook(|| {
@@ -181,9 +246,61 @@ fn App() -> Element {
             }
         });
     });
+    // iPhone: the native glass card and floating buttons.
+    let glass = glass::provide(move |action| match action {
+        glass::ButtonAction::OpenMenu => drawer.set(true),
+        // In Search the button closes it, back to where you were.
+        glass::ButtonAction::Search => {
+            let next = if *view.peek() == View::Search { last_view.peek().clone() } else { View::Search };
+            view.set(next);
+        }
+        glass::ButtonAction::AddTask | glass::ButtonAction::Theme | glass::ButtonAction::Settings => {}
+    });
+    // Measure the drawer's header buttons each time it opens.
+    use_effect(move || {
+        if drawer() {
+            glass.measure_drawer();
+        }
+    });
+    // The floating buttons step aside while the drawer is open.
+    use_effect(move || {
+        let mut state = glass::floating_buttons(view() == View::Search, drawer());
+        state.theme = theme();
+        if drawer() && !(glass.settings_open)() {
+            state.drawer = glass::drawer_buttons(&(glass.drawer_rects)(), &theme());
+        }
+        if (glass.native)() {
+            spawn(async move { api::glass_buttons(state).await });
+        }
+    });
+    // Search slides in and out: a still copy of the page being left is
+    // taken as soon as the view changes (before the new one loads).
+    use_hook(|| {
+        let _ = document::eval(GHOST_JS);
+    });
+    let mut requested = use_signal(|| None::<View>);
+    use_effect(move || {
+        let v = view();
+        let before = requested.peek().clone();
+        requested.set(Some(v.clone()));
+        let dir = match before.map(|b| view_motion(&b, &v)) {
+            Some(Motion::Push) => "push",
+            Some(Motion::Pop) => "pop",
+            _ => return,
+        };
+        let _ = document::eval(&format!("window.keelGhost && keelGhost('{dir}');"));
+    });
+    // Where closing Search goes back to.
+    use_effect(move || {
+        let v = view();
+        if v != View::Search {
+            last_view.set(v);
+        }
+    });
     // Touch: swipe right opens the drawer, swipe left closes it.
     use_hook(move || {
         spawn(async move {
+            let _ = document::eval(gestures::LONG_PRESS_JS);
             let mut swipes = document::eval(gestures::SWIPE_JS);
             while let Ok(s) = swipes.recv::<gestures::Swipe>().await {
                 let open_now = *drawer.peek();
@@ -193,10 +310,13 @@ fn App() -> Element {
             }
         });
     });
-    // Picking a view closes the drawer.
+    // Picking a view closes the drawer once that view's data has loaded:
+    // the page swaps under the drawer, then the drawer slides away to reveal
+    // it (closing first showed the old page snap to the new one).
+    let mut closing_for = use_signal(|| None::<View>);
     use_effect(move || {
-        let _ = view();
-        drawer.set(false);
+        let v = view();
+        closing_for.set(Some(v));
     });
 
     let data = use_resource(move || async move {
@@ -261,6 +381,7 @@ fn App() -> Element {
             Vec::new()
         };
         Ok::<Loaded, String>(Loaded {
+            view: v,
             projects,
             sections,
             labels,
@@ -274,8 +395,32 @@ fn App() -> Element {
         })
     });
 
+    // Each time a different view's data lands, the page fades in again
+    // (`swaps` alternates the animation so it restarts).
+    let mut swaps = use_signal(|| (None::<View>, 0u32, Motion::Fade));
+    use_effect(move || {
+        let loaded_view = match &*data.read() {
+            Some(Ok(l)) => Some(l.view.clone()),
+            Some(Err(_)) => closing_for.peek().clone(),
+            None => None,
+        };
+        let Some(lv) = loaded_view else { return };
+        if closing_for.peek().as_ref() == Some(&lv) {
+            closing_for.set(None);
+            drawer.set(false);
+        }
+        if swaps.peek().0.as_ref() != Some(&lv) {
+            let (before, n, _) = swaps.peek().clone();
+            let motion = before.as_ref().map_or(Motion::Fade, |b| view_motion(b, &lv));
+            swaps.set((Some(lv), n + 1, motion));
+            if motion != Motion::Fade {
+                // After the new page renders: the left-behind copy moves off.
+                let _ = document::eval("requestAnimationFrame(() => window.keelGhostGo && keelGhostGo());");
+            }
+        }
+    });
+
     let today = today();
-    let current = view();
     let state = (*data.read()).clone();
 
     rsx! {
@@ -302,7 +447,7 @@ fn App() -> Element {
                         theme,
                         reload,
                     }
-                    MainPane { view: current, loaded, today, show_completed, drawer, search_query, reload }
+                    MainPane { view: loaded.view.clone(), loaded, today, show_completed, drawer, search_query, reload, swap: swaps().1, motion: swaps().2 }
                 },
             }
         }
@@ -334,6 +479,10 @@ fn MainPane(
     drawer: Signal<bool>,
     search_query: Signal<String>,
     reload: Signal<u32>,
+    /// Bumped when a different view lands; alternates the fade-in.
+    #[props(default)]
+    swap: u32,
+    motion: Motion,
 ) -> Element {
     let mut show_completed = show_completed;
     let mut drawer = drawer;
@@ -403,8 +552,14 @@ fn MainPane(
     let groups = if date_view { date_groups(&view, loaded.tasks.clone(), today) } else { Vec::new() };
 
     rsx! {
-        main { class: "main",
-            div { class: "content",
+        main { class: if motion == Motion::Push { "main view-push" } else { "main" },
+            div {
+                class: match motion {
+                    Motion::Pop => "content view-pop",
+                    Motion::Push => "content",
+                    Motion::Fade if swap % 2 == 0 => "content view-in-a",
+                    Motion::Fade => "content view-in-b",
+                },
                 div { class: "view-head",
                     button {
                         class: "icon-btn menu-btn",
@@ -469,6 +624,7 @@ fn MainPane(
                     }
                     AddTask {
                         key: "{view_key}",
+                        main: true,
                         defaults: defaults.clone(),
                         projects: loaded.projects.clone(),
                         sections: loaded.sections.clone(),
@@ -499,6 +655,7 @@ fn MainPane(
                     }
                     AddTask {
                         key: "{view_key}",
+                        main: true,
                         defaults: defaults.clone(),
                         projects: loaded.projects.clone(),
                         sections: loaded.sections.clone(),
@@ -519,6 +676,7 @@ fn MainPane(
                     }
                     AddTask {
                         key: "{view_key}",
+                        main: true,
                         defaults: defaults.clone(),
                         projects: loaded.projects.clone(),
                         sections: loaded.sections.clone(),
@@ -772,5 +930,18 @@ fn AddSection(project_id: Id, reload: Signal<u32>) -> Element {
                 },
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod motion_tests {
+    use super::*;
+
+    #[test]
+    fn search_pushes_in_and_pops_out() {
+        assert_eq!(view_motion(&View::Today, &View::Search), Motion::Push);
+        assert_eq!(view_motion(&View::Search, &View::Inbox), Motion::Pop);
+        assert_eq!(view_motion(&View::Today, &View::Inbox), Motion::Fade);
+        assert_eq!(view_motion(&View::Search, &View::Search), Motion::Fade);
     }
 }

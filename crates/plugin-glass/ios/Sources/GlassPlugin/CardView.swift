@@ -1,0 +1,300 @@
+import SwiftUI
+import UIKit
+
+/// Background tint behind each kind of highlighted phrase: the web's
+/// `--hl-*` colors (style.rs), stronger in dark mode, like Todoist.
+func highlightColor(_ kind: String) -> UIColor {
+  let (light, dark): ((CGFloat, CGFloat, CGFloat), (CGFloat, CGFloat, CGFloat)) =
+    switch kind {
+    case "date", "time": ((5, 133, 39), (46, 190, 96))
+    case "repeat", "deadline": ((105, 47, 194), (160, 110, 240))
+    case "priority-1", "priority": ((209, 69, 59), (255, 112, 102))
+    case "priority-2", "label": ((235, 137, 9), (255, 154, 20))
+    case "priority-3", "project", "section": ((36, 111, 224), (82, 151, 255))
+    default: ((120, 120, 120), (160, 160, 160))
+    }
+  return UIColor { traits in
+    let dk = traits.userInterfaceStyle == .dark
+    let (r, g, b) = dk ? dark : light
+    return UIColor(red: r / 255, green: g / 255, blue: b / 255, alpha: dk ? 0.36 : 0.22)
+  }
+}
+
+/// Draws text backgrounds (the highlights) as rounded, slightly padded
+/// pills instead of TextKit's square boxes.
+final class RoundedHighlightLayoutManager: NSLayoutManager {
+  override func fillBackgroundRectArray(
+    _ rectArray: UnsafePointer<CGRect>, count rectCount: Int, forCharacterRange charRange: NSRange, color: UIColor
+  ) {
+    color.setFill()
+    for i in 0..<rectCount {
+      // A little air around the phrase, but not across the space between
+      // two neighbouring phrases.
+      let r = rectArray[i].insetBy(dx: -1.5, dy: -1)
+      UIBezierPath(roundedRect: r, cornerRadius: 6).fill()
+    }
+  }
+}
+
+/// The title, with quick-add phrases highlighted from the spans the web UI
+/// sends. It wraps onto more lines as it grows (the card keeps its width),
+/// and Return submits rather than adding a line break.
+struct TitleField: UIViewRepresentable {
+  @ObservedObject var model: CardModel
+
+  static let font = UIFont.systemFont(ofSize: 17, weight: .semibold)
+
+  /// Takes focus as soon as it's on screen, so the keyboard opens with the
+  /// card (calling it from `makeUIView` was too early on the phone).
+  final class AutoFocusField: UITextView {
+    /// The field on screen, for `Demo`.
+    static weak var current: AutoFocusField?
+    let placeholder = UILabel()
+
+    /// TextKit 1 with a layout manager that rounds the highlights.
+    init() {
+      let storage = NSTextStorage()
+      let layout = RoundedHighlightLayoutManager()
+      storage.addLayoutManager(layout)
+      let container = NSTextContainer(size: CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+      container.widthTracksTextView = true
+      layout.addTextContainer(container)
+      super.init(frame: .zero, textContainer: container)
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func didMoveToWindow() {
+      super.didMoveToWindow()
+      if window != nil { AutoFocusField.current = self }
+      if window != nil { focus(attempt: 0) }
+    }
+
+    /// Focus right away (a deferred first try didn't open the keyboard on
+    /// the phone), retrying briefly if refused. The window must be the key
+    /// window too: Keel's isn't always key after launch, and then the field
+    /// takes focus but iOS shows no keyboard.
+    func focus(attempt: Int) {
+      guard let window else { return }
+      if !window.isKeyWindow { window.makeKey() }
+      if isFirstResponder { return }
+      if becomeFirstResponder() || attempt >= 20 { return }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.focus(attempt: attempt + 1) }
+    }
+
+    func syncPlaceholder() { placeholder.isHidden = !text.isEmpty }
+  }
+
+  func makeUIView(context: Context) -> AutoFocusField {
+    let f = AutoFocusField()
+    f.font = TitleField.font
+    f.backgroundColor = .clear
+    f.isScrollEnabled = false
+    // A highlight at the start of a line reaches just past the text edge.
+    f.clipsToBounds = false
+    f.textContainerInset = .zero
+    f.textContainer.lineFragmentPadding = 0
+    f.returnKeyType = .done
+    f.delegate = context.coordinator
+    f.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    f.placeholder.font = TitleField.font
+    f.placeholder.textColor = .placeholderText
+    f.placeholder.translatesAutoresizingMaskIntoConstraints = false
+    f.addSubview(f.placeholder)
+    NSLayoutConstraint.activate([
+      f.placeholder.leadingAnchor.constraint(equalTo: f.leadingAnchor),
+      f.placeholder.topAnchor.constraint(equalTo: f.topAnchor),
+    ])
+    return f
+  }
+
+  /// Height for the offered width: the text wraps instead of widening.
+  func sizeThatFits(_ proposal: ProposedViewSize, uiView: AutoFocusField, context: Context) -> CGSize? {
+    let width = proposal.width ?? uiView.bounds.width
+    let fit = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+    return CGSize(width: width, height: max(fit.height, TitleField.font.lineHeight))
+  }
+
+  func updateUIView(_ f: AutoFocusField, context: Context) {
+    guard let state = model.state else { return }
+    f.placeholder.text = state.mode == .add ? "e.g. Call mom tomorrow 5pm p1 #Home" : "Task name"
+    let c = context.coordinator
+    if c.token != model.resetToken {
+      c.token = model.resetToken
+      f.text = state.title
+    }
+    defer { f.syncPlaceholder() }
+    // Typing got ahead of this state; the next one will match.
+    guard f.text == state.title else { return }
+    let text = NSMutableAttributedString(
+      string: state.title, attributes: [.font: TitleField.font, .foregroundColor: UIColor.label])
+    let length = (state.title as NSString).length
+    for s in state.spans where s.start < s.end && s.end <= length {
+      text.addAttribute(.backgroundColor, value: highlightColor(s.kind), range: NSRange(location: s.start, length: s.end - s.start))
+    }
+    // Rewriting the text mid-composition (marked text) would break typing.
+    guard f.markedTextRange == nil else { return }
+    let selection = f.selectedRange
+    f.attributedText = text
+    f.selectedRange = selection
+    f.typingAttributes = [.font: TitleField.font, .foregroundColor: UIColor.label]
+  }
+
+  func makeCoordinator() -> Coordinator { Coordinator(model: model) }
+
+  final class Coordinator: NSObject, UITextViewDelegate {
+    let model: CardModel
+    var token = -1
+    init(model: CardModel) { self.model = model }
+
+    func textViewDidChange(_ v: UITextView) {
+      (v as? AutoFocusField)?.syncPlaceholder()
+      model.send(.title(v.text, reset: model.state?.reset ?? 0))
+    }
+
+    /// Return submits; pasted line breaks become spaces (titles are one line).
+    /// Backspace right after a highlight un-highlights it (Todoist) instead
+    /// of deleting.
+    func textView(_ v: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+      if text.isEmpty, range.length == 1, v.selectedRange.length == 0, v.markedTextRange == nil,
+        let state = model.state, state.mode == .add, v.text == state.title,
+        state.spans.contains(where: { $0.end == range.location + 1 })
+      {
+        model.send(.unhighlight(range.location + 1))
+        return false
+      }
+      if text == "\n" {
+        if model.state?.canSubmit == true { model.send(.submit) }
+        return false
+      }
+      guard text.contains(where: \.isNewline) else { return true }
+      let flat = text.components(separatedBy: .newlines).joined(separator: " ")
+      v.textStorage.replaceCharacters(in: range, with: NSAttributedString(string: flat, attributes: v.typingAttributes))
+      v.selectedRange = NSRange(location: range.location + (flat as NSString).length, length: 0)
+      textViewDidChange(v)
+      return false
+    }
+  }
+}
+
+func chipIcon(_ id: ChipId) -> String {
+  switch id {
+  case .date: return "calendar"
+  case .priority: return "flag"
+  case .labels: return "tag"
+  case .reminders: return "alarm"
+  case .deadline: return "scope"
+  case .repeat: return "repeat"
+  case .location: return "number"
+  }
+}
+
+extension ChipId: Identifiable {
+  var id: String { rawValue }
+}
+
+struct ChipLabel: View {
+  let chip: ChipState
+
+  var body: some View {
+    HStack(spacing: 6) {
+      Label(chip.label, systemImage: chipIcon(chip.id))
+      if chip.repeats { Image(systemName: "repeat").font(.caption.weight(.semibold)) }
+    }
+      .font(.subheadline.weight(chip.set ? .semibold : .regular))
+      .foregroundStyle(chip.set ? chip.color : Color.primary)
+      .lineLimit(1)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+  }
+}
+
+struct ChipButton: View {
+  let chip: ChipState
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      ChipLabel(chip: chip)
+    }
+    .buttonStyle(.plain)
+    .glassEffect(chip.set ? .regular.tint(chip.color.opacity(0.18)).interactive() : .regular.interactive(), in: .capsule)
+  }
+}
+
+/// The composer / editor: title, description, a sideways-scrolling chip row
+/// and a send button pinned at its end, resting on the keyboard.
+struct CardView: View {
+  @ObservedObject var model: CardModel
+  @State private var drag: CGFloat = 0
+
+  var body: some View {
+    if let state = model.state ?? model.shown {
+      ZStack(alignment: .bottom) {
+        // Catches taps outside the card.
+        Color.black.opacity(0.001)
+          .ignoresSafeArea()
+          .onTapGesture { model.cancel() }
+
+        VStack(alignment: .leading, spacing: 10) {
+          TitleField(model: model)
+            .fixedSize(horizontal: false, vertical: true)
+          TextField("Description", text: $model.description, axis: .vertical)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .lineLimit(1...4)
+            .onChange(of: model.description) { _, text in
+              if text != model.state?.description { model.send(.description(text, reset: model.state?.reset ?? 0)) }
+            }
+          HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+              GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                  ForEach(state.chips, id: \.id) { chip in
+                    if chip.id == .priority || chip.id == .repeat {
+                      ChipMenu(chip: chip, picker: state.picker) { model.send(.pick($0)) }
+                    } else {
+                      ChipButton(chip: chip) { model.picker = chip.id }
+                    }
+                  }
+                }
+                .padding(.vertical, 2)
+              }
+            }
+            .clipShape(.capsule)
+            Button {
+              if state.canSubmit { model.send(.submit) }
+            } label: {
+              Image(systemName: state.mode == .add ? "arrow.up" : "checkmark")
+                .font(.body.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular.tint(keelGreen).interactive(), in: .circle)
+            .opacity(state.canSubmit ? 1 : 0.4)
+            .disabled(!state.canSubmit)
+            .accessibilityLabel(state.mode == .add ? "Add task" : "Save")
+          }
+        }
+        .padding(16)
+        .glassEffect(in: .rect(cornerRadius: 26))
+        .sheet(item: $model.picker, onDismiss: { TitleField.AutoFocusField.current?.becomeFirstResponder() }) { id in
+          PickerSheet(id: id, model: model)
+        }
+        .padding(.horizontal, 8)
+        .padding(.bottom, 8)
+        .offset(y: max(drag, 0))
+        .gesture(
+          DragGesture(minimumDistance: 12)
+            .onChanged { drag = $0.translation.height }
+            .onEnded { g in
+              if g.translation.height > 80 { model.cancel() }
+              drag = 0
+            }
+        )
+        .animation(.spring(duration: 0.25), value: drag)
+      }
+    }
+  }
+}

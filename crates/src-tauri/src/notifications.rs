@@ -19,6 +19,10 @@ use keel_service::AppService;
 #[derive(Default)]
 pub struct Reminders {
     plan: Mutex<Vec<PlannedReminder>>,
+    /// One re-plan at a time: commands are async, so two (two quick
+    /// completions) could otherwise interleave their cancel / schedule /
+    /// save steps.
+    syncing: Mutex<()>,
     #[cfg(desktop)]
     fired: Mutex<HashSet<i32>>,
 }
@@ -38,6 +42,8 @@ pub fn permission_text(state: PermissionState) -> &'static str {
 
 /// Re-plans and hands the plan to the OS (mobile) or the desktop ticker.
 pub fn resync<R: Runtime>(app: &AppHandle<R>) {
+    let reminders = app.state::<Reminders>();
+    let _one_at_a_time = reminders.syncing.lock().expect("reminder sync lock");
     let plan = match app.state::<AppService>().reminder_plan() {
         Ok(plan) => plan,
         Err(e) => {
@@ -60,12 +66,21 @@ fn schedule_on_device<R: Runtime>(app: &AppHandle<R>, plan: &[PlannedReminder]) 
     // ourselves because plugin 2.7 can't on iOS: `pending()` fails to parse
     // (iOS omits the `schedule` field Rust requires) and `cancel_all()` sends
     // null args that Swift rejects. Only `cancel(ids)` works.
+    // Clear everything pending first (the vendored plugin's `cancel_all`
+    // works on iOS), so nothing from an earlier plan can outlive it: a
+    // completed task's reminder once fired because cancelling its id failed
+    // and the id was forgotten. Falls back to the ids we tracked.
     let previous = svc.scheduled_reminder_ids().unwrap_or_default();
-    if !previous.is_empty() {
-        if let Err(e) = n.cancel(previous) {
-            eprintln!("reminders: cancelling pending failed: {e}");
+    let cleared = match n.cancel_all() {
+        Ok(()) => true,
+        Err(e) => {
+            eprintln!("reminders: clearing pending failed: {e}");
+            previous.is_empty()
+                || n.cancel(previous.clone())
+                    .map_err(|e| eprintln!("reminders: cancelling pending failed: {e}"))
+                    .is_ok()
         }
-    }
+    };
     let mut scheduled = Vec::new();
     if matches!(n.permission_state(), Ok(PermissionState::Granted)) {
         for r in plan {
@@ -83,9 +98,23 @@ fn schedule_on_device<R: Runtime>(app: &AppHandle<R>, plan: &[PlannedReminder]) 
             }
         }
     }
-    if let Err(e) = svc.set_scheduled_reminder_ids(&scheduled) {
+    if let Err(e) = svc.set_scheduled_reminder_ids(&tracked_after(cleared, &previous, &scheduled)) {
         eprintln!("reminders: saving scheduled ids failed: {e}");
     }
+}
+
+/// The ids to remember after a re-plan: what was just scheduled, plus the
+/// old ids when clearing them failed (they may still be pending, and the
+/// next re-plan tries again).
+#[cfg(any(mobile, test))]
+fn tracked_after(cleared: bool, previous: &[i32], scheduled: &[i32]) -> Vec<i32> {
+    let mut ids = if cleared { Vec::new() } else { previous.to_vec() };
+    for id in scheduled {
+        if !ids.contains(id) {
+            ids.push(*id);
+        }
+    }
+    ids
 }
 
 /// The plugin's iOS side parses `Schedule::At` with a literal `'Z'` and no
@@ -142,5 +171,13 @@ mod tests {
         assert_eq!((d.year(), d.month() as u8, d.day()), (2026, 10, 20));
         assert_eq!((d.hour(), d.minute(), d.second()), (14, 10, 0));
         assert!(d.offset().is_utc());
+    }
+
+    #[test]
+    fn ids_whose_cancel_failed_stay_tracked() {
+        // Cleared: only what was just scheduled needs tracking.
+        assert_eq!(tracked_after(true, &[1, 2, 3], &[3, 4]), vec![3, 4]);
+        // Not cleared: the old ids may still be pending, so keep them too.
+        assert_eq!(tracked_after(false, &[1, 2, 3], &[3, 4]), vec![1, 2, 3, 4]);
     }
 }

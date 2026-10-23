@@ -371,3 +371,55 @@ struct ImportArgs<'a> {
 pub async fn import_todoist_csv(project_name: &str, text: &str) -> Result<ImportSummary, String> {
     invoke("import_todoist_csv", &ImportArgs { project_name, text }).await
 }
+
+#[derive(Serialize)]
+struct GlassStateArg<'a> {
+    state: &'a crate::glass::CardState,
+}
+
+/// True on iOS, where `tauri-plugin-glass` draws the native card and buttons.
+pub async fn glass_available() -> bool {
+    invoke("plugin:glass|is_available", &NoArgs {}).await.unwrap_or(false)
+}
+
+/// Opens the native card, replacing whatever its fields hold.
+pub async fn glass_show(state: &crate::glass::CardState) {
+    let _ = invoke::<_, ()>("plugin:glass|show", &GlassStateArg { state }).await;
+}
+
+/// Refreshes the open card (highlights, chips) after an edit.
+pub async fn glass_update(state: &crate::glass::CardState) {
+    let _ = invoke::<_, ()>("plugin:glass|update", &GlassStateArg { state }).await;
+}
+
+pub async fn glass_hide() {
+    let _ = invoke::<_, ()>("plugin:glass|hide", &NoArgs {}).await;
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ActionsArg<'a> {
+    target: &'a str,
+    title: &'a str,
+    items: Vec<crate::glass::ActionItem>,
+}
+
+/// Opens the native action menu for a long-pressed row.
+pub async fn glass_actions(target: &str, title: &str, items: Vec<crate::glass::ActionItem>) {
+    let _ = invoke::<_, ()>("plugin:glass|actions", &ActionsArg { target, title, items }).await;
+}
+
+#[derive(Serialize)]
+struct PromptArg<'a> {
+    prompt: &'a crate::glass::Prompt,
+}
+
+/// Shows a native text prompt (answered through the `prompt` event).
+pub async fn glass_prompt(prompt: &crate::glass::Prompt) {
+    let _ = invoke::<_, ()>("plugin:glass|prompt", &PromptArg { prompt }).await;
+}
+
+/// Shows or hides the floating glass buttons.
+pub async fn glass_buttons(state: crate::glass::ButtonsState) {
+    let _ = invoke::<_, ()>("plugin:glass|buttons", &state).await;
+}

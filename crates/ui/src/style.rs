@@ -41,6 +41,8 @@ fn font_faces() -> String {
 
 const LIGHT: &str = r#"
   color-scheme: light;
+  --hl-a: .22; --hl-date: 5,133,39; --hl-repeat: 105,47,194; --hl-project: 36,111,224; --hl-label: 235,137,9;
+  --hl-p1: 209,69,59; --hl-p2: 235,137,9; --hl-p3: 36,111,224; --hl-p4: 120,120,120;
   --app-bg: #f5f3f0;
   --bg: #ffffff;
   --sidebar: transparent;
@@ -49,6 +51,8 @@ const LIGHT: &str = r#"
   --subtle: #666666;
   --divider: #efefef;
   --hover: rgba(0,0,0,.045);
+  --field-fill: rgba(118,118,128,.12);
+  --field-fill-focus: rgba(118,118,128,.18);
   --row-hover: #f7f5f3;
   --icon-hover: rgba(0,0,0,.06);
   --active-bg: #ffffff;
@@ -86,6 +90,8 @@ const LIGHT: &str = r#"
 
 const DARK: &str = r#"
   color-scheme: dark;
+  --hl-a: .36; --hl-date: 46,190,96; --hl-repeat: 160,110,240; --hl-project: 82,151,255; --hl-label: 255,170,60;
+  --hl-p1: 255,112,102; --hl-p2: 255,154,20; --hl-p3: 82,151,255; --hl-p4: 160,160,160;
   --app-bg: #161616;
   --bg: #212121;
   --sidebar: transparent;
@@ -94,6 +100,8 @@ const DARK: &str = r#"
   --subtle: #b0b0b0;
   --divider: #303030;
   --hover: rgba(255,255,255,.06);
+  --field-fill: rgba(118,118,128,.24);
+  --field-fill-focus: rgba(118,118,128,.32);
   --row-hover: #292929;
   --icon-hover: rgba(255,255,255,.08);
   --active-bg: #2b2b2b;
@@ -157,7 +165,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .brand .theme-toggle { margin-left: auto; }
 .nav-item { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: var(--r-md);
   cursor: pointer; color: var(--text); user-select: none; margin-bottom: 1px; }
-.nav-item:hover { background: var(--hover); }
+@media (hover: hover) { .nav-item:hover { background: var(--hover); } }
+.nav-item.pressed { background: var(--hover); }
 .nav-item:active { transform: scale(.985); }
 .nav-item.active { background: var(--active-bg); color: var(--active-text); box-shadow: var(--shadow-sm); font-weight: 500; }
 .nav-item .count { margin-left: auto; color: var(--muted); font-size: 12px; }
@@ -178,13 +187,35 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .icon { display: inline-flex; align-items: center; justify-content: center; }
 .icon-btn { border: none; background: none; cursor: pointer; color: var(--muted); padding: 5px; border-radius: var(--r);
   display: inline-flex; align-items: center; justify-content: center; }
-.icon-btn:hover { background: var(--icon-hover); color: var(--text); }
+@media (hover: hover) { .icon-btn:hover { background: var(--icon-hover); color: var(--text); } }
 .icon-btn:active { transform: scale(.92); }
 
 /* Main pane: a rounded card floating on the app background */
 .main { flex: 1; overflow-y: auto; background: var(--bg); margin: 8px 8px 8px 0;
   border-radius: var(--r-lg); box-shadow: var(--shadow-md); }
-.content { max-width: 820px; margin: 0 auto; padding: 40px 48px 96px; animation: fade-up .22s var(--ease); }
+.content { max-width: 820px; margin: 0 auto; padding: 40px 48px 96px; }
+/* A view fades in when it lands; two identical animations alternate so a
+   switch restarts it (main.rs `swap`). */
+@keyframes view-in-a { from { opacity: 0; } to { opacity: 1; } }
+@keyframes view-in-b { from { opacity: 0; } to { opacity: 1; } }
+.content.view-in-a { animation: view-in-a .2s var(--ease); }
+.content.view-in-b { animation: view-in-b .2s var(--ease); }
+/* Search slides in over the page and back out, like an iOS push / pop. The
+   page being left is a still copy (.view-ghost, from GHOST_JS): under the
+   main pane for a push, over it for a pop. */
+.app { position: relative; overflow-x: clip; }
+.main { position: relative; z-index: 1; }
+.main.view-push { animation: view-push .36s cubic-bezier(.32,.72,0,1); }
+.content.view-pop { animation: view-under .36s cubic-bezier(.32,.72,0,1); }
+@keyframes view-push { from { transform: translateX(100%); box-shadow: -10px 0 30px rgba(0,0,0,.25); } to { transform: none; } }
+@keyframes view-under { from { transform: translateX(-24%); opacity: .6; } to { transform: none; opacity: 1; } }
+.view-ghost { position: absolute; z-index: 0; overflow: hidden; background: var(--bg); pointer-events: none; }
+.view-ghost.pop { z-index: 2; box-shadow: -10px 0 30px rgba(0,0,0,.25); }
+.view-ghost.push.go { animation: ghost-under .36s cubic-bezier(.32,.72,0,1) forwards; }
+.view-ghost.pop.go { animation: ghost-off .36s cubic-bezier(.32,.72,0,1) forwards; }
+@keyframes ghost-under { to { transform: translateX(-24%); opacity: .6; } }
+@keyframes ghost-off { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .main.view-push, .content.view-pop { animation: none; } }
 .view-title { font-size: 26px; font-weight: 700; margin: 0 0 2px; letter-spacing: -0.02em; }
 .view-sub { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
 .section-title { display: flex; align-items: baseline; gap: 6px; font-weight: 650; font-size: 14px;
@@ -192,15 +223,19 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .section-title .muted { color: var(--muted); font-weight: 400; font-size: 13px; }
 
 /* Task rows: a soft list, rounded highlight on hover */
+.task-slot { display: contents; }
 .task { border-radius: var(--r-md); }
 .task-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 10px 9px; border-radius: var(--r-md); }
-.task:not(.completed) .task-row:hover { background: var(--row-hover); }
+@media (hover: hover) { .task:not(.completed) .task-row:hover { background: var(--row-hover); } }
+.task.pressed .task-row { background: var(--row-hover); }
 .check { width: 19px; height: 19px; min-width: 19px; margin-top: 1px; border-radius: 50%; padding: 0;
   border: 1.5px solid var(--p4); background: transparent; color: var(--muted); cursor: pointer;
   display: flex; align-items: center; justify-content: center; }
 .check .icon { opacity: 0; transform: scale(.6); transition: opacity .16s var(--ease), transform .16s var(--ease); }
-.check:hover .icon { opacity: 1; transform: scale(1); }
-.check:hover { background: var(--hover); }
+@media (hover: hover) {
+  .check:hover .icon { opacity: 1; transform: scale(1); }
+  .check:hover { background: var(--hover); }
+}
 .check:active { transform: scale(.82); }
 .check.p1 { border: 2px solid var(--p1); background: var(--p1-bg); color: var(--p1); }
 .check.p2 { border: 2px solid var(--p2); background: var(--p2-bg); color: var(--p2); }
@@ -219,7 +254,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .task-project { font-size: 12px; color: var(--muted); white-space: nowrap; align-self: flex-end; padding-bottom: 2px; }
 .task-actions { display: flex; gap: 2px; opacity: 0; transform: translateX(4px); }
 .task-actions { transition: opacity .16s var(--ease), transform .16s var(--ease); }
-.task:hover .task-actions { opacity: 1; transform: none; }
+/* Mouse: hover shows a task's actions. Touch: a long press does (gestures.rs);
+   a hover reveal on iPhone would cost every tap on a task an extra tap. */
+@media (hover: hover) { .task:hover .task-actions { opacity: 1; transform: none; pointer-events: auto; } }
+.task.pressed .task-actions { opacity: 1; transform: none; }
 .streak-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin: 2px 0 10px 40px;
   padding: 12px 14px; background: var(--panel); border-radius: var(--r-lg); font-size: 13px;
   animation: pop-in .18s var(--ease); }
@@ -233,8 +271,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   cursor: pointer; border-radius: var(--r-md); }
 .add-task-row .plus { width: 19px; height: 19px; border-radius: 50%; color: var(--accent);
   display: flex; align-items: center; justify-content: center; transition: background-color .16s, color .16s; }
-.add-task-row:hover { color: var(--accent); background: var(--row-hover); }
-.add-task-row:hover .plus { background: var(--accent); color: #fff; }
+/* Mouse only: on iPhone a hover style makes WebKit spend the first tap on hover. */
+@media (hover: hover) {
+  .add-task-row:hover { color: var(--accent); background: var(--row-hover); }
+  .add-task-row:hover .plus { background: var(--accent); color: #fff; }
+}
 .editor { border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 12px 0; margin: 8px 0;
   background: var(--bg); box-shadow: var(--shadow-md); animation: pop-in .18s var(--ease);
   transition: border-color .16s, box-shadow .16s; }
@@ -245,7 +286,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; }
 .chip { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px;
   border: 1px solid var(--chip-border); border-radius: var(--r); font-size: 12px; color: var(--subtle); background: var(--chip-bg); }
-.chip:hover { background: var(--chip-hover); border-color: var(--border-strong); }
+@media (hover: hover) { .chip:hover { background: var(--chip-hover); border-color: var(--border-strong); } }
 .chip:focus-within { box-shadow: 0 0 0 3px var(--focus-ring); }
 .chip input, .chip select { border: none; outline: none; background: transparent; font-size: 12px; color: var(--chip-text); }
 .quick-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 6px; font-size: 12px; }
@@ -261,9 +302,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .btn { border: none; border-radius: var(--r); padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .btn:active:not(:disabled) { transform: scale(.97); }
 .btn-cancel { background: var(--btn-cancel); color: var(--btn-cancel-text); }
-.btn-cancel:hover { background: var(--btn-cancel-hover); }
+@media (hover: hover) { .btn-cancel:hover { background: var(--btn-cancel-hover); } }
 .btn-add { background: var(--accent); color: #fff; box-shadow: var(--shadow-sm); }
-.btn-add:hover { background: var(--accent-hover); box-shadow: var(--shadow-md); }
+@media (hover: hover) { .btn-add:hover { background: var(--accent-hover); box-shadow: var(--shadow-md); } }
 .btn-add:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
 
 /* Labels + editor pickers */
@@ -284,7 +325,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .menu { min-width: 210px; max-height: 320px; overflow-y: auto; }
 .menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: none;
   background: none; border-radius: var(--r); cursor: pointer; font-size: 13px; text-align: left; color: var(--text); }
-.menu-item:hover { background: var(--hover); }
+@media (hover: hover) { .menu-item:hover { background: var(--hover); } }
 .menu-item.indent { padding-left: 30px; }
 .menu-item.checked { font-weight: 600; }
 .menu-icon { display: inline-flex; color: var(--muted); }
@@ -315,7 +356,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .cal-dow { text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0 4px; }
 .cal-day { height: 32px; border: none; background: none; border-radius: 50%; cursor: pointer; font-size: 12.5px;
   color: var(--text); font-variant-numeric: tabular-nums; }
-.cal-day:hover { background: var(--hover); }
+@media (hover: hover) { .cal-day:hover { background: var(--hover); } }
 .cal-day.other { color: var(--muted); opacity: .6; }
 .cal-day.past { color: var(--muted); opacity: .45; }
 .cal-day.is-today { color: var(--accent); font-weight: 700; }
@@ -339,14 +380,21 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   white-space: pre-wrap; overflow-wrap: anywhere; border: none; }
 .title-mirror { color: transparent; pointer-events: none; user-select: none; }
 .title-input { resize: none; overflow: hidden; background: transparent; outline: none; color: var(--text); }
-.hl { color: transparent; border-radius: 4px; box-shadow: 0 0 0 2px var(--hl-bg); background: var(--hl-bg); }
-.hl-date { --hl-bg: rgba(5,133,39,.14); }
-.hl-repeat { --hl-bg: rgba(105,47,194,.14); }
-.hl-priority { --hl-bg: rgba(209,69,59,.14); }
-.hl-project { --hl-bg: rgba(36,111,224,.14); }
-.hl-label { --hl-bg: rgba(235,137,9,.16); }
+/* Quick-add highlights, Todoist-style: a strong tint with rounded ends
+   (colors per theme in LIGHT/DARK; priorities use their flag colors). */
+.hl { --hl-bg: rgba(var(--hl-rgb), var(--hl-a)); color: transparent; border-radius: 6px;
+  box-shadow: 0 0 0 1.5px var(--hl-bg); background: var(--hl-bg);
+  -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.hl-date { --hl-rgb: var(--hl-date); }
+.hl-repeat { --hl-rgb: var(--hl-repeat); }
+.hl-p1 { --hl-rgb: var(--hl-p1); }
+.hl-p2 { --hl-rgb: var(--hl-p2); }
+.hl-p3 { --hl-rgb: var(--hl-p3); }
+.hl-p4 { --hl-rgb: var(--hl-p4); }
+.hl-project { --hl-rgb: var(--hl-project); }
+.hl-label { --hl-rgb: var(--hl-label); }
 .label-opt { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: var(--r); cursor: pointer; font-size: 13px; }
-.label-opt:hover { background: var(--hover); }
+@media (hover: hover) { .label-opt:hover { background: var(--hover); } }
 .label-empty { color: var(--muted); font-size: 12px; padding: 6px 8px; }
 .label-new { width: 100%; margin-top: 6px; padding: 7px 8px; font-size: 12px; border: 1px solid var(--border);
   border-radius: var(--r); outline: none; background: var(--bg); }
@@ -354,12 +402,51 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 
 /* Completed tasks + sidebar management */
 .view-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* iPhone: native glass buttons float over the header (menu left, search
+   right) and the list (+ bottom right); keep their spots clear. */
+.native-glass .menu-btn { display: none; }
+/* iPhone: glass stand-ins cover the drawer's theme and settings buttons
+   (glass::DRAWER_JS); the web ones stay in place, invisible, to be tapped. */
+.native-glass .brand .icon-btn { visibility: hidden; }
+.native-glass .brand .settings-btn { margin-left: 10px; }
+.native-glass .content { padding-top: calc(env(safe-area-inset-top) + 60px); padding-bottom: 120px; }
+/* Touch: Todoist-sized rows (a little shorter) with a bigger check circle,
+   whose tap area reaches past it to ~44px. */
+@media (pointer: coarse) {
+  .task-row { gap: 14px; padding: 14px 8px 13px; }
+  .task-content { font-size: 17px; line-height: 23px; }
+  .task-desc { font-size: 14px; line-height: 19px; margin-top: 3px; }
+  .task-meta { font-size: 14px; margin-top: 6px; gap: 12px; }
+  .check { position: relative; width: 24px; height: 24px; min-width: 24px; margin-top: 0; border-width: 1.75px; }
+  .check::after { content: ''; position: absolute; inset: -10px; }
+  .task-project { font-size: 13px; }
+  /* Sidebar: bigger rows, icons and logo to match the task rows. */
+  .brand { font-size: 20px; gap: 12px; padding: 6px 8px 20px; }
+  .brand-mark, .brand-mark svg { width: 40px; height: 40px; }
+  .brand .icon-btn svg { width: 22px; height: 22px; }
+  .nav-item { height: 46px; gap: 12px; font-size: 17px; margin-bottom: 2px; }
+  .nav-icon { width: 28px; height: 28px; }
+  .nav-icon svg { width: 22px; height: 22px; }
+  .nav-icon.hash { font-size: 19px; }
+  .nav-item .count { font-size: 15px; }
+  .section-head { font-size: 13px; padding: 22px 10px 8px; }
+  .section-head .icon-btn svg { width: 20px; height: 20px; }
+  .project-input { font-size: 16px; padding: 10px 12px; }
+  /* The add row, Reminders-style: a blank next task with a dotted circle,
+     lined up with the task circles above it. */
+  .add-task-row { padding: 14px 8px 13px; gap: 10px; font-size: 17px; }
+  .add-task-row .plus { box-sizing: border-box; width: 24px; height: 24px; min-width: 24px;
+    background: transparent; border: 2px dotted color-mix(in srgb, var(--text) 35%, transparent); }
+  .add-task-row .plus svg { display: none; }
+}
+/* Touch: a long press shows a task's actions; no text selection or callout. */
+@media (hover: none) { .task-row, .nav-item { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
 .view-head .view-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .view-head .view-toggle { flex-shrink: 0; }
 .menu-btn { display: none; margin-left: -6px; color: var(--subtle); }
 .view-toggle { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; cursor: pointer;
   color: var(--muted); font-size: 13px; padding: 6px 10px; border-radius: var(--r); }
-.view-toggle:hover { background: var(--icon-hover); color: var(--text); }
+@media (hover: hover) { .view-toggle:hover { background: var(--icon-hover); color: var(--text); } }
 .check.done { background: var(--muted); border: 1.5px solid var(--muted); color: var(--bg); }
 .check.done .icon { opacity: 1; transform: none; }
 .task.completed { animation: fade-up .2s var(--ease); }
@@ -368,7 +455,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .done-when { color: var(--muted); }
 .nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-actions { display: none; gap: 0; }
-.nav-item:hover .nav-actions { display: inline-flex; }
+/* Mouse: hover shows a row's rename/delete. Touch: a long press opens a menu
+   (gestures.rs); a hover reveal would cost every tap an extra tap. */
+@media (hover: hover) { .nav-item:hover .nav-actions { display: inline-flex; } }
 .nav-actions .icon-btn { padding: 3px; }
 .confirm-box { margin: 4px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md);
   background: var(--bg); box-shadow: var(--shadow-md); animation: pop-in .16s var(--ease); }
@@ -381,7 +470,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chevron { position: absolute; left: -22px; top: 10px; width: 20px; height: 20px; padding: 0;
   border: none; background: none; color: var(--muted); cursor: pointer; border-radius: var(--r-sm);
   display: flex; align-items: center; justify-content: center; transition: transform .18s var(--ease), background-color .16s; }
-.chevron:hover { background: var(--icon-hover); color: var(--text); }
+@media (hover: hover) { .chevron:hover { background: var(--icon-hover); color: var(--text); } }
 .chevron.collapsed { transform: rotate(-90deg); }
 .section-block { margin-top: 18px; }
 .section-row { position: relative; }
@@ -417,7 +506,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .deadline-chip.urgent { color: var(--due-overdue); }
 .reminder-chip { color: var(--accent); }
 .quick-chip.chip-deadline { color: var(--due-week); }
-.hl-deadline { --hl-bg: rgba(105,47,194,.14); }
+.hl-deadline { --hl-rgb: var(--hl-repeat); }
 .reminder-pop { min-width: 250px; }
 .reminder-item { display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 8px; font-size: 13px; }
 .reminder-item .icon-btn { font-size: 16px; line-height: 1; width: 26px; height: 26px; }
@@ -427,12 +516,19 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 
 /* Search view */
 .nav-icon.search { color: var(--subtle); }
+/* A filled pill like iOS's search field (and the round glass buttons):
+   no outline or glow; a slightly deeper fill while typing. */
 .search-box { position: relative; display: flex; align-items: center; margin: 6px 0 14px; }
-.search-icon { position: absolute; left: 12px; display: inline-flex; color: var(--muted); pointer-events: none; }
-.search-input { width: 100%; height: 42px; padding: 0 14px 0 40px; border: 1px solid var(--border); border-radius: var(--r-md);
-  font-size: 15px; outline: none; background: var(--bg); color: var(--text); transition: border-color .16s, box-shadow .16s; }
-.search-input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
+.search-icon { position: absolute; left: 13px; display: inline-flex; color: var(--muted); pointer-events: none; }
+.search-input { width: 100%; height: 42px; padding: 0 40px 0 40px; border: none; border-radius: 999px;
+  font-size: 16px; outline: none; background: var(--field-fill); color: var(--text); transition: background .16s;
+  -webkit-appearance: none; appearance: none; }
+.search-input:focus { background: var(--field-fill-focus); }
 .search-input::placeholder { color: var(--muted); }
+.search-input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+.search-clear { position: absolute; right: 10px; width: 20px; height: 20px; padding: 0; border: none; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; background: var(--muted); color: var(--bg); cursor: pointer; }
+.search-clear .icon, .search-clear svg { width: 12px; height: 12px; }
 
 /* Settings window */
 .modal-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.32); display: flex;
@@ -488,13 +584,18 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
    by the header's hamburger) and the main pane goes full-bleed. */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 700px) {
-  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; width: min(300px, 86vw);
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; width: min(360px, 88vw);
     background: var(--app-bg); box-shadow: var(--shadow-lg);
     padding-top: calc(14px + env(safe-area-inset-top)); padding-bottom: calc(14px + env(safe-area-inset-bottom));
     transform: translateX(-100%); visibility: hidden;
     transition: transform .26s var(--ease), visibility 0s linear .26s; }
   .app.drawer-open .sidebar { transform: none; visibility: visible; transition: transform .26s var(--ease); }
-  .drawer-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.36); animation: fade-in .2s var(--ease); }
+  .drawer-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.45); animation: fade-in .2s var(--ease); }
+  /* Parallax: the page sits a little to the right while the drawer is open
+     and glides back as it closes (`translate`, so it composes with the
+     fade-in's animation). */
+  .content { transition: translate .26s var(--ease); }
+  .app.drawer-open .content { translate: 28px 0; }
   .menu-btn { display: inline-flex; }
   .main { margin: 0; border-radius: 0; box-shadow: none; }
   .content { padding: calc(10px + env(safe-area-inset-top)) 16px 80px; }
@@ -507,7 +608,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .task-row { gap: 10px; padding: 10px 8px 9px; }
   .task-actions { position: absolute; top: 4px; right: 4px; padding: 2px; border-radius: var(--r);
     background: var(--row-hover); box-shadow: var(--shadow-sm); pointer-events: none; }
-  .task:hover .task-actions, .task-actions:focus-within { pointer-events: auto; }
+  .task.pressed .task-actions, .task-actions:focus-within { pointer-events: auto; }
   .task-project { max-width: 38%; overflow: hidden; text-overflow: ellipsis; }
   .streak-panel { margin-left: 0; gap: 12px; }
   /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */
@@ -527,6 +628,78 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+/* Touch: tapped controls keep WebKit's sticky :hover, so hover styles are
+   mouse-only (above); a brief press state gives touch its feedback. */
+@media (hover: none) {
+  .icon-btn:active, .view-toggle:active, .chevron:active { background: var(--icon-hover); }
+  .chip:active, .menu-item:active, .cal-day:active, .label-opt:active { background: var(--hover); }
+}
+/* Completing a task (completion.rs): the circle fills with the priority
+   color and the chosen Keel mark, then the row switches off like an old TV
+   (squash to a bright line, shrink to a dot) and the gap closes. */
+.check .icon svg.done-mark { width: 13px; height: 13px; }
+.check.p1 { --fill: var(--p1); }
+.check.p2 { --fill: var(--p2); }
+.check.p3 { --fill: var(--p3); }
+.task.completing .check { background: var(--fill, var(--accent)); border-color: var(--fill, var(--accent)); color: #fff;
+  animation: check-pop .32s cubic-bezier(.3, 1.6, .5, 1); }
+.task.completing .check .icon { opacity: 1; transform: scale(1);
+  transition: opacity .18s .06s, transform .3s .06s cubic-bezier(.3, 1.6, .5, 1); }
+.task.completing .task-content { color: var(--muted); transition: color .3s .1s; }
+@keyframes check-pop { 0% { transform: scale(.8); } 60% { transform: scale(1.14); } 100% { transform: scale(1); } }
+.task.switch-off { overflow: hidden; transform-origin: center; pointer-events: none;
+  animation: tv-off .38s cubic-bezier(.6, .05, .4, 1) forwards, row-collapse .18s ease .2s forwards; }
+@keyframes tv-off {
+  0%   { transform: scale(1, 1);     filter: brightness(1);   opacity: 1; }
+  45%  { transform: scale(1, .03);   filter: brightness(2.6); opacity: 1; }
+  80%  { transform: scale(.25, .03); filter: brightness(3);   opacity: .9; }
+  100% { transform: scale(0, .03);   filter: brightness(3);   opacity: 0; }
+}
+@keyframes row-collapse { from { max-height: 400px; } to { max-height: 0; margin-top: 0; margin-bottom: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .task.completing .check { animation: none; }
+  .task.switch-off { animation: fade-away .4s ease forwards; }
+  @keyframes fade-away { to { opacity: 0; } }
+}
+@media (pointer: coarse) { .check .icon svg.done-mark { width: 16px; height: 16px; } }
+
+/* Settings → Appearance → Completion mark. */
+.completion-setting { flex-wrap: wrap; gap: 12px; }
+.mark-choices { display: flex; gap: 8px; }
+.mark-choice { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 10px; min-width: 76px;
+  border: 1px solid var(--border); border-radius: var(--r-md); background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.mark-choice.chosen { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 1px var(--accent) inset; }
+.mark-dot { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center; }
+.mark-dot svg { width: 17px; height: 17px; }
+.mark-name { font-size: 12px; }
+/* Days a task repeats on, ringed like Todoist's. */
+.cal-day.repeat-day:not(.selected) { outline: 1.5px dashed var(--muted); outline-offset: -3px; }
+/* Calendar: the selected day takes its due color (like the chip and the
+   highlighted phrase); the title opens a month / year chooser. */
+.cal-day.selected.sel-overdue { background: var(--due-overdue); }
+.cal-day.selected.sel-today { background: var(--due-today); }
+.cal-day.selected.sel-tomorrow { background: var(--due-tomorrow); }
+.cal-day.selected.sel-week { background: var(--due-week); }
+.cal-day.selected.sel-later { background: var(--due-later); }
+.cal-title.chooser { display: inline-flex; align-items: center; gap: 4px; margin-right: auto; padding: 4px 6px;
+  border: none; border-radius: var(--r); background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.cal-title.chooser.open .icon { transform: rotate(180deg); }
+.cal-title.chooser.open { color: var(--accent); }
+.wheel { position: relative; display: flex; height: 180px; margin: 4px 0 8px;
+  -webkit-mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent);
+  mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); }
+.wheel-band { position: absolute; left: 0; right: 0; top: 72px; height: 36px; border-radius: var(--r-md);
+  background: var(--hover); pointer-events: none; }
+.wheel-col { position: relative; flex: 1; overflow-y: auto; padding: 72px 0; scroll-snap-type: y mandatory;
+  scrollbar-width: none; overscroll-behavior: contain; }
+.wheel-col::-webkit-scrollbar { display: none; }
+.wheel-item { height: 36px; line-height: 36px; text-align: center; scroll-snap-align: center; cursor: pointer;
+  font-size: 16px; color: var(--text); }
+.wheel-item.on { font-weight: 600; }
+/* The looping month wheel: twelve rows that WHEEL_JS moves around the band. */
+.wheel-col.loop { overflow: hidden; padding: 0; touch-action: none; cursor: grab; user-select: none; }
+.wheel-col.loop .wheel-item { position: absolute; left: 0; right: 0; top: 72px; will-change: transform; }
 "#;
 
 /// The full stylesheet: light by default, dark when the OS prefers it (unless

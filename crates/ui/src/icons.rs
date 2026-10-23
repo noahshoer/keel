@@ -166,6 +166,11 @@ pub fn arrow_right() -> String {
     svg(16, "1.8", r#"<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M8 12h8M13 9l3 3-3 3"/>"#)
 }
 
+/// The ✕ inside the search field's clear button.
+pub fn x_small() -> String {
+    svg(12, "2.4", r#"<path d="M7 7l10 10M17 7L7 17"/>"#)
+}
+
 pub fn no_date() -> String {
     svg(16, "1.8", r#"<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>"#)
 }

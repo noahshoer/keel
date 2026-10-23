@@ -13,6 +13,7 @@ use keel_core::recurrence::Recurrence;
 use keel_core::views;
 
 use crate::api::{self, NewTask, TaskPatch};
+use crate::glass::Pick;
 use crate::icons::{self, Icon};
 use crate::pickers::{DatePicker, DeadlinePicker, Menu, MenuItem, OpenPop, ReminderDraft, ReminderPicker};
 
@@ -37,6 +38,9 @@ pub struct EditorValues {
     /// `YYYY-MM-DD` or empty.
     pub deadline: String,
     pub reminders: Vec<ReminderDraft>,
+    /// Byte ranges of `content` turned back into plain text (backspace
+    /// right after a highlight); quick add leaves them alone.
+    pub plain: Vec<(usize, usize)>,
 }
 
 impl EditorValues {
@@ -54,6 +58,7 @@ impl EditorValues {
             parent_id: None,
             deadline: String::new(),
             reminders: Vec::new(),
+            plain: Vec::new(),
         }
     }
 
@@ -72,6 +77,7 @@ impl EditorValues {
             parent_id: t.parent_id.clone(),
             deadline: t.deadline.clone().unwrap_or_default(),
             reminders: Vec::new(),
+            plain: Vec::new(),
         }
     }
 
@@ -118,8 +124,12 @@ fn repeat_choice(rule: &Option<Recurrence>) -> &'static str {
 
 /// The rule for a repeat choice; "Every week/month" anchor on `date` (or today).
 fn recurrence_for(choice: &str, date: &str, existing: Option<Recurrence>) -> Option<Recurrence> {
-    let anchor = NaiveDate::parse_from_str(date.get(..10).unwrap_or(date), "%Y-%m-%d")
-        .unwrap_or_else(|_| crate::today());
+    recurrence_for_at(choice, date, existing, crate::today())
+}
+
+/// [`recurrence_for`] relative to `today` (testable off the browser).
+pub(crate) fn recurrence_for_at(choice: &str, date: &str, existing: Option<Recurrence>, today: NaiveDate) -> Option<Recurrence> {
+    let anchor = NaiveDate::parse_from_str(date.get(..10).unwrap_or(date), "%Y-%m-%d").unwrap_or(today);
     match choice {
         "daily" => Some(Recurrence::Daily),
         "weekdays" => Some(Recurrence::Weekly(vec![0, 1, 2, 3, 4])),
@@ -141,6 +151,50 @@ pub fn repeat_text(rule: &Recurrence) -> String {
     match chars.next() {
         Some(first) => first.to_uppercase().chain(chars).collect(),
         None => text,
+    }
+}
+
+/// The Labels chip's text.
+pub(crate) fn labels_text(labels: &[String]) -> String {
+    if labels.is_empty() { "Labels".to_string() } else { labels.join(", ") }
+}
+
+/// The Priority chip's text ("4" is no priority).
+pub(crate) fn priority_text(priority: &str) -> String {
+    if priority == "4" { "Priority".to_string() } else { format!("P{priority}") }
+}
+
+/// The repeat choices as (value, label); week/month options name the day
+/// they repeat on, and "keep" appears when the task has a custom rule.
+pub(crate) fn repeat_options(date: &str, keep_label: Option<&str>, today: NaiveDate) -> Vec<(&'static str, String)> {
+    let anchor = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap_or(today);
+    let mut opts = vec![
+        ("none", "No repeat".to_string()),
+        ("daily", "Every day".to_string()),
+        ("weekdays", "Every weekday (Mon – Fri)".to_string()),
+        ("weekly", format!("Every week on {}", anchor.format("%A"))),
+        ("monthly", format!("Every month on the {}", ordinal(anchor.day() as u8))),
+    ];
+    if let Some(text) = keep_label {
+        opts.push(("keep", text.to_string()));
+    }
+    opts
+}
+
+/// The Repeat chip's text for the chosen option.
+pub(crate) fn repeat_chip_text(repeat: &str, opts: &[(&'static str, String)]) -> String {
+    opts.iter()
+        .find(|(value, _)| *value == repeat && *value != "none")
+        .map(|(_, label)| label.clone())
+        .unwrap_or_else(|| "Repeat".to_string())
+}
+
+/// "Project" or "Project / Section" for the location chip.
+pub(crate) fn location_text(project_id: &Id, section_id: Option<&Id>, projects: &[Project], sections: &[Section]) -> String {
+    let Some(p) = projects.iter().find(|p| &p.id == project_id) else { return "Inbox".to_string() };
+    match section_id.and_then(|s| sections.iter().find(|x| &x.id == s && x.project_id == p.id)) {
+        Some(s) => format!("{} / {}", p.name, s.name),
+        None => p.name.clone(),
     }
 }
 
@@ -173,7 +227,118 @@ pub fn changes(
 
 /// Parses the editor's title as quick add.
 fn parse_title(v: &EditorValues, projects: &[Project], sections: &[Section]) -> QuickAdd {
-    let mut qa = quickadd::parse(&v.content, crate::today(), projects, sections);
+    parse_title_at(v, projects, sections, crate::today())
+}
+
+/// Whether the title has a name to save: with quick add, something besides
+/// the recognized phrases ("This weekend" alone highlights but can't be
+/// added yet).
+pub(crate) fn has_name(v: &EditorValues, quick_add: bool, projects: &[Project], sections: &[Section], today: NaiveDate) -> bool {
+    if quick_add {
+        !parse_title_at(v, projects, sections, today).content.trim().is_empty()
+    } else {
+        !v.content.trim().is_empty()
+    }
+}
+
+/// The typed phrases a pick replaces.
+fn kinds_for(pick: &Pick) -> &'static [SpanKind] {
+    match pick {
+        Pick::Date { .. } => &[SpanKind::Date, SpanKind::Time],
+        Pick::Priority { .. } => &[SpanKind::Priority],
+        Pick::Labels { .. } => &[SpanKind::Label],
+        Pick::Reminders { .. } => &[],
+        Pick::Deadline { .. } => &[SpanKind::Deadline],
+        Pick::Repeat { .. } => &[SpanKind::Repeat],
+        Pick::Location { .. } => &[SpanKind::Project, SpanKind::Section],
+    }
+}
+
+/// Applies a chip pick. With quick add, the typed phrase the pick replaces
+/// comes out of the title (Todoist-style), so the web editor and the iPhone
+/// card save the same input the same way. A different day also replaces a
+/// typed repeat (it set the date); a time for the same day keeps it.
+pub(crate) fn apply_pick(
+    v: &mut EditorValues,
+    pick: &Pick,
+    quick_add: bool,
+    projects: &[Project],
+    sections: &[Section],
+    today: NaiveDate,
+) {
+    if quick_add {
+        let qa = parse_title_at(v, projects, sections, today);
+        let mut kinds = kinds_for(pick).to_vec();
+        if let Pick::Date { date, .. } = pick {
+            let shown = qa.date.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| v.date.clone());
+            if *date != shown {
+                kinds.push(SpanKind::Repeat);
+            }
+        }
+        // Through `with_title`, so un-highlighted ranges move with the text.
+        *v = with_title(v, quickadd::strip_spans(&v.content, &qa.spans, &kinds));
+    }
+    match pick {
+        Pick::Date { date, time } => (v.date, v.time) = (date.clone(), time.clone()),
+        Pick::Priority { value } => v.priority = value.clone(),
+        Pick::Labels { names } => v.labels = names.clone(),
+        Pick::Reminders { drafts } => v.reminders = drafts.clone(),
+        Pick::Deadline { date } => v.deadline = date.clone(),
+        Pick::Repeat { value } => v.repeat = value.clone(),
+        Pick::Location { project_id, section_id } => (v.project_id, v.section_id) = (project_id.clone(), section_id.clone()),
+    }
+}
+
+/// Toggles one label from the labels menu: the typed @labels count as picked
+/// (so taking them out of the title doesn't drop them), then it's applied
+/// like the card's labels pick.
+pub(crate) fn toggle_label(
+    v: &mut EditorValues,
+    name: &str,
+    quick_add: bool,
+    projects: &[Project],
+    sections: &[Section],
+    today: NaiveDate,
+) {
+    let mut names = v.labels.clone();
+    if quick_add {
+        for l in parse_title_at(v, projects, sections, today).labels {
+            if !names.iter().any(|n| n.eq_ignore_ascii_case(&l)) {
+                names.push(l);
+            }
+        }
+    }
+    match names.iter().position(|n| n.eq_ignore_ascii_case(name)) {
+        Some(i) => {
+            names.remove(i);
+        }
+        None => names.push(name.to_string()),
+    }
+    apply_pick(v, &Pick::Labels { names }, quick_add, projects, sections, today);
+}
+
+/// The values after the title is retyped: kept-plain phrases follow the
+/// text, or are dropped when the edit touches them.
+pub(crate) fn with_title(v: &EditorValues, text: String) -> EditorValues {
+    EditorValues { plain: quickadd::shift_plain(&v.content, &text, &v.plain), content: text, ..v.clone() }
+}
+
+/// Turns the highlighted phrase ending at byte `end` back into plain text
+/// (Todoist's backspace). False when no highlight ends there.
+pub(crate) fn unhighlight(v: &mut EditorValues, projects: &[Project], sections: &[Section], today: NaiveDate, end: usize) -> bool {
+    let qa = parse_title_at(v, projects, sections, today);
+    match qa.spans.iter().find(|s| s.end == end) {
+        Some(s) => {
+            v.plain.push((s.start, s.end));
+            true
+        }
+        None => false,
+    }
+}
+
+/// [`parse_title`] relative to `today` (testable off the browser).
+pub(crate) fn parse_title_at(v: &EditorValues, projects: &[Project], sections: &[Section], today: NaiveDate) -> QuickAdd {
+    let mut qa = quickadd::parse_keeping(&v.content, today, projects, sections, &v.plain);
     // A bare /Section resolves within the Inbox; carry its project along.
     if qa.project_id.is_none() {
         if let Some(s) = qa.section_id.as_ref().and_then(|id| sections.iter().find(|s| &s.id == id)) {
@@ -185,9 +350,16 @@ fn parse_title(v: &EditorValues, projects: &[Project], sections: &[Section]) -> 
 
 /// The new task described by the editor values with the quick-add parse
 /// applied on top (text wins over chips for the fields it mentions).
-fn new_task_from(v: &EditorValues, qa: &QuickAdd) -> NewTask {
-    let date = qa.due_string().unwrap_or_else(|| v.due_string());
-    let recurrence = qa.recurrence.clone().or_else(|| recurrence_for(&v.repeat, &date, None));
+fn new_task_from(v: &EditorValues, qa: &QuickAdd, today: NaiveDate) -> NewTask {
+    // A typed date wins; a picked time goes with it unless a time was typed.
+    let date = match (qa.date, qa.time) {
+        (Some(d), None) => match chrono::NaiveTime::parse_from_str(&v.time, "%H:%M") {
+            Ok(t) => format!("{}T{}", d.format("%Y-%m-%d"), t.format("%H:%M:00")),
+            Err(_) => d.format("%Y-%m-%d").to_string(),
+        },
+        _ => qa.due_string().unwrap_or_else(|| v.due_string()),
+    };
+    let recurrence = qa.recurrence.clone().or_else(|| recurrence_for_at(&v.repeat, &date, None, today));
     let mut labels = v.labels.clone();
     for l in &qa.labels {
         if !labels.iter().any(|x| x.eq_ignore_ascii_case(l)) {
@@ -213,20 +385,40 @@ fn new_task_from(v: &EditorValues, qa: &QuickAdd) -> NewTask {
 }
 
 /// Adds the task the editor describes (quick add applied), creating any
-/// labels it mentions that don't exist yet.
-pub async fn add_from_editor(v: EditorValues, projects: Vec<Project>, sections: Vec<Section>, labels: Vec<Label>) {
+/// labels it mentions that don't exist yet. Fails when the task wasn't added.
+pub async fn add_from_editor(
+    v: EditorValues,
+    projects: Vec<Project>,
+    sections: Vec<Section>,
+    labels: Vec<Label>,
+) -> Result<(), String> {
     let qa = parse_title(&v, &projects, &sections);
-    let task = new_task_from(&v, &qa);
+    let task = new_task_from(&v, &qa, crate::today());
     for name in &qa.labels {
         if !labels.iter().any(|l| l.name.eq_ignore_ascii_case(name)) {
             let _ = api::add_label(name.clone()).await;
         }
     }
-    if let Ok(result) = api::add_task(task).await {
-        if let Some(id) = result.id_mapping.values().next() {
-            sync_reminders(id.clone(), &[], &v.reminders).await;
-        }
+    let result = api::add_task(task).await?;
+    if let Some(id) = result.id_mapping.values().next() {
+        sync_reminders(id.clone(), &[], &v.reminders).await;
     }
+    Ok(())
+}
+
+/// Saves an edited task: the move (with its sub-tree), reminder changes,
+/// then the field changes. Fails when the move or the field changes weren't
+/// saved.
+pub async fn save_edit(id: Id, before: EditorValues, after: EditorValues, existing: Option<Recurrence>) -> Result<(), String> {
+    let (patch, moved) = changes(&before, &after, existing);
+    if let Some((project, section)) = moved {
+        api::move_task(id.clone(), project, section).await?;
+    }
+    sync_reminders(id.clone(), &before.reminders, &after.reminders).await;
+    if !patch.is_empty() {
+        api::update_task(id, patch).await?;
+    }
+    Ok(())
 }
 
 /// Saves reminder edits: removes the ones taken out, adds the new ones.
@@ -251,6 +443,9 @@ pub fn TaskEditor(
     labels: Vec<Label>,
     /// Text for the "keep current rule" repeat option, when the rule is custom.
     keep_label: Option<String>,
+    /// The edited task's recurrence (what "keep" repeats by).
+    #[props(default)]
+    existing: Option<Recurrence>,
     submit_text: String,
     /// Parse the title as natural language (add mode) and preview it.
     #[props(default)]
@@ -265,31 +460,67 @@ pub fn TaskEditor(
     let mut reload = reload;
     let start = initial.clone();
     let mut vals = use_signal(move || start);
+    // The lists quick add resolves #project and /section against, kept
+    // current as projects and sections change (a signal, so the handlers
+    // below stay Copy).
+    let mut lists = use_signal(|| (projects.clone(), sections.clone()));
+    {
+        let (projects, sections) = (projects.clone(), sections.clone());
+        use_effect(use_reactive!(|(projects, sections)| lists.set((projects, sections))));
+    }
+    // This editor's id: Backspace in its title reaches it, not another one.
+    let editor_id = use_hook(|| {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    });
+    // Backspace right after a highlight turns it back into text
+    // (UNHIGHLIGHT_KEY_JS reports the caret, in UTF-16 units).
+    use_hook(move || {
+        if quick_add {
+            spawn(async move {
+                let mut asks = document::eval(&UNHIGHLIGHT_JS.replace("$ID", &editor_id.to_string()));
+                while let Ok(at) = asks.recv::<usize>().await {
+                    let mut v = vals();
+                    let (projects, sections) = lists();
+                    let end = crate::glass::byte_at_utf16(&v.content, at);
+                    if unhighlight(&mut v, &projects, &sections, crate::today(), end) {
+                        vals.set(v);
+                    }
+                }
+            });
+        }
+    });
+    use_drop(move || {
+        let _ = document::eval(&format!("delete window.__keelUnhighlight?.['{editor_id}'];"));
+    });
+    // A chip pick, applied the same way as on the iPhone card.
+    let mut pick = move |p: Pick| {
+        let (projects, sections) = lists();
+        vals.with_mut(|v| apply_pick(v, &p, quick_add, &projects, &sections, crate::today()));
+    };
+    let mut toggle = move |name: String| {
+        let (projects, sections) = lists();
+        vals.with_mut(|v| toggle_label(v, &name, quick_add, &projects, &sections, crate::today()));
+    };
     let blank = initial.clone();
     let blank = use_signal(move || blank);
     let mut open: OpenPop = use_signal(|| None);
     let mut new_label = use_signal(String::new);
     let v = vals();
-    let can_submit = !v.content.trim().is_empty();
-    let label_text = if v.labels.is_empty() { "Labels".to_string() } else { v.labels.join(", ") };
+    let can_submit = has_name(&v, quick_add, &projects, &sections, crate::today());
+    let label_text = labels_text(&v.labels);
     let today = crate::today();
 
     // Project / section menu: each project, then its sections indented.
     let location = v.location();
     let mut location_items = Vec::new();
-    let mut location_text = String::from("Inbox");
+    let location_text = location_text(&v.project_id, v.section_id.as_ref(), &projects, &sections);
     for p in projects.iter() {
         let icon = if p.is_inbox { icons::inbox() } else { icons::hash_small() };
         let class = if p.is_inbox { "loc-inbox" } else { "loc-project" };
         location_items.push(MenuItem::new(p.id.to_string(), p.name.clone()).icon(icon, class));
-        if location == p.id.to_string() {
-            location_text = p.name.clone();
-        }
         for s in sections.iter().filter(|s| s.project_id == p.id) {
             let value = format!("{}|{}", p.id, s.id);
-            if location == value {
-                location_text = format!("{} / {}", p.name, s.name);
-            }
             location_items.push(MenuItem::new(value, s.name.clone()).icon(icons::section_small(), "loc-section").indented());
         }
     }
@@ -305,29 +536,22 @@ pub fn TaskEditor(
         .iter()
         .map(|p| MenuItem::new(*p, format!("Priority {p}")).icon(icons::flag_small(), flag_class(p)))
         .collect();
-    let priority_text = if v.priority == "4" { "Priority".to_string() } else { format!("P{}", v.priority) };
+    let priority_text = priority_text(&v.priority);
 
-    // Repeat menu; week/month options name the day they repeat on.
-    let anchor = NaiveDate::parse_from_str(&v.date, "%Y-%m-%d").unwrap_or(today);
-    let mut repeat_items = vec![
-        MenuItem::new("none", "No repeat"),
-        MenuItem::new("daily", "Every day"),
-        MenuItem::new("weekdays", "Every weekday (Mon – Fri)"),
-        MenuItem::new("weekly", format!("Every week on {}", anchor.format("%A"))),
-        MenuItem::new("monthly", format!("Every month on the {}", ordinal(anchor.day() as u8))),
-    ];
-    if let Some(text) = keep_label.clone() {
-        repeat_items.push(MenuItem::new("keep", text));
-    }
-    let repeat_text_chip = repeat_items
-        .iter()
-        .find(|i| i.value == v.repeat && i.value != "none")
-        .map(|i| i.label.clone())
-        .unwrap_or_else(|| "Repeat".to_string());
+    let repeat_opts = repeat_options(&v.date, keep_label.as_deref(), today);
+    let repeat_text_chip = repeat_chip_text(&v.repeat, &repeat_opts);
+    let repeat_items: Vec<MenuItem> = repeat_opts.into_iter().map(|(value, label)| MenuItem::new(value, label)).collect();
 
     // Live quick-add parse: highlighted spans in the title + preview chips.
     let qa = quick_add.then(|| parse_title(&v, &projects, &sections));
     let spans = qa.as_ref().map(|q| q.spans.clone()).unwrap_or_default();
+    // The labels the task will get: picked plus typed (the menu ticks both).
+    let mut shown_labels = v.labels.clone();
+    for l in qa.iter().flat_map(|q| q.labels.iter()) {
+        if !shown_labels.iter().any(|n| n.eq_ignore_ascii_case(l)) {
+            shown_labels.push(l.clone());
+        }
+    }
     let preview: Vec<(&'static str, String)> = match &qa {
         Some(qa) => {
             let mut chips = Vec::new();
@@ -363,6 +587,11 @@ pub fn TaskEditor(
         None => Vec::new(),
     };
 
+    // The days it will repeat on (typed rule, or the Repeat menu's).
+    let repeat_rule = qa
+        .as_ref()
+        .and_then(|q| q.recurrence.clone())
+        .or_else(|| recurrence_for_at(&v.repeat, &v.date, existing.clone(), today));
     // Relative reminders count back from a due date (typed or picked).
     let has_due = !v.date.is_empty() || !v.time.is_empty() || qa.as_ref().is_some_and(|q| q.date.is_some());
     let title_placeholder: &'static str =
@@ -373,7 +602,8 @@ pub fn TaskEditor(
     let mut submitted = use_signal(|| false);
     let mut submit = move || {
         let v = vals();
-        if submitted() || v.content.trim().is_empty() {
+        let (p, s) = lists();
+        if submitted() || !has_name(&v, quick_add, &p, &s, crate::today()) {
             return;
         }
         if keep_open {
@@ -406,10 +636,11 @@ pub fn TaskEditor(
                 div { class: "pop-backdrop", onclick: move |_| open.set(None), onwheel: move |_| open.set(None) }
             }
             HighlightedTitle {
+                editor_id,
                 value: v.content.clone(),
                 spans,
                 placeholder: title_placeholder,
-                on_input: move |val: String| vals.with_mut(|v| v.content = val),
+                on_input: move |val: String| vals.with_mut(|v| *v = with_title(v, val)),
                 on_enter: move |_| submit(),
             }
             if !preview.is_empty() {
@@ -433,21 +664,19 @@ pub fn TaskEditor(
                     date: v.date.clone(),
                     time: v.time.clone(),
                     open,
-                    on_change: move |(date, time): (String, String)| vals.with_mut(|v| {
-                        v.date = date;
-                        v.time = time;
-                    }),
+                    rule: repeat_rule.clone(),
+                    on_change: move |(date, time): (String, String)| pick(Pick::Date { date, time }),
                 }
                 DeadlinePicker {
                     deadline: v.deadline.clone(),
                     open,
-                    on_change: move |d: String| vals.with_mut(|v| v.deadline = d),
+                    on_change: move |date: String| pick(Pick::Deadline { date }),
                 }
                 ReminderPicker {
                     reminders: v.reminders.clone(),
                     has_due: has_due,
                     open,
-                    on_change: move |rs: Vec<ReminderDraft>| vals.with_mut(|v| v.reminders = rs),
+                    on_change: move |drafts: Vec<ReminderDraft>| pick(Pick::Reminders { drafts }),
                 }
                 Menu {
                     id: "priority",
@@ -458,7 +687,7 @@ pub fn TaskEditor(
                     items: priority_items,
                     selected: v.priority.clone(),
                     open,
-                    on_select: move |p: String| vals.with_mut(|v| v.priority = p),
+                    on_select: move |value: String| pick(Pick::Priority { value }),
                 }
                 Menu {
                     id: "repeat",
@@ -468,7 +697,7 @@ pub fn TaskEditor(
                     items: repeat_items,
                     selected: v.repeat.clone(),
                     open,
-                    on_select: move |r: String| vals.with_mut(|v| v.repeat = r),
+                    on_select: move |value: String| pick(Pick::Repeat { value }),
                 }
                 Menu {
                     id: "location",
@@ -478,15 +707,9 @@ pub fn TaskEditor(
                     items: location_items,
                     selected: location.clone(),
                     open,
-                    on_select: move |val: String| vals.with_mut(|v| match val.split_once('|') {
-                        Some((p, s)) => {
-                            v.project_id = Id::from(p);
-                            v.section_id = Some(Id::from(s));
-                        }
-                        None => {
-                            v.project_id = Id::from(val.as_str());
-                            v.section_id = None;
-                        }
+                    on_select: move |val: String| pick(match val.split_once('|') {
+                        Some((p, s)) => Pick::Location { project_id: Id::from(p), section_id: Some(Id::from(s)) },
+                        None => Pick::Location { project_id: Id::from(val.as_str()), section_id: None },
                     }),
                 }
                 div { class: "chip-wrap",
@@ -509,8 +732,8 @@ pub fn TaskEditor(
                                 LabelOption {
                                     key: "{l.id}",
                                     name: l.name.clone(),
-                                    checked: v.labels.iter().any(|n| n.eq_ignore_ascii_case(&l.name)),
-                                    vals,
+                                    checked: shown_labels.iter().any(|n| n.eq_ignore_ascii_case(&l.name)),
+                                    on_toggle: move |name: String| toggle(name),
                                 }
                             }
                             input {
@@ -525,11 +748,9 @@ pub fn TaskEditor(
                                         if name.is_empty() {
                                             return;
                                         }
-                                        vals.with_mut(|v| {
-                                            if !v.labels.iter().any(|n| n.eq_ignore_ascii_case(&name)) {
-                                                v.labels.push(name.clone());
-                                            }
-                                        });
+                                        if !shown_labels.iter().any(|n| n.eq_ignore_ascii_case(&name)) {
+                                            toggle(name.clone());
+                                        }
                                         new_label.set(String::new());
                                         spawn(async move {
                                             let _ = api::add_label(name).await;
@@ -555,10 +776,40 @@ pub fn TaskEditor(
     }
 }
 
+/// Todoist's backspace: in a title field, Backspace right where a
+/// highlighted phrase ends un-highlights it instead of deleting. Installed
+/// once (App); hands the caret to the open editor (`UNHIGHLIGHT_JS`).
+pub const UNHIGHLIGHT_KEY_JS: &str = r#"
+document.addEventListener('keydown', (e) => {
+  const ta = e.target;
+  if (e.key !== 'Backspace' || !ta.classList?.contains('title-input') || ta.selectionStart !== ta.selectionEnd) return;
+  const pos = ta.selectionStart;
+  let at = 0;
+  for (const n of ta.parentElement.querySelector('.title-mirror')?.childNodes ?? []) {
+    const len = (n.textContent || '').length;
+    if (n.nodeName === 'MARK' && at + len === pos) {
+      const send = window.__keelUnhighlight?.[ta.closest('[data-editor]')?.dataset.editor];
+      if (send) { e.preventDefault(); send(pos); }
+      return;
+    }
+    at += len;
+  }
+}, true);
+"#;
+
+/// One editor's end of it, keyed by its id (`$ID`): the Backspace goes to
+/// the editor whose title it was typed in.
+const UNHIGHLIGHT_JS: &str = r#"
+(window.__keelUnhighlight ??= {})['$ID'] = (pos) => dioxus.send(pos);
+await new Promise(() => {});
+"#;
+
 /// The task title: an auto-growing textarea over a mirror that paints the
 /// quick-add phrases it recognized. Enter submits (titles are one line).
 #[component]
 fn HighlightedTitle(
+    /// Routes un-highlight Backspaces to this editor.
+    editor_id: u32,
     value: String,
     spans: Vec<Span>,
     placeholder: &'static str,
@@ -578,7 +829,13 @@ fn HighlightedTitle(
         let class = match s.kind {
             SpanKind::Date | SpanKind::Time => "hl hl-date",
             SpanKind::Repeat => "hl hl-repeat",
-            SpanKind::Priority => "hl hl-priority",
+            // The flag's color: the level is the phrase's digit ("p2", "!!2").
+            SpanKind::Priority => match value[s.start..s.end].chars().rev().find(|c| c.is_ascii_digit()) {
+                Some('1') => "hl hl-p1",
+                Some('2') => "hl hl-p2",
+                Some('3') => "hl hl-p3",
+                _ => "hl hl-p4",
+            },
             SpanKind::Project | SpanKind::Section => "hl hl-project",
             SpanKind::Label => "hl hl-label",
             SpanKind::Deadline => "hl hl-deadline",
@@ -591,7 +848,7 @@ fn HighlightedTitle(
     }
 
     rsx! {
-        div { class: "title-wrap",
+        div { class: "title-wrap", "data-editor": "{editor_id}",
             div { class: "title-mirror", aria_hidden: "true",
                 for (i, (text, class)) in segments.iter().enumerate() {
                     if class.is_empty() {
@@ -623,23 +880,13 @@ fn HighlightedTitle(
 }
 
 #[component]
-fn LabelOption(name: String, checked: bool, vals: Signal<EditorValues>) -> Element {
-    let mut vals = vals;
+fn LabelOption(name: String, checked: bool, on_toggle: EventHandler<String>) -> Element {
     rsx! {
         label { class: "label-opt",
             input {
                 r#type: "checkbox",
                 checked,
-                onchange: move |_| {
-                    let name = name.clone();
-                    vals.with_mut(|v| {
-                        if let Some(i) = v.labels.iter().position(|n| n.eq_ignore_ascii_case(&name)) {
-                            v.labels.remove(i);
-                        } else {
-                            v.labels.push(name);
-                        }
-                    });
-                },
+                onchange: move |_| on_toggle.call(name.clone()),
             }
             Icon { svg: icons::tag_small() }
             "{name}"
@@ -655,13 +902,27 @@ pub fn AddTask(
     sections: Vec<Section>,
     labels: Vec<Label>,
     reload: Signal<u32>,
+    /// The view's own row (the floating + opens this one).
+    #[props(default)]
+    main: bool,
 ) -> Element {
     let mut reload = reload;
     let mut open = use_signal(|| false);
+    let glass = crate::glass::use_glass();
 
     if !open() {
+        let (d, p, s, l) = (defaults.clone(), projects.clone(), sections.clone(), labels.clone());
         return rsx! {
-            div { class: "add-task-row", onclick: move |_| open.set(true),
+            div {
+                class: "add-task-row",
+                class: if main { "view-add" },
+                onclick: move |_| {
+                    if (glass.native)() {
+                        glass.add(d.clone(), p.clone(), s.clone(), l.clone(), reload);
+                    } else {
+                        open.set(true);
+                    }
+                },
                 span { class: "plus", Icon { svg: icons::plus(14) } }
                 "Add task"
             }
@@ -682,12 +943,76 @@ pub fn AddTask(
             on_submit: move |v: EditorValues| {
                 let (p, s, l) = (p2.clone(), s2.clone(), l2.clone());
                 spawn(async move {
-                    add_from_editor(v, p, s, l).await;
+                    let _ = add_from_editor(v, p, s, l).await;
                     reload += 1;
                 });
             },
             on_cancel: move |_| open.set(false),
             reload,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn edit_changes_leave_quick_add_text_alone() {
+        let mut task = Task::new("Buy p1 batteries #2", Id::from("P-IN"));
+        task.id = Id::from("T-1");
+        let before = EditorValues::from_task(&task);
+        let mut after = before.clone();
+        after.priority = "1".to_string();
+        let (patch, moved) = changes(&before, &after, None);
+        assert_eq!(patch.content, None);
+        assert_eq!(patch.priority, Some(Priority::P1));
+        assert_eq!(moved, None);
+    }
+
+    fn day19() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 10, 19).unwrap()
+    }
+
+    fn typed(content: &str) -> EditorValues {
+        let mut v = EditorValues::blank(Id::from("P-IN"), None, String::new(), Vec::new());
+        v.content = content.into();
+        v
+    }
+
+    #[test]
+    fn a_web_pick_replaces_the_typed_phrase_like_the_card() {
+        let mut v = typed("call mom tomorrow");
+        let pick = crate::glass::Pick::Date { date: "2026-10-23".into(), time: String::new() };
+        apply_pick(&mut v, &pick, true, &[], &[], day19());
+        assert_eq!(v.content, "call mom");
+        let task = new_task_from(&v, &parse_title_at(&v, &[], &[], day19()), day19());
+        assert_eq!(task.date, "2026-10-23", "the pick is what's saved");
+        // Editing doesn't parse the title, so nothing is stripped.
+        let mut e = typed("call mom tomorrow");
+        apply_pick(&mut e, &pick, false, &[], &[], day19());
+        assert_eq!(e.content, "call mom tomorrow");
+    }
+
+    #[test]
+    fn toggling_a_label_keeps_the_typed_ones() {
+        let mut v = typed("x @home");
+        toggle_label(&mut v, "work", true, &[], &[], day19());
+        assert_eq!(v.content, "x");
+        assert_eq!(v.labels, vec!["home".to_string(), "work".to_string()]);
+        toggle_label(&mut v, "HOME", true, &[], &[], day19());
+        assert_eq!(v.labels, vec!["work".to_string()]);
+    }
+
+    #[test]
+    fn a_picked_time_is_saved_with_a_typed_date() {
+        let today = NaiveDate::from_ymd_opt(2026, 10, 19).unwrap();
+        let mut v = EditorValues::blank(Id::from("P-IN"), None, String::new(), Vec::new());
+        v.content = "water plants every monday".into();
+        v.date = "2026-10-19".into();
+        v.time = "17:00".into();
+        let task = new_task_from(&v, &parse_title_at(&v, &[], &[], today), today);
+        assert_eq!(task.date, "2026-10-19T17:00:00");
+        assert!(task.recurrence.is_some(), "the repeat is kept");
     }
 }
