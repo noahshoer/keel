@@ -66,6 +66,18 @@ pub fn SearchPane(
                     }
                 },
             }
+            if !q.is_empty() {
+                button {
+                    r#type: "button",
+                    class: "search-clear",
+                    title: "Clear",
+                    aria_label: "Clear search",
+                    // Keep focus (and the keyboard) in the field.
+                    onmousedown: move |e| e.prevent_default(),
+                    onclick: move |_| query.set(String::new()),
+                    Icon { svg: icons::x_small() }
+                }
+            }
         }
         if q.trim().is_empty() {
             div { class: "empty",

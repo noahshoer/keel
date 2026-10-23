@@ -51,6 +51,8 @@ const LIGHT: &str = r#"
   --subtle: #666666;
   --divider: #efefef;
   --hover: rgba(0,0,0,.045);
+  --field-fill: rgba(118,118,128,.12);
+  --field-fill-focus: rgba(118,118,128,.18);
   --row-hover: #f7f5f3;
   --icon-hover: rgba(0,0,0,.06);
   --active-bg: #ffffff;
@@ -98,6 +100,8 @@ const DARK: &str = r#"
   --subtle: #b0b0b0;
   --divider: #303030;
   --hover: rgba(255,255,255,.06);
+  --field-fill: rgba(118,118,128,.24);
+  --field-fill-focus: rgba(118,118,128,.32);
   --row-hover: #292929;
   --icon-hover: rgba(255,255,255,.08);
   --active-bg: #2b2b2b;
@@ -496,12 +500,19 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 
 /* Search view */
 .nav-icon.search { color: var(--subtle); }
+/* A filled pill like iOS's search field (and the round glass buttons):
+   no outline or glow; a slightly deeper fill while typing. */
 .search-box { position: relative; display: flex; align-items: center; margin: 6px 0 14px; }
-.search-icon { position: absolute; left: 12px; display: inline-flex; color: var(--muted); pointer-events: none; }
-.search-input { width: 100%; height: 42px; padding: 0 14px 0 40px; border: 1px solid var(--border); border-radius: var(--r-md);
-  font-size: 15px; outline: none; background: var(--bg); color: var(--text); transition: border-color .16s, box-shadow .16s; }
-.search-input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
+.search-icon { position: absolute; left: 13px; display: inline-flex; color: var(--muted); pointer-events: none; }
+.search-input { width: 100%; height: 42px; padding: 0 40px 0 40px; border: none; border-radius: 999px;
+  font-size: 16px; outline: none; background: var(--field-fill); color: var(--text); transition: background .16s;
+  -webkit-appearance: none; appearance: none; }
+.search-input:focus { background: var(--field-fill-focus); }
 .search-input::placeholder { color: var(--muted); }
+.search-input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+.search-clear { position: absolute; right: 10px; width: 20px; height: 20px; padding: 0; border: none; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; background: var(--muted); color: var(--bg); cursor: pointer; }
+.search-clear .icon, .search-clear svg { width: 12px; height: 12px; }
 
 /* Settings window */
 .modal-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.32); display: flex;
