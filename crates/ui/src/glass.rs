@@ -4,7 +4,8 @@
 //! chips and saving behave exactly like the web editor.
 
 
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{Datelike, NaiveDate, NaiveTime};
+use keel_core::calendar::{self, MonthView};
 use dioxus::prelude::*;
 use keel_core::ids::Id;
 use keel_core::model::{Label, Project, Section, Task};
@@ -15,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::api;
 use crate::editor::{
-    add_from_editor, labels_text, recurrence_for_at, repeat_days, unhighlight, with_title, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
+    add_from_editor, labels_text, recurrence_for_at, unhighlight, with_title, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
     repeat_text, save_edit, EditorValues,
 };
 use crate::pickers::{date_chip, deadline_text, offset_text, quick_dates, reminders_text, ReminderDraft, REMINDER_PRESETS};
@@ -88,9 +89,13 @@ pub struct PickerData {
     /// Relative reminders need a due date.
     pub has_due: bool,
     pub quick_dates: Vec<QuickDate>,
-    /// The days the task repeats on (`YYYY-MM-DD`, about six months ahead),
-    /// ringed in the calendar.
-    pub repeat_days: Vec<String>,
+    /// The calendar month shown (core's model; the card only draws it).
+    pub calendar: MonthView,
+    /// The month / year picker's choices.
+    pub years: Vec<i32>,
+    pub months: Vec<&'static str>,
+    /// The chosen date's due color (fills the selected day).
+    pub selected_tone: Option<String>,
 }
 
 /// A date-picker shortcut ("Tomorrow", "Next week").
@@ -100,6 +105,8 @@ pub struct QuickDate {
     pub hint: String,
     /// `YYYY-MM-DD`
     pub date: String,
+    /// The date's due color, like the chip.
+    pub tone: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -134,6 +141,9 @@ pub enum GlassEvent {
     Title { text: String },
     Description { text: String },
     Pick { pick: Pick },
+    /// The calendar's arrows (`delta` months) and its month / year picker.
+    CalendarShift { delta: i32 },
+    CalendarMonth { year: i32, month: u32 },
     /// Backspace right after a highlight: that phrase becomes plain text.
     /// `at` is where the highlight ends, in UTF-16 units.
     Unhighlight { at: usize },
@@ -191,6 +201,11 @@ pub struct CardContext {
     /// The edited task's recurrence (what "keep" means).
     pub existing: Option<Recurrence>,
     pub today: NaiveDate,
+    /// The device's first day of the week (the calendar's first column).
+    pub week_start: chrono::Weekday,
+    /// The month the calendar shows, once navigated; None follows the
+    /// chosen date (or today).
+    pub calendar: Option<(i32, u32)>,
 }
 
 /// Keel's due color for a date (the task list's `.due.*` classes).
@@ -355,9 +370,23 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
         has_due: date.is_some() || time.is_some(),
         quick_dates: quick_dates(ctx.today)
             .into_iter()
-            .map(|(label, hint, d)| QuickDate { label: label.to_string(), hint, date: d.format("%Y-%m-%d").to_string() })
+            .map(|(label, hint, d)| QuickDate {
+                label: label.to_string(),
+                hint,
+                date: d.format("%Y-%m-%d").to_string(),
+                tone: due_tone(views::due_bucket(d, ctx.today)).to_string(),
+            })
             .collect(),
-        repeat_days: rule.as_ref().map(|r| repeat_days(r, ctx.today)).unwrap_or_default(),
+        calendar: {
+            let (y, m) = ctx.calendar.unwrap_or_else(|| {
+                let d = date.unwrap_or(ctx.today);
+                (d.year(), d.month())
+            });
+            calendar::month_view(y, m, ctx.week_start, ctx.today, date, rule.as_ref())
+        },
+        years: calendar::year_choices(ctx.today),
+        months: calendar::MONTHS.to_vec(),
+        selected_tone: date.map(|d| due_tone(views::due_bucket(d, ctx.today)).to_string()),
     };
 
     CardState {
@@ -374,6 +403,34 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
     }
 }
 
+/// Calendar navigation lives in the context, not the task's values: the
+/// arrows and the month / year picker move it (true: the card needs a
+/// refresh); picking a date resets it to follow that date.
+pub fn apply_calendar(ctx: &mut CardContext, ev: &GlassEvent, v: &EditorValues) -> bool {
+    let shown = || {
+        ctx.calendar.unwrap_or_else(|| {
+            let d = NaiveDate::parse_from_str(&v.date, "%Y-%m-%d").unwrap_or(ctx.today);
+            (d.year(), d.month())
+        })
+    };
+    match ev {
+        GlassEvent::CalendarShift { delta } => {
+            let (y, m) = shown();
+            ctx.calendar = Some(calendar::shift_month(y, m, *delta));
+            true
+        }
+        GlassEvent::CalendarMonth { year, month } => {
+            ctx.calendar = Some((*year, (*month).clamp(1, 12)));
+            true
+        }
+        GlassEvent::Pick { pick: Pick::Date { .. } } => {
+            ctx.calendar = None;
+            false
+        }
+        _ => false,
+    }
+}
+
 /// Applies one action from the card to the values.
 pub fn apply_event(v: &mut EditorValues, ev: &GlassEvent, mode: CardMode, ctx: &CardContext) -> Outcome {
     match ev {
@@ -386,6 +443,7 @@ pub fn apply_event(v: &mut EditorValues, ev: &GlassEvent, mode: CardMode, ctx: &
         }
         GlassEvent::Description { text } => v.description = text.clone(),
         GlassEvent::Submit => return Outcome::Submit,
+        GlassEvent::CalendarShift { .. } | GlassEvent::CalendarMonth { .. } => {}
         GlassEvent::Cancel => return Outcome::Cancel,
         GlassEvent::Pick { pick } => {
             if mode == CardMode::Add {
@@ -811,7 +869,16 @@ pub fn use_glass() -> Glass {
 impl Glass {
     /// Opens the composer with `defaults` (project, section, date, parent).
     pub fn add(self, defaults: EditorValues, projects: Vec<Project>, sections: Vec<Section>, labels: Vec<Label>, reload: Signal<u32>) {
-        let ctx = CardContext { projects, sections, labels, keep_label: None, existing: None, today: crate::today() };
+        let ctx = CardContext {
+            projects,
+            sections,
+            labels,
+            keep_label: None,
+            existing: None,
+            today: crate::today(),
+            week_start: crate::pickers::week_start(),
+            calendar: None,
+        };
         self.open(CardSession {
             mode: CardMode::Add,
             initial: defaults.clone(),
@@ -837,7 +904,16 @@ impl Glass {
         before.reminders = reminders;
         let existing = task.due.as_ref().and_then(|d| d.recurrence.clone());
         let keep_label = (before.repeat == "keep").then(|| existing.as_ref().map(repeat_text).unwrap_or_default());
-        let ctx = CardContext { projects, sections, labels, keep_label, existing: existing.clone(), today: crate::today() };
+        let ctx = CardContext {
+            projects,
+            sections,
+            labels,
+            keep_label,
+            existing: existing.clone(),
+            today: crate::today(),
+            week_start: crate::pickers::week_start(),
+            calendar: None,
+        };
         self.open(CardSession {
             mode: CardMode::Edit,
             initial: before.clone(),
@@ -876,6 +952,12 @@ impl Glass {
 
     async fn handle(mut self, ev: GlassEvent) {
         let Some(mut s) = self.session.peek().clone() else { return };
+        if apply_calendar(&mut s.ctx, &ev, &s.values) {
+            let state = card_state(&s.values, s.mode, &s.ctx);
+            self.session.set(Some(s));
+            api::glass_update(&state).await;
+            return;
+        }
         let before = s.values.content.clone();
         match apply_event(&mut s.values, &ev, s.mode, &s.ctx) {
             Outcome::Changed => {
@@ -937,7 +1019,16 @@ mod tests {
         inbox.id = Id::from("P-IN");
         let mut work = Project::new("Work");
         work.id = Id::from("P-WORK");
-        CardContext { projects: vec![inbox, work], sections: vec![], labels: vec![], keep_label: None, existing: None, today: today() }
+        CardContext {
+            projects: vec![inbox, work],
+            sections: vec![],
+            labels: vec![],
+            keep_label: None,
+            existing: None,
+            today: today(),
+            week_start: chrono::Weekday::Sun,
+            calendar: None,
+        }
     }
 
     fn blank(content: &str) -> EditorValues {
@@ -1217,17 +1308,20 @@ mod tests {
     }
 
     #[test]
-    fn the_picker_lists_the_days_a_task_repeats_on() {
-        let p = card_state(&blank("x every monday"), CardMode::Add, &ctx()).picker;
-        assert_eq!(&p.repeat_days[..3], &["2026-10-19", "2026-10-26", "2026-11-02"]);
-        assert!(!p.repeat_days.contains(&"2026-10-20".to_string()));
+    fn the_calendar_rings_the_days_a_task_repeats_on() {
+        let repeats = |v: &EditorValues| -> Vec<String> {
+            let p = card_state(v, CardMode::Add, &ctx()).picker;
+            p.calendar.weeks.iter().flatten().filter(|c| c.repeat).map(|c| c.date.format("%Y-%m-%d").to_string()).collect()
+        };
+        let r = repeats(&blank("x every monday"));
+        assert_eq!(&r[..2], &["2026-10-19", "2026-10-26"]);
+        assert!(!r.contains(&"2026-10-20".to_string()));
         // A repeat picked from the menu counts too.
         let mut v = blank("x");
         v.date = "2026-10-21".into();
         v.repeat = "weekly".into();
-        let p = card_state(&v, CardMode::Add, &ctx()).picker;
-        assert_eq!(&p.repeat_days[..2], &["2026-10-21", "2026-10-28"]);
-        assert!(card_state(&blank("x tomorrow"), CardMode::Add, &ctx()).picker.repeat_days.is_empty());
+        assert_eq!(&repeats(&v)[..2], &["2026-10-21", "2026-10-28"]);
+        assert!(repeats(&blank("x tomorrow")).is_empty());
     }
 
     #[test]
@@ -1239,5 +1333,32 @@ mod tests {
         assert!(card_state(&blank("Clean This Weekend"), CardMode::Add, &ctx()).can_submit);
         // Editing doesn't parse, so a title like that is just a name.
         assert!(card_state(&blank("This Weekend"), CardMode::Edit, &ctx()).can_submit);
+    }
+
+    #[test]
+    fn the_picker_calendar_follows_the_chosen_date_and_navigation() {
+        let mut c = ctx();
+        let mut v = blank("x");
+        v.date = "2026-12-04".into();
+        let p = card_state(&v, CardMode::Add, &c).picker;
+        assert_eq!(p.calendar.title, "December 2026", "opens on the chosen date's month");
+        assert_eq!(p.years.first(), Some(&2025));
+        assert_eq!(p.months[0], "January");
+        assert!(apply_calendar(&mut c, &GlassEvent::CalendarShift { delta: 1 }, &v));
+        assert_eq!(card_state(&v, CardMode::Add, &c).picker.calendar.title, "January 2027");
+        assert!(apply_calendar(&mut c, &GlassEvent::CalendarMonth { year: 2028, month: 3 }, &v));
+        assert_eq!(card_state(&v, CardMode::Add, &c).picker.calendar.title, "March 2028");
+        // Picking a date brings the calendar back to it.
+        assert!(!apply_calendar(&mut c, &GlassEvent::Pick { pick: Pick::Date { date: "2026-10-24".into(), time: String::new() } }, &v));
+        assert_eq!(c.calendar, None);
+    }
+
+    #[test]
+    fn the_picker_colors_match_the_date_chip() {
+        let p = card_state(&blank("x tomorrow"), CardMode::Add, &ctx()).picker;
+        assert_eq!(p.selected_tone.as_deref(), Some("due-tomorrow"));
+        let tones: Vec<&str> = p.quick_dates.iter().map(|q| q.tone.as_str()).collect();
+        // Today (Mon 19), Tomorrow, This weekend (Sat 24), Next week (Mon 26).
+        assert_eq!(tones, vec!["due-today", "due-tomorrow", "due-week", "due-later"]);
     }
 }

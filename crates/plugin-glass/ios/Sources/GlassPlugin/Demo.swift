@@ -47,6 +47,17 @@ enum Demo {
       }
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
         if let chip { model.picker = chip }
+        // KEEL_GLASS_CAL="1;2027-3": then press "next month", then choose March 2027.
+        if let cal = ProcessInfo.processInfo.environment["KEEL_GLASS_CAL"] {
+          let steps = cal.components(separatedBy: ";")
+          DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            if let d = Int(steps[0]) { model.send(.calendarShift(d)) }
+            if steps.count > 1 {
+              let ym = steps[1].components(separatedBy: "-").compactMap { Int($0) }
+              DispatchQueue.main.asyncAfter(deadline: .now() + 1) { model.send(.calendarMonth(year: ym[0], month: ym[1])) }
+            }
+          }
+        }
         if !text.isEmpty, let field = TitleField.AutoFocusField.current {
           field.text = text
           field.delegate?.textViewDidChange?(field)

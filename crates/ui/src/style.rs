@@ -648,6 +648,22 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .mark-name { font-size: 12px; }
 /* Days a task repeats on, ringed like Todoist's. */
 .cal-day.repeat-day:not(.selected) { outline: 1.5px dashed var(--muted); outline-offset: -3px; }
+/* Calendar: the selected day takes its due color (like the chip and the
+   highlighted phrase); the title opens a month / year chooser. */
+.cal-day.selected.sel-overdue { background: var(--due-overdue); }
+.cal-day.selected.sel-today { background: var(--due-today); }
+.cal-day.selected.sel-tomorrow { background: var(--due-tomorrow); }
+.cal-day.selected.sel-week { background: var(--due-week); }
+.cal-day.selected.sel-later { background: var(--due-later); }
+.cal-title.chooser { display: inline-flex; align-items: center; gap: 4px; margin-right: auto; padding: 4px 6px;
+  border: none; border-radius: var(--r); background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.cal-title.chooser.open .icon { transform: rotate(180deg); }
+.month-chooser { display: flex; flex-direction: column; gap: 8px; padding: 6px 0 10px; }
+.year-row { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.chooser-cell { padding: 7px 0; min-width: 52px; border: 1px solid var(--border); border-radius: var(--r-md);
+  background: transparent; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.chooser-cell.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 "#;
 
 /// The full stylesheet: light by default, dark when the OS prefers it (unless

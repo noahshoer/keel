@@ -153,15 +153,6 @@ pub fn repeat_text(rule: &Recurrence) -> String {
     }
 }
 
-/// How far ahead the date pickers ring repeat days.
-const REPEAT_WINDOW_DAYS: i64 = 183;
-
-/// The days `rule` repeats on from `today` (`YYYY-MM-DD`), about six
-/// months ahead, for the date pickers on every platform.
-pub(crate) fn repeat_days(rule: &Recurrence, today: NaiveDate) -> Vec<String> {
-    rule.days_within(today, REPEAT_WINDOW_DAYS).into_iter().map(|d| d.format("%Y-%m-%d").to_string()).collect()
-}
-
 /// The Labels chip's text.
 pub(crate) fn labels_text(labels: &[String]) -> String {
     if labels.is_empty() { "Labels".to_string() } else { labels.join(", ") }
@@ -476,12 +467,10 @@ pub fn TaskEditor(
     };
 
     // The days it will repeat on (typed rule, or the Repeat menu's).
-    let repeat_days = qa
+    let repeat_rule = qa
         .as_ref()
         .and_then(|q| q.recurrence.clone())
-        .or_else(|| recurrence_for_at(&v.repeat, &v.date, existing.clone(), today))
-        .map(|r| repeat_days(&r, today))
-        .unwrap_or_default();
+        .or_else(|| recurrence_for_at(&v.repeat, &v.date, existing.clone(), today));
     // Relative reminders count back from a due date (typed or picked).
     let has_due = !v.date.is_empty() || !v.time.is_empty() || qa.as_ref().is_some_and(|q| q.date.is_some());
     let title_placeholder: &'static str =
@@ -556,7 +545,7 @@ pub fn TaskEditor(
                     date: v.date.clone(),
                     time: v.time.clone(),
                     open,
-                    repeat_days: repeat_days.clone(),
+                    rule: repeat_rule.clone(),
                     on_change: move |(date, time): (String, String)| vals.with_mut(|v| {
                         v.date = date;
                         v.time = time;

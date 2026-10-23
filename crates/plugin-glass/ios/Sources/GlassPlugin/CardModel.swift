@@ -82,14 +82,39 @@ struct PickerData: Codable, Equatable {
   let reminderPresets: [ReminderPreset]
   let hasDue: Bool
   let quickDates: [QuickDate]
-  /// The days the task repeats on (`yyyy-MM-dd`), ringed in the calendar.
-  let repeatDays: [String]
+  /// The calendar month shown (built in Rust's core; drawn here).
+  let calendar: MonthViewData
+  /// The month / year chooser's choices.
+  let years: [Int]
+  let months: [String]
+  /// The chosen date's due color (fills the selected day).
+  let selectedTone: String?
+}
+
+/// `keel_core::calendar::MonthView`.
+struct MonthViewData: Codable, Equatable {
+  struct Day: Codable, Equatable {
+    let date: String
+    let day: Int
+    let inMonth: Bool
+    let today: Bool
+    let past: Bool
+    let selected: Bool
+    let `repeat`: Bool
+  }
+  let year: Int
+  let month: Int
+  let title: String
+  let weekdays: [String]
+  let weeks: [[Day]]
 }
 
 struct QuickDate: Codable, Equatable {
   let label: String
   let hint: String
   let date: String
+  /// The date's due color, like the chip.
+  let tone: String
 }
 
 /// A `[minutes, label]` pair.
@@ -163,10 +188,13 @@ enum CardEvent: Encodable {
   /// Backspace right after a highlight: that phrase becomes plain text
   /// (`at`: where it ends, UTF-16).
   case unhighlight(Int)
+  /// The calendar's arrows and its month / year chooser.
+  case calendarShift(Int)
+  case calendarMonth(year: Int, month: Int)
   case submit
   case cancel
 
-  private enum K: String, CodingKey { case type, text, pick, at }
+  private enum K: String, CodingKey { case type, text, pick, at, delta, year, month }
 
   func encode(to encoder: Encoder) throws {
     var c = encoder.container(keyedBy: K.self)
@@ -175,6 +203,9 @@ enum CardEvent: Encodable {
     case .description(let t): try c.encode("description", forKey: .type); try c.encode(t, forKey: .text)
     case .pick(let p): try c.encode("pick", forKey: .type); try c.encode(p, forKey: .pick)
     case .unhighlight(let at): try c.encode("unhighlight", forKey: .type); try c.encode(at, forKey: .at)
+    case .calendarShift(let delta): try c.encode("calendarShift", forKey: .type); try c.encode(delta, forKey: .delta)
+    case .calendarMonth(let year, let month):
+      try c.encode("calendarMonth", forKey: .type); try c.encode(year, forKey: .year); try c.encode(month, forKey: .month)
     case .submit: try c.encode("submit", forKey: .type)
     case .cancel: try c.encode("cancel", forKey: .type)
     }

@@ -3,7 +3,7 @@
 //! One popover is open at a time per editor (`open` holds its id); the editor
 //! draws a transparent backdrop that closes it.
 
-use chrono::{Datelike, Duration, Months, NaiveDate, NaiveTime};
+use chrono::{Datelike, Duration, NaiveDate, NaiveTime};
 use dioxus::prelude::*;
 use keel_core::{calendar, quickadd, views};
 
@@ -52,6 +52,34 @@ fn native_time(v: &str) -> Option<Option<NaiveTime>> {
 }
 
 /// True on touch screens (phones), where pickers use native controls.
+/// The device's first day of the week (from its locale, read at startup):
+/// the calendar's first column on every platform.
+static WEEK_START: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(1);
+
+pub fn week_start() -> chrono::Weekday {
+    // 1 = Monday … 7 = Sunday (Intl.Locale weekInfo's firstDay).
+    match WEEK_START.load(std::sync::atomic::Ordering::Relaxed) {
+        7 => chrono::Weekday::Sun,
+        6 => chrono::Weekday::Sat,
+        _ => chrono::Weekday::Mon,
+    }
+}
+
+/// Reads the locale's first weekday once (call from App).
+pub fn provide_week_start() {
+    use_hook(|| {
+        spawn(async {
+            let mut e = document::eval(
+                "const l = new Intl.Locale(navigator.language || 'en-US'); \
+                 const w = (l.getWeekInfo ? l.getWeekInfo() : l.weekInfo); dioxus.send(w ? w.firstDay : 7);",
+            );
+            if let Ok(day) = e.recv::<u8>().await {
+                WEEK_START.store(day, std::sync::atomic::Ordering::Relaxed);
+            }
+        });
+    });
+}
+
 #[derive(Clone, Copy)]
 pub struct Touch(pub Signal<bool>);
 
@@ -112,10 +140,10 @@ pub fn DatePicker(
     time: String,
     open: OpenPop,
     on_change: EventHandler<(String, String)>,
-    /// The days the task repeats on (`YYYY-MM-DD`): a ⟳ on the chip and
-    /// dashed rings in the calendar.
+    /// The task's repeat rule: a ⟳ on the chip and dashed rings in the
+    /// calendar (core works out the days).
     #[props(default)]
-    repeat_days: Vec<String>,
+    rule: Option<keel_core::recurrence::Recurrence>,
 ) -> Element {
     let mut open = open;
     let today = crate::today();
@@ -135,12 +163,12 @@ pub fn DatePicker(
                 onclick: move |_| open.set(if is_open { None } else { Some("date") }),
                 Icon { svg: icons::calendar_small() }
                 "{chip_text}"
-                if !repeat_days.is_empty() {
+                if rule.is_some() {
                     Icon { svg: icons::repeat_small() }
                 }
             }
             if is_open {
-                Scheduler { selected, time: current_time, on_change, open, repeat_days: repeat_days.clone() }
+                Scheduler { selected, time: current_time, on_change, open, rule: rule.clone() }
             }
         }
     }
@@ -174,13 +202,19 @@ fn Scheduler(
     /// Header when nothing is picked.
     #[props(default = "No date")]
     empty_text: &'static str,
-    /// Days ringed as repeats (`YYYY-MM-DD`).
+    /// The repeat rule whose days are ringed.
     #[props(default)]
-    repeat_days: Vec<String>,
+    rule: Option<keel_core::recurrence::Recurrence>,
 ) -> Element {
     let mut open = open;
     let today = crate::today();
-    let mut month = use_signal(move || selected.unwrap_or(today).with_day(1).expect("day 1"));
+    // The month shown (year, month); core builds the grid for it.
+    let mut month = use_signal(move || {
+        let d = selected.unwrap_or(today);
+        (d.year(), d.month())
+    });
+    // The month / year picker, opened from the title.
+    let mut choosing = use_signal(|| false);
     let mut time_text = use_signal(move || time.map(views::time_label).unwrap_or_default());
     let mut time_bad = use_signal(|| false);
     let time_str = time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
@@ -197,8 +231,8 @@ fn Scheduler(
         .map(|((label, hint, d), (icon, cls))| (label, hint, d, icon, cls))
         .collect();
 
-    let m = month();
-    let weeks = calendar::month_weeks(m);
+    let (y, mo) = month();
+    let view = calendar::month_view(y, mo, week_start(), today, selected, rule.as_ref());
     let header = match selected {
         Some(d) => views::due_label(d, today),
         None => empty_text.to_string(),
@@ -279,43 +313,79 @@ fn Scheduler(
             }
             div { class: "sched-cal",
                 div { class: "cal-nav",
-                    span { class: "cal-title", "{MONTHS[m.month0() as usize]} {m.year()}" }
+                    button {
+                        r#type: "button",
+                        class: if choosing() { "cal-title chooser open" } else { "cal-title chooser" },
+                        title: "Choose month and year",
+                        onclick: move |_| choosing.set(!choosing()),
+                        "{view.title}"
+                        Icon { svg: icons::chevron_down_small() }
+                    }
                     button {
                         r#type: "button",
                         class: "icon-btn",
                         title: "Previous month",
-                        disabled: m <= today.with_day(1).expect("day 1"),
-                        onclick: move |_| month.set(m - Months::new(1)),
+                        onclick: move |_| month.set(calendar::shift_month(y, mo, -1)),
                         Icon { svg: icons::chevron_left() }
                     }
                     button {
                         r#type: "button",
                         class: "icon-btn",
                         title: "Today",
-                        onclick: move |_| month.set(today.with_day(1).expect("day 1")),
+                        onclick: move |_| month.set((today.year(), today.month())),
                         span { class: "cal-dot" }
                     }
                     button {
                         r#type: "button",
                         class: "icon-btn",
                         title: "Next month",
-                        onclick: move |_| month.set(m + Months::new(1)),
+                        onclick: move |_| month.set(calendar::shift_month(y, mo, 1)),
                         Icon { svg: icons::chevron_right() }
                     }
                 }
-                div { class: "cal-grid",
-                    for d in ["M", "T", "W", "T", "F", "S", "S"].iter().enumerate() {
-                        span { key: "h{d.0}", class: "cal-dow", "{d.1}" }
+                if choosing() {
+                    div { class: "month-chooser",
+                        div { class: "year-row",
+                            for year in calendar::year_choices(today) {
+                                button {
+                                    key: "{year}",
+                                    r#type: "button",
+                                    class: if year == y { "chooser-cell on" } else { "chooser-cell" },
+                                    onclick: move |_| month.set((year, mo)),
+                                    "{year}"
+                                }
+                            }
+                        }
+                        div { class: "month-grid",
+                            for (i, name) in calendar::MONTHS.iter().enumerate() {
+                                button {
+                                    key: "{i}",
+                                    r#type: "button",
+                                    class: if i as u32 + 1 == mo { "chooser-cell on" } else { "chooser-cell" },
+                                    onclick: move |_| {
+                                        month.set((y, i as u32 + 1));
+                                        choosing.set(false);
+                                    },
+                                    "{&name[..3]}"
+                                }
+                            }
+                        }
                     }
-                    for (i, day) in weeks.iter().flatten().copied().enumerate() {
+                }
+                div { class: "cal-grid",
+                    for (i, d) in view.weekdays.iter().enumerate() {
+                        span { key: "h{i}", class: "cal-dow", "{d}" }
+                    }
+                    for (i, cell) in view.weeks.iter().flatten().cloned().enumerate() {
                         {
                             let ts = time_str.clone();
+                            let day = cell.date;
                             let mut cls = String::from("cal-day");
-                            if day.month() != m.month() { cls.push_str(" other"); }
-                            if day < today { cls.push_str(" past"); }
-                            if day == today { cls.push_str(" is-today"); }
-                            if Some(day) == selected { cls.push_str(" selected"); }
-                            if repeat_days.iter().any(|r| *r == day.format("%Y-%m-%d").to_string()) { cls.push_str(" repeat-day"); }
+                            if !cell.in_month { cls.push_str(" other"); }
+                            if cell.past { cls.push_str(" past"); }
+                            if cell.today { cls.push_str(" is-today"); }
+                            if cell.selected { cls.push_str(&format!(" selected sel-{}", due_class(day, today))); }
+                            if cell.repeat { cls.push_str(" repeat-day"); }
                             rsx! {
                                 button {
                                     key: "{i}",
