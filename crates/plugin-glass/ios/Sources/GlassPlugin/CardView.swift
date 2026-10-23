@@ -149,7 +149,7 @@ struct TitleField: UIViewRepresentable {
 
     func textViewDidChange(_ v: UITextView) {
       (v as? AutoFocusField)?.syncPlaceholder()
-      model.send(.title(v.text))
+      model.send(.title(v.text, reset: model.state?.reset ?? 0))
     }
 
     /// Return submits; pasted line breaks become spaces (titles are one line).
@@ -244,7 +244,7 @@ struct CardView: View {
             .foregroundStyle(.secondary)
             .lineLimit(1...4)
             .onChange(of: model.description) { _, text in
-              if text != model.state?.description { model.send(.description(text)) }
+              if text != model.state?.description { model.send(.description(text, reset: model.state?.reset ?? 0)) }
             }
           HStack(spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {

@@ -11,12 +11,12 @@ use keel_core::ids::Id;
 use keel_core::model::{Label, Project, Section, Task};
 use keel_core::recurrence::Recurrence;
 use keel_core::views;
-use keel_core::quickadd::{strip_spans, QuickAdd, SpanKind};
+use keel_core::quickadd::{QuickAdd, SpanKind};
 use serde::{Deserialize, Serialize};
 
 use crate::api;
 use crate::editor::{
-    add_from_editor, labels_text, recurrence_for_at, unhighlight, with_title, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
+    add_from_editor, apply_pick, labels_text, recurrence_for_at, unhighlight, with_title, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
     repeat_text, save_edit, EditorValues,
 };
 use crate::pickers::{date_chip, deadline_text, offset_text, quick_dates, reminders_text, ReminderDraft, REMINDER_PRESETS};
@@ -128,6 +128,8 @@ pub struct CardState {
     /// no longer matches what's in the field (typing got ahead of it).
     pub title: String,
     pub description: String,
+    /// The card's reset number; Swift sends it back with typing.
+    pub reset: u32,
     pub spans: Vec<GlassSpan>,
     pub chips: Vec<ChipState>,
     pub can_submit: bool,
@@ -138,8 +140,18 @@ pub struct CardState {
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum GlassEvent {
-    Title { text: String },
-    Description { text: String },
+    /// Typing, stamped with the card's reset number when it was typed (see
+    /// `CardContext::reset`).
+    Title {
+        text: String,
+        #[serde(default)]
+        reset: u32,
+    },
+    Description {
+        text: String,
+        #[serde(default)]
+        reset: u32,
+    },
     Pick { pick: Pick },
     /// The calendar's arrows (`delta` months) and its month / year picker.
     CalendarShift { delta: i32 },
@@ -206,6 +218,17 @@ pub struct CardContext {
     /// The month the calendar shows, once navigated; None follows the
     /// chosen date (or today).
     pub calendar: Option<(i32, u32)>,
+    /// Bumped each time the card is reset for a new task. Swift stamps typing
+    /// with the number it last showed, so typing from before a reset is
+    /// told apart.
+    pub reset: u32,
+}
+
+/// A fresh reset number for a newly opened card (never one an earlier
+/// card used).
+fn next_reset() -> u32 {
+    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+    NEXT.fetch_add(1000, std::sync::atomic::Ordering::Relaxed)
 }
 
 /// Keel's due color for a date (the task list's `.due.*` classes).
@@ -246,19 +269,6 @@ pub(crate) fn byte_at_utf16(s: &str, at: usize) -> usize {
         units += c.len_utf16();
     }
     s.len()
-}
-
-/// The typed phrases a pick replaces.
-fn kinds_for(pick: &Pick) -> &'static [SpanKind] {
-    match pick {
-        Pick::Date { .. } => &[SpanKind::Date, SpanKind::Time],
-        Pick::Priority { .. } => &[SpanKind::Priority],
-        Pick::Labels { .. } => &[SpanKind::Label],
-        Pick::Reminders { .. } => &[],
-        Pick::Deadline { .. } => &[SpanKind::Deadline],
-        Pick::Repeat { .. } => &[SpanKind::Repeat],
-        Pick::Location { .. } => &[SpanKind::Project, SpanKind::Section],
-    }
 }
 
 /// The values with what the title says applied on top, the same way
@@ -392,6 +402,7 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
 
     CardState {
         mode,
+        reset: ctx.reset,
         title: v.content.clone(),
         description: v.description.clone(),
         spans,
@@ -435,43 +446,22 @@ pub fn apply_calendar(ctx: &mut CardContext, ev: &GlassEvent, v: &EditorValues) 
 /// Applies one action from the card to the values.
 pub fn apply_event(v: &mut EditorValues, ev: &GlassEvent, mode: CardMode, ctx: &CardContext) -> Outcome {
     match ev {
-        GlassEvent::Title { text } => *v = with_title(v, text.clone()),
+        // Typed before the last reset reached the field (Return, then a fast
+        // keystroke): it belongs to the task just added, not the next one.
+        GlassEvent::Title { reset, .. } | GlassEvent::Description { reset, .. } if *reset != ctx.reset => {}
+        GlassEvent::Title { text, .. } => *v = with_title(v, text.clone()),
         GlassEvent::Unhighlight { at } => {
             let end = byte_at_utf16(&v.content, *at);
             if mode != CardMode::Add || !unhighlight(v, &ctx.projects, &ctx.sections, ctx.today, end) {
                 return Outcome::Changed;
             }
         }
-        GlassEvent::Description { text } => v.description = text.clone(),
+        GlassEvent::Description { text, .. } => v.description = text.clone(),
         GlassEvent::Submit => return Outcome::Submit,
         GlassEvent::CalendarShift { .. } | GlassEvent::CalendarMonth { .. } => {}
         GlassEvent::Cancel => return Outcome::Cancel,
         GlassEvent::Pick { pick } => {
-            if mode == CardMode::Add {
-                let qa = parse_title_at(v, &ctx.projects, &ctx.sections, ctx.today);
-                let mut kinds = kinds_for(pick).to_vec();
-                // A different day replaces a typed repeat too (it set the
-                // date); a time for the same day keeps it.
-                if let Pick::Date { date, .. } = pick {
-                    let shown = qa.date.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| v.date.clone());
-                    if *date != shown {
-                        kinds.push(SpanKind::Repeat);
-                    }
-                }
-                // Through `with_title`, so un-highlighted ranges move with the text.
-                *v = with_title(v, strip_spans(&v.content, &qa.spans, &kinds));
-            }
-            match pick {
-                Pick::Date { date, time } => (v.date, v.time) = (date.clone(), time.clone()),
-                Pick::Priority { value } => v.priority = value.clone(),
-                Pick::Labels { names } => v.labels = names.clone(),
-                Pick::Reminders { drafts } => v.reminders = drafts.clone(),
-                Pick::Deadline { date } => v.deadline = date.clone(),
-                Pick::Repeat { value } => v.repeat = value.clone(),
-                Pick::Location { project_id, section_id } => {
-                    (v.project_id, v.section_id) = (project_id.clone(), section_id.clone())
-                }
-            }
+            apply_pick(v, pick, mode == CardMode::Add, &ctx.projects, &ctx.sections, ctx.today);
         }
     }
     Outcome::Changed
@@ -480,8 +470,17 @@ pub fn apply_event(v: &mut EditorValues, ev: &GlassEvent, mode: CardMode, ctx: &
 
 /// What the values become after a submit: adding resets the card for the
 /// next task (it stays open); editing closes it.
-pub fn after_submit(mode: CardMode, initial: &EditorValues) -> Option<EditorValues> {
+pub fn after_submit(mode: CardMode, initial: &EditorValues, ctx: &mut CardContext) -> Option<EditorValues> {
+    // The next task's calendar opens on its own month, not the one browsed to.
+    ctx.calendar = None;
+    ctx.reset = ctx.reset.wrapping_add(1);
     (mode == CardMode::Add).then(|| initial.clone())
+}
+
+/// After a failed add the card gets the task back, unless the next one is
+/// already being typed (then that's kept).
+pub fn restore_failed_add(current: &EditorValues, reset: &EditorValues, failed: EditorValues) -> Option<EditorValues> {
+    (current == reset).then_some(failed)
 }
 
 /// One open card: what it was opened with and what it holds now.
@@ -889,6 +888,7 @@ impl Glass {
             today: crate::today(),
             week_start: crate::pickers::week_start(),
             calendar: None,
+            reset: next_reset(),
         };
         self.open(CardSession {
             mode: CardMode::Add,
@@ -924,6 +924,7 @@ impl Glass {
             today: crate::today(),
             week_start: crate::pickers::week_start(),
             calendar: None,
+            reset: next_reset(),
         };
         self.open(CardSession {
             mode: CardMode::Edit,
@@ -989,20 +990,37 @@ impl Glass {
                     return;
                 }
                 let mut reload = s.reload;
-                match after_submit(s.mode, &s.initial) {
+                match after_submit(s.mode, &s.initial, &mut s.ctx) {
                     Some(next) => {
-                        let saved = std::mem::replace(&mut s.values, next);
+                        let saved = std::mem::replace(&mut s.values, next.clone());
                         let state = card_state(&s.values, s.mode, &s.ctx);
                         let (p, sec, l) = (s.ctx.projects.clone(), s.ctx.sections.clone(), s.ctx.labels.clone());
                         self.session.set(Some(s));
                         api::glass_show(&state).await;
-                        add_from_editor(saved, p, sec, l).await;
+                        if add_from_editor(saved.clone(), p, sec, l).await.is_err() {
+                            // Not added: the card gets the text back.
+                            let open = self.session.peek().clone();
+                            if let Some(mut s) = open {
+                                if let Some(back) = restore_failed_add(&s.values, &next, saved) {
+                                    s.values = back;
+                                    let state = card_state(&s.values, s.mode, &s.ctx);
+                                    self.session.set(Some(s));
+                                    api::glass_show(&state).await;
+                                }
+                            }
+                        }
                     }
                     None => {
                         self.session.set(None);
                         api::glass_hide().await;
                         if let Some(id) = s.task_id.clone() {
-                            save_edit(id, s.initial.clone(), s.values.clone(), s.existing.clone()).await;
+                            let edit = save_edit(id, s.initial.clone(), s.values.clone(), s.existing.clone()).await;
+                            if edit.is_err() && self.session.peek().is_none() {
+                                // Not saved: the card comes back with the changes.
+                                let state = card_state(&s.values, s.mode, &s.ctx);
+                                self.session.set(Some(s));
+                                api::glass_show(&state).await;
+                            }
                         }
                     }
                 }
@@ -1039,6 +1057,7 @@ mod tests {
             today: today(),
             week_start: chrono::Weekday::Sun,
             calendar: None,
+            reset: 0,
         }
     }
 
@@ -1121,8 +1140,8 @@ mod tests {
     #[test]
     fn typing_updates_the_values() {
         let mut v = blank("");
-        assert_eq!(apply_event(&mut v, &GlassEvent::Title { text: "hi".into() }, CardMode::Add, &ctx()), Outcome::Changed);
-        apply_event(&mut v, &GlassEvent::Description { text: "more".into() }, CardMode::Add, &ctx());
+        assert_eq!(apply_event(&mut v, &GlassEvent::Title { text: "hi".into(), reset: 0 }, CardMode::Add, &ctx()), Outcome::Changed);
+        apply_event(&mut v, &GlassEvent::Description { text: "more".into(), reset: 0 }, CardMode::Add, &ctx());
         assert_eq!((v.content.as_str(), v.description.as_str()), ("hi", "more"));
     }
 
@@ -1144,14 +1163,17 @@ mod tests {
         .unwrap();
         assert_eq!(ev, GlassEvent::Pick { pick: Pick::Location { project_id: Id::from("P-WORK"), section_id: None } });
         let ev: GlassEvent = serde_json::from_str(r#"{"type":"title","text":"hi"}"#).unwrap();
-        assert_eq!(ev, GlassEvent::Title { text: "hi".into() });
+        assert_eq!(ev, GlassEvent::Title { text: "hi".into(), reset: 0 });
     }
 
     #[test]
     fn add_submit_resets_to_defaults() {
         let initial = blank("");
-        assert_eq!(after_submit(CardMode::Add, &initial), Some(initial.clone()));
-        assert_eq!(after_submit(CardMode::Edit, &initial), None);
+        let mut c = ctx();
+        c.calendar = Some((2027, 3));
+        assert_eq!(after_submit(CardMode::Add, &initial, &mut c), Some(initial.clone()));
+        assert_eq!(c.calendar, None, "the next task's calendar opens on its own month");
+        assert_eq!(after_submit(CardMode::Edit, &initial, &mut ctx()), None);
     }
 
     #[test]
@@ -1191,7 +1213,7 @@ mod tests {
         assert_eq!(refresh_for(&pick, "call p1", "call"), Refresh::Replace);
         assert_eq!(refresh_for(&pick, "call", "call"), Refresh::Update);
         // Typing never replaces the field (it's already showing the text).
-        assert_eq!(refresh_for(&GlassEvent::Title { text: "call".into() }, "cal", "call"), Refresh::Update);
+        assert_eq!(refresh_for(&GlassEvent::Title { text: "call".into(), reset: 0 }, "cal", "call"), Refresh::Update);
     }
 
     #[test]
@@ -1292,7 +1314,7 @@ mod tests {
         assert!(s.spans.is_empty());
         assert!(!chip(&s, ChipId::Date).set);
         // Typing on keeps it plain; new phrases still highlight.
-        apply_event(&mut v, &GlassEvent::Title { text: "call mom today 5pm".into() }, CardMode::Add, &ctx());
+        apply_event(&mut v, &GlassEvent::Title { text: "call mom today 5pm".into(), reset: 0 }, CardMode::Add, &ctx());
         let s = card_state(&v, CardMode::Add, &ctx());
         assert_eq!(s.spans.len(), 1);
         assert_eq!((s.spans[0].start, s.spans[0].kind.as_str()), (15, "time"));
@@ -1404,12 +1426,41 @@ mod tests {
         // removes "tomorrow" again.
         let mut v = blank("buy today milk");
         apply_event(&mut v, &GlassEvent::Unhighlight { at: 9 }, CardMode::Add, &ctx());
-        apply_event(&mut v, &GlassEvent::Title { text: "tomorrow buy today milk".into() }, CardMode::Add, &ctx());
+        apply_event(&mut v, &GlassEvent::Title { text: "tomorrow buy today milk".into(), reset: 0 }, CardMode::Add, &ctx());
         assert_eq!(card_state(&v, CardMode::Add, &ctx()).spans.len(), 1, "only tomorrow");
         pick_date(&mut v, "2026-10-23", "");
         assert_eq!(v.content, "buy today milk");
         let s = card_state(&v, CardMode::Add, &ctx());
         assert!(s.spans.is_empty(), "\"today\" stays text");
         assert_eq!(s.picker.date, "2026-10-23");
+    }
+
+    #[test]
+    fn a_failed_add_gives_the_card_its_text_back() {
+        let reset = blank("");
+        let failed = blank("call mom");
+        assert_eq!(restore_failed_add(&reset, &reset, failed.clone()), Some(failed.clone()));
+        // Already typing the next task: that's kept.
+        assert_eq!(restore_failed_add(&blank("buy milk"), &reset, failed), None);
+    }
+
+    #[test]
+    fn typing_from_before_a_reset_is_ignored() {
+        // Return was pressed (reset 3 -> 4) but a keystroke from before the
+        // field cleared still arrives: it mustn't refill the next task.
+        let mut c = ctx();
+        c.reset = 3;
+        after_submit(CardMode::Add, &blank(""), &mut c);
+        assert_eq!(c.reset, 4);
+        assert_eq!(card_state(&blank(""), CardMode::Add, &c).reset, 4, "Swift is told the number");
+        let mut v = blank("");
+        apply_event(&mut v, &GlassEvent::Title { text: "call mom x".into(), reset: 3 }, CardMode::Add, &c);
+        assert_eq!(v.content, "");
+        apply_event(&mut v, &GlassEvent::Description { text: "old".into(), reset: 3 }, CardMode::Add, &c);
+        assert_eq!(v.description, "");
+        apply_event(&mut v, &GlassEvent::Title { text: "buy milk".into(), reset: 4 }, CardMode::Add, &c);
+        assert_eq!(v.content, "buy milk");
+        let ev: GlassEvent = serde_json::from_str(r#"{"type":"title","text":"hi","reset":4}"#).unwrap();
+        assert_eq!(ev, GlassEvent::Title { text: "hi".into(), reset: 4 });
     }
 }

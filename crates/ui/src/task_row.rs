@@ -125,7 +125,7 @@ pub fn TaskRow(
                         let (id, before, rule) = (id.clone(), before.clone(), existing_rule.clone());
                         editing.set(false);
                         spawn(async move {
-                            save_edit(id, before, after, rule).await;
+                            let _ = save_edit(id, before, after, rule).await;
                             reload += 1;
                         });
                     },
@@ -225,8 +225,13 @@ pub fn TaskRow(
                                 if gen() != mine {
                                     return;
                                 }
+                                // Hidden before the save so the reload can't flash it
+                                // back; if the save fails, the row returns unchecked.
                                 done_due.set(Some(due));
-                                let _ = api::complete_task(id).await;
+                                if api::complete_task(id).await.is_err() {
+                                    done_due.set(None);
+                                    phase.set(0);
+                                }
                                 reload += 1;
                             });
                         },
@@ -378,7 +383,7 @@ pub fn TaskRow(
                             let (p, s, l) = (sub_projects.clone(), sub_sections.clone(), sub_labels.clone());
                             adding_sub.set(false);
                             spawn(async move {
-                                add_from_editor(v, p, s, l).await;
+                                let _ = add_from_editor(v, p, s, l).await;
                                 reload += 1;
                             });
                         },

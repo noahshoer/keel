@@ -196,12 +196,12 @@ pub fn quick_dates(today: NaiveDate) -> Vec<(&'static str, String, NaiveDate)> {
 /// tap move `pos`; a flick coasts, then it snaps to a month. The year wheel is
 /// a plain snap-scrolling list.
 const WHEEL_JS: &str = r#"
-requestAnimationFrame(() => {
+(window.__keelWheel ??= {})['$ID'] = (startM, startY) => requestAnimationFrame(() => {
   const H = 36;
-  const [months, years] = document.querySelectorAll('.wheel .wheel-col');
+  const [months, years] = document.querySelectorAll('.wheel[data-wheel="$ID"] .wheel-col');
   if (months) {
     const rows = [...months.querySelectorAll('.wheel-item')], n = rows.length;
-    let pos = $M, last = $M, anim = 0, snapT;
+    let pos = startM, last = startM, anim = 0, snapT;
     const wrap = (i) => ((i % n) + n) % n;
     const draw = () => rows.forEach((el, i) => {
       let d = wrap(i - pos);
@@ -269,8 +269,8 @@ requestAnimationFrame(() => {
     draw();
   }
   if (years) {
-    years.scrollTop = $Y * H;
-    let last = $Y, t;
+    years.scrollTop = startY * H;
+    let last = startY, t;
     years.addEventListener('scroll', () => {
       clearTimeout(t);
       t = setTimeout(() => {
@@ -284,6 +284,7 @@ requestAnimationFrame(() => {
     });
   }
 });
+await new Promise(() => {});
 "#;
 
 /// Relative reminder choices, in minutes before the due time.
@@ -316,6 +317,32 @@ fn Scheduler(
     // while they're open, so a wheel's rows don't shift under it.
     let mut choosing = use_signal(|| false);
     let mut wheel_years = use_signal(Vec::<i32>::new);
+    // One channel per calendar for its wheels' turns, set up once
+    // (WHEEL_JS); opening the wheels just starts them at the shown month.
+    let wheel_id = use_hook(|| {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    });
+    use_hook(move || {
+        spawn(async move {
+            let mut e = document::eval(&WHEEL_JS.replace("$ID", &wheel_id.to_string()));
+            while let Ok((col, i)) = e.recv::<(u8, usize)>().await {
+                let (y, mo) = *month.peek();
+                match col {
+                    0 => month.set((y, i as u32 % 12 + 1)),
+                    _ => {
+                        let year = wheel_years.peek().get(i).copied();
+                        if let Some(year) = year {
+                            month.set((year, mo));
+                        }
+                    }
+                }
+            }
+        });
+    });
+    use_drop(move || {
+        let _ = document::eval(&format!("delete window.__keelWheel?.['{wheel_id}'];"));
+    });
     use_effect(move || {
         if !choosing() {
             return;
@@ -323,22 +350,8 @@ fn Scheduler(
         let (y, mo) = *month.peek();
         let years = calendar::year_choices(today, y);
         let at = years.iter().position(|v| *v == y).unwrap_or(0);
-        wheel_years.set(years.clone());
-        spawn(async move {
-            let js = WHEEL_JS.replace("$M", &(mo - 1).to_string()).replace("$Y", &at.to_string());
-            let mut e = document::eval(&js);
-            while let Ok((col, i)) = e.recv::<(u8, usize)>().await {
-                let (y, mo) = *month.peek();
-                match col {
-                    0 => month.set((y, i as u32 % 12 + 1)),
-                    _ => {
-                        if let Some(year) = years.get(i) {
-                            month.set((*year, mo));
-                        }
-                    }
-                }
-            }
-        });
+        wheel_years.set(years);
+        let _ = document::eval(&format!("window.__keelWheel?.['{wheel_id}']?.({}, {at});", mo - 1));
     });
     let mut time_text = use_signal(move || time.map(views::time_label).unwrap_or_default());
     let mut time_bad = use_signal(|| false);
@@ -471,7 +484,7 @@ fn Scheduler(
                 if choosing() {
                     // Month and year wheels, like iOS Calendar's; they
                     // stand in for the day grid while open.
-                    div { class: "wheel",
+                    div { class: "wheel", "data-wheel": "{wheel_id}",
                         div { class: "wheel-band" }
                         // The twelve months, looping: WHEEL_JS places each
                         // row around the band (no copies).

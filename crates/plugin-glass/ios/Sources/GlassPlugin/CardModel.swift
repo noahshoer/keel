@@ -139,6 +139,9 @@ struct CardState: Codable, Equatable {
   let mode: CardMode
   let title: String
   let description: String
+  /// Rust's reset number for the card; typing is sent back with it, so
+  /// keystrokes from before a reset (Return, then fast typing) are dropped.
+  let reset: Int
   let spans: [GlassSpan]
   let chips: [ChipState]
   let canSubmit: Bool
@@ -182,8 +185,9 @@ enum Pick: Encodable {
 
 /// What the user did in the card (`ui::glass::GlassEvent`).
 enum CardEvent: Encodable {
-  case title(String)
-  case description(String)
+  /// Typing, with the reset number of the state shown when it was typed.
+  case title(String, reset: Int)
+  case description(String, reset: Int)
   case pick(Pick)
   /// Backspace right after a highlight: that phrase becomes plain text
   /// (`at`: where it ends, UTF-16).
@@ -194,13 +198,15 @@ enum CardEvent: Encodable {
   case submit
   case cancel
 
-  private enum K: String, CodingKey { case type, text, pick, at, delta, year, month }
+  private enum K: String, CodingKey { case type, text, reset, pick, at, delta, year, month }
 
   func encode(to encoder: Encoder) throws {
     var c = encoder.container(keyedBy: K.self)
     switch self {
-    case .title(let t): try c.encode("title", forKey: .type); try c.encode(t, forKey: .text)
-    case .description(let t): try c.encode("description", forKey: .type); try c.encode(t, forKey: .text)
+    case .title(let t, let reset):
+      try c.encode("title", forKey: .type); try c.encode(t, forKey: .text); try c.encode(reset, forKey: .reset)
+    case .description(let t, let reset):
+      try c.encode("description", forKey: .type); try c.encode(t, forKey: .text); try c.encode(reset, forKey: .reset)
     case .pick(let p): try c.encode("pick", forKey: .type); try c.encode(p, forKey: .pick)
     case .unhighlight(let at): try c.encode("unhighlight", forKey: .type); try c.encode(at, forKey: .at)
     case .calendarShift(let delta): try c.encode("calendarShift", forKey: .type); try c.encode(delta, forKey: .delta)

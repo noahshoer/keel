@@ -94,17 +94,6 @@ pub fn strip_spans(input: &str, spans: &[Span], kinds: &[SpanKind]) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-const ALL_KINDS: [SpanKind; 8] = [
-    SpanKind::Date,
-    SpanKind::Time,
-    SpanKind::Repeat,
-    SpanKind::Priority,
-    SpanKind::Project,
-    SpanKind::Section,
-    SpanKind::Label,
-    SpanKind::Deadline,
-];
-
 /// [`parse`], leaving the `plain` byte ranges alone: phrases the user
 /// turned back into text (backspace right after a highlight, as in
 /// Todoist). They're masked with filler of the same byte length, so every
@@ -126,9 +115,16 @@ pub fn parse_keeping(
             if kept && !c.is_whitespace() { "\u{1}".repeat(c.len_utf8()) } else { c.to_string() }
         })
         .collect();
-    let mut q = parse(&masked, today, projects, sections);
-    q.content = if q.spans.is_empty() { input.trim().to_string() } else { strip_spans(input, &q.spans, &ALL_KINDS) };
+    let (mut q, used) = parse_tokens(&masked, today, projects, sections);
+    // The title is the words the parser didn't use, as in `parse`, taken from
+    // the real text. Masking keeps every word boundary, so the words line up.
+    q.content = unused_words(&tokens(input), &used);
     q
+}
+
+/// The title left after parsing: the unused words, single-spaced.
+fn unused_words(tokens: &[Token], used: &[bool]) -> String {
+    tokens.iter().zip(used).filter(|(_, used)| !**used).map(|(tok, _)| tok.raw.as_str()).collect::<Vec<_>>().join(" ")
 }
 
 /// Moves `plain` ranges through an edit from `old` to `new`: ranges before
@@ -601,6 +597,11 @@ fn match_name(t: &[Token], i: usize, sigil: &str, names: &[&str]) -> Option<(usi
 /// phrase on its own is still recognized (`content` is then empty); the
 /// editors won't save until there's a name besides it, as in Todoist.
 pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Section]) -> QuickAdd {
+    parse_tokens(input, today, projects, sections).0
+}
+
+/// `parse`, also returning which of `input`'s words it used.
+fn parse_tokens(input: &str, today: NaiveDate, projects: &[Project], sections: &[Section]) -> (QuickAdd, Vec<bool>) {
     let t = tokens(input);
     let mut used = vec![false; t.len()];
     let mut q = QuickAdd::default();
@@ -741,16 +742,10 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
         q.date = Some(today);
     }
 
-    q.content = t
-        .iter()
-        .zip(&used)
-        .filter(|(_, used)| !**used)
-        .map(|(tok, _)| tok.raw.as_str())
-        .collect::<Vec<_>>()
-        .join(" ");
+    q.content = unused_words(&t, &used);
     spans.sort_by_key(|s| s.start);
     q.spans = spans;
-    q
+    (q, used)
 }
 
 #[cfg(test)]
@@ -1208,4 +1203,14 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn kept_text_is_spaced_like_parse() {
+        // Kept as text with no other phrase: whitespace collapses, as in parse.
+        assert_eq!(pk("call  mom   today", &[(12, 17)]).content, "call mom today");
+        // With another phrase recognized too.
+        let q = pk("call  mom today   tomorrow", &[(10, 15)]);
+        assert_eq!(q.content, "call mom today");
+        assert_eq!(q.date, Some(d(2026, 10, 20)));
+    }
 }
