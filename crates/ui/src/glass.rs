@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::api;
 use crate::editor::{
-    add_from_editor, labels_text, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
+    add_from_editor, labels_text, unhighlight, with_title, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
     repeat_text, save_edit, EditorValues,
 };
 use crate::pickers::{date_chip, deadline_text, offset_text, quick_dates, reminders_text, ReminderDraft, REMINDER_PRESETS};
@@ -126,6 +126,9 @@ pub enum GlassEvent {
     Title { text: String },
     Description { text: String },
     Pick { pick: Pick },
+    /// Backspace right after a highlight: that phrase becomes plain text.
+    /// `at` is where the highlight ends, in UTF-16 units.
+    Unhighlight { at: usize },
     Submit,
     Cancel,
 }
@@ -195,6 +198,18 @@ fn kind_name(k: SpanKind) -> &'static str {
 
 fn utf16_at(s: &str, byte: usize) -> usize {
     s[..byte].encode_utf16().count()
+}
+
+/// The byte offset of UTF-16 offset `at` in `s` (clamped to the end).
+pub(crate) fn byte_at_utf16(s: &str, at: usize) -> usize {
+    let mut units = 0;
+    for (i, c) in s.char_indices() {
+        if units >= at {
+            return i;
+        }
+        units += c.len_utf16();
+    }
+    s.len()
 }
 
 /// The typed phrases a pick replaces.
@@ -330,7 +345,13 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
 /// Applies one action from the card to the values.
 pub fn apply_event(v: &mut EditorValues, ev: &GlassEvent, mode: CardMode, ctx: &CardContext) -> Outcome {
     match ev {
-        GlassEvent::Title { text } => v.content = text.clone(),
+        GlassEvent::Title { text } => *v = with_title(v, text.clone()),
+        GlassEvent::Unhighlight { at } => {
+            let end = byte_at_utf16(&v.content, *at);
+            if mode != CardMode::Add || !unhighlight(v, &ctx.projects, &ctx.sections, ctx.today, end) {
+                return Outcome::Changed;
+            }
+        }
         GlassEvent::Description { text } => v.description = text.clone(),
         GlassEvent::Submit => return Outcome::Submit,
         GlassEvent::Cancel => return Outcome::Cancel,
@@ -1124,5 +1145,31 @@ mod tests {
         assert_eq!(answer_text(&["  Groceries ".to_string()], 0), Some("Groceries".to_string()));
         assert_eq!(answer_text(&["   ".to_string()], 0), None);
         assert_eq!(answer_text(&[], 0), None);
+    }
+
+    #[test]
+    fn backspace_after_a_highlight_keeps_the_phrase_as_text() {
+        let mut v = blank("call mom today");
+        assert_eq!(card_state(&v, CardMode::Add, &ctx()).spans.len(), 1);
+        let ev = GlassEvent::Unhighlight { at: 14 };
+        assert_eq!(apply_event(&mut v, &ev, CardMode::Add, &ctx()), Outcome::Changed);
+        assert_eq!(v.content, "call mom today", "nothing is deleted");
+        let s = card_state(&v, CardMode::Add, &ctx());
+        assert!(s.spans.is_empty());
+        assert!(!chip(&s, ChipId::Date).set);
+        // Typing on keeps it plain; new phrases still highlight.
+        apply_event(&mut v, &GlassEvent::Title { text: "call mom today 5pm".into() }, CardMode::Add, &ctx());
+        let s = card_state(&v, CardMode::Add, &ctx());
+        assert_eq!(s.spans.len(), 1);
+        assert_eq!((s.spans[0].start, s.spans[0].kind.as_str()), (15, "time"));
+    }
+
+    #[test]
+    fn unhighlight_needs_a_highlight_ending_there() {
+        let mut v = blank("call mom today");
+        apply_event(&mut v, &GlassEvent::Unhighlight { at: 4 }, CardMode::Add, &ctx());
+        assert!(v.plain.is_empty());
+        let ev: GlassEvent = serde_json::from_str(r#"{"type":"unhighlight","at":14}"#).unwrap();
+        assert_eq!(ev, GlassEvent::Unhighlight { at: 14 });
     }
 }

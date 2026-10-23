@@ -150,10 +150,13 @@ enum CardEvent: Encodable {
   case title(String)
   case description(String)
   case pick(Pick)
+  /// Backspace right after a highlight: that phrase becomes plain text
+  /// (`at`: where it ends, UTF-16).
+  case unhighlight(Int)
   case submit
   case cancel
 
-  private enum K: String, CodingKey { case type, text, pick }
+  private enum K: String, CodingKey { case type, text, pick, at }
 
   func encode(to encoder: Encoder) throws {
     var c = encoder.container(keyedBy: K.self)
@@ -161,6 +164,7 @@ enum CardEvent: Encodable {
     case .title(let t): try c.encode("title", forKey: .type); try c.encode(t, forKey: .text)
     case .description(let t): try c.encode("description", forKey: .type); try c.encode(t, forKey: .text)
     case .pick(let p): try c.encode("pick", forKey: .type); try c.encode(p, forKey: .pick)
+    case .unhighlight(let at): try c.encode("unhighlight", forKey: .type); try c.encode(at, forKey: .at)
     case .submit: try c.encode("submit", forKey: .type)
     case .cancel: try c.encode("cancel", forKey: .type)
     }

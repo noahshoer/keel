@@ -37,6 +37,9 @@ pub struct EditorValues {
     /// `YYYY-MM-DD` or empty.
     pub deadline: String,
     pub reminders: Vec<ReminderDraft>,
+    /// Byte ranges of `content` turned back into plain text (backspace
+    /// right after a highlight); quick add leaves them alone.
+    pub plain: Vec<(usize, usize)>,
 }
 
 impl EditorValues {
@@ -54,6 +57,7 @@ impl EditorValues {
             parent_id: None,
             deadline: String::new(),
             reminders: Vec::new(),
+            plain: Vec::new(),
         }
     }
 
@@ -72,6 +76,7 @@ impl EditorValues {
             parent_id: t.parent_id.clone(),
             deadline: t.deadline.clone().unwrap_or_default(),
             reminders: Vec::new(),
+            plain: Vec::new(),
         }
     }
 
@@ -220,9 +225,28 @@ fn parse_title(v: &EditorValues, projects: &[Project], sections: &[Section]) -> 
     parse_title_at(v, projects, sections, crate::today())
 }
 
+/// The values after the title is retyped: kept-plain phrases follow the
+/// text, or are dropped when the edit touches them.
+pub(crate) fn with_title(v: &EditorValues, text: String) -> EditorValues {
+    EditorValues { plain: quickadd::shift_plain(&v.content, &text, &v.plain), content: text, ..v.clone() }
+}
+
+/// Turns the highlighted phrase ending at byte `end` back into plain text
+/// (Todoist's backspace). False when no highlight ends there.
+pub(crate) fn unhighlight(v: &mut EditorValues, projects: &[Project], sections: &[Section], today: NaiveDate, end: usize) -> bool {
+    let qa = parse_title_at(v, projects, sections, today);
+    match qa.spans.iter().find(|s| s.end == end) {
+        Some(s) => {
+            v.plain.push((s.start, s.end));
+            true
+        }
+        None => false,
+    }
+}
+
 /// [`parse_title`] relative to `today` (testable off the browser).
 pub(crate) fn parse_title_at(v: &EditorValues, projects: &[Project], sections: &[Section], today: NaiveDate) -> QuickAdd {
-    let mut qa = quickadd::parse(&v.content, today, projects, sections);
+    let mut qa = quickadd::parse_keeping(&v.content, today, projects, sections, &v.plain);
     // A bare /Section resolves within the Inbox; carry its project along.
     if qa.project_id.is_none() {
         if let Some(s) = qa.section_id.as_ref().and_then(|id| sections.iter().find(|s| &s.id == id)) {
@@ -327,6 +351,25 @@ pub fn TaskEditor(
     let mut reload = reload;
     let start = initial.clone();
     let mut vals = use_signal(move || start);
+    // Backspace right after a highlight turns it back into text
+    // (UNHIGHLIGHT_KEY_JS reports the caret, in UTF-16 units).
+    {
+        let (projects, sections) = (projects.clone(), sections.clone());
+        use_hook(move || {
+            if quick_add {
+                spawn(async move {
+                    let mut asks = document::eval(UNHIGHLIGHT_JS);
+                    while let Ok(at) = asks.recv::<usize>().await {
+                        let mut v = vals();
+                        let end = crate::glass::byte_at_utf16(&v.content, at);
+                        if unhighlight(&mut v, &projects, &sections, crate::today(), end) {
+                            vals.set(v);
+                        }
+                    }
+                });
+            }
+        });
+    }
     let blank = initial.clone();
     let blank = use_signal(move || blank);
     let mut open: OpenPop = use_signal(|| None);
@@ -451,7 +494,7 @@ pub fn TaskEditor(
                 value: v.content.clone(),
                 spans,
                 placeholder: title_placeholder,
-                on_input: move |val: String| vals.with_mut(|v| v.content = val),
+                on_input: move |val: String| vals.with_mut(|v| *v = with_title(v, val)),
                 on_enter: move |_| submit(),
             }
             if !preview.is_empty() {
@@ -596,6 +639,29 @@ pub fn TaskEditor(
         }
     }
 }
+
+/// Todoist's backspace: in a title field, Backspace right where a
+/// highlighted phrase ends un-highlights it instead of deleting. Installed
+/// once (App); hands the caret to the open editor (`UNHIGHLIGHT_JS`).
+pub const UNHIGHLIGHT_KEY_JS: &str = r#"
+document.addEventListener('keydown', (e) => {
+  const ta = e.target;
+  if (e.key !== 'Backspace' || !ta.classList?.contains('title-input') || ta.selectionStart !== ta.selectionEnd) return;
+  const pos = ta.selectionStart;
+  let at = 0;
+  for (const n of ta.parentElement.querySelector('.title-mirror')?.childNodes ?? []) {
+    const len = (n.textContent || '').length;
+    if (n.nodeName === 'MARK' && at + len === pos) { e.preventDefault(); window.__keelUnhighlight?.(pos); return; }
+    at += len;
+  }
+}, true);
+"#;
+
+/// The open editor's end of it (the latest editor to open gets the caret).
+const UNHIGHLIGHT_JS: &str = r#"
+window.__keelUnhighlight = (pos) => dioxus.send(pos);
+await new Promise(() => {});
+"#;
 
 /// The task title: an auto-growing textarea over a mirror that paints the
 /// quick-add phrases it recognized. Enter submits (titles are one line).

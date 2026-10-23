@@ -153,7 +153,16 @@ struct TitleField: UIViewRepresentable {
     }
 
     /// Return submits; pasted line breaks become spaces (titles are one line).
+    /// Backspace right after a highlight un-highlights it (Todoist) instead
+    /// of deleting.
     func textView(_ v: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+      if text.isEmpty, range.length == 1, v.selectedRange.length == 0, v.markedTextRange == nil,
+        let state = model.state, state.mode == .add, v.text == state.title,
+        state.spans.contains(where: { $0.end == range.location + 1 })
+      {
+        model.send(.unhighlight(range.location + 1))
+        return false
+      }
       if text == "\n" {
         if model.state?.canSubmit == true { model.send(.submit) }
         return false

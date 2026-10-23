@@ -50,6 +50,17 @@ enum Demo {
         if !text.isEmpty, let field = TitleField.AutoFocusField.current {
           field.text = text
           field.delegate?.textViewDidChange?(field)
+          // KEEL_GLASS_BACKSPACE=1: then press backspace once (as the keyboard would).
+          if ProcessInfo.processInfo.environment["KEEL_GLASS_BACKSPACE"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+              let n = (field.text as NSString).length
+              let range = NSRange(location: n - 1, length: 1)
+              if field.delegate?.textView?(field, shouldChangeTextIn: range, replacementText: "") ?? true {
+                field.textStorage.replaceCharacters(in: range, with: "")
+                field.delegate?.textViewDidChange?(field)
+              }
+            }
+          }
         }
         if let p = pickPriority {
           DispatchQueue.main.asyncAfter(deadline: .now() + 1) {

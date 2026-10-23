@@ -176,6 +176,10 @@ fn App() -> Element {
     // on wide windows, where the sidebar is always shown).
     let mut drawer = use_signal(|| false);
     use_hook(|| theme::apply(&theme.peek()));
+    // Quick add: Backspace right after a highlight un-highlights it.
+    use_hook(|| {
+        let _ = document::eval(editor::UNHIGHLIGHT_KEY_JS);
+    });
     // Forms here are handled in Rust; never let the browser submit one (a
     // native submit reloads the page and cuts off work still in flight).
     use_hook(|| {

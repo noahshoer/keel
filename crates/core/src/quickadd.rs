@@ -94,6 +94,71 @@ pub fn strip_spans(input: &str, spans: &[Span], kinds: &[SpanKind]) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+const ALL_KINDS: [SpanKind; 8] = [
+    SpanKind::Date,
+    SpanKind::Time,
+    SpanKind::Repeat,
+    SpanKind::Priority,
+    SpanKind::Project,
+    SpanKind::Section,
+    SpanKind::Label,
+    SpanKind::Deadline,
+];
+
+/// [`parse`], leaving the `plain` byte ranges alone: phrases the user
+/// turned back into text (backspace right after a highlight, as in
+/// Todoist). They're masked with filler of the same byte length, so every
+/// other offset is unchanged, and the title is rebuilt from `input`.
+pub fn parse_keeping(
+    input: &str,
+    today: NaiveDate,
+    projects: &[Project],
+    sections: &[Section],
+    plain: &[(usize, usize)],
+) -> QuickAdd {
+    if plain.is_empty() {
+        return parse(input, today, projects, sections);
+    }
+    let masked: String = input
+        .char_indices()
+        .map(|(i, c)| {
+            let kept = plain.iter().any(|&(a, b)| i >= a && i < b);
+            if kept && !c.is_whitespace() { "\u{1}".repeat(c.len_utf8()) } else { c.to_string() }
+        })
+        .collect();
+    let mut q = parse(&masked, today, projects, sections);
+    q.content = if q.spans.is_empty() { input.trim().to_string() } else { strip_spans(input, &q.spans, &ALL_KINDS) };
+    q
+}
+
+/// Moves `plain` ranges through an edit from `old` to `new`: ranges before
+/// or after the changed stretch stay with their text; a range the edit
+/// touches is dropped, so the phrase is read again.
+pub fn shift_plain(old: &str, new: &str, plain: &[(usize, usize)]) -> Vec<(usize, usize)> {
+    let mut prefix = old.bytes().zip(new.bytes()).take_while(|(a, b)| a == b).count();
+    while !old.is_char_boundary(prefix) || !new.is_char_boundary(prefix) {
+        prefix -= 1;
+    }
+    let max_suffix = old.len().min(new.len()) - prefix;
+    let mut suffix = old.bytes().rev().zip(new.bytes().rev()).take(max_suffix).take_while(|(a, b)| a == b).count();
+    while !old.is_char_boundary(old.len() - suffix) || !new.is_char_boundary(new.len() - suffix) {
+        suffix -= 1;
+    }
+    let (old_end, delta) = (old.len() - suffix, new.len() as isize - old.len() as isize);
+    plain
+        .iter()
+        .filter_map(|&(a, b)| {
+            if b <= prefix {
+                Some((a, b))
+            } else if a >= old_end {
+                Some(((a as isize + delta) as usize, (b as isize + delta) as usize))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 fn tokens(input: &str) -> Vec<Token> {
     let mut out = Vec::new();
     let mut start: Option<usize> = None;
@@ -692,7 +757,7 @@ pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Se
 
 #[cfg(test)]
 mod tests {
-    use super::{parse, strip_spans, QuickAdd, SpanKind};
+    use super::{parse, parse_keeping, shift_plain, strip_spans, QuickAdd, SpanKind};
     use crate::ids::Id;
     use crate::model::{Priority, Project, Section};
     use crate::recurrence::Recurrence;
@@ -1091,5 +1156,42 @@ mod tests {
     fn strip_spans_collapses_spaces() {
         let input = "a  p1  b";
         assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Priority]), "a b");
+    }
+
+    fn pk(input: &str, plain: &[(usize, usize)]) -> QuickAdd {
+        parse_keeping(input, today(), &projects(), &sections(), plain)
+    }
+
+    #[test]
+    fn a_kept_phrase_stays_plain_text() {
+        let q = pk("call mom today", &[(9, 14)]);
+        assert_eq!(q.date, None);
+        assert_eq!(q.content, "call mom today");
+        assert!(q.spans.is_empty());
+    }
+
+    #[test]
+    fn other_phrases_still_parse_around_a_kept_one() {
+        let q = pk("buy today paper p1 tomorrow", &[(4, 9)]);
+        assert_eq!(q.priority, Some(Priority::P1));
+        assert_eq!(q.date, Some(d(2026, 10, 20)));
+        assert_eq!(q.content, "buy today paper");
+        assert!(q.spans.iter().all(|s| s.start >= 9));
+    }
+
+    #[test]
+    fn no_kept_phrases_is_a_plain_parse() {
+        assert_eq!(pk("call mom today", &[]), p("call mom today"));
+    }
+
+    #[test]
+    fn kept_ranges_follow_edits_around_them() {
+        // Typing after the kept word: it stays put.
+        assert_eq!(shift_plain("x today", "x today 5pm", &[(2, 7)]), vec![(2, 7)]);
+        // Typing before it: it moves along.
+        assert_eq!(shift_plain("x today", "abc x today", &[(2, 7)]), vec![(6, 11)]);
+        // Editing inside it: it's forgotten (read again).
+        assert_eq!(shift_plain("x today", "x toda", &[(2, 7)]), vec![]);
+        assert_eq!(shift_plain("x today", "x tOday", &[(2, 7)]), vec![]);
     }
 }
