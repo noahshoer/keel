@@ -191,7 +191,12 @@ impl<R: Runtime> Notification<R> {
 
     /// Cancel all pending notifications.
     pub fn cancel_all(&self) -> crate::Result<()> {
-        self.0.run_mobile_plugin("cancel", ()).map_err(Into::into)
+        // KEEL PATCH: `()` serializes to null, which the Swift side's
+        // `parseArgs` rejects, so this always failed on iOS. An empty object
+        // decodes with `notifications == nil`, which removes every pending
+        // request.
+        let args: HashMap<&str, Vec<i32>> = HashMap::new();
+        self.0.run_mobile_plugin("cancel", args).map_err(Into::into)
     }
 
     /// Creates a notification channel, which notifications can target

@@ -9,4 +9,8 @@ holds notifications scheduled by the current run of the app. Tapping a
 notification scheduled by an earlier run (e.g. the daily summary) cold-launches
 the app with an empty map and crashed it. The lookup is now optional.
 
-Drop this copy once an upstream release fixes it.
+A second change, in `src/mobile.rs` (`cancel_all`, marked `KEEL PATCH`):
+it sent `()` (null), which the Swift side rejects, so it always failed on
+iOS. It now sends an empty object, which Swift reads as "remove all pending".
+
+Drop this copy once an upstream release fixes both.
