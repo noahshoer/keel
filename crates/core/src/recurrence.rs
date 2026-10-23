@@ -159,6 +159,12 @@ impl Recurrence {
         }
     }
 
+    /// The days in `[from, from + days)` the rule falls on, in order:
+    /// what the date pickers ring as repeats.
+    pub fn days_within(&self, from: NaiveDate, days: i64) -> Vec<NaiveDate> {
+        (0..days).map(|i| from + chrono::Duration::days(i)).filter(|d| self.contains(*d)).collect()
+    }
+
     /// The first occurrence strictly after `date`.
     pub fn next_after(&self, date: NaiveDate) -> NaiveDate {
         match self {
@@ -403,5 +409,15 @@ mod tests {
         assert_eq!(Recurrence::MonthlyWorkday { nth: 1 }.describe(), "every first workday");
         assert_eq!(Recurrence::MonthlyNthWeekday { nth: 2, weekday: 1 }.describe(), "every second Tue");
         assert_eq!(Recurrence::MonthlyNthWeekday { nth: -1, weekday: 4 }.describe(), "every last Fri");
+    }
+
+    #[test]
+    fn days_within_lists_each_occurrence_in_the_window() {
+        let mon_fri = Recurrence::Weekly(vec![0, 4]);
+        let from = NaiveDate::from_ymd_opt(2026, 10, 23).unwrap(); // a Friday
+        let days = mon_fri.days_within(from, 14);
+        let ymd = |d: u32| NaiveDate::from_ymd_opt(2026, 10, d).unwrap();
+        assert_eq!(days, vec![ymd(23), ymd(26), ymd(30), NaiveDate::from_ymd_opt(2026, 11, 2).unwrap()]);
+        assert!(Recurrence::Daily.days_within(from, 0).is_empty());
     }
 }

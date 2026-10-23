@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::api;
 use crate::editor::{
-    add_from_editor, labels_text, recurrence_for_at, unhighlight, with_title, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
+    add_from_editor, labels_text, recurrence_for_at, repeat_days, unhighlight, with_title, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
     repeat_text, save_edit, EditorValues,
 };
 use crate::pickers::{date_chip, deadline_text, offset_text, quick_dates, reminders_text, ReminderDraft, REMINDER_PRESETS};
@@ -202,15 +202,6 @@ fn due_tone(bucket: views::DueBucket) -> &'static str {
         views::DueBucket::ThisWeek => "due-week",
         views::DueBucket::Later => "due-later",
     }
-}
-
-/// The days `rule` repeats on from `today`, about six months ahead.
-pub(crate) fn repeat_days(rule: &Recurrence, today: NaiveDate) -> Vec<String> {
-    (0..183)
-        .map(|i| today + chrono::Duration::days(i))
-        .filter(|d| rule.contains(*d))
-        .map(|d| d.format("%Y-%m-%d").to_string())
-        .collect()
 }
 
 fn kind_name(k: SpanKind) -> &'static str {
