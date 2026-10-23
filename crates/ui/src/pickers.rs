@@ -187,6 +187,32 @@ pub fn quick_dates(today: NaiveDate) -> Vec<(&'static str, String, NaiveDate)> {
     ]
 }
 
+/// Drives the month / year wheels: scrolls each to its value, then reports
+/// the row that settles in the band (`[column, row]`). A tap on a row spins
+/// it there. Rows are 36px, matching `.wheel-item`.
+const WHEEL_JS: &str = r#"
+requestAnimationFrame(() => {
+  const cols = document.querySelectorAll('.wheel .wheel-col');
+  [$M, $Y].forEach((start, c) => {
+    const col = cols[c];
+    if (!col) return;
+    col.scrollTop = start * 36;
+    let last = start, t;
+    col.addEventListener('scroll', () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        const i = Math.round(col.scrollTop / 36);
+        if (i !== last) { last = i; dioxus.send([c, i]); }
+      }, 110);
+    });
+    col.addEventListener('click', (e) => {
+      const it = e.target.closest('.wheel-item');
+      if (it) col.scrollTo({ top: Number(it.dataset.i) * 36, behavior: 'smooth' });
+    });
+  });
+});
+"#;
+
 /// Relative reminder choices, in minutes before the due time.
 pub const REMINDER_PRESETS: [i64; 5] = [0, 10, 30, 60, 1440];
 
@@ -213,8 +239,34 @@ fn Scheduler(
         let d = selected.unwrap_or(today);
         (d.year(), d.month())
     });
-    // The month / year picker, opened from the title.
+    // The month / year wheels, opened from the title. The years are fixed
+    // while they're open, so a wheel's rows don't shift under it.
     let mut choosing = use_signal(|| false);
+    let mut wheel_years = use_signal(Vec::<i32>::new);
+    use_effect(move || {
+        if !choosing() {
+            return;
+        }
+        let (y, mo) = *month.peek();
+        let years = calendar::year_choices(today, y);
+        let at = years.iter().position(|v| *v == y).unwrap_or(0);
+        wheel_years.set(years.clone());
+        spawn(async move {
+            let js = WHEEL_JS.replace("$M", &(mo - 1).to_string()).replace("$Y", &at.to_string());
+            let mut e = document::eval(&js);
+            while let Ok((col, i)) = e.recv::<(u8, usize)>().await {
+                let (y, mo) = *month.peek();
+                match col {
+                    0 => month.set((y, i as u32 % 12 + 1)),
+                    _ => {
+                        if let Some(year) = years.get(i) {
+                            month.set((*year, mo));
+                        }
+                    }
+                }
+            }
+        });
+    });
     let mut time_text = use_signal(move || time.map(views::time_label).unwrap_or_default());
     let mut time_bad = use_signal(|| false);
     let time_str = time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
@@ -344,34 +396,22 @@ fn Scheduler(
                     }
                 }
                 if choosing() {
-                    div { class: "month-chooser",
-                        div { class: "year-row",
-                            for year in calendar::year_choices(today) {
-                                button {
-                                    key: "{year}",
-                                    r#type: "button",
-                                    class: if year == y { "chooser-cell on" } else { "chooser-cell" },
-                                    onclick: move |_| month.set((year, mo)),
-                                    "{year}"
-                                }
+                    // Month and year wheels, like iOS Calendar's; they
+                    // stand in for the day grid while open.
+                    div { class: "wheel",
+                        div { class: "wheel-band" }
+                        div { class: "wheel-col", "data-col": "0",
+                            for (i, name) in calendar::MONTHS.iter().enumerate() {
+                                div { key: "{i}", class: if i as u32 + 1 == mo { "wheel-item on" } else { "wheel-item" }, "data-i": "{i}", "{name}" }
                             }
                         }
-                        div { class: "month-grid",
-                            for (i, name) in calendar::MONTHS.iter().enumerate() {
-                                button {
-                                    key: "{i}",
-                                    r#type: "button",
-                                    class: if i as u32 + 1 == mo { "chooser-cell on" } else { "chooser-cell" },
-                                    onclick: move |_| {
-                                        month.set((y, i as u32 + 1));
-                                        choosing.set(false);
-                                    },
-                                    "{&name[..3]}"
-                                }
+                        div { class: "wheel-col", "data-col": "1",
+                            for (i, year) in wheel_years().iter().enumerate() {
+                                div { key: "{year}", class: if *year == y { "wheel-item on" } else { "wheel-item" }, "data-i": "{i}", "{year}" }
                             }
                         }
                     }
-                }
+                } else {
                 div { class: "cal-grid",
                     for (i, d) in view.weekdays.iter().enumerate() {
                         span { key: "h{i}", class: "cal-dow", "{d}" }
@@ -400,6 +440,7 @@ fn Scheduler(
                             }
                         }
                     }
+                }
                 }
             }
             if with_time {

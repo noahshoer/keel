@@ -313,7 +313,8 @@ struct MonthCalendar: View {
   let picker: PickerData
   let send: (CardEvent) -> Void
   let pick: (String) -> Void
-  @State private var choosing = false
+  // KEEL_GLASS_WHEEL (simulator demo only): open with the wheels showing.
+  @State private var choosing = ProcessInfo.processInfo.environment["KEEL_GLASS_WHEEL"] != nil
 
   var body: some View {
     let cal = picker.calendar
@@ -321,9 +322,9 @@ struct MonthCalendar: View {
       HStack {
         Button { withAnimation(.snappy) { choosing.toggle() } } label: {
           HStack(spacing: 4) {
-            Text(cal.title).font(.headline).foregroundStyle(Color.primary)
-            Image(systemName: "chevron.down").font(.caption.weight(.bold))
-              .rotationEffect(.degrees(choosing ? 180 : 0))
+            Text(cal.title).font(.headline).foregroundStyle(choosing ? keelGreen : Color.primary)
+            Image(systemName: "chevron.right").font(.caption.weight(.bold))
+              .rotationEffect(.degrees(choosing ? 90 : 0))
           }
         }
         .buttonStyle(.borderless)
@@ -336,53 +337,47 @@ struct MonthCalendar: View {
       }
       .tint(keelGreen)
       if choosing {
-        chooser(cal)
-      }
-      let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
-      LazyVGrid(columns: columns, spacing: 6) {
-        ForEach(cal.weekdays.indices, id: \.self) { i in
-          Text(cal.weekdays[i]).font(.caption.weight(.semibold)).foregroundStyle(Color.secondary)
-        }
-        // Rows with none of the month's days (a sixth week) are left out.
-        ForEach(cal.weeks.filter { $0.contains(where: \.inMonth) }.flatMap { $0 }, id: \.date) { cell in
-          if cell.inMonth { dayCell(cell) } else { Color.clear.frame(height: 38) }
+        wheels(cal)
+      } else {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
+        LazyVGrid(columns: columns, spacing: 6) {
+          ForEach(cal.weekdays.indices, id: \.self) { i in
+            Text(cal.weekdays[i]).font(.caption.weight(.semibold)).foregroundStyle(Color.secondary)
+          }
+          // Rows with none of the month's days (a sixth week) are left out.
+          ForEach(cal.weeks.filter { $0.contains(where: \.inMonth) }.flatMap { $0 }, id: \.date) { cell in
+            if cell.inMonth { dayCell(cell) } else { Color.clear.frame(height: 38) }
+          }
         }
       }
     }
     .padding(.vertical, 4)
   }
 
-  /// Years in a row, months in a 4 × 3 grid (the choices come from Rust).
-  private func chooser(_ cal: MonthViewData) -> some View {
-    VStack(spacing: 8) {
-      ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 6) {
-          ForEach(picker.years, id: \.self) { year in
-            cellButton("\(year)", on: year == cal.year) { send(.calendarMonth(year: year, month: cal.month)) }
-          }
-        }
+  /// Month and year wheels, like iOS Calendar's (they stand in for the
+  /// grid while open). Each turn asks Rust for that month; the choices come
+  /// from Rust too.
+  private func wheels(_ cal: MonthViewData) -> some View {
+    HStack(spacing: 0) {
+      Picker("Month", selection: Binding(
+        get: { cal.month },
+        set: { send(.calendarMonth(year: cal.year, month: $0)) }
+      )) {
+        ForEach(picker.months.indices, id: \.self) { i in Text(picker.months[i]).tag(i + 1) }
       }
-      LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 6) {
-        ForEach(picker.months.indices, id: \.self) { i in
-          cellButton(String(picker.months[i].prefix(3)), on: i + 1 == cal.month) {
-            send(.calendarMonth(year: cal.year, month: i + 1))
-            withAnimation(.snappy) { choosing = false }
-          }
-        }
+      .pickerStyle(.wheel)
+      .frame(maxWidth: .infinity)
+      Picker("Year", selection: Binding(
+        get: { cal.year },
+        set: { send(.calendarMonth(year: $0, month: cal.month)) }
+      )) {
+        // String(_:) so a year doesn't get a thousands separator.
+        ForEach(picker.years, id: \.self) { year in Text(String(year)).tag(year) }
       }
+      .pickerStyle(.wheel)
+      .frame(maxWidth: .infinity)
     }
-    .transition(.opacity.combined(with: .move(edge: .top)))
-  }
-
-  private func cellButton(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
-    Button(action: action) {
-      Text(text)
-        .font(.subheadline.weight(on ? .semibold : .regular))
-        .foregroundStyle(on ? Color.white : Color.primary)
-        .frame(minWidth: 56, minHeight: 34)
-        .background(on ? keelGreen : Color.secondary.opacity(0.15), in: .capsule)
-    }
-    .buttonStyle(.plain)
+    .transition(.opacity)
   }
 
   private func dayCell(_ cell: MonthViewData.Day) -> some View {

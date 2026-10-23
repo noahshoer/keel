@@ -658,12 +658,18 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .cal-title.chooser { display: inline-flex; align-items: center; gap: 4px; margin-right: auto; padding: 4px 6px;
   border: none; border-radius: var(--r); background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
 .cal-title.chooser.open .icon { transform: rotate(180deg); }
-.month-chooser { display: flex; flex-direction: column; gap: 8px; padding: 6px 0 10px; }
-.year-row { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-.month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.chooser-cell { padding: 7px 0; min-width: 52px; border: 1px solid var(--border); border-radius: var(--r-md);
-  background: transparent; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
-.chooser-cell.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.cal-title.chooser.open { color: var(--accent); }
+.wheel { position: relative; display: flex; height: 180px; margin: 4px 0 8px;
+  -webkit-mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent);
+  mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); }
+.wheel-band { position: absolute; left: 0; right: 0; top: 72px; height: 36px; border-radius: var(--r-md);
+  background: var(--hover); pointer-events: none; }
+.wheel-col { position: relative; flex: 1; overflow-y: auto; padding: 72px 0; scroll-snap-type: y mandatory;
+  scrollbar-width: none; overscroll-behavior: contain; }
+.wheel-col::-webkit-scrollbar { display: none; }
+.wheel-item { height: 36px; line-height: 36px; text-align: center; scroll-snap-align: center; cursor: pointer;
+  font-size: 16px; color: var(--text); }
+.wheel-item.on { font-weight: 600; }
 "#;
 
 /// The full stylesheet: light by default, dark when the OS prefers it (unless

@@ -338,6 +338,10 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
         ),
     ];
 
+    let cal_month = ctx.calendar.unwrap_or_else(|| {
+        let d = date.unwrap_or(ctx.today);
+        (d.year(), d.month())
+    });
     let picker = PickerData {
         date: shown.date.clone(),
         time: shown.time.clone(),
@@ -377,14 +381,8 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
                 tone: due_tone(views::due_bucket(d, ctx.today)).to_string(),
             })
             .collect(),
-        calendar: {
-            let (y, m) = ctx.calendar.unwrap_or_else(|| {
-                let d = date.unwrap_or(ctx.today);
-                (d.year(), d.month())
-            });
-            calendar::month_view(y, m, ctx.week_start, ctx.today, date, rule.as_ref())
-        },
-        years: calendar::year_choices(ctx.today),
+        calendar: calendar::month_view(cal_month.0, cal_month.1, ctx.week_start, ctx.today, date, rule.as_ref()),
+        years: calendar::year_choices(ctx.today, cal_month.0),
         months: calendar::MONTHS.to_vec(),
         selected_tone: date.map(|d| due_tone(views::due_bucket(d, ctx.today)).to_string()),
     };
@@ -1343,6 +1341,7 @@ mod tests {
         let p = card_state(&v, CardMode::Add, &c).picker;
         assert_eq!(p.calendar.title, "December 2026", "opens on the chosen date's month");
         assert_eq!(p.years.first(), Some(&2025));
+        assert_eq!(p.years.last(), Some(&2036));
         assert_eq!(p.months[0], "January");
         assert!(apply_calendar(&mut c, &GlassEvent::CalendarShift { delta: 1 }, &v));
         assert_eq!(card_state(&v, CardMode::Add, &c).picker.calendar.title, "January 2027");

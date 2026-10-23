@@ -89,9 +89,10 @@ pub fn shift_month(year: i32, month: u32, delta: i32) -> (i32, u32) {
     (index.div_euclid(12), index.rem_euclid(12) as u32 + 1)
 }
 
-/// The years the month / year picker offers: last year to five ahead.
-pub fn year_choices(today: NaiveDate) -> Vec<i32> {
-    (today.year() - 1..=today.year() + 5).collect()
+/// The years the month / year wheel offers: last year to ten ahead,
+/// stretched to hold the `shown` year when the arrows went past either end.
+pub fn year_choices(today: NaiveDate, shown: i32) -> Vec<i32> {
+    (shown.min(today.year() - 1)..=shown.max(today.year() + 10)).collect()
 }
 
 /// The weeks shown for the month containing `day`: always 6 rows of
@@ -173,8 +174,12 @@ mod tests {
     }
 
     #[test]
-    fn the_year_picker_offers_last_year_to_five_ahead() {
-        assert_eq!(year_choices(d(2026, 10, 23)), vec![2025, 2026, 2027, 2028, 2029, 2030, 2031]);
+    fn the_year_wheel_offers_last_year_to_ten_ahead_and_the_shown_year() {
+        let today = d(2026, 10, 23);
+        assert_eq!(year_choices(today, 2026), (2025..=2036).collect::<Vec<_>>());
+        // Arrowed past either end: the wheel still holds the shown year.
+        assert_eq!(year_choices(today, 2040).last(), Some(&2040));
+        assert_eq!(year_choices(today, 2020).first(), Some(&2020));
         assert_eq!(MONTHS[9], "October");
     }
 }
