@@ -123,8 +123,12 @@ fn repeat_choice(rule: &Option<Recurrence>) -> &'static str {
 
 /// The rule for a repeat choice; "Every week/month" anchor on `date` (or today).
 fn recurrence_for(choice: &str, date: &str, existing: Option<Recurrence>) -> Option<Recurrence> {
-    let anchor = NaiveDate::parse_from_str(date.get(..10).unwrap_or(date), "%Y-%m-%d")
-        .unwrap_or_else(|_| crate::today());
+    recurrence_for_at(choice, date, existing, crate::today())
+}
+
+/// [`recurrence_for`] relative to `today` (testable off the browser).
+pub(crate) fn recurrence_for_at(choice: &str, date: &str, existing: Option<Recurrence>, today: NaiveDate) -> Option<Recurrence> {
+    let anchor = NaiveDate::parse_from_str(date.get(..10).unwrap_or(date), "%Y-%m-%d").unwrap_or(today);
     match choice {
         "daily" => Some(Recurrence::Daily),
         "weekdays" => Some(Recurrence::Weekly(vec![0, 1, 2, 3, 4])),
@@ -337,6 +341,9 @@ pub fn TaskEditor(
     labels: Vec<Label>,
     /// Text for the "keep current rule" repeat option, when the rule is custom.
     keep_label: Option<String>,
+    /// The edited task's recurrence (what "keep" repeats by).
+    #[props(default)]
+    existing: Option<Recurrence>,
     submit_text: String,
     /// Parse the title as natural language (add mode) and preview it.
     #[props(default)]
@@ -448,6 +455,13 @@ pub fn TaskEditor(
         None => Vec::new(),
     };
 
+    // The days it will repeat on (typed rule, or the Repeat menu's).
+    let repeat_days = qa
+        .as_ref()
+        .and_then(|q| q.recurrence.clone())
+        .or_else(|| recurrence_for_at(&v.repeat, &v.date, existing.clone(), today))
+        .map(|r| crate::glass::repeat_days(&r, today))
+        .unwrap_or_default();
     // Relative reminders count back from a due date (typed or picked).
     let has_due = !v.date.is_empty() || !v.time.is_empty() || qa.as_ref().is_some_and(|q| q.date.is_some());
     let title_placeholder: &'static str =
@@ -518,6 +532,7 @@ pub fn TaskEditor(
                     date: v.date.clone(),
                     time: v.time.clone(),
                     open,
+                    repeat_days: repeat_days.clone(),
                     on_change: move |(date, time): (String, String)| vals.with_mut(|v| {
                         v.date = date;
                         v.time = time;

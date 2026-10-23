@@ -22,18 +22,26 @@ struct ChipState: Codable, Equatable {
   let id: ChipId
   let label: String
   let set: Bool
-  /// "p1".."p3" for the priority flag colors; nil means Keel green.
+  /// "p1".."p3" (priority flags) or "due-…" (the date's due color);
+  /// nil means Keel green.
   let tone: String?
+  /// The date repeats (drawn with a ⟳).
+  let repeats: Bool
 
   var color: Color { tone.map(priorityTone) ?? keelGreen }
 }
 
-/// The web's `--p1`..`--p3` flag colors, light and dark.
+/// Keel's colors for a tone, light and dark: the web's `--p1`..`--p3` flag
+/// colors and `--due-*` due colors (style.rs).
 func priorityTone(_ tone: String) -> Color {
   let (light, dark): (UInt32, UInt32) =
     switch tone {
-    case "p1": (0xd1453b, 0xff7066)
+    case "p1", "due-overdue": (0xd1453b, 0xff7066)
     case "p2": (0xeb8909, 0xff9a14)
+    case "due-today": (0x058527, 0x25b84c)
+    case "due-tomorrow": (0xad6200, 0xff9a14)
+    case "due-week": (0x692fc2, 0xa970ff)
+    case "due-later": (0x808080, 0x9a9a9a)
     default: (0x246fe0, 0x5297ff)
     }
   func ui(_ hex: UInt32) -> UIColor {
@@ -74,6 +82,8 @@ struct PickerData: Codable, Equatable {
   let reminderPresets: [ReminderPreset]
   let hasDue: Bool
   let quickDates: [QuickDate]
+  /// The days the task repeats on (`yyyy-MM-dd`), ringed in the calendar.
+  let repeatDays: [String]
 }
 
 struct QuickDate: Codable, Equatable {

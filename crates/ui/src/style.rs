@@ -646,6 +646,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   display: flex; align-items: center; justify-content: center; }
 .mark-dot svg { width: 17px; height: 17px; }
 .mark-name { font-size: 12px; }
+/* Days a task repeats on, ringed like Todoist's. */
+.cal-day.repeat-day:not(.selected) { outline: 1.5px dashed var(--muted); outline-offset: -3px; }
 "#;
 
 /// The full stylesheet: light by default, dark when the OS prefers it (unless

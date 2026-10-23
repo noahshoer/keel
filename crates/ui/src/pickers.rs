@@ -107,7 +107,16 @@ pub fn reminders_text(reminders: &[ReminderDraft], today: NaiveDate) -> String {
 }
 
 #[component]
-pub fn DatePicker(date: String, time: String, open: OpenPop, on_change: EventHandler<(String, String)>) -> Element {
+pub fn DatePicker(
+    date: String,
+    time: String,
+    open: OpenPop,
+    on_change: EventHandler<(String, String)>,
+    /// The days the task repeats on (`YYYY-MM-DD`): a ⟳ on the chip and
+    /// dashed rings in the calendar.
+    #[props(default)]
+    repeat_days: Vec<String>,
+) -> Element {
     let mut open = open;
     let today = crate::today();
     let selected = NaiveDate::parse_from_str(&date, "%Y-%m-%d").ok();
@@ -126,9 +135,12 @@ pub fn DatePicker(date: String, time: String, open: OpenPop, on_change: EventHan
                 onclick: move |_| open.set(if is_open { None } else { Some("date") }),
                 Icon { svg: icons::calendar_small() }
                 "{chip_text}"
+                if !repeat_days.is_empty() {
+                    Icon { svg: icons::repeat_small() }
+                }
             }
             if is_open {
-                Scheduler { selected, time: current_time, on_change, open }
+                Scheduler { selected, time: current_time, on_change, open, repeat_days: repeat_days.clone() }
             }
         }
     }
@@ -162,6 +174,9 @@ fn Scheduler(
     /// Header when nothing is picked.
     #[props(default = "No date")]
     empty_text: &'static str,
+    /// Days ringed as repeats (`YYYY-MM-DD`).
+    #[props(default)]
+    repeat_days: Vec<String>,
 ) -> Element {
     let mut open = open;
     let today = crate::today();
@@ -300,6 +315,7 @@ fn Scheduler(
                             if day < today { cls.push_str(" past"); }
                             if day == today { cls.push_str(" is-today"); }
                             if Some(day) == selected { cls.push_str(" selected"); }
+                            if repeat_days.iter().any(|r| *r == day.format("%Y-%m-%d").to_string()) { cls.push_str(" repeat-day"); }
                             rsx! {
                                 button {
                                     key: "{i}",

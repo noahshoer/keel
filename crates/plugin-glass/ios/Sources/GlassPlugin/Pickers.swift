@@ -96,7 +96,8 @@ struct PickerSheet: View {
       }
     }
     .tint(keelGreen)
-    .presentationDetents([.medium, .large])
+    // The date sheets open tall enough for their calendar.
+    .presentationDetents(id == .date || id == .deadline ? [.large] : [.medium, .large])
   }
 
   func send(_ p: Pick) { model.send(.pick(p)) }
@@ -129,15 +130,9 @@ struct DateSheet: View {
         }
       }
       Section {
-        DatePicker(
-          "Date",
-          selection: Binding(
-            get: { day ?? Date() },
-            set: { pick(.date(date: dayFormat.string(from: $0), time: picker.time)) }),
-          displayedComponents: .date
-        )
-        .datePickerStyle(.graphical)
-        .tint(keelGreen)
+        MonthCalendar(selected: picker.date, repeatDays: Set(picker.repeatDays)) { day in
+          pick(.date(date: day, time: picker.time))
+        }
       }
       Section("Time") {
         if let time {
@@ -305,5 +300,95 @@ struct LocationSheet: View {
         if on { Image(systemName: "checkmark").foregroundStyle(keelGreen) }
       }
     }
+  }
+}
+
+/// A month grid like Todoist's: the chosen day filled, today in green, and
+/// every day the task repeats on ringed with a dashed circle. (The system's
+/// graphical date picker can't mark days.)
+struct MonthCalendar: View {
+  let selected: String
+  let repeatDays: Set<String>
+  let pick: (String) -> Void
+  @State private var month: Date
+
+  private static let cal = Calendar.current
+
+  init(selected: String, repeatDays: Set<String>, pick: @escaping (String) -> Void) {
+    self.selected = selected
+    self.repeatDays = repeatDays
+    self.pick = pick
+    let start = dayFormat.date(from: selected) ?? Date()
+    _month = State(initialValue: Self.cal.date(from: Self.cal.dateComponents([.year, .month], from: start)) ?? start)
+  }
+
+  /// The month's days, with leading blanks so the first lands on its weekday.
+  private var cells: [Date?] {
+    let cal = Self.cal
+    let days = cal.range(of: .day, in: .month, for: month)?.count ?? 30
+    let lead = (cal.component(.weekday, from: month) - cal.firstWeekday + 7) % 7
+    return Array(repeating: nil, count: lead)
+      + (0..<days).compactMap { cal.date(byAdding: .day, value: $0, to: month) }
+  }
+
+  private var weekdays: [String] {
+    let s = Self.cal.veryShortStandaloneWeekdaySymbols
+    let f = Self.cal.firstWeekday - 1
+    return Array(s[f...] + s[..<f])
+  }
+
+  var body: some View {
+    let today = dayFormat.string(from: Date())
+    VStack(spacing: 10) {
+      HStack {
+        Text(month, format: .dateTime.month(.wide).year()).font(.headline)
+        Spacer()
+        Button { shift(-1) } label: { Image(systemName: "chevron.left") }.buttonStyle(.borderless)
+          .accessibilityLabel("Previous month")
+        Button { shift(1) } label: { Image(systemName: "chevron.right") }.buttonStyle(.borderless)
+          .padding(.leading, 18).accessibilityLabel("Next month")
+      }
+      .tint(keelGreen)
+      let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
+      LazyVGrid(columns: columns, spacing: 6) {
+        ForEach(weekdays.indices, id: \.self) { i in
+          Text(weekdays[i]).font(.caption.weight(.semibold)).foregroundStyle(Color.secondary)
+        }
+        ForEach(cells.indices, id: \.self) { i in
+          if let date = cells[i] {
+            let key = dayFormat.string(from: date)
+            dayCell(date: date, key: key, today: today)
+          } else {
+            Color.clear.frame(height: 38)
+          }
+        }
+      }
+    }
+    .padding(.vertical, 4)
+  }
+
+  private func dayCell(date: Date, key: String, today: String) -> some View {
+    let isSelected = key == selected
+    let isToday = key == today
+    let isPast = key < today
+    return Button { pick(key) } label: {
+      Text("\(Self.cal.component(.day, from: date))")
+        .font(.body.weight(isSelected || isToday ? .semibold : .regular))
+        .foregroundStyle(isSelected ? Color.white : isToday ? keelGreen : isPast ? Color.secondary : Color.primary)
+        .frame(width: 38, height: 38)
+        .background {
+          if isSelected {
+            Circle().fill(keelGreen)
+          } else if repeatDays.contains(key) {
+            Circle().strokeBorder(Color.secondary, style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+          }
+        }
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(Text(date, format: .dateTime.weekday(.wide).month().day()))
+  }
+
+  private func shift(_ months: Int) {
+    if let m = Self.cal.date(byAdding: .month, value: months, to: month) { month = m }
   }
 }

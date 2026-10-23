@@ -119,6 +119,7 @@ pub fn TaskRow(
                     sections,
                     labels,
                     keep_label,
+                    existing: existing_rule.clone(),
                     submit_text: "Save".to_string(),
                     on_submit: move |after: EditorValues| {
                         let (id, before, rule) = (id.clone(), before.clone(), existing_rule.clone());

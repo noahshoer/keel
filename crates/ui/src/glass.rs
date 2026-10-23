@@ -9,12 +9,13 @@ use dioxus::prelude::*;
 use keel_core::ids::Id;
 use keel_core::model::{Label, Project, Section, Task};
 use keel_core::recurrence::Recurrence;
+use keel_core::views;
 use keel_core::quickadd::{strip_spans, QuickAdd, SpanKind};
 use serde::{Deserialize, Serialize};
 
 use crate::api;
 use crate::editor::{
-    add_from_editor, labels_text, unhighlight, with_title, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
+    add_from_editor, labels_text, recurrence_for_at, unhighlight, with_title, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
     repeat_text, save_edit, EditorValues,
 };
 use crate::pickers::{date_chip, deadline_text, offset_text, quick_dates, reminders_text, ReminderDraft, REMINDER_PRESETS};
@@ -55,8 +56,12 @@ pub struct ChipState {
     pub label: String,
     /// Has a value (drawn tinted).
     pub set: bool,
-    /// A color other than Keel green: "p1".."p3" for the priority flags.
+    /// A color other than Keel green: "p1".."p3" for the priority flags,
+    /// "due-overdue" / "due-today" / "due-tomorrow" / "due-week" /
+    /// "due-later" for the date (Keel's due colors).
     pub tone: Option<String>,
+    /// The date repeats (drawn with a ⟳).
+    pub repeats: bool,
 }
 
 /// What the pickers need to show the current values and the choices.
@@ -83,6 +88,9 @@ pub struct PickerData {
     /// Relative reminders need a due date.
     pub has_due: bool,
     pub quick_dates: Vec<QuickDate>,
+    /// The days the task repeats on (`YYYY-MM-DD`, about six months ahead),
+    /// ringed in the calendar.
+    pub repeat_days: Vec<String>,
 }
 
 /// A date-picker shortcut ("Tomorrow", "Next week").
@@ -180,7 +188,29 @@ pub struct CardContext {
     pub labels: Vec<Label>,
     /// Text for the "keep current rule" repeat option, when the rule is custom.
     pub keep_label: Option<String>,
+    /// The edited task's recurrence (what "keep" means).
+    pub existing: Option<Recurrence>,
     pub today: NaiveDate,
+}
+
+/// Keel's due color for a date (the task list's `.due.*` classes).
+fn due_tone(bucket: views::DueBucket) -> &'static str {
+    match bucket {
+        views::DueBucket::Overdue => "due-overdue",
+        views::DueBucket::Today => "due-today",
+        views::DueBucket::Tomorrow => "due-tomorrow",
+        views::DueBucket::ThisWeek => "due-week",
+        views::DueBucket::Later => "due-later",
+    }
+}
+
+/// The days `rule` repeats on from `today`, about six months ahead.
+pub(crate) fn repeat_days(rule: &Recurrence, today: NaiveDate) -> Vec<String> {
+    (0..183)
+        .map(|i| today + chrono::Duration::days(i))
+        .filter(|d| rule.contains(*d))
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .collect()
 }
 
 fn kind_name(k: SpanKind) -> &'static str {
@@ -279,10 +309,17 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
     let repeat_label = typed_rule.map(repeat_text).unwrap_or_else(|| repeat_chip_text(&shown.repeat, &opts));
     let at_inbox = ctx.projects.iter().any(|p| p.is_inbox && p.id == shown.project_id) && shown.section_id.is_none();
 
-    let chip = |id, label: String, set| ChipState { id, label, set, tone: None };
+    // The rule the task will repeat by: typed, or picked from the menu.
+    let rule = typed_rule.cloned().or_else(|| recurrence_for_at(&shown.repeat, &shown.date, ctx.existing.clone(), ctx.today));
+    let date_tone = date.map(|d| due_tone(views::due_bucket(d, ctx.today)).to_string());
+    let chip = |id, label: String, set| ChipState { id, label, set, tone: None, repeats: false };
     let priority_tone = matches!(shown.priority.as_str(), "1" | "2" | "3").then(|| format!("p{}", shown.priority));
     let chips = vec![
-        chip(ChipId::Date, date_chip(date, time, ctx.today).0, date.is_some() || time.is_some()),
+        ChipState {
+            tone: date_tone,
+            repeats: rule.is_some(),
+            ..chip(ChipId::Date, date_chip(date, time, ctx.today).0, date.is_some() || time.is_some())
+        },
         ChipState { tone: priority_tone, ..chip(ChipId::Priority, priority_text(&shown.priority), shown.priority != "4") },
         chip(ChipId::Labels, labels_text(&shown.labels), !shown.labels.is_empty()),
         chip(ChipId::Reminders, reminders_text(&shown.reminders, ctx.today), !shown.reminders.is_empty()),
@@ -329,6 +366,7 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
             .into_iter()
             .map(|(label, hint, d)| QuickDate { label: label.to_string(), hint, date: d.format("%Y-%m-%d").to_string() })
             .collect(),
+        repeat_days: rule.as_ref().map(|r| repeat_days(r, ctx.today)).unwrap_or_default(),
     };
 
     CardState {
@@ -779,7 +817,7 @@ pub fn use_glass() -> Glass {
 impl Glass {
     /// Opens the composer with `defaults` (project, section, date, parent).
     pub fn add(self, defaults: EditorValues, projects: Vec<Project>, sections: Vec<Section>, labels: Vec<Label>, reload: Signal<u32>) {
-        let ctx = CardContext { projects, sections, labels, keep_label: None, today: crate::today() };
+        let ctx = CardContext { projects, sections, labels, keep_label: None, existing: None, today: crate::today() };
         self.open(CardSession {
             mode: CardMode::Add,
             initial: defaults.clone(),
@@ -805,7 +843,7 @@ impl Glass {
         before.reminders = reminders;
         let existing = task.due.as_ref().and_then(|d| d.recurrence.clone());
         let keep_label = (before.repeat == "keep").then(|| existing.as_ref().map(repeat_text).unwrap_or_default());
-        let ctx = CardContext { projects, sections, labels, keep_label, today: crate::today() };
+        let ctx = CardContext { projects, sections, labels, keep_label, existing: existing.clone(), today: crate::today() };
         self.open(CardSession {
             mode: CardMode::Edit,
             initial: before.clone(),
@@ -905,7 +943,7 @@ mod tests {
         inbox.id = Id::from("P-IN");
         let mut work = Project::new("Work");
         work.id = Id::from("P-WORK");
-        CardContext { projects: vec![inbox, work], sections: vec![], labels: vec![], keep_label: None, today: today() }
+        CardContext { projects: vec![inbox, work], sections: vec![], labels: vec![], keep_label: None, existing: None, today: today() }
     }
 
     fn blank(content: &str) -> EditorValues {
@@ -1171,5 +1209,30 @@ mod tests {
         assert!(v.plain.is_empty());
         let ev: GlassEvent = serde_json::from_str(r#"{"type":"unhighlight","at":14}"#).unwrap();
         assert_eq!(ev, GlassEvent::Unhighlight { at: 14 });
+    }
+
+    #[test]
+    fn the_date_chip_takes_the_due_color_and_a_repeat_mark() {
+        let s = card_state(&blank("x tomorrow"), CardMode::Add, &ctx());
+        assert_eq!(chip(&s, ChipId::Date).tone.as_deref(), Some("due-tomorrow"));
+        assert!(!chip(&s, ChipId::Date).repeats);
+        let s = card_state(&blank("x every monday"), CardMode::Add, &ctx());
+        assert_eq!(chip(&s, ChipId::Date).tone.as_deref(), Some("due-today"), "today is a Monday");
+        assert!(chip(&s, ChipId::Date).repeats);
+        assert_eq!(chip(&card_state(&blank("x"), CardMode::Add, &ctx()), ChipId::Date).tone, None);
+    }
+
+    #[test]
+    fn the_picker_lists_the_days_a_task_repeats_on() {
+        let p = card_state(&blank("x every monday"), CardMode::Add, &ctx()).picker;
+        assert_eq!(&p.repeat_days[..3], &["2026-10-19", "2026-10-26", "2026-11-02"]);
+        assert!(!p.repeat_days.contains(&"2026-10-20".to_string()));
+        // A repeat picked from the menu counts too.
+        let mut v = blank("x");
+        v.date = "2026-10-21".into();
+        v.repeat = "weekly".into();
+        let p = card_state(&v, CardMode::Add, &ctx()).picker;
+        assert_eq!(&p.repeat_days[..2], &["2026-10-21", "2026-10-28"]);
+        assert!(card_state(&blank("x tomorrow"), CardMode::Add, &ctx()).picker.repeat_days.is_empty());
     }
 }

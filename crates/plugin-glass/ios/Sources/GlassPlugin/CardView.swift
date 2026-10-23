@@ -197,7 +197,10 @@ struct ChipLabel: View {
   let chip: ChipState
 
   var body: some View {
-    Label(chip.label, systemImage: chipIcon(chip.id))
+    HStack(spacing: 6) {
+      Label(chip.label, systemImage: chipIcon(chip.id))
+      if chip.repeats { Image(systemName: "repeat").font(.caption.weight(.semibold)) }
+    }
       .font(.subheadline.weight(chip.set ? .semibold : .regular))
       .foregroundStyle(chip.set ? chip.color : Color.primary)
       .lineLimit(1)
