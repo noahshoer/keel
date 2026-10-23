@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // The chip pickers. Each offers the same choices as its web counterpart in
 // `crates/ui/src/pickers.rs` / `editor.rs`, and reports picks as `Pick`s in
@@ -359,15 +360,9 @@ struct MonthCalendar: View {
   /// from Rust too.
   private func wheels(_ cal: MonthViewData) -> some View {
     HStack(spacing: 0) {
-      // The months loop like Calendar's: many copies, read back as the
-      // middle one (identical rows, so the jump back can't be seen).
-      Picker("Month", selection: Binding(
-        get: { monthLoopMiddle + cal.month - 1 },
-        set: { send(.calendarMonth(year: cal.year, month: $0 % 12 + 1)) }
-      )) {
-        ForEach(0..<monthLoopMiddle * 2, id: \.self) { i in Text(picker.months[i % 12]).tag(i) }
+      LoopingMonthWheel(months: picker.months, month: cal.month) { month in
+        send(.calendarMonth(year: cal.year, month: month))
       }
-      .pickerStyle(.wheel)
       .frame(maxWidth: .infinity)
       Picker("Year", selection: Binding(
         get: { cal.year },
@@ -381,10 +376,6 @@ struct MonthCalendar: View {
     }
     .transition(.opacity)
   }
-
-  /// The month wheel's middle copy starts at this row (50 copies of 12 on
-  /// each side: farther than anyone spins in one go).
-  private let monthLoopMiddle = 600
 
   private func dayCell(_ cell: MonthViewData.Day) -> some View {
     let fill = priorityTone(picker.selectedTone ?? "due-today")
@@ -403,5 +394,55 @@ struct MonthCalendar: View {
     }
     .buttonStyle(.plain)
     .accessibilityLabel(cell.date)
+  }
+}
+
+/// The month wheel, looping like Calendar's. One list of twelve months; the
+/// wheel's rows only point into it (`row % 12`). UIPickerView asks for a
+/// row's title just as it scrolls into view and reuses the few on screen,
+/// so its many rows cost nothing. After every stop it jumps back to the same
+/// month in the middle (identical rows, so the jump can't be seen), so no
+/// fling ever reaches an end.
+struct LoopingMonthWheel: UIViewRepresentable {
+  let months: [String]
+  /// 1-based.
+  let month: Int
+  let onChange: (Int) -> Void
+
+  static let rows = 12 * 1000
+  static let middle = 12 * 500
+
+  func makeUIView(context: Context) -> UIPickerView {
+    let wheel = UIPickerView()
+    wheel.dataSource = context.coordinator
+    wheel.delegate = context.coordinator
+    wheel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    wheel.selectRow(Self.middle + month - 1, inComponent: 0, animated: false)
+    return wheel
+  }
+
+  func updateUIView(_ wheel: UIPickerView, context: Context) {
+    context.coordinator.parent = self
+    // The month changed elsewhere (the arrows): show it.
+    if wheel.selectedRow(inComponent: 0) % 12 != month - 1 {
+      wheel.selectRow(Self.middle + month - 1, inComponent: 0, animated: false)
+    }
+  }
+
+  func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+  final class Coordinator: NSObject, UIPickerViewDataSource, UIPickerViewDelegate {
+    var parent: LoopingMonthWheel
+    init(_ parent: LoopingMonthWheel) { self.parent = parent }
+
+    func numberOfComponents(in _: UIPickerView) -> Int { 1 }
+    func pickerView(_: UIPickerView, numberOfRowsInComponent _: Int) -> Int { LoopingMonthWheel.rows }
+    func pickerView(_: UIPickerView, titleForRow row: Int, forComponent _: Int) -> String? {
+      parent.months[row % 12]
+    }
+    func pickerView(_ wheel: UIPickerView, didSelectRow row: Int, inComponent _: Int) {
+      wheel.selectRow(LoopingMonthWheel.middle + row % 12, inComponent: 0, animated: false)
+      parent.onChange(row % 12 + 1)
+    }
   }
 }
