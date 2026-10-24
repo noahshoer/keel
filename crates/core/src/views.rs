@@ -175,7 +175,8 @@ pub struct Card {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum CardMode {
-    /// Only top-level matches, one card each.
+    /// Only top-level matches, one card each. A task whose parent is in
+    /// another project counts as top-level here.
     TopLevel,
     /// Every match, grouped under its top-level ancestor.
     Grouped,
@@ -184,10 +185,15 @@ pub enum CardMode {
 /// The top-level ancestor of `task`. The walk stops at a parent that is
 /// missing or deleted, and a `parent_id` cycle makes the task its own root.
 pub fn root<'a>(task: &'a Task, all: &'a [Task]) -> &'a Task {
+    root_where(task, all, |_| true)
+}
+
+/// [`root`], walking only through parents that pass `keep`.
+fn root_where<'a>(task: &'a Task, all: &'a [Task], keep: impl Fn(&Task) -> bool) -> &'a Task {
     let mut cur = task;
     let mut seen = vec![&task.id];
     while let Some(pid) = cur.parent_id.as_ref() {
-        let Some(parent) = all.iter().find(|t| !t.is_deleted && &t.id == pid) else {
+        let Some(parent) = all.iter().find(|t| !t.is_deleted && &t.id == pid && keep(t)) else {
             break;
         };
         if seen.contains(&&parent.id) {
@@ -207,7 +213,12 @@ pub fn cards(matched: Vec<Task>, all: &[Task], mode: CardMode) -> Vec<Card> {
         CardRow { task, progress }
     };
     if mode == CardMode::TopLevel {
-        let tops: Vec<Task> = matched.into_iter().filter(|t| root(t, all).id == t.id).collect();
+        // A sub-task moved alone to another project heads its own card there:
+        // the walk goes only through tasks in the same project.
+        let tops: Vec<Task> = matched
+            .into_iter()
+            .filter(|t| root_where(t, all, |p| p.project_id == t.project_id).id == t.id)
+            .collect();
         return tops
             .into_iter()
             .map(|t| Card { head: row(t), head_matches: true, rows: Vec::new() })
@@ -658,6 +669,22 @@ mod card_tests {
         let cs = cards(vec![f.chargers.clone()], &all(&f), CardMode::Grouped);
         assert_eq!(heads(&cs), ["Pack"]);
         assert_eq!(rows(&cs[0]), ["Chargers"]);
+    }
+
+    #[test]
+    fn toplevel_shows_subtask_moved_to_other_project() {
+        let mut f = fx();
+        f.chargers.project_id = Id::from("other");
+        let mut tooth = task("Toothbrush", Some(&f.chargers));
+        tooth.project_id = Id::from("other");
+        let mut a = all(&f);
+        a.push(tooth.clone());
+        // The other project's list: Chargers heads it, its child stays under it.
+        let cs = cards(vec![f.chargers.clone(), tooth], &a, CardMode::TopLevel);
+        assert_eq!(heads(&cs), ["Chargers"]);
+        // Pack's own project still hides its same-project sub-tasks.
+        let cs = cards(vec![f.pack.clone(), f.passport.clone()], &a, CardMode::TopLevel);
+        assert_eq!(heads(&cs), ["Pack"]);
     }
 
     #[test]
