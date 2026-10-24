@@ -284,9 +284,10 @@ fn App() -> Element {
             glass.measure_drawer();
         }
     });
-    // The floating buttons step aside while the drawer is open.
+    // The floating buttons step aside while the drawer or the task view is open.
     use_effect(move || {
-        let mut state = glass::floating_buttons(view() == View::Search, drawer());
+        let view_open = !nav.stack.read().0.is_empty();
+        let mut state = glass::floating_buttons(view() == View::Search, drawer(), view_open);
         state.theme = theme();
         if drawer() && !(glass.settings_open)() {
             state.drawer = glass::drawer_buttons(&(glass.drawer_rects)(), &theme());
@@ -328,6 +329,9 @@ fn App() -> Element {
                 let open_now = *drawer.peek();
                 if let Some(open) = gestures::drawer_swipe(&s, open_now) {
                     drawer.set(open);
+                }
+                if gestures::sheet_swipe(&s) {
+                    nav.ask_close();
                 }
             }
         });
@@ -462,7 +466,7 @@ fn App() -> Element {
 
     rsx! {
         style { dangerous_inner_html: style::css() }
-        div { class: if drawer() { "app drawer-open" } else { "app" },
+        div { class: format!("app{}{}", if drawer() { " drawer-open" } else { "" }, if open_task.is_some() { " view-open" } else { "" }),
             if drawer() {
                 div { class: "drawer-scrim", onclick: move |_| drawer.set(false) }
             }
@@ -484,16 +488,22 @@ fn App() -> Element {
                         theme,
                         reload,
                     }
+                    // The scrim and sheet stay mounted while views push and
+                    // pop inside, so the entrance plays once per open.
                     if let Some(d) = open_task.clone() {
-                        task_view::view::TaskView {
-                            key: "{d.task.id}",
-                            detail: d,
-                            depth: nav.stack.read().0.len(),
-                            projects: loaded.projects.clone(),
-                            sections: loaded.sections.clone(),
-                            labels: loaded.labels.clone(),
-                            inbox_id: loaded.inbox.id.clone(),
-                            reload,
+                        div { class: "tv-scrim", onclick: move |_| nav.ask_close() }
+                        div { class: "tv-sheet",
+                            div { class: "tv-grabber", aria_hidden: "true" }
+                            task_view::view::TaskView {
+                                key: "{d.task.id}",
+                                detail: d,
+                                depth: nav.stack.read().0.len(),
+                                projects: loaded.projects.clone(),
+                                sections: loaded.sections.clone(),
+                                labels: loaded.labels.clone(),
+                                inbox_id: loaded.inbox.id.clone(),
+                                reload,
+                            }
                         }
                     }
                     MainPane { view: loaded.view.clone(), loaded, today, show_completed, drawer, search_query, reload, swap: swaps().1, motion: swaps().2 }

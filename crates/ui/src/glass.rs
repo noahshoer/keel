@@ -717,8 +717,10 @@ pub struct ButtonsState {
     pub theme: String,
 }
 
-pub fn floating_buttons(searching: bool, drawer_open: bool) -> ButtonsState {
-    ButtonsState { visible: !drawer_open, add: !searching, searching, drawer: Vec::new(), theme: "system".to_string() }
+/// The floating buttons for this screen. They step aside while the drawer
+/// or the task view is open (the view's header sits where they float).
+pub fn floating_buttons(searching: bool, drawer_open: bool, view_open: bool) -> ButtonsState {
+    ButtonsState { visible: !drawer_open && !view_open, add: !searching, searching, drawer: Vec::new(), theme: "system".to_string() }
 }
 
 /// Where the page drew one of the drawer's header buttons (CSS px, which
@@ -1271,9 +1273,15 @@ mod tests {
     fn search_swaps_the_search_button_for_close_and_drops_add() {
         let state =
             |visible, add, searching| ButtonsState { visible, add, searching, drawer: Vec::new(), theme: "system".into() };
-        assert_eq!(floating_buttons(false, false), state(true, true, false));
-        assert_eq!(floating_buttons(true, false), state(true, false, true));
-        assert!(!floating_buttons(false, true).visible, "hidden while the drawer is open");
+        assert_eq!(floating_buttons(false, false, false), state(true, true, false));
+        assert_eq!(floating_buttons(true, false, false), state(true, false, true));
+        assert!(!floating_buttons(false, true, false).visible, "hidden while the drawer is open");
+    }
+
+    #[test]
+    fn floating_buttons_hide_while_the_task_view_is_open() {
+        assert!(!floating_buttons(false, false, true).visible);
+        assert!(floating_buttons(false, false, false).visible, "back on close");
     }
 
     #[test]
@@ -1318,8 +1326,8 @@ mod tests {
 
     #[test]
     fn buttons_carry_the_app_theme() {
-        assert_eq!(floating_buttons(false, false).theme, "system");
-        let mut s = floating_buttons(false, false);
+        assert_eq!(floating_buttons(false, false, false).theme, "system");
+        let mut s = floating_buttons(false, false, false);
         s.theme = "dark".into();
         assert_eq!(serde_json::to_value(&s).unwrap()["theme"], "dark");
     }

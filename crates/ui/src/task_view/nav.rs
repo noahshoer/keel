@@ -98,6 +98,9 @@ pub struct TaskViewNav {
     /// Set when a view should open with its "Add sub-task" editor showing;
     /// the view clears it.
     pub add_sub: Signal<bool>,
+    /// Set by a tap on the sheet's scrim or a swipe down on its grip: the
+    /// view saves any pending edit, then closes, and clears it.
+    pub close_asked: Signal<bool>,
 }
 
 pub fn provide_nav() -> TaskViewNav {
@@ -106,6 +109,7 @@ pub fn provide_nav() -> TaskViewNav {
         show_completed: Signal::new(false),
         all: Signal::new(Vec::new()),
         add_sub: Signal::new(false),
+        close_asked: Signal::new(false),
     })
 }
 
@@ -142,6 +146,13 @@ impl TaskViewNav {
 
     pub fn close(mut self) {
         self.stack.write().close();
+    }
+
+    /// Asks the open view to close (it saves a pending edit first).
+    pub fn ask_close(mut self) {
+        if !self.stack.peek().0.is_empty() {
+            self.close_asked.set(true);
+        }
     }
 
     /// The task on top was completed from its own circle.

@@ -199,6 +199,14 @@ pub fn TaskView(
             });
         })
     };
+    // A tap on the scrim or a swipe down on the sheet's grip.
+    use_effect(move || {
+        let mut flag = nav.close_asked;
+        if flag() {
+            flag.set(false);
+            navigate.call(NavTo::Close);
+        }
+    });
     // A picker's change, saved now.
     let save_values = {
         let (id, rule) = (id.clone(), rule.clone());
@@ -722,8 +730,14 @@ fn GrowingText(
             textarea {
                 rows: "1",
                 placeholder,
-                autofocus,
                 value: "{value}",
+                // `autofocus` is only an attribute to Dioxus, which a browser
+                // ignores after load; focus the new field itself.
+                onmounted: move |e| async move {
+                    if autofocus {
+                        let _ = e.set_focus(true).await;
+                    }
+                },
                 oninput: move |e| on_input.call(e.value().replace(['\n', '\r'], " ")),
                 onkeydown: move |e| {
                     if e.key() == Key::Enter {

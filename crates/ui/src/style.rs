@@ -491,13 +491,28 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .card-flag.p2 { color: var(--p2); }
 .card-flag.p3 { color: var(--p3); }
 .card-chev { display: inline-flex; color: var(--muted); }
-/* Task view (task_view/view.rs): a sheet on narrow windows, a panel on the
-   right on wide ones. Structural only; Task 9 owns sizes and motion. */
-.task-view { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; top: 48px; display: flex; flex-direction: column;
-  background: var(--app-bg); border-radius: 16px 16px 0 0; box-shadow: var(--shadow-lg); }
+/* Task view (task_view/view.rs): a sheet below 900px, a panel from 900px. */
+/* Phone: a sheet from the bottom with the list showing above it, over a
+   light scrim (a tap closes it); a swipe down on the grabber or header closes
+   it too (gestures.rs). The sheet (main.rs) stays mounted while views push
+   inside it, so it slides up once per open. Its content scrolls inside. */
+.tv-scrim { position: fixed; inset: 0; z-index: 39; background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
+.tv-sheet { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; top: max(56px, calc(env(safe-area-inset-top) + 8px));
+  display: flex; flex-direction: column; background: var(--app-bg); border-radius: 26px 26px 0 0;
+  box-shadow: 0 -8px 30px rgba(0,0,0,.18); animation: sheet-up .34s cubic-bezier(.32,.72,0,1); }
+.tv-grabber { flex: none; display: flex; justify-content: center; padding: 7px 0 1px; }
+.tv-grabber::before { content: ''; width: 38px; height: 5px; border-radius: 3px; background: var(--border-strong); }
+.task-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes panel-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* Wide: a 360px panel on the right; the list narrows beside it and stays usable. */
 @media (min-width: 900px) {
-  .task-view { left: auto; top: 0; width: 360px; border-radius: 0; border-left: 1px solid var(--border); }
+  .tv-scrim, .tv-grabber { display: none; }
+  .tv-sheet { left: auto; top: 0; width: 360px; border-radius: 0; border-left: 1px solid var(--border); box-shadow: none;
+    animation: panel-in .2s var(--ease); }
+  .app.view-open .main { margin-right: calc(360px + 8px); }
 }
+@media (prefers-reduced-motion: reduce) { .tv-sheet, .tv-scrim { animation: none; } }
 .tv-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; }
 .tv-back { display: inline-flex; align-items: center; gap: 2px; width: auto; padding: 0 8px 0 4px; color: var(--accent); }
 .tv-crumb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
@@ -507,7 +522,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-close .tv-x { display: none; color: var(--muted); }
 @media (min-width: 900px) { .tv-close .tv-done-text { display: none; } .tv-close .tv-x { display: inline-flex; } }
 .menu-item.danger { color: var(--p1); }
-.tv-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px 24px; }
+.tv-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: 4px 12px calc(24px + env(safe-area-inset-bottom)); }
 .tv-titleline { display: flex; align-items: flex-start; gap: 10px; margin: 4px 2px 12px; }
 .tv-titleline .check { margin-top: 4px; }
 .tv-titleline.done .tv-title textarea { text-decoration: line-through; color: var(--muted); }
@@ -517,7 +533,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-grow-mirror { visibility: hidden; }
 .tv-grow textarea { resize: none; overflow: hidden; border: none; outline: none; background: transparent; color: var(--text); }
 .tv-grow textarea::placeholder { color: var(--muted); }
-.tv-title { font-size: 20px; font-weight: 600; line-height: 26px; }
+.tv-title { font-size: 20px; font-weight: 600; line-height: 26px; min-width: 0; overflow-wrap: anywhere; }
 .tv-desc { font-size: 14px; line-height: 20px; color: var(--subtle); }
 .tv-desc textarea { color: var(--subtle); }
 .tv-card { background: var(--bg); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
