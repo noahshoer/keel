@@ -72,6 +72,10 @@ pub async fn today_view() -> Result<Vec<Task>, String> {
     invoke("today_view", &NoArgs {}).await
 }
 
+pub async fn all_tasks() -> Result<Vec<Task>, String> {
+    invoke("all_tasks", &NoArgs {}).await
+}
+
 pub async fn upcoming_view(days: i64) -> Result<Vec<Task>, String> {
     invoke("upcoming_view", &DaysArg { days }).await
 }

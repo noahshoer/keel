@@ -32,6 +32,11 @@ fn today_view(state: tauri::State<'_, AppService>) -> Result<Vec<Task>, String> 
 }
 
 #[tauri::command(rename_all = "snake_case")]
+fn all_tasks(state: tauri::State<'_, AppService>) -> Result<Vec<Task>, String> {
+    state.all_tasks().map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
 fn upcoming_view(state: tauri::State<'_, AppService>, days: i64) -> Result<Vec<Task>, String> {
     state.upcoming_view(days).map_err(|e| e.to_string())
 }
@@ -222,6 +227,7 @@ pub fn run() {
             list_projects,
             list_tasks,
             today_view,
+            all_tasks,
             upcoming_view,
             project_view,
             list_labels,
