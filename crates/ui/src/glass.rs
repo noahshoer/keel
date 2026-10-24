@@ -134,6 +134,9 @@ pub struct CardState {
     pub chips: Vec<ChipState>,
     pub can_submit: bool,
     pub picker: PickerData,
+    /// Shows only this chip's picker, no card; a pick saves at once.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub only_picker: Option<ChipId>,
 }
 
 /// What the user did in the card, as Swift reports it.
@@ -222,6 +225,9 @@ pub struct CardContext {
     /// with the number it last showed, so typing from before a reset is
     /// told apart.
     pub reset: u32,
+    /// Picker-only (the task view on iPhone): one chip's picker, and its
+    /// pick is saved straight away.
+    pub only_picker: Option<ChipId>,
 }
 
 /// A fresh reset number for a newly opened card (never one an earlier
@@ -412,6 +418,7 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
             None => !v.content.trim().is_empty(),
         },
         picker,
+        only_picker: ctx.only_picker,
     }
 }
 
@@ -462,6 +469,9 @@ pub fn apply_event(v: &mut EditorValues, ev: &GlassEvent, mode: CardMode, ctx: &
         GlassEvent::Cancel => return Outcome::Cancel,
         GlassEvent::Pick { pick } => {
             apply_pick(v, pick, mode == CardMode::Add, &ctx.projects, &ctx.sections, ctx.today);
+            if ctx.only_picker.is_some() {
+                return Outcome::Submit;
+            }
         }
     }
     Outcome::Changed
@@ -889,6 +899,7 @@ impl Glass {
             week_start: crate::pickers::week_start(),
             calendar: None,
             reset: next_reset(),
+            only_picker: None,
         };
         self.open(CardSession {
             mode: CardMode::Add,
@@ -901,14 +912,17 @@ impl Glass {
         });
     }
 
-    /// Opens the editor on `task`.
-    pub fn edit(
+    /// Opens `chip`'s picker alone on `task` (no card); a pick is saved
+    /// at once and closes it.
+    #[allow(clippy::too_many_arguments)]
+    pub fn pick_field(
         self,
         task: &Task,
         reminders: Vec<ReminderDraft>,
         projects: Vec<Project>,
         sections: Vec<Section>,
         labels: Vec<Label>,
+        chip: ChipId,
         reload: Signal<u32>,
     ) {
         let mut before = EditorValues::from_task(task);
@@ -925,6 +939,7 @@ impl Glass {
             week_start: crate::pickers::week_start(),
             calendar: None,
             reset: next_reset(),
+            only_picker: Some(chip),
         };
         self.open(CardSession {
             mode: CardMode::Edit,
@@ -1058,6 +1073,7 @@ mod tests {
             week_start: chrono::Weekday::Sun,
             calendar: None,
             reset: 0,
+            only_picker: None,
         }
     }
 
@@ -1462,5 +1478,35 @@ mod tests {
         assert_eq!(v.content, "buy milk");
         let ev: GlassEvent = serde_json::from_str(r#"{"type":"title","text":"hi","reset":4}"#).unwrap();
         assert_eq!(ev, GlassEvent::Title { text: "hi".into(), reset: 4 });
+    }
+
+    #[test]
+    fn only_picker_serializes_camel_case() {
+        let mut c = ctx();
+        c.only_picker = Some(ChipId::Deadline);
+        let json = serde_json::to_string(&card_state(&blank("x"), CardMode::Edit, &c)).unwrap();
+        assert!(json.contains(r#""onlyPicker":"deadline""#), "{json}");
+        let json = serde_json::to_string(&card_state(&blank("x"), CardMode::Edit, &ctx())).unwrap();
+        assert!(!json.contains("onlyPicker"), "{json}");
+    }
+
+    #[test]
+    fn pick_in_picker_mode_submits() {
+        let ev = GlassEvent::Pick { pick: Pick::Priority { value: "4".into() } };
+        let mut c = ctx();
+        c.only_picker = Some(ChipId::Priority);
+        let mut v = blank("x");
+        assert_eq!(apply_event(&mut v, &ev, CardMode::Edit, &c), Outcome::Submit);
+        assert_eq!(v.priority, "4", "the pick is applied before saving");
+        let mut v = blank("x");
+        assert_eq!(apply_event(&mut v, &ev, CardMode::Edit, &ctx()), Outcome::Changed);
+    }
+
+    #[test]
+    fn cancel_in_picker_mode_does_not_save() {
+        let mut c = ctx();
+        c.only_picker = Some(ChipId::Labels);
+        let mut v = blank("x");
+        assert_eq!(apply_event(&mut v, &GlassEvent::Cancel, CardMode::Edit, &c), Outcome::Cancel);
     }
 }

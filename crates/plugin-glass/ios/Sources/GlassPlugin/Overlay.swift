@@ -39,13 +39,20 @@ struct OverlayView: View {
         FloatingButtons(model: model)
           .allowsHitTesting(!model.isOpen)
       }
-      if model.isOpen {
+      if model.isOpen && !model.pickerOnly {
         CardView(model: model)
           .transition(.move(edge: .bottom).combined(with: .opacity))
       }
       if !model.isOpen {
         DrawerButtons(model: model)
       }
+    }
+    // Picker-only: the chip's sheet alone. Closing it without a pick cancels.
+    .sheet(
+      item: Binding(get: { model.pickerOnly ? model.picker : nil }, set: { model.picker = $0 }),
+      onDismiss: { if model.pickerOnly && !model.pickSent { model.cancel() } }
+    ) { id in
+      PickerSheet(id: id, model: model)
     }
     .alert(
       model.prompt?.title ?? "",

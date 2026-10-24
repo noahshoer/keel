@@ -146,6 +146,9 @@ struct CardState: Codable, Equatable {
   let chips: [ChipState]
   let canSubmit: Bool
   let picker: PickerData
+  /// Picker-only (the task view): this chip's picker shows alone, without
+  /// the card or the keyboard, and its first pick is saved.
+  let onlyPicker: ChipId?
 }
 
 /// A value chosen in a picker (`ui::glass::Pick`).
@@ -273,6 +276,8 @@ final class CardModel: ObservableObject {
   @Published var resetToken = 0
   @Published var description = ""
   @Published var picker: ChipId?
+  /// A picker-only sheet sent its pick (closing it then isn't a cancel).
+  var pickSent = false
   @Published var buttonsVisible = false
   /// The + shows (views with an "Add task" row).
   @Published var addVisible = true
@@ -300,6 +305,18 @@ final class CardModel: ObservableObject {
     state = s
     description = s.description
     resetToken += 1
+    if let only = s.onlyPicker {
+      pickSent = false
+      picker = only
+    }
+  }
+
+  var pickerOnly: Bool { state?.onlyPicker != nil }
+
+  /// Sends a picker's choice.
+  func pick(_ p: Pick) {
+    if pickerOnly { pickSent = true }
+    send(.pick(p))
   }
 
   func update(_ s: CardState) {

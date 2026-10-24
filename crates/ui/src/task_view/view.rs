@@ -16,7 +16,7 @@ use crate::editor::{
     self, add_from_editor, apply_pick, flag_class, location_items, location_pick, location_text, priority_items,
     repeat_chip_text, repeat_options, repeat_text, save_edit, toggle_label, EditorValues, LabelPicker, TaskEditor,
 };
-use crate::glass::{ActionItem, Pick, TaskAction};
+use crate::glass::{ActionItem, ChipId, Pick, TaskAction};
 use crate::icons::{self, Icon};
 use crate::pickers::{
     date_chip, deadline_text, reminders_text, DatePicker, DeadlinePicker, Face, Menu, MenuItem, OpenPop, ReminderDraft,
@@ -60,6 +60,20 @@ fn view_actions(recurring: bool) -> Vec<ActionItem> {
     }
     items.push(item(TaskAction::Delete, "Delete task", true));
     items
+}
+
+/// The native picker for a field row or pill (Repeat has no row: its rule
+/// shows in Date's).
+fn native_chip(field: Option<Field>, missing: Option<Missing>) -> ChipId {
+    match (field, missing) {
+        (_, Some(Missing::Repeat)) => ChipId::Repeat,
+        (Some(Field::Deadline), _) => ChipId::Deadline,
+        (Some(Field::Priority), _) => ChipId::Priority,
+        (Some(Field::Labels), _) => ChipId::Labels,
+        (Some(Field::Reminders), _) => ChipId::Reminders,
+        (Some(Field::Location), _) => ChipId::Location,
+        _ => ChipId::Date,
+    }
 }
 
 fn row_face(class: &str, text: String) -> Face {
@@ -211,11 +225,13 @@ pub fn TaskView(
         toggle_label(&mut after, &name, false, &[], &[], crate::today());
         save_values.call(after);
     });
-    // iPhone: a field opens the native edit card (Task 8 brings one picker).
-    let edit_native = {
+    // iPhone: a field opens only its native picker; the pick saves at once.
+    let pick_native = {
         let (task, mine) = (task.clone(), my_reminders.clone());
         let (p, s, l) = (projects.clone(), sections.clone(), labels.clone());
-        use_callback(move |_: ()| glass.edit(&task, mine.clone(), p.clone(), s.clone(), l.clone(), reload))
+        use_callback(move |chip: ChipId| {
+            glass.pick_field(&task, mine.clone(), p.clone(), s.clone(), l.clone(), chip, reload)
+        })
     };
     let delete = {
         let id = id.clone();
@@ -316,8 +332,9 @@ pub fn TaskView(
                     Some(icons::hash_small()),
                 ),
             };
+            let chip = native_chip(which, m);
             return rsx! {
-                button { r#type: "button", class: "{class}", onclick: move |_| edit_native.call(()),
+                button { r#type: "button", class: "{class}", onclick: move |_| pick_native.call(chip),
                     if let Some(svg) = icon {
                         span { class: "chip-icon", Icon { svg } }
                     }

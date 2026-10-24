@@ -86,7 +86,8 @@ struct PickerSheet: View {
           case .labels: LabelsSheet(picker: p, pick: send)
           case .reminders: RemindersSheet(picker: p, pick: send)
           case .location: LocationSheet(picker: p) { send($0); model.picker = nil }
-          default: EmptyView()
+          case .priority: PrioritySheet(picker: p, pick: send)
+          case .repeat: RepeatSheet(picker: p, pick: send)
           }
         }
       }
@@ -101,7 +102,51 @@ struct PickerSheet: View {
     .presentationDetents(id == .date || id == .deadline ? [.large] : [.medium, .large])
   }
 
-  func send(_ p: Pick) { model.send(.pick(p)) }
+  func send(_ p: Pick) { model.pick(p) }
+}
+
+/// Priority as a sheet, for picker-only mode (the card uses `ChipMenu`).
+struct PrioritySheet: View {
+  let picker: PickerData
+  let pick: (Pick) -> Void
+
+  var body: some View {
+    List(["1", "2", "3", "4"], id: \.self) { p in
+      Button {
+        pick(.priority(p))
+      } label: {
+        HStack {
+          Label("Priority \(p)", systemImage: "flag.fill").foregroundStyle(priorityColor(p))
+          Spacer()
+          if picker.priority == p { Image(systemName: "checkmark").foregroundStyle(keelGreen) }
+        }
+      }
+    }
+    .navigationTitle("Priority")
+    .navigationBarTitleDisplayMode(.inline)
+  }
+}
+
+/// Repeat as a sheet, for picker-only mode (the card uses `ChipMenu`).
+struct RepeatSheet: View {
+  let picker: PickerData
+  let pick: (Pick) -> Void
+
+  var body: some View {
+    List(picker.repeatOptions, id: \.self) { opt in
+      Button {
+        pick(.repeat(opt[0]))
+      } label: {
+        HStack {
+          Text(opt[1]).foregroundStyle(Color.primary)
+          Spacer()
+          if picker.repeat == opt[0] { Image(systemName: "checkmark").foregroundStyle(keelGreen) }
+        }
+      }
+    }
+    .navigationTitle("Repeat")
+    .navigationBarTitleDisplayMode(.inline)
+  }
 }
 
 struct DateSheet: View {

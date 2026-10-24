@@ -4,7 +4,8 @@ import WebKit
 /// Drives the card without touches, for simulator checks:
 /// `SIMCTL_CHILD_KEEL_GLASS_DEMO="<selector>|<text>|<submit 0/1>|<chip>" xcrun simctl launch …`
 /// clicks `selector` in the page, types `text` into the title, submits, or
-/// opens `chip`'s picker sheet.
+/// opens `chip`'s picker sheet. A `js:` selector runs page JavaScript first;
+/// the other steps follow it.
 /// Does nothing unless the variable is set.
 enum Demo {
   static func run(webview: WKWebView, model: CardModel) {
@@ -15,6 +16,18 @@ enum Demo {
           model.prompt = nil
           model.promptClosedAt = Date()
           model.answerPrompt(p.id, answer.components(separatedBy: "|"))
+        } else if n < 60 {
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { poll(n + 1) }
+        }
+      }
+      poll(0)
+    }
+    // KEEL_GLASS_CHOOSE="streak": chooses that item in the first action menu that opens.
+    if let choice = ProcessInfo.processInfo.environment["KEEL_GLASS_CHOOSE"] {
+      func poll(_ n: Int) {
+        if let menu = model.actionMenu {
+          model.actionMenu = nil
+          model.chooseAction(menu.target, choice)
         } else if n < 60 {
           DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { poll(n + 1) }
         }
@@ -34,9 +47,7 @@ enum Demo {
       // floating button instead of clicking.
       if selector.hasPrefix("js:") {
         webview.evaluateJavaScript(String(selector.dropFirst(3)))
-        return
-      }
-      if selector.hasPrefix("@") {
+      } else if selector.hasPrefix("@") {
         model.button(String(selector.dropFirst()))
       } else {
         // "last:<selector>" clicks the last match.
@@ -75,7 +86,7 @@ enum Demo {
         }
         if let p = pickPriority {
           DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            model.send(.pick(.priority(p)))
+            model.pick(.priority(p))
             if submit { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { model.send(.submit) } }
           }
           return
