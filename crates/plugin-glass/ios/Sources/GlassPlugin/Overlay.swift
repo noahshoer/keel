@@ -47,10 +47,11 @@ struct OverlayView: View {
         DrawerButtons(model: model)
       }
     }
-    // Picker-only: the chip's sheet alone. Closing it without a pick cancels.
+    // Picker-only: the chip's sheet alone. Picks are saved as they're made,
+    // so closing it (Done, a swipe) just ends the session.
     .sheet(
       item: Binding(get: { model.pickerOnly ? model.picker : nil }, set: { model.picker = $0 }),
-      onDismiss: { if model.pickerOnly && !model.pickSent { model.cancel() } }
+      onDismiss: { if model.pickerOnly { model.cancel() } }
     ) { id in
       PickerSheet(id: id, model: model)
     }

@@ -102,7 +102,7 @@ struct PickerSheet: View {
     .presentationDetents(id == .date || id == .deadline ? [.large] : [.medium, .large])
   }
 
-  func send(_ p: Pick) { model.pick(p) }
+  func send(_ p: Pick) { model.send(.pick(p)) }
 }
 
 /// Priority as a sheet, for picker-only mode (the card uses `ChipMenu`).

@@ -84,9 +84,19 @@ enum Demo {
             }
           }
         }
+        // KEEL_GLASS_LABELS="a;b": toggles each label on in the open Labels
+        // sheet, a second apart (as its rows do), then closes it like Done.
+        if let names = ProcessInfo.processInfo.environment["KEEL_GLASS_LABELS"]?.components(separatedBy: ";") {
+          for (i, name) in names.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i + 1)) {
+              model.send(.pick(.labels((model.state?.picker.labels ?? []) + [name])))
+            }
+          }
+          DispatchQueue.main.asyncAfter(deadline: .now() + Double(names.count) + 4) { model.picker = nil }
+        }
         if let p = pickPriority {
           DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            model.pick(.priority(p))
+            model.send(.pick(.priority(p)))
             if submit { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { model.send(.submit) } }
           }
           return

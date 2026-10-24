@@ -202,7 +202,19 @@ pub fn refresh_for(ev: &GlassEvent, before: &str, after: &str) -> Refresh {
 pub enum Outcome {
     Changed,
     Submit,
+    /// Picker-only: save the change now and keep the picker open.
+    Save,
     Cancel,
+}
+
+/// Picker-only: whether a pick ends the interaction (single-choice
+/// pickers), or the picker stays open for more (Labels and Reminders
+/// toggle several; Date takes a day and then a time) until dismissed.
+pub fn closes_on_pick(chip: ChipId) -> bool {
+    match chip {
+        ChipId::Priority | ChipId::Repeat | ChipId::Deadline | ChipId::Location => true,
+        ChipId::Labels | ChipId::Reminders | ChipId::Date => false,
+    }
 }
 
 /// The lists and date a card is shown against.
@@ -469,8 +481,8 @@ pub fn apply_event(v: &mut EditorValues, ev: &GlassEvent, mode: CardMode, ctx: &
         GlassEvent::Cancel => return Outcome::Cancel,
         GlassEvent::Pick { pick } => {
             apply_pick(v, pick, mode == CardMode::Add, &ctx.projects, &ctx.sections, ctx.today);
-            if ctx.only_picker.is_some() {
-                return Outcome::Submit;
+            if let Some(chip) = ctx.only_picker {
+                return if closes_on_pick(chip) { Outcome::Submit } else { Outcome::Save };
             }
         }
     }
@@ -1000,6 +1012,20 @@ impl Glass {
                 self.session.set(None);
                 api::glass_hide().await;
             }
+            Outcome::Save => {
+                let Some(id) = s.task_id.clone() else { return };
+                let mut reload = s.reload;
+                // Saved values become the base for the next save; a failed
+                // save shows the last saved ones again.
+                match save_edit(id, s.initial.clone(), s.values.clone(), s.existing.clone()).await {
+                    Ok(_) => s.initial = s.values.clone(),
+                    Err(_) => s.values = s.initial.clone(),
+                }
+                let state = card_state(&s.values, s.mode, &s.ctx);
+                self.session.set(Some(s));
+                api::glass_update(&state).await;
+                reload += 1;
+            }
             Outcome::Submit => {
                 if !card_state(&s.values, s.mode, &s.ctx).can_submit {
                     return;
@@ -1508,5 +1534,28 @@ mod tests {
         c.only_picker = Some(ChipId::Labels);
         let mut v = blank("x");
         assert_eq!(apply_event(&mut v, &GlassEvent::Cancel, CardMode::Edit, &c), Outcome::Cancel);
+    }
+
+    #[test]
+    fn single_choice_pickers_close_on_pick() {
+        for chip in [ChipId::Priority, ChipId::Repeat, ChipId::Deadline, ChipId::Location] {
+            assert!(closes_on_pick(chip), "{chip:?}");
+        }
+        for chip in [ChipId::Labels, ChipId::Reminders, ChipId::Date] {
+            assert!(!closes_on_pick(chip), "{chip:?}");
+        }
+    }
+
+    #[test]
+    fn pick_in_a_staying_picker_saves_and_keeps_it_open() {
+        let mut c = ctx();
+        c.only_picker = Some(ChipId::Labels);
+        let mut v = blank("x");
+        let ev = GlassEvent::Pick { pick: Pick::Labels { names: vec!["home".into()] } };
+        assert_eq!(apply_event(&mut v, &ev, CardMode::Edit, &c), Outcome::Save);
+        assert_eq!(v.labels, vec!["home".to_string()]);
+        c.only_picker = Some(ChipId::Date);
+        let ev = GlassEvent::Pick { pick: Pick::Date { date: "2026-10-20".into(), time: String::new() } };
+        assert_eq!(apply_event(&mut v, &ev, CardMode::Edit, &c), Outcome::Save);
     }
 }

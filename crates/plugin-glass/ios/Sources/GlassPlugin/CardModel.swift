@@ -269,15 +269,14 @@ final class CardModel: ObservableObject {
   /// Set by the plugin: reports the chosen action.
   var chooseAction: (String, String) -> Void = { _, _ in }
 
-  /// nil while the card is closed.
+  /// nil while the card is closed. With `onlyPicker` set, only that chip's
+  /// sheet shows; Rust saves each pick, and a single-choice pick closes it.
   @Published var state: CardState?
   /// Bumped by `show`: the fields take the state's text even if the user
   /// typed something else (a fresh card, or the reset after adding).
   @Published var resetToken = 0
   @Published var description = ""
   @Published var picker: ChipId?
-  /// A picker-only sheet sent its pick (closing it then isn't a cancel).
-  var pickSent = false
   @Published var buttonsVisible = false
   /// The + shows (views with an "Add task" row).
   @Published var addVisible = true
@@ -305,19 +304,10 @@ final class CardModel: ObservableObject {
     state = s
     description = s.description
     resetToken += 1
-    if let only = s.onlyPicker {
-      pickSent = false
-      picker = only
-    }
+    if let only = s.onlyPicker { picker = only }
   }
 
   var pickerOnly: Bool { state?.onlyPicker != nil }
-
-  /// Sends a picker's choice.
-  func pick(_ p: Pick) {
-    if pickerOnly { pickSent = true }
-    send(.pick(p))
-  }
 
   func update(_ s: CardState) {
     guard state != nil else { return }
