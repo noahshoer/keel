@@ -101,7 +101,13 @@ pub struct TaskViewNav {
     /// Set by a tap on the sheet's scrim or a swipe down on its grip: the
     /// view saves any pending edit, then closes, and clears it.
     pub close_asked: Signal<bool>,
+    /// The view's completion circles ignore taps (see [`TaskViewNav::hold_circles`]).
+    pub circles_held: Signal<bool>,
 }
+
+/// How long the circles stay held after a tap's call returns: longer than
+/// the gap between a double tap's two taps.
+const CIRCLE_SETTLE_MS: u32 = 400;
 
 pub fn provide_nav() -> TaskViewNav {
     use_context_provider(|| TaskViewNav {
@@ -110,6 +116,7 @@ pub fn provide_nav() -> TaskViewNav {
         all: Signal::new(Vec::new()),
         add_sub: Signal::new(false),
         close_asked: Signal::new(false),
+        circles_held: Signal::new(false),
     })
 }
 
@@ -153,6 +160,24 @@ impl TaskViewNav {
         if !self.stack.peek().0.is_empty() {
             self.close_asked.set(true);
         }
+    }
+
+    /// Holds the view's completion circles for one tap; false when they're
+    /// already held. A double tap's second tap would otherwise complete the
+    /// task twice, or land on the circle that took the first one's place
+    /// (the parent's after a pop, or the next sub-task's).
+    pub fn hold_circles(mut self) -> bool {
+        if *self.circles_held.peek() {
+            return false;
+        }
+        self.circles_held.set(true);
+        true
+    }
+
+    /// Lets the circles take taps again, a moment after the tap's call returned.
+    pub async fn release_circles(mut self) {
+        crate::completion::sleep(CIRCLE_SETTLE_MS).await;
+        self.circles_held.set(false);
     }
 
     /// The task on top was completed from its own circle.

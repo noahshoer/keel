@@ -144,8 +144,6 @@ pub fn TaskView(
     let mut adding = use_signal(|| false);
     let mut streak = use_signal(|| false);
     let mut more_open = use_signal(|| false);
-    // The circle's complete / reopen is in flight.
-    let mut busy = use_signal(|| false);
     let open: OpenPop = use_signal(|| None);
     let mut open_set = open;
     // A list row's "Add sub-task" opens the view with the editor showing.
@@ -549,12 +547,9 @@ pub fn TaskView(
                         class: if checked { "check done" } else { check_class(task.priority) },
                         title: if checked { "Mark as not done" } else { "Complete task" },
                         onclick: move |_| {
-                            // A second tap before the first returns is ignored
-                            // (it would complete a repeating task twice).
-                            if busy() {
+                            if !nav.hold_circles() {
                                 return;
                             }
-                            busy.set(true);
                             let pair = commit();
                             let (id, rule) = (id_circle.clone(), rule_circle.clone());
                             spawn_forever(async move {
@@ -566,8 +561,7 @@ pub fn TaskView(
                                     nav.completed_here();
                                 }
                                 reload += 1;
-                                // The view may be gone by now.
-                                let _ = busy.try_write().map(|mut b| *b = false);
+                                nav.release_circles().await;
                             });
                         },
                         Icon { svg: icons::check() }
@@ -698,8 +692,7 @@ fn SubtaskRow(row: CardRow, on_open: EventHandler<Id>, reload: Signal<u32>) -> E
     let checked = t.checked;
     let id_check = t.id.clone();
     let id_open = t.id.clone();
-    // The circle's complete / reopen is in flight.
-    let mut busy = use_signal(|| false);
+    let nav = use_nav();
     rsx! {
         div { class: if checked { "tv-sub done" } else { "tv-sub" },
             button {
@@ -707,15 +700,15 @@ fn SubtaskRow(row: CardRow, on_open: EventHandler<Id>, reload: Signal<u32>) -> E
                 class: if checked { "check done" } else { check_class(t.priority) },
                 title: if checked { "Mark as not done" } else { "Complete sub-task" },
                 onclick: move |_| {
-                    if busy() {
+                    if !nav.hold_circles() {
                         return;
                     }
-                    busy.set(true);
                     let id = id_check.clone();
-                    spawn(async move {
+                    // Not tied to the row: it goes once the task is done.
+                    spawn_forever(async move {
                         let _ = if checked { api::uncomplete_task(id).await } else { api::complete_task(id).await };
                         reload += 1;
-                        busy.set(false);
+                        nav.release_circles().await;
                     });
                 },
                 Icon { svg: icons::check() }
