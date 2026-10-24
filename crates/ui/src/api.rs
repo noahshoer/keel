@@ -440,13 +440,13 @@ pub async fn glass_prompt(prompt: &crate::glass::Prompt) {
     let _ = invoke::<_, ()>("plugin:glass|prompt", &PromptArg { prompt }).await;
 }
 
-/// Shows or hides the floating glass buttons.
 /// Removes the task sheet's glass X and •••.
 pub async fn glass_sheet_hide() {
     let args = serde_json::json!({ "buttons": [], "top": 0.0, "duration": 0.0 });
     let _ = invoke::<_, ()>("plugin:glass|sheet", &args).await;
 }
 
+/// Shows or hides the floating glass buttons.
 pub async fn glass_buttons(state: crate::glass::ButtonsState) {
     let _ = invoke::<_, ()>("plugin:glass|buttons", &state).await;
 }

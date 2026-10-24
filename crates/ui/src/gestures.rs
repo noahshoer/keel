@@ -140,6 +140,17 @@ pub fn drag_offset(start: f64, dy: f64) -> f64 {
     (start + dy).max(0.0)
 }
 
+/// Where a drag starts, as an offset below the large height: where the sheet
+/// is right now if it was still settling (`settling`, its current shift),
+/// else its detent's resting place.
+pub fn drag_from(detent: Detent, settling: Option<f64>, medium: f64) -> f64 {
+    match (settling, detent) {
+        (Some(shift), _) => shift.max(0.0),
+        (None, Detent::Large) => 0.0,
+        (None, Detent::Medium) => medium.max(0.0),
+    }
+}
+
 /// Where a released drag sends the sheet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Settle {
@@ -198,7 +209,8 @@ pub fn settle_offset(settle: Settle, medium: f64) -> f64 {
 /// - `decide(start, dx, dy)`: "pending" / "drag" / "scroll" / "ignore"
 ///   ([`sheet_drag_action`]); `hold(start, dx, dy)`: bool ([`holds_scroll`]).
 ///   `start` is `[scrollTop, blocked, inField, fieldFocused, width, detent]`.
-/// - `drag(start, dy)`: [`drag_offset`].
+/// - `drag(start, dy)`: [`drag_offset`]; `from(detent, settling, medium)`:
+///   [`drag_from`] (`settling` is the current shift, or null at rest).
 /// - `settle(detent, y, medium, velocity)`: "large" / "medium" / "close"
 ///   ([`sheet_settle`]); `rest(settle, medium)`: [`settle_offset`].
 /// - `glass(rects, sheetTop, vvLeft, vvTop)`: the glass X and •••
@@ -250,6 +262,9 @@ pub fn install_sheet_rules() {
         holds_scroll(&start(&a), dx, dy)
     });
     let drag = Closure::<dyn Fn(f64, f64) -> f64>::new(drag_offset);
+    let from = Closure::<dyn Fn(JsValue, JsValue, f64) -> f64>::new(|d: JsValue, s: JsValue, medium| {
+        drag_from(detent(&d), s.as_f64(), medium)
+    });
     let settle = Closure::<dyn Fn(JsValue, f64, f64, f64) -> String>::new(|d: JsValue, y, medium, v| {
         name(sheet_settle(detent(&d), y, medium, v))
     });
@@ -274,6 +289,7 @@ pub fn install_sheet_rules() {
     set("decide", decide.as_ref());
     set("hold", hold.as_ref());
     set("drag", drag.as_ref());
+    set("from", from.as_ref());
     set("settle", settle.as_ref());
     set("rest", rest.as_ref());
     set("glass", glass.as_ref());
@@ -282,6 +298,7 @@ pub fn install_sheet_rules() {
     decide.forget();
     hold.forget();
     drag.forget();
+    from.forget();
     settle.forget();
     rest.forget();
     glass.forget();
@@ -324,9 +341,16 @@ const sheetEl = () => document.querySelector('.tv-sheet');
 const scrim = () => document.querySelector('.tv-scrim');
 const vvTop = () => window.visualViewport?.offsetTop ?? 0;
 const native = () => document.body.classList.contains('native-glass');
-// Numbered, so a message overtaken by a later one is dropped in Swift.
+// Numbered per page load (`epoch`), so Swift drops a message overtaken by a
+// later one and starts over after a reload. If showing the glass fails, the
+// web X and ••• come back.
+const epoch = Date.now();
 let seqOut = 0;
-const send = (m) => { if (native()) window.__TAURI__?.core.invoke('plugin:glass|sheet', { ...m, seq: ++seqOut }).catch(() => {}); };
+const send = (m) => {
+  if (!native()) return;
+  window.__TAURI__?.core.invoke('plugin:glass|sheet', { ...m, epoch, seq: ++seqOut })
+    .catch(() => { if (m.buttons) sheetEl()?.classList.remove('glass-head'); });
+};
 let frame = null, frameTop = 0;
 // One position per animation frame while the sheet follows the finger.
 const follow = (top) => {
@@ -352,11 +376,13 @@ window.keelSheetOpened = (tries = 0) => {
   const sheet = sheetEl();
   if (!window.keelSheet) return;
   const glass = sheet && measureGlass(sheet);
+  // Not measurable: the web X and ••• stay (they're hidden only under glass-head).
   if (!glass || glass.buttons.length < 2) {
     if (tries < 10) requestAnimationFrame(() => keelSheetOpened(tries + 1));
     return;
   }
   sheet.dataset.detent = 'medium';
+  sheet.classList.add('glass-head');
   // The slide-up (sheet-up): from one sheet height down to its resting place.
   const anim = sheet.getAnimations()[0];
   const rest = glass.top - shiftOf(sheet);
@@ -409,10 +435,15 @@ document.addEventListener('touchmove', (ev) => {
     if (g.mode === 'pending' && keelSheet.hold(g.start, dx, dy)) ev.preventDefault();
     if (g.mode !== 'drag') return;
     seq++;
-    g.sheet.getAnimations().forEach((a) => a.finish());
-    Object.assign(g, heights(g.sheet), { dy0: dy });
-    g.from = g.start[5] === 'large' ? 0 : Math.max(0, g.M);
-    g.sheet.classList.add('tv-large');
+    // Grabbed while settling: freeze it where it is (its pending settle is
+    // dropped by `seq`) and drag from there.
+    const sheet = g.sheet, settling = sheet.classList.contains('tv-large') ? shiftOf(sheet) : null;
+    sheet.style.transition = 'none';
+    if (settling !== null) sheet.style.transform = `translateY(${settling}px)`;
+    sheet.getAnimations().forEach((a) => a.finish());
+    Object.assign(g, heights(sheet), { dy0: dy });
+    g.from = keelSheet.from(g.start[5], settling, g.M);
+    sheet.classList.add('tv-large');
   }
   ev.preventDefault();
   g.yNow = keelSheet.drag(g.from, dy - g.dy0);
@@ -434,10 +465,10 @@ const end = (cancelled) => {
   place(d, target, secs);
   glide(keelSheet.screenTop(d.largeTop, target, vvTop()), secs);
   const mine = seq;
+  if (to !== 'close') d.sheet.dataset.detent = to;
   setTimeout(() => {
     if (to === 'close') { dioxus.send({ close: true }); return; }
     if (mine !== seq || !d.sheet.isConnected) return;
-    d.sheet.dataset.detent = to;
     if (to === 'medium') d.sheet.classList.remove('tv-large');
     d.sheet.style.transition = 'none';
     d.sheet.style.transform = '';
@@ -449,15 +480,31 @@ document.addEventListener('touchend', () => end(false), { passive: true, capture
 document.addEventListener('touchcancel', () => end(true), { passive: true, capture: true });
 // The keyboard: keep the sheet in the visible area above it, and tell the
 // glass where the sheet now is (it never hides).
+// Only on iPhone at 1x: a desktop pinch-zoom mustn't lift the sheet.
+// (The iPhone app is portrait only, so the buttons never move sideways.)
+// Mid-glide (opening, settling) it waits for the glide to finish, so the
+// glass isn't parked halfway.
+let waiting = false;
 const viewport = () => {
   const v = window.visualViewport, root = document.documentElement;
-  if (v) {
+  for (const k of ['--vv-top', '--vv-h', '--kb']) root.style.removeProperty(k);
+  if (v && native() && v.scale === 1) {
     root.style.setProperty('--vv-top', `${v.offsetTop}px`);
     root.style.setProperty('--vv-h', `${v.height}px`);
     root.style.setProperty('--kb', `${Math.max(0, root.clientHeight - v.offsetTop - v.height)}px`);
   }
   const sheet = sheetEl();
-  if (sheet && !(g && g.mode === 'drag')) follow(sheet.getBoundingClientRect().top - vvTop());
+  if (!sheet || !sheet.classList.contains('glass-head') || (g && g.mode === 'drag')) return;
+  const moving = sheet.getAnimations();
+  if (moving.length) {
+    if (!waiting) {
+      waiting = true;
+      Promise.all(moving.map((a) => a.finished.catch(() => {}))).then(() => { waiting = false; viewport(); });
+    }
+    return;
+  }
+  if (frame !== null) { cancelAnimationFrame(frame); frame = null; }
+  send({ top: sheet.getBoundingClientRect().top - vvTop(), duration: 0 });
 };
 window.keelSheetViewport = viewport;
 window.visualViewport?.addEventListener('resize', viewport);
@@ -666,6 +713,17 @@ mod tests {
         assert_eq!(drag_offset(300.0, -120.0), 180.0);
         assert_eq!(drag_offset(300.0, -400.0), 0.0, "stops at the large height");
         assert_eq!(drag_offset(0.0, -30.0), 0.0);
+    }
+
+    #[test]
+    fn a_drag_starts_where_the_sheet_is() {
+        assert_eq!(drag_from(Detent::Medium, None, 300.0), 300.0, "at rest at medium");
+        assert_eq!(drag_from(Detent::Large, None, 300.0), 0.0, "at rest at large");
+        // Grabbed again while still settling: from where it is right now,
+        // not from the detent it was heading to.
+        assert_eq!(drag_from(Detent::Medium, Some(140.0), 300.0), 140.0);
+        assert_eq!(drag_from(Detent::Large, Some(-3.0), 300.0), 0.0);
+        assert_eq!(drag_from(Detent::Medium, None, -20.0), 0.0, "keyboard up: medium meets large");
     }
 
     // The medium detent sits 300px below the large one in these tests.

@@ -531,7 +531,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   background: color-mix(in srgb, var(--text) 7%, transparent); }
 @media (hover: hover) { .tv-round:hover { background: color-mix(in srgb, var(--text) 12%, transparent); } }
 .native-glass .tv-round { width: 40px; height: 40px; }
-.native-glass .tv-sheet .tv-head .tv-round { visibility: hidden; }
+.native-glass .tv-sheet.glass-head .tv-head .tv-round { visibility: hidden; }
 .menu-item.danger { color: var(--p1); }
 .tv-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   padding: 4px 12px calc(24px + env(safe-area-inset-bottom)); }

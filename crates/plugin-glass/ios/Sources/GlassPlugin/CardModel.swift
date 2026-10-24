@@ -349,7 +349,7 @@ final class CardModel: ObservableObject {
   @Published var sheetTop: CGFloat = 0
   /// While the sheet glides, its top follows the page's curve frame by frame.
   @Published var sheetGlide: SheetGlide?
-  var sheetSeq = 0
+  var sheetOrder = SheetOrder()
 
   /// Window-space frames of the controls that take touches while the card is closed.
   var hitRects: [String: CGRect] = [:]
@@ -378,10 +378,7 @@ final class CardModel: ObservableObject {
   /// Moves the sheet's buttons: at once, or gliding in step with the page's
   /// own animation (same start, duration and curve).
   func placeSheet(_ a: SheetArgs) {
-    if let seq = a.seq {
-      guard seq > sheetSeq else { return }
-      sheetSeq = seq
-    }
+    guard sheetOrder.accepts(epoch: a.epoch, seq: a.seq) else { return }
     if let buttons = a.buttons { sheetButtons = buttons }
     let now = Date()
     if a.duration > 0 {

@@ -38,14 +38,15 @@ class ButtonsArgs: Decodable {
 /// the sheet's top; absent keeps the current ones, empty removes them) and
 /// the sheet's top on screen, at once or gliding there over `duration` from
 /// `start` (wall-clock ms, when the page's own animation began) and `from`
-/// (where it began; absent = where the glass is now). `seq` orders the
-/// messages (an older one arriving late is dropped).
+/// (where it began; absent = where the glass is now). `epoch` (the page
+/// load) and `seq` order the messages (`SheetOrder`).
 class SheetArgs: Decodable {
   let buttons: [DrawerButton]?
   let top: CGFloat
   let from: CGFloat?
   let start: Double?
   let duration: Double
+  let epoch: Double?
   let seq: Int?
 }
 
