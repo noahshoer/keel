@@ -98,6 +98,21 @@ pub fn check_circle() -> String {
     svg(16, "1.6", r#"<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>"#)
 }
 
+/// "Add sub-task": a branch arrow.
+pub fn subtask() -> String {
+    svg(18, "1.6", r#"<path d="M6 4v8a4 4 0 0 0 4 4h8"/><path d="M15 13l3 3-3 3"/>"#)
+}
+
+/// "More": three dots in a row.
+pub fn more() -> String {
+    svg(18, "2", r#"<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>"#)
+}
+
+/// A paragraph: the description's row.
+pub fn text_lines() -> String {
+    svg(16, "1.6", r#"<path d="M5 7h14M5 12h14M5 17h9"/>"#)
+}
+
 pub fn search() -> String {
     svg(20, "1.7", r#"<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>"#)
 }

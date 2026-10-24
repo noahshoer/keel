@@ -95,6 +95,9 @@ pub struct TaskViewNav {
     pub show_completed: Signal<bool>,
     /// Every task, refreshed with each load (rows open tasks with their ancestors).
     pub all: Signal<Vec<Task>>,
+    /// Set when a view should open with its "Add sub-task" editor showing;
+    /// the view clears it.
+    pub add_sub: Signal<bool>,
 }
 
 pub fn provide_nav() -> TaskViewNav {
@@ -102,6 +105,7 @@ pub fn provide_nav() -> TaskViewNav {
         stack: Signal::new(ViewStack::default()),
         show_completed: Signal::new(false),
         all: Signal::new(Vec::new()),
+        add_sub: Signal::new(false),
     })
 }
 
@@ -122,6 +126,12 @@ impl TaskViewNav {
         self.stack.write().open_chain(id, all);
     }
 
+    /// Opens a task like [`Self::open_chain`], with its "Add sub-task" editor open.
+    pub fn open_adding(mut self, id: Id, all: &[Task]) {
+        self.open_chain(id, all);
+        self.add_sub.set(true);
+    }
+
     pub fn push(mut self, id: Id) {
         self.stack.write().push(id);
     }
@@ -132,6 +142,11 @@ impl TaskViewNav {
 
     pub fn close(mut self) {
         self.stack.write().close();
+    }
+
+    /// The task on top was completed from its own circle.
+    pub fn completed_here(mut self) {
+        self.stack.write().completed_here();
     }
 }
 

@@ -361,6 +361,12 @@ fn App() -> Element {
         let today_count = today_tasks.len();
         let all = api::all_tasks().await?;
         nav.all.set(all.clone());
+        // A deleted task's view closes, and every view above it.
+        let mut stack = nav.stack.peek().clone();
+        stack.prune(&all);
+        if stack != *nav.stack.peek() {
+            nav.stack.set(stack);
+        }
         let mut filter_groups = Vec::new();
         let mut filter_error = None;
         let tasks = match &v {
@@ -447,6 +453,12 @@ fn App() -> Element {
 
     let today = today();
     let state = (*data.read()).clone();
+    // The task view on top of the stack, if one is open.
+    let open_task = nav
+        .stack
+        .read()
+        .top()
+        .and_then(|id| task_view::nav::detail(id, &nav.all.read(), (nav.show_completed)()));
 
     rsx! {
         style { dangerous_inner_html: style::css() }
@@ -471,6 +483,18 @@ fn App() -> Element {
                         today_day: today.day(),
                         theme,
                         reload,
+                    }
+                    if let Some(d) = open_task.clone() {
+                        task_view::view::TaskView {
+                            key: "{d.task.id}",
+                            detail: d,
+                            depth: nav.stack.read().0.len(),
+                            projects: loaded.projects.clone(),
+                            sections: loaded.sections.clone(),
+                            labels: loaded.labels.clone(),
+                            inbox_id: loaded.inbox.id.clone(),
+                            reload,
+                        }
                     }
                     MainPane { view: loaded.view.clone(), loaded, today, show_completed, drawer, search_query, reload, swap: swaps().1, motion: swaps().2 }
                 },

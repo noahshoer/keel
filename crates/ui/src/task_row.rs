@@ -9,7 +9,7 @@ use crate::icons::{self, Icon};
 use crate::pickers::ReminderDraft;
 use crate::task_view::nav::use_nav;
 
-fn check_class(p: Priority) -> &'static str {
+pub(crate) fn check_class(p: Priority) -> &'static str {
     match p {
         Priority::P1 => "check p1",
         Priority::P2 => "check p2",
@@ -129,14 +129,10 @@ pub fn TaskRow(
     let due = due_text(&task, today);
     let recurring = task.due.as_ref().is_some_and(|d| d.is_recurring);
     let streak_on = task.streak_enabled;
-    let goal = task.streak_goal;
-    let goal_value = goal.map(|g| g.to_string()).unwrap_or_default();
     let show_meta = due.is_some() || streak_on || !task.labels.is_empty() || deadline.is_some() || has_reminders;
 
     let id_complete = task.id.clone();
     let id_delete = task.id.clone();
-    let id_toggle = task.id.clone();
-    let id_goal = task.id.clone();
     let id_open = task.id.clone();
 
     // One root per row: keyed rows with several roots broke Dioxus' moves
@@ -235,6 +231,15 @@ pub fn TaskRow(
                     }
                 }
                 div { class: "task-actions",
+                    button {
+                        class: "icon-btn",
+                        title: "Add sub-task",
+                        onclick: {
+                            let id = task.id.clone();
+                            move |_| nav.open_adding(id.clone(), &nav.all.read())
+                        },
+                        Icon { svg: icons::subtask() }
+                    }
                     if recurring {
                         button {
                             class: "icon-btn",
@@ -261,41 +266,55 @@ pub fn TaskRow(
                 }
             }
             if panel() && recurring {
-                div { class: "streak-panel",
-                    if streak_on {
-                        span { class: "stat", "Current " b { "🔥 {task.streak_current}" } }
-                        span { class: "stat", "Best " b { "{task.streak_best}" } }
-                        label {
-                            "Goal "
-                            input {
-                                r#type: "number",
-                                min: "1",
-                                value: "{goal_value}",
-                                onchange: move |e| {
-                                    let id = id_goal.clone();
-                                    let new_goal = e.value().trim().parse::<i64>().ok().filter(|g| *g > 0);
-                                    spawn(async move {
-                                        let _ = api::set_streak(id, true, new_goal).await;
-                                        reload += 1;
-                                    });
-                                },
-                            }
-                        }
-                    } else {
-                        span { "Track how many times in a row you complete this." }
-                    }
-                    button {
-                        class: if streak_on { "btn btn-cancel" } else { "btn btn-add" },
-                        onclick: move |_| {
-                            let id = id_toggle.clone();
+                StreakPanel { task: task.clone(), reload }
+            }
+        }
+    }
+}
+
+/// A repeating task's streak: current and best, a goal, and tracking on or off.
+#[component]
+pub fn StreakPanel(task: Task, reload: Signal<u32>) -> Element {
+    let mut reload = reload;
+    let streak_on = task.streak_enabled;
+    let goal = task.streak_goal;
+    let goal_value = goal.map(|g| g.to_string()).unwrap_or_default();
+    let id_toggle = task.id.clone();
+    let id_goal = task.id.clone();
+    rsx! {
+        div { class: "streak-panel",
+            if streak_on {
+                span { class: "stat", "Current " b { "🔥 {task.streak_current}" } }
+                span { class: "stat", "Best " b { "{task.streak_best}" } }
+                label {
+                    "Goal "
+                    input {
+                        r#type: "number",
+                        min: "1",
+                        value: "{goal_value}",
+                        onchange: move |e| {
+                            let id = id_goal.clone();
+                            let new_goal = e.value().trim().parse::<i64>().ok().filter(|g| *g > 0);
                             spawn(async move {
-                                let _ = api::set_streak(id, !streak_on, goal).await;
+                                let _ = api::set_streak(id, true, new_goal).await;
                                 reload += 1;
                             });
                         },
-                        if streak_on { "Stop tracking" } else { "Track streak" }
                     }
                 }
+            } else {
+                span { "Track how many times in a row you complete this." }
+            }
+            button {
+                class: if streak_on { "btn btn-cancel" } else { "btn btn-add" },
+                onclick: move |_| {
+                    let id = id_toggle.clone();
+                    spawn(async move {
+                        let _ = api::set_streak(id, !streak_on, goal).await;
+                        reload += 1;
+                    });
+                },
+                if streak_on { "Stop tracking" } else { "Track streak" }
             }
         }
     }

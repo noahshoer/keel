@@ -12,6 +12,18 @@ use crate::icons::{self, Icon};
 /// Which popover an editor has open.
 pub type OpenPop = Signal<Option<&'static str>>;
 
+/// How a picker's button looks outside the editor's chip row: the task
+/// view's field rows and dotted "+ …" pills. The popover is the same.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Face {
+    /// The button's classes, in place of the chip's.
+    pub class: String,
+    /// The button's text, in place of the chip's.
+    pub text: String,
+    /// Shows the picker's icon before the text.
+    pub icon: bool,
+}
+
 const MONTHS: [&str; 12] = [
     "January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
     "November", "December",
@@ -144,6 +156,8 @@ pub fn DatePicker(
     /// calendar (core works out the days).
     #[props(default)]
     rule: Option<keel_core::recurrence::Recurrence>,
+    #[props(default)]
+    face: Option<Face>,
 ) -> Element {
     let mut open = open;
     let today = crate::today();
@@ -153,18 +167,26 @@ pub fn DatePicker(
 
     let (chip_text, chip_class) = date_chip(selected, current_time, today);
 
+    let btn_class = match &face { Some(f) => f.class.clone(), None => format!("chip chip-btn due-chip {chip_class}") };
     rsx! {
         div { class: "chip-wrap",
             button {
                 r#type: "button",
-                class: "chip chip-btn due-chip {chip_class}",
+                class: "{btn_class}",
                 class: if is_open { "chip-open" },
                 title: "Date",
                 onclick: move |_| open.set(if is_open { None } else { Some("date") }),
-                Icon { svg: icons::calendar_small() }
-                "{chip_text}"
-                if rule.is_some() {
-                    Icon { svg: icons::repeat_small() }
+                if face.as_ref().is_none_or(|f| f.icon) {
+                    Icon { svg: icons::calendar_small() }
+                }
+                match &face {
+                    Some(f) => rsx! { "{f.text}" },
+                    None => rsx! {
+                        "{chip_text}"
+                        if rule.is_some() {
+                            Icon { svg: icons::repeat_small() }
+                        }
+                    },
                 }
             }
             if is_open {
@@ -607,7 +629,12 @@ fn Scheduler(
 
 /// The deadline chip + date-only scheduler. `deadline` is `YYYY-MM-DD` or empty.
 #[component]
-pub fn DeadlinePicker(deadline: String, open: OpenPop, on_change: EventHandler<String>) -> Element {
+pub fn DeadlinePicker(
+    deadline: String,
+    open: OpenPop,
+    on_change: EventHandler<String>,
+    #[props(default)] face: Option<Face>,
+) -> Element {
     let mut open = open;
     let today = crate::today();
     let selected = NaiveDate::parse_from_str(&deadline, "%Y-%m-%d").ok();
@@ -618,16 +645,22 @@ pub fn DeadlinePicker(deadline: String, open: OpenPop, on_change: EventHandler<S
         Some(_) => "deadline-chip set",
         None => "deadline-chip",
     };
+    let btn_class = match &face { Some(f) => f.class.clone(), None => format!("chip chip-btn {class}") };
     rsx! {
         div { class: "chip-wrap",
             button {
                 r#type: "button",
-                class: "chip chip-btn {class}",
+                class: "{btn_class}",
                 class: if is_open { "chip-open" },
                 title: "Deadline: the date it must be done by",
                 onclick: move |_| open.set(if is_open { None } else { Some("deadline") }),
-                Icon { svg: icons::target_small() }
-                "{text}"
+                if face.as_ref().is_none_or(|f| f.icon) {
+                    Icon { svg: icons::target_small() }
+                }
+                match &face {
+                    Some(f) => rsx! { "{f.text}" },
+                    None => rsx! { "{text}" },
+                }
             }
             if is_open {
                 Scheduler {
@@ -701,6 +734,8 @@ pub fn ReminderPicker(
     has_due: bool,
     open: OpenPop,
     on_change: EventHandler<Vec<ReminderDraft>>,
+    #[props(default)]
+    face: Option<Face>,
 ) -> Element {
     let mut open = open;
     let today = crate::today();
@@ -733,16 +768,26 @@ pub fn ReminderPicker(
     };
     let presets = REMINDER_PRESETS;
 
+    let btn_class = match &face {
+        Some(f) => f.class.clone(),
+        None if reminders.is_empty() => "chip chip-btn".to_string(),
+        None => "chip chip-btn reminder-chip".to_string(),
+    };
     rsx! {
         div { class: "chip-wrap",
             button {
                 r#type: "button",
-                class: if reminders.is_empty() { "chip chip-btn" } else { "chip chip-btn reminder-chip" },
+                class: "{btn_class}",
                 class: if is_open { "chip-open" },
                 title: "Reminders",
                 onclick: move |_| open.set(if is_open { None } else { Some("reminders") }),
-                Icon { svg: icons::bell_small() }
-                "{text}"
+                if face.as_ref().is_none_or(|f| f.icon) {
+                    Icon { svg: icons::bell_small() }
+                }
+                match &face {
+                    Some(f) => rsx! { "{f.text}" },
+                    None => rsx! { "{text}" },
+                }
             }
             if is_open {
                 div { class: "popover menu reminder-pop",
@@ -856,20 +901,30 @@ pub fn Menu(
     selected: String,
     open: OpenPop,
     on_select: EventHandler<String>,
+    #[props(default)]
+    face: Option<Face>,
 ) -> Element {
     let mut open = open;
     let is_open = open() == Some(id);
+    let btn_class = match &face { Some(f) => f.class.clone(), None => "chip chip-btn".to_string() };
     rsx! {
         div { class: "chip-wrap",
             button {
                 r#type: "button",
-                class: "chip chip-btn",
+                class: "{btn_class}",
                 class: if is_open { "chip-open" },
                 title,
                 onclick: move |_| open.set(if is_open { None } else { Some(id) }),
-                span { class: "chip-icon {icon_class}", Icon { svg: icon } }
-                "{text}"
-                span { class: "chip-caret", Icon { svg: icons::chevron_down_small() } }
+                if face.as_ref().is_none_or(|f| f.icon) {
+                    span { class: "chip-icon {icon_class}", Icon { svg: icon } }
+                }
+                match &face {
+                    Some(f) => rsx! { "{f.text}" },
+                    None => rsx! {
+                        "{text}"
+                        span { class: "chip-caret", Icon { svg: icons::chevron_down_small() } }
+                    },
+                }
             }
             if is_open {
                 div { class: "popover menu",
