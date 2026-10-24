@@ -206,9 +206,18 @@ const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const scrim = () => document.querySelector('.tv-scrim');
 const measure = () => [['tv-close', '.tv-sheet .tv-head .tv-close'], ['tv-more', '.tv-sheet .tv-head .tv-more']].map(([id, sel]) => {
   const r = document.querySelector(sel)?.getBoundingClientRect();
-  return r && r.width > 0 && { id, x: r.x, y: r.y, w: r.width, h: r.height };
+  // On screen: the keyboard can pan the visual viewport over the layout one.
+  const v = window.visualViewport;
+  return r && r.width > 0 && { id, x: r.x - (v?.offsetLeft ?? 0), y: r.y - (v?.offsetTop ?? 0), w: r.width, h: r.height };
 }).filter(Boolean);
-const rectKey = (el) => { const r = el.getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map(Math.round).join(); };
+// Where the sheet is on screen: its layout rect plus the visual viewport's
+// pan, zoom and height (the keyboard moves those, not the layout rect).
+const rectKey = (el) => {
+  const r = el.getBoundingClientRect(), v = window.visualViewport;
+  const pan = v ? [v.offsetLeft, v.offsetTop, v.scale * 100, v.height] : [];
+  return [r.x, r.y, r.width, r.height, ...pan].map(Math.round).join();
+};
+window.keelSheetKey = () => { const s = document.querySelector('.tv-sheet'); return s ? rectKey(s) : ''; };
 let lastRect = '';
 const settle = async () => {
   const sheet = document.querySelector('.tv-sheet');
@@ -483,6 +492,14 @@ mod tests {
         assert_eq!(sheet_release(40.0, 0.8), SheetRelease::Close, "a fast flick down");
         assert_eq!(sheet_release(6.0, 0.8), SheetRelease::SpringBack, "a twitch, not a flick");
         assert_eq!(sheet_release(120.0, -0.6), SheetRelease::SpringBack, "flung back up");
+    }
+
+    #[test]
+    fn the_keyboard_panning_the_viewport_counts_as_moving_the_sheet() {
+        // The layout rect doesn't change when the keyboard pans the visual
+        // viewport; the glass buttons must still be measured again.
+        assert!(SHEET_DRAG_JS.contains("[v.offsetLeft, v.offsetTop, v.scale * 100, v.height]"));
+        assert!(SHEET_DRAG_JS.contains("y: r.y - (v?.offsetTop ?? 0)"));
     }
 
     #[test]
