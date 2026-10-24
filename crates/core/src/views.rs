@@ -157,6 +157,87 @@ pub fn children<'a>(parent: &Id, all: &'a [Task]) -> Vec<&'a Task> {
     kids
 }
 
+/// One task in a card, with its sub-task counts.
+#[derive(Clone, PartialEq, Debug)]
+pub struct CardRow {
+    pub task: Task,
+    pub progress: Option<Progress>,
+}
+
+/// A head task and the matched rows grouped under it. `head_matches == false`
+/// means the head is context only (no circle; tapping it opens the head task).
+#[derive(Clone, PartialEq, Debug)]
+pub struct Card {
+    pub head: CardRow,
+    pub head_matches: bool,
+    pub rows: Vec<CardRow>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CardMode {
+    /// Only top-level matches, one card each.
+    TopLevel,
+    /// Every match, grouped under its top-level ancestor.
+    Grouped,
+}
+
+/// The top-level ancestor of `task`. The walk stops at a parent that is
+/// missing or deleted, and a `parent_id` cycle makes the task its own root.
+pub fn root<'a>(task: &'a Task, all: &'a [Task]) -> &'a Task {
+    let mut cur = task;
+    let mut seen = vec![&task.id];
+    while let Some(pid) = cur.parent_id.as_ref() {
+        let Some(parent) = all.iter().find(|t| !t.is_deleted && &t.id == pid) else {
+            break;
+        };
+        if seen.contains(&&parent.id) {
+            return task;
+        }
+        seen.push(&parent.id);
+        cur = parent;
+    }
+    cur
+}
+
+/// Groups a view's matched tasks into cards (see `CardMode`). Cards keep the
+/// order of their first matched member; rows keep the input order.
+pub fn cards(matched: Vec<Task>, all: &[Task], mode: CardMode) -> Vec<Card> {
+    let row = |task: Task| {
+        let progress = progress(&task.id, all);
+        CardRow { task, progress }
+    };
+    if mode == CardMode::TopLevel {
+        let tops: Vec<Task> = matched.into_iter().filter(|t| root(t, all).id == t.id).collect();
+        return tops
+            .into_iter()
+            .map(|t| Card { head: row(t), head_matches: true, rows: Vec::new() })
+            .collect();
+    }
+    let mut out: Vec<(Id, Card)> = Vec::new();
+    for task in matched {
+        let root_task = root(&task, all);
+        let root_id = root_task.id.clone();
+        let is_root = root_id == task.id;
+        let unmatched_head = (!is_root).then(|| root_task.clone());
+        let idx = match out.iter().position(|(id, _)| *id == root_id) {
+            Some(i) => i,
+            None => {
+                let head = unmatched_head.unwrap_or_else(|| task.clone());
+                out.push((root_id, Card { head: row(head), head_matches: is_root, rows: Vec::new() }));
+                out.len() - 1
+            }
+        };
+        let card = &mut out[idx].1;
+        if is_root {
+            card.head = row(task);
+            card.head_matches = true;
+        } else {
+            card.rows.push(row(task));
+        }
+    }
+    out.into_iter().map(|(_, c)| c).collect()
+}
+
 /// The time of day of a task's due, when it has one (`…THH:MM:SS`).
 pub fn due_time(task: &Task) -> Option<chrono::NaiveTime> {
     task.due
@@ -440,5 +521,186 @@ mod progress_tests {
         let all = vec![p.clone(), a, b, c, d];
         let names: Vec<&str> = children(&p.id, &all).iter().map(|t| t.content.as_str()).collect();
         assert_eq!(names, vec!["b", "c", "a"]);
+    }
+}
+
+#[cfg(test)]
+mod card_tests {
+    use super::{cards, progress, root, Card, CardMode, Progress};
+    use crate::ids::Id;
+    use crate::model::{Due, Priority, Task};
+
+    struct Fx {
+        pack: Task,
+        chargers: Task,
+        passport: Task,
+        clothes: Task,
+        call: Task,
+    }
+
+    fn task(name: &str, parent: Option<&Task>) -> Task {
+        let mut t = Task::new(name, Id::from("P"));
+        t.parent_id = parent.map(|p| p.id.clone());
+        t
+    }
+
+    fn fx() -> Fx {
+        let mut pack = task("Pack", None);
+        pack.priority = Priority::P2;
+        Fx {
+            chargers: task("Chargers", Some(&pack)),
+            passport: task("Passport", Some(&pack)),
+            clothes: task("Clothes", Some(&pack)),
+            call: task("Call", None),
+            pack,
+        }
+    }
+
+    fn all(f: &Fx) -> Vec<Task> {
+        vec![f.pack.clone(), f.chargers.clone(), f.passport.clone(), f.clothes.clone(), f.call.clone()]
+    }
+
+    fn heads(cs: &[Card]) -> Vec<String> {
+        cs.iter().map(|c| c.head.task.content.clone()).collect()
+    }
+
+    fn rows(c: &Card) -> Vec<String> {
+        c.rows.iter().map(|r| r.task.content.clone()).collect()
+    }
+
+    #[test]
+    fn toplevel_hides_subtasks() {
+        let f = fx();
+        let m = vec![f.call.clone(), f.pack.clone(), f.chargers.clone(), f.passport.clone(), f.clothes.clone()];
+        let cs = cards(m, &all(&f), CardMode::TopLevel);
+        assert_eq!(heads(&cs), ["Call", "Pack"]);
+        assert!(cs.iter().all(|c| c.head_matches && c.rows.is_empty()));
+    }
+
+    #[test]
+    fn toplevel_keeps_orphans() {
+        let f = fx();
+        let mut orphan = task("Orphan", None);
+        orphan.parent_id = Some(Id::from("gone"));
+        let mut a = all(&f);
+        a.push(orphan.clone());
+        let cs = cards(vec![orphan], &a, CardMode::TopLevel);
+        assert_eq!(heads(&cs), ["Orphan"]);
+    }
+
+    #[test]
+    fn grouped_subtask_under_unmatched_parent() {
+        let f = fx();
+        let cs = cards(vec![f.call.clone(), f.chargers.clone()], &all(&f), CardMode::Grouped);
+        assert_eq!(heads(&cs), ["Call", "Pack"]);
+        assert!(cs[0].head_matches);
+        assert!(!cs[1].head_matches);
+        assert_eq!(rows(&cs[1]), ["Chargers"]);
+    }
+
+    #[test]
+    fn grouped_siblings_share_card() {
+        let f = fx();
+        let m = vec![f.chargers.clone(), f.call.clone(), f.passport.clone()];
+        let cs = cards(m, &all(&f), CardMode::Grouped);
+        assert_eq!(heads(&cs), ["Pack", "Call"]);
+        assert_eq!(rows(&cs[0]), ["Chargers", "Passport"]);
+    }
+
+    #[test]
+    fn grouped_parent_also_matches() {
+        let f = fx();
+        let m = vec![f.chargers.clone(), f.pack.clone(), f.passport.clone()];
+        let cs = cards(m, &all(&f), CardMode::Grouped);
+        assert_eq!(cs.len(), 1);
+        assert_eq!(cs[0].head.task.content, "Pack");
+        assert!(cs[0].head_matches);
+        assert_eq!(rows(&cs[0]), ["Chargers", "Passport"]);
+    }
+
+    #[test]
+    fn grouped_grandchild_goes_to_root() {
+        let f = fx();
+        let tooth = task("Toothbrush", Some(&f.chargers));
+        let mut a = all(&f);
+        a.push(tooth.clone());
+        let cs = cards(vec![tooth], &a, CardMode::Grouped);
+        assert_eq!(heads(&cs), ["Pack"]);
+        assert_eq!(rows(&cs[0]), ["Toothbrush"]);
+    }
+
+    #[test]
+    fn grouped_completed_parent_is_context() {
+        let mut f = fx();
+        f.pack.checked = true;
+        let mut h = task("H", Some(&f.pack));
+        h.due = Some(Due {
+            date: "2026-10-23".into(),
+            timezone: None,
+            string: "every day".into(),
+            lang: "en".into(),
+            is_recurring: true,
+            recurrence: None,
+        });
+        let mut a = all(&f);
+        a.push(h.clone());
+        let cs = cards(vec![h], &a, CardMode::Grouped);
+        assert_eq!(cs.len(), 1);
+        assert_eq!(cs[0].head.task.content, "Pack");
+        assert!(!cs[0].head_matches);
+        assert_eq!(rows(&cs[0]), ["H"]);
+    }
+
+    #[test]
+    fn cards_group_across_projects() {
+        let mut f = fx();
+        f.chargers.project_id = Id::from("other");
+        let cs = cards(vec![f.chargers.clone()], &all(&f), CardMode::Grouped);
+        assert_eq!(heads(&cs), ["Pack"]);
+        assert_eq!(rows(&cs[0]), ["Chargers"]);
+    }
+
+    #[test]
+    fn cycle_does_not_hang() {
+        let mut a = task("A", None);
+        let mut b = task("B", None);
+        a.parent_id = Some(b.id.clone());
+        b.parent_id = Some(a.id.clone());
+        let all = vec![a.clone(), b.clone()];
+        assert_eq!(root(&a, &all).content, "A");
+        for mode in [CardMode::TopLevel, CardMode::Grouped] {
+            let cs = cards(vec![a.clone(), b.clone()], &all, mode);
+            let mut seen: Vec<String> = Vec::new();
+            for c in &cs {
+                seen.push(c.head.task.content.clone());
+                seen.extend(rows(c));
+            }
+            seen.sort();
+            assert_eq!(seen, ["A", "B"]);
+        }
+    }
+
+    #[test]
+    fn card_rows_carry_progress() {
+        let mut f = fx();
+        let cs = cards(vec![f.pack.clone()], &all(&f), CardMode::Grouped);
+        assert_eq!(cs[0].head.progress, Some(Progress { done: 0, total: 3 }));
+        f.chargers.checked = true;
+        f.passport.checked = true;
+        let a = all(&f);
+        let cs = cards(vec![f.pack.clone(), f.clothes.clone()], &a, CardMode::Grouped);
+        assert_eq!(cs[0].head.progress, Some(Progress { done: 2, total: 3 }));
+        assert_eq!(cs[0].rows[0].progress, progress(&f.clothes.id, &a));
+    }
+
+    #[test]
+    fn all_done_head() {
+        let mut f = fx();
+        f.chargers.checked = true;
+        f.passport.checked = true;
+        f.clothes.checked = true;
+        let cs = cards(vec![f.pack.clone()], &all(&f), CardMode::Grouped);
+        assert!(cs[0].head.progress.unwrap().all_done());
+        assert!(cs[0].rows.is_empty());
     }
 }
