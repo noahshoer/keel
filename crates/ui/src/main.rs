@@ -237,7 +237,7 @@ fn App() -> Element {
     // Task reminders, read by every task row (refreshed with each load).
     let mut reminders = use_context_provider(|| Signal::new(Vec::<Reminder>::new()));
     // The task view's stack; rows open tasks into it.
-    task_view::nav::provide_nav();
+    let mut nav = task_view::nav::provide_nav();
     pickers::provide_touch();
     pickers::provide_week_start();
     // The mark a completed circle fills with (a per-device setting).
@@ -360,6 +360,7 @@ fn App() -> Element {
         let today_tasks = api::today_view().await?;
         let today_count = today_tasks.len();
         let all = api::all_tasks().await?;
+        nav.all.set(all.clone());
         let mut filter_groups = Vec::new();
         let mut filter_error = None;
         let tasks = match &v {
@@ -754,6 +755,11 @@ enum HeadMode {
     ConfirmDelete,
 }
 
+/// A section's cards: top-level tasks only, one card each.
+fn section_cards(tasks: Vec<Task>, all: &[Task]) -> Vec<views::Card> {
+    views::cards(tasks, all, CardMode::TopLevel)
+}
+
 /// A project section: header (rename / delete on hover), its tasks, and its
 /// own "+ Add task".
 #[component]
@@ -772,8 +778,9 @@ fn SectionBlock(
     let mut reload = reload;
     let mut mode = use_signal(|| HeadMode::Normal);
     let mut draft = use_signal(String::new);
-    let count = tasks.len();
-    let cards = views::cards(tasks, &all, CardMode::TopLevel);
+    let cards = section_cards(tasks, &all);
+    // What the section shows: its top-level tasks (sub-tasks go with them).
+    let count = cards.len();
     let name = section.name.clone();
     let id_rename = section.id.clone();
     let id_delete = section.id.clone();
@@ -969,6 +976,18 @@ mod card_mode_tests {
         assert_eq!(view_mode(&View::Upcoming), CardMode::Grouped);
         assert_eq!(view_mode(&View::Label("home".into())), CardMode::Grouped);
         assert_eq!(view_mode(&View::Filter(Id::from("f"), "F".into(), "today".into())), CardMode::Grouped);
+    }
+
+    #[test]
+    fn section_count_is_top_level_tasks() {
+        let day = d(2026, 10, 23);
+        let p = task("Pack", None, day);
+        let c = task("Chargers", Some(&p), day);
+        let g = task("Cable", Some(&c), day);
+        let other = task("Gym", None, day);
+        let in_section = vec![p.clone(), c.clone(), g.clone(), other.clone()];
+        let all = in_section.clone();
+        assert_eq!(section_cards(in_section, &all).len(), 2);
     }
 
     #[test]

@@ -15,6 +15,27 @@ impl ViewStack {
         self.0 = vec![id];
     }
 
+    /// Replaces the stack with `id` on top of its ancestors, top-level first,
+    /// so Back walks up to the parent. The walk follows `parent_id` through
+    /// live tasks in `all` and stops at a missing or deleted parent, or at a cycle.
+    pub fn open_chain(&mut self, id: Id, all: &[Task]) {
+        let mut chain = vec![id];
+        loop {
+            let cur = chain.last().expect("chain starts non-empty");
+            let parent = all
+                .iter()
+                .find(|t| &t.id == cur)
+                .and_then(|t| t.parent_id.as_ref())
+                .and_then(|p| all.iter().find(|t| !t.is_deleted && &t.id == p));
+            match parent {
+                Some(p) if !chain.contains(&p.id) => chain.push(p.id.clone()),
+                _ => break,
+            }
+        }
+        chain.reverse();
+        self.0 = chain;
+    }
+
     /// Opens a sub-task on top of the current task.
     pub fn push(&mut self, id: Id) {
         self.0.push(id);
@@ -72,12 +93,15 @@ pub fn detail(id: &Id, all: &[Task], show_completed: bool) -> Option<TaskDetail>
 pub struct TaskViewNav {
     pub stack: Signal<ViewStack>,
     pub show_completed: Signal<bool>,
+    /// Every task, refreshed with each load (rows open tasks with their ancestors).
+    pub all: Signal<Vec<Task>>,
 }
 
 pub fn provide_nav() -> TaskViewNav {
     use_context_provider(|| TaskViewNav {
         stack: Signal::new(ViewStack::default()),
         show_completed: Signal::new(false),
+        all: Signal::new(Vec::new()),
     })
 }
 
@@ -90,6 +114,12 @@ impl TaskViewNav {
     pub fn open(mut self, id: Id) {
         self.show_completed.set(false);
         self.stack.write().open(id);
+    }
+
+    /// Opens a task from a list with its ancestors under it; show-completed starts off.
+    pub fn open_chain(mut self, id: Id, all: &[Task]) {
+        self.show_completed.set(false);
+        self.stack.write().open_chain(id, all);
     }
 
     pub fn push(mut self, id: Id) {
@@ -132,6 +162,44 @@ mod tests {
         s.push(id("B"));
         s.open(id("C"));
         assert_eq!(s, stack(&["C"]));
+    }
+
+    #[test]
+    fn open_chain_builds_ancestors() {
+        let all = vec![task("P", None, 0), task("C", Some("P"), 0), task("G", Some("C"), 0)];
+        let mut s = stack(&["X"]);
+        s.open_chain(id("G"), &all);
+        assert_eq!(s, stack(&["P", "C", "G"]));
+    }
+
+    #[test]
+    fn open_chain_top_level_is_single() {
+        let all = vec![task("P", None, 0), task("C", Some("P"), 0)];
+        let mut s = ViewStack::default();
+        s.open_chain(id("P"), &all);
+        assert_eq!(s, stack(&["P"]));
+    }
+
+    #[test]
+    fn open_chain_stops_at_missing_parent() {
+        // B is gone (or deleted); C's chain starts at C.
+        let mut b = task("B", Some("A"), 0);
+        b.is_deleted = true;
+        let all = vec![task("A", None, 0), b, task("C", Some("B"), 0), task("D", Some("Z"), 0)];
+        let mut s = ViewStack::default();
+        s.open_chain(id("C"), &all);
+        assert_eq!(s, stack(&["C"]));
+        s.open_chain(id("D"), &all);
+        assert_eq!(s, stack(&["D"]));
+    }
+
+    #[test]
+    fn open_chain_cycle_terminates() {
+        let all = vec![task("A", Some("B"), 0), task("B", Some("A"), 0)];
+        let mut s = ViewStack::default();
+        s.open_chain(id("A"), &all);
+        assert_eq!(s.top(), Some(&id("A")));
+        assert!(s.0.len() <= 2);
     }
 
     #[test]

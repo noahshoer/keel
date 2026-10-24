@@ -190,7 +190,7 @@ pub fn TaskRow(
                 div {
                     class: "task-body",
                     title: "Open task",
-                    onclick: move |_| nav.open(id_open.clone()),
+                    onclick: move |_| nav.open_chain(id_open.clone(), &nav.all.read()),
                     div { class: "task-title",
                         div { class: "task-content", "{task.content}" }
                         if let Some(p) = progress {
@@ -332,7 +332,7 @@ pub fn CompletedRow(task: Task, today: NaiveDate, project_name: Option<String>, 
                 div {
                     class: "task-body",
                     title: "Open task",
-                    onclick: move |_| nav.open(id_open.clone()),
+                    onclick: move |_| nav.open_chain(id_open.clone(), &nav.all.read()),
                     div { class: "task-content", "{task.content}" }
                     div { class: "task-meta",
                         span { class: "done-when", "Completed · {when}" }
