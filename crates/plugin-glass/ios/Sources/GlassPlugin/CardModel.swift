@@ -350,6 +350,15 @@ final class CardModel: ObservableObject {
   /// While the sheet glides, its top follows the page's curve frame by frame.
   @Published var sheetGlide: SheetGlide?
   var sheetOrder = SheetOrder()
+  /// While the page drags the sheet, the glass follows the finger natively.
+  var sheetFollow: SheetFollow?
+  /// The finger's latest y on the web view (nil when no finger is down).
+  var finger: CGFloat?
+
+  func fingerMoved(_ y: CGFloat?) {
+    finger = y
+    if let y, let f = sheetFollow { sheetTop = f.top(finger: y) }
+  }
 
   /// Window-space frames of the controls that take touches while the card is closed.
   var hitRects: [String: CGRect] = [:]
@@ -380,6 +389,15 @@ final class CardModel: ObservableObject {
   func placeSheet(_ a: SheetArgs) {
     guard sheetOrder.accepts(epoch: a.epoch, seq: a.seq) else { return }
     if let buttons = a.buttons { sheetButtons = buttons }
+    if let f0 = a.finger {
+      // The drag took over: from here the finger moves the glass.
+      let follow = SheetFollow(top0: a.top, finger0: f0, floor: a.floor ?? -.greatestFiniteMagnitude)
+      sheetFollow = follow
+      sheetGlide = nil
+      sheetTop = follow.top(finger: finger ?? f0)
+      return
+    }
+    sheetFollow = nil
     let now = Date()
     if a.duration > 0 {
       let from = a.from ?? sheetTopNow(now)

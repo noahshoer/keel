@@ -325,8 +325,10 @@ pub struct SheetMsg {
 ///
 /// iPhone: the glass X and ••• (`plugin:glass|sheet`) are told where the
 /// sheet's top is on screen: with the sheet's first frame as it opens (they
-/// ride its slide-up with the same curve), every frame of a drag, the target
-/// and duration of each settle, and on every viewport change (the keyboard).
+/// ride its slide-up with the same curve); once when a drag takes over, with
+/// the finger's place, after which Swift moves them with the finger itself
+/// (no message per frame); the target and duration of each settle; and on
+/// every viewport change (the keyboard).
 /// So they never hide and the web buttons never show in their place.
 ///
 /// The keyboard: `--vv-top`, `--vv-h` and `--kb` (on the root) keep the
@@ -351,16 +353,9 @@ const send = (m) => {
   window.__TAURI__?.core.invoke('plugin:glass|sheet', { ...m, epoch, seq: ++seqOut })
     .catch(() => { if (m.buttons) sheetEl()?.classList.remove('glass-head'); });
 };
-let frame = null, frameTop = 0;
-// One position per animation frame while the sheet follows the finger.
-const follow = (top) => {
-  frameTop = top;
-  if (frame === null) frame = requestAnimationFrame(() => { frame = null; send({ top: frameTop, duration: 0 }); });
-};
 // A glide in step with the page's own animation: same start (wall clock),
 // duration and curve, so Swift draws the glass where the sheet is each frame.
 const glide = (top, s, extra = {}) => {
-  if (frame !== null) { cancelAnimationFrame(frame); frame = null; }
   send({ top, duration: s, start: Date.now(), ...extra });
 };
 const shiftOf = (el) => new DOMMatrix(getComputedStyle(el).transform).m42 || 0;
@@ -444,13 +439,16 @@ document.addEventListener('touchmove', (ev) => {
     Object.assign(g, heights(sheet), { dy0: dy });
     g.from = keelSheet.from(g.start[5], settling, g.M);
     sheet.classList.add('tv-large');
+    // Hand the glass to the finger: Swift moves it natively from here
+    // (same rule as below) until the release's glide.
+    const vt = vvTop();
+    send({ top: keelSheet.screenTop(g.largeTop, g.from, vt), finger: g.y + dy - vt, floor: g.largeTop - vt, duration: 0 });
   }
   ev.preventDefault();
   g.yNow = keelSheet.drag(g.from, dy - g.dy0);
   g.samples.push([ev.timeStamp, dy]);
   if (g.samples.length > 6) g.samples.shift();
   place(g, g.yNow, 0);
-  follow(keelSheet.screenTop(g.largeTop, g.yNow, vvTop()));
 }, { passive: false, capture: true });
 const end = (cancelled) => {
   const d = g;
@@ -503,7 +501,6 @@ const viewport = () => {
     }
     return;
   }
-  if (frame !== null) { cancelAnimationFrame(frame); frame = null; }
   send({ top: sheet.getBoundingClientRect().top - vvTop(), duration: 0 });
 };
 window.keelSheetViewport = viewport;
