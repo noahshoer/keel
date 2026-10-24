@@ -109,6 +109,54 @@ pub fn nest(tasks: Vec<Task>) -> Vec<Nested> {
     out
 }
 
+/// Sub-task completion counts for one parent.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct Progress {
+    pub done: usize,
+    pub total: usize,
+}
+
+impl Progress {
+    /// True when there is at least one counted sub-task and all are checked.
+    pub fn all_done(&self) -> bool {
+        self.total > 0 && self.done == self.total
+    }
+
+    /// Compact count for rows: "2/5".
+    pub fn short(&self) -> String {
+        format!("{}/{}", self.done, self.total)
+    }
+
+    /// Spelled-out count for the task view header: "2 of 5".
+    pub fn long(&self) -> String {
+        format!("{} of {}", self.done, self.total)
+    }
+}
+
+/// Counts a task's direct, non-deleted sub-tasks. Repeating sub-tasks are
+/// left out (they never stay complete). `None` when nothing is counted.
+pub fn progress(parent: &Id, all: &[Task]) -> Option<Progress> {
+    let mut p = Progress { done: 0, total: 0 };
+    for t in all {
+        if t.is_deleted || t.parent_id.as_ref() != Some(parent) || t.due.as_ref().is_some_and(|d| d.is_recurring) {
+            continue;
+        }
+        p.total += 1;
+        if t.checked {
+            p.done += 1;
+        }
+    }
+    (p.total > 0).then_some(p)
+}
+
+/// A task's direct, non-deleted sub-tasks ordered by `child_order`, then `added_at`.
+pub fn children<'a>(parent: &Id, all: &'a [Task]) -> Vec<&'a Task> {
+    let mut kids: Vec<&Task> =
+        all.iter().filter(|t| !t.is_deleted && t.parent_id.as_ref() == Some(parent)).collect();
+    kids.sort_by(|a, b| a.child_order.cmp(&b.child_order).then(a.added_at.cmp(&b.added_at)));
+    kids
+}
+
 /// The time of day of a task's due, when it has one (`…THH:MM:SS`).
 pub fn due_time(task: &Task) -> Option<chrono::NaiveTime> {
     task.due
@@ -293,5 +341,104 @@ mod time_tests {
         assert_eq!(due_time(&task), None, "date-only due has no time");
         task.due = Some(due("2026-10-19T17:30:00"));
         assert_eq!(due_time(&task), Some(t(17, 30)));
+    }
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::{children, progress, Progress};
+    use crate::ids::Id;
+    use crate::model::{Due, Task};
+
+    fn t(name: &str, parent: Option<&Task>, checked: bool, recurring: bool) -> Task {
+        let mut task = Task::new(name, Id::from("P"));
+        task.parent_id = parent.map(|p| p.id.clone());
+        task.checked = checked;
+        if recurring {
+            task.due = Some(Due {
+                date: "2026-10-23".into(),
+                timezone: None,
+                string: "every day".into(),
+                lang: "en".into(),
+                is_recurring: true,
+                recurrence: None,
+            });
+        }
+        task
+    }
+
+    #[test]
+    fn progress_none_without_children() {
+        let p = t("p", None, false, false);
+        assert_eq!(progress(&p.id, &[p.clone()]), None);
+    }
+
+    #[test]
+    fn progress_counts_direct_children_only() {
+        let p = t("p", None, false, false);
+        let a = t("a", Some(&p), true, false);
+        let b = t("b", Some(&p), false, false);
+        let c = t("c", Some(&p), false, false);
+        let a1 = t("a1", Some(&a), false, false);
+        let a2 = t("a2", Some(&a), false, false);
+        let all = vec![p.clone(), a.clone(), b, c, a1, a2];
+        assert_eq!(progress(&p.id, &all), Some(Progress { done: 1, total: 3 }));
+        assert_eq!(progress(&a.id, &all), Some(Progress { done: 0, total: 2 }));
+    }
+
+    #[test]
+    fn progress_skips_repeating_children() {
+        let p = t("p", None, false, false);
+        let a = t("a", Some(&p), true, false);
+        let h = t("h", Some(&p), false, true);
+        let pr = progress(&p.id, &[p.clone(), a, h]).unwrap();
+        assert_eq!(pr, Progress { done: 1, total: 1 });
+        assert!(pr.all_done());
+    }
+
+    #[test]
+    fn progress_none_when_only_repeating_children() {
+        let p = t("p", None, false, false);
+        let h = t("h", Some(&p), false, true);
+        assert_eq!(progress(&p.id, &[p.clone(), h]), None);
+    }
+
+    #[test]
+    fn progress_skips_deleted_children() {
+        let p = t("p", None, false, false);
+        let a = t("a", Some(&p), false, false);
+        let mut d = t("d", Some(&p), true, false);
+        d.is_deleted = true;
+        assert_eq!(progress(&p.id, &[p.clone(), a, d]), Some(Progress { done: 0, total: 1 }));
+    }
+
+    #[test]
+    fn all_done_needs_every_child() {
+        assert!(Progress { done: 5, total: 5 }.all_done());
+        assert!(!Progress { done: 4, total: 5 }.all_done());
+        assert!(!Progress { done: 0, total: 0 }.all_done());
+    }
+
+    #[test]
+    fn progress_text() {
+        assert_eq!(Progress { done: 2, total: 5 }.short(), "2/5");
+        assert_eq!(Progress { done: 5, total: 5 }.long(), "5 of 5");
+    }
+
+    #[test]
+    fn children_in_child_order() {
+        let p = t("p", None, false, false);
+        let mut a = t("a", Some(&p), false, false);
+        let mut b = t("b", Some(&p), false, false);
+        let mut c = t("c", Some(&p), false, false);
+        let mut d = t("d", Some(&p), false, false);
+        a.child_order = 2;
+        b.child_order = 0;
+        c.child_order = 1;
+        d.child_order = 3;
+        d.is_deleted = true;
+        let all = vec![p.clone(), a, b, c, d];
+        let names: Vec<&str> = children(&p.id, &all).iter().map(|t| t.content.as_str()).collect();
+        assert_eq!(names, vec!["b", "c", "a"]);
     }
 }
