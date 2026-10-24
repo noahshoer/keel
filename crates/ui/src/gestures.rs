@@ -24,7 +24,7 @@ pub struct Swipe {
     pub width: f64,
     /// It started in a field, the editor, a popover or a dialog.
     pub blocked: bool,
-    /// It started in the task view's sheet (no drawer swipes there).
+    /// It started in the task view's sheet or its scrim (no drawer swipes there).
     #[serde(default)]
     pub in_sheet: bool,
     /// It started on the sheet's grabber or header (a swipe down closes it).
@@ -52,7 +52,7 @@ pub fn is_close_swipe(dx: f64, dy: f64) -> bool {
 
 /// Whether a finished touch closes the task sheet (phone layout only).
 pub fn sheet_swipe(s: &Swipe) -> bool {
-    s.on_grip && s.width < SHEET_MAX && is_close_swipe(s.dx, s.dy)
+    !s.blocked && s.on_grip && s.width < SHEET_MAX && is_close_swipe(s.dx, s.dy)
 }
 
 /// Reports each single-finger touch to Rust as a [`Swipe`].
@@ -63,7 +63,7 @@ document.addEventListener('touchstart', (ev) => {
   if (ev.touches.length !== 1) { start = null; return; }
   const t = ev.touches[0];
   const at = (sel) => !!ev.target.closest?.(sel);
-  start = { x: t.clientX, y: t.clientY, blocked: at(BLOCK), in_sheet: at('.tv-sheet'), on_grip: at('.tv-grabber, .tv-head') };
+  start = { x: t.clientX, y: t.clientY, blocked: at(BLOCK), in_sheet: at('.tv-sheet, .tv-scrim'), on_grip: at('.tv-grabber, .tv-head') };
 }, { passive: true });
 document.addEventListener('touchend', (ev) => {
   if (!start) return;
@@ -165,6 +165,18 @@ mod tests {
         assert!(!sheet_swipe(&Swipe { on_grip: false, ..grip.clone() }), "content scrolls instead");
         assert!(!sheet_swipe(&Swipe { width: 1280.0, ..grip.clone() }), "desktop panel");
         assert_eq!(drawer_swipe(&Swipe { in_sheet: true, ..swipe(120.0, 0.0) }, false), None, "no drawer from the sheet");
+    }
+
+    #[test]
+    fn a_drag_in_a_blocked_target_never_closes_the_sheet() {
+        let grip = Swipe { on_grip: true, in_sheet: true, blocked: true, ..swipe(0.0, 120.0) };
+        assert!(!sheet_swipe(&grip), "a drag inside the ••• menu");
+    }
+
+    #[test]
+    fn a_touch_on_the_scrim_counts_as_in_the_sheet() {
+        // So a sideways swipe on the scrim doesn't open the drawer over it.
+        assert!(SWIPE_JS.contains("in_sheet: at('.tv-sheet, .tv-scrim')"));
     }
 
     #[test]
