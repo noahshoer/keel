@@ -13,6 +13,7 @@ mod settings;
 mod sidebar;
 mod style;
 mod task_row;
+mod task_view;
 mod theme;
 
 use std::collections::HashMap;
