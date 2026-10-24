@@ -335,6 +335,17 @@ pub fn apply_at<R: Repository>(
                             d.date = format!("{}{}", iso(next), suffix);
                         }
                         streak::credit_completion(&mut task, occurrence);
+                        // A new occurrence starts with its sub-tasks unchecked
+                        // (repeating sub-tasks keep their own schedule).
+                        for mut child in descendants(repo, &task.id)? {
+                            let child_recurring = child.due.as_ref().is_some_and(|d| d.is_recurring);
+                            if child.checked && !child_recurring {
+                                child.checked = false;
+                                child.completed_at = None;
+                                child.updated_at = now;
+                                repo.upsert_task(&child)?;
+                            }
+                        }
                     }
                     None => {
                         task.checked = true;
