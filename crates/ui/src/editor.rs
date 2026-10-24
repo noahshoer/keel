@@ -463,6 +463,17 @@ pub async fn save_edit(id: Id, before: EditorValues, after: EditorValues, existi
     Ok(())
 }
 
+/// The labels a pick added by a name no label has yet (any case), so they
+/// can be created: names already on the task aren't.
+pub fn labels_to_create(before: &[String], after: &[String], known: &[Label]) -> Vec<String> {
+    after
+        .iter()
+        .filter(|n| !before.iter().any(|b| b.eq_ignore_ascii_case(n)))
+        .filter(|n| !known.iter().any(|l| l.name.eq_ignore_ascii_case(n)))
+        .cloned()
+        .collect()
+}
+
 /// Saves reminder edits: removes the ones taken out, adds the new ones.
 pub async fn sync_reminders(task_id: Id, before: &[ReminderDraft], after: &[ReminderDraft]) {
     for old in before {
@@ -1009,6 +1020,20 @@ pub fn AddTask(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_label_picked_by_a_new_name_is_created_once() {
+        let known = vec![Label::new("home")];
+        let before: Vec<String> = vec!["home".into()];
+        let after: Vec<String> = vec!["home".into(), "Travel".into()];
+        assert_eq!(labels_to_create(&before, &after, &known), ["Travel"]);
+        // Known names (any case) and names already on the task aren't created.
+        let after: Vec<String> = vec!["HOME".into()];
+        assert!(labels_to_create(&before, &after, &known).is_empty());
+        let before: Vec<String> = vec!["Travel".into()];
+        let after: Vec<String> = vec!["travel".into()];
+        assert!(labels_to_create(&before, &after, &known).is_empty());
+    }
 
     #[test]
     fn edit_changes_leave_quick_add_text_alone() {

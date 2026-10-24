@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::api;
 use crate::editor::{
     add_from_editor, apply_pick, labels_text, recurrence_for_at, unhighlight, with_title, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
-    repeat_text, save_edit, EditorValues,
+    repeat_text, labels_to_create, save_edit, EditorValues,
 };
 use crate::pickers::{date_chip, deadline_text, offset_text, quick_dates, reminders_text, ReminderDraft, REMINDER_PRESETS};
 
@@ -1035,9 +1035,14 @@ impl Glass {
                 let before = begin_save(&mut s.initial, &s.values);
                 let after = s.values.clone();
                 let existing = s.existing.clone();
+                // A label typed in the Labels sheet is created first.
+                let new_labels = labels_to_create(&before.labels, &after.labels, &s.ctx.labels);
                 let state = card_state(&s.values, s.mode, &s.ctx);
                 self.session.set(Some(s));
                 api::glass_update(&state).await;
+                for name in new_labels {
+                    let _ = api::add_label(name).await;
+                }
                 if save_edit(id, before.clone(), after, existing).await.is_err() {
                     let open = self.session.peek().clone();
                     if let Some(mut s) = open {

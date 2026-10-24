@@ -83,7 +83,7 @@ struct PickerSheet: View {
           switch id {
           case .date: DateSheet(picker: p, showRepeat: model.pickerOnly, pick: send, send: { model.send($0) })
           case .deadline: DeadlineSheet(picker: p, pick: send)
-          case .labels: LabelsSheet(picker: p, pick: send)
+          case .labels: LabelsSheet(picker: p, canCreate: model.pickerOnly, pick: send)
           case .reminders: RemindersSheet(picker: p, pick: send)
           case .location: LocationSheet(picker: p) { send($0); model.picker = nil }
           case .priority: PrioritySheet(picker: p, pick: send)
@@ -258,11 +258,26 @@ struct DeadlineSheet: View {
 
 struct LabelsSheet: View {
   let picker: PickerData
+  /// The task view's sheet has no title to type @name in, so it gets a
+  /// field for a new label instead.
+  let canCreate: Bool
   let pick: (Pick) -> Void
+  @State private var newName = ""
+
+  /// Turns on the typed label (an existing one in any case, or a new name).
+  func create() {
+    let typed = newName.trimmingCharacters(in: .whitespaces)
+    let name = (typed.hasPrefix("@") ? String(typed.dropFirst()) : typed).trimmingCharacters(in: .whitespaces)
+    newName = ""
+    guard !name.isEmpty else { return }
+    let known = picker.allLabels.first { $0.caseInsensitiveCompare(name) == .orderedSame } ?? name
+    guard !picker.labels.contains(where: { $0.caseInsensitiveCompare(known) == .orderedSame }) else { return }
+    pick(.labels(picker.labels + [known]))
+  }
 
   var body: some View {
     List {
-      if picker.allLabels.isEmpty && picker.labels.isEmpty {
+      if picker.allLabels.isEmpty && picker.labels.isEmpty && !canCreate {
         Text("No labels yet. Type @name in the title to add one.").foregroundStyle(Color.secondary)
       }
       // Labels typed in the title but not saved yet show too.
@@ -278,6 +293,16 @@ struct LabelsSheet: View {
             Spacer()
             if on { Image(systemName: "checkmark").foregroundStyle(keelGreen) }
           }
+        }
+      }
+      if canCreate {
+        HStack {
+          Image(systemName: "plus").foregroundStyle(keelGreen)
+          TextField("New label", text: $newName)
+            .submitLabel(.done)
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .onSubmit(create)
         }
       }
     }

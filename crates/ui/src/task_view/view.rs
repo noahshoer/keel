@@ -9,7 +9,7 @@ use keel_core::model::{Label, Project, Reminder, Section};
 use keel_core::recurrence::Recurrence;
 use keel_core::views::CardRow;
 
-use super::fields::{layout, pending_save_before_nav, subtask_header, Field, Missing};
+use super::fields::{layout, pending_save_before_nav, subtask_header, takes_stored_text, Field, Missing};
 use super::nav::{use_nav, TaskDetail, TaskViewNav};
 use crate::api;
 use crate::editor::{
@@ -126,13 +126,15 @@ pub fn TaskView(
     let mut title = use_signal(|| init.content.clone());
     let mut desc = use_signal(|| init.description.clone());
     // The stored task changed (a save landed, or an edit elsewhere): take
-    // it, and reset only the drafts whose stored text changed.
+    // it, and reset only the drafts whose stored text changed. Our own save
+    // coming back leaves a draft typed since alone.
     use_effect(use_reactive!(|stored| {
         let old = seen.peek().clone();
-        if stored.content != old.content {
+        let saved = base.peek().clone();
+        if takes_stored_text(&stored.content, &old.content, &saved.content) {
             title.set(stored.content.clone());
         }
-        if stored.description != old.description {
+        if takes_stored_text(&stored.description, &old.description, &saved.description) {
             desc.set(stored.description.clone());
         }
         base.set(stored.clone());
@@ -142,6 +144,8 @@ pub fn TaskView(
     let mut adding = use_signal(|| false);
     let mut streak = use_signal(|| false);
     let mut more_open = use_signal(|| false);
+    // The circle's complete / reopen is in flight.
+    let mut busy = use_signal(|| false);
     let open: OpenPop = use_signal(|| None);
     let mut open_set = open;
     // A list row's "Add sub-task" opens the view with the editor showing.
@@ -188,22 +192,12 @@ pub fn TaskView(
             }
         })
     };
-    let navigate = {
-        let (id, rule) = (id.clone(), rule.clone());
-        use_callback(move |to: NavTo| {
-            let pair = commit();
-            if pair.is_none() {
-                go(nav, to);
-                return;
-            }
-            let (id, rule) = (id.clone(), rule.clone());
-            spawn_forever(async move {
-                save_text(id, pair, rule).await;
-                go(nav, to);
-                reload += 1;
-            });
-        })
-    };
+    // Moves at once (a second fast tap on Back acts on the view below,
+    // not again on this one); the pending edit still saves.
+    let navigate = use_callback(move |to: NavTo| {
+        save_drafts.call(());
+        go(nav, to);
+    });
     // A tap on the scrim or a swipe down on the sheet's grip.
     use_effect(move || {
         let mut flag = nav.close_asked;
@@ -555,6 +549,12 @@ pub fn TaskView(
                         class: if checked { "check done" } else { check_class(task.priority) },
                         title: if checked { "Mark as not done" } else { "Complete task" },
                         onclick: move |_| {
+                            // A second tap before the first returns is ignored
+                            // (it would complete a repeating task twice).
+                            if busy() {
+                                return;
+                            }
+                            busy.set(true);
                             let pair = commit();
                             let (id, rule) = (id_circle.clone(), rule_circle.clone());
                             spawn_forever(async move {
@@ -566,6 +566,8 @@ pub fn TaskView(
                                     nav.completed_here();
                                 }
                                 reload += 1;
+                                // The view may be gone by now.
+                                let _ = busy.try_write().map(|mut b| *b = false);
                             });
                         },
                         Icon { svg: icons::check() }
@@ -696,6 +698,8 @@ fn SubtaskRow(row: CardRow, on_open: EventHandler<Id>, reload: Signal<u32>) -> E
     let checked = t.checked;
     let id_check = t.id.clone();
     let id_open = t.id.clone();
+    // The circle's complete / reopen is in flight.
+    let mut busy = use_signal(|| false);
     rsx! {
         div { class: if checked { "tv-sub done" } else { "tv-sub" },
             button {
@@ -703,10 +707,15 @@ fn SubtaskRow(row: CardRow, on_open: EventHandler<Id>, reload: Signal<u32>) -> E
                 class: if checked { "check done" } else { check_class(t.priority) },
                 title: if checked { "Mark as not done" } else { "Complete sub-task" },
                 onclick: move |_| {
+                    if busy() {
+                        return;
+                    }
+                    busy.set(true);
                     let id = id_check.clone();
                     spawn(async move {
                         let _ = if checked { api::uncomplete_task(id).await } else { api::complete_task(id).await };
                         reload += 1;
+                        busy.set(false);
                     });
                 },
                 Icon { svg: icons::check() }

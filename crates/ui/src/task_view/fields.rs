@@ -88,6 +88,13 @@ pub fn pending_save_before_nav(before: &EditorValues, draft: &EditorValues) -> b
     before.content != draft.content || before.description != draft.description
 }
 
+/// Whether a draft takes the stored text after a reload: only when the
+/// stored text changed (`seen` is the last stored text) and isn't just our
+/// own save coming back (`saved`), so a draft typed since stays.
+pub fn takes_stored_text(stored: &str, seen: &str, saved: &str) -> bool {
+    stored != seen && stored != saved
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,6 +202,16 @@ mod tests {
         let mut desc = before.clone();
         desc.description.push_str("  ");
         assert!(pending_save_before_nav(&before, &desc));
+    }
+
+    #[test]
+    fn our_own_save_coming_back_keeps_the_draft() {
+        // Saved "Pack", then typed "Pack bag": the reload brings back "Pack".
+        assert!(!takes_stored_text("Pack", "Old", "Pack"));
+        // An edit from elsewhere replaces the draft.
+        assert!(takes_stored_text("Moved", "Old", "Pack"));
+        // Nothing changed.
+        assert!(!takes_stored_text("Old", "Old", "Old"));
     }
 
     #[test]
