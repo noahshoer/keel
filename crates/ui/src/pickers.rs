@@ -158,6 +158,9 @@ pub fn DatePicker(
     rule: Option<keel_core::recurrence::Recurrence>,
     #[props(default)]
     face: Option<Face>,
+    /// The chip's icon in place of the calendar outline.
+    #[props(default)]
+    icon: Option<String>,
 ) -> Element {
     let mut open = open;
     let today = crate::today();
@@ -177,7 +180,7 @@ pub fn DatePicker(
                 title: "Date",
                 onclick: move |_| open.set(if is_open { None } else { Some("date") }),
                 if face.as_ref().is_none_or(|f| f.icon) {
-                    Icon { svg: icons::calendar_small() }
+                    Icon { svg: icon.clone().unwrap_or_else(icons::calendar_small) }
                 }
                 match &face {
                     Some(f) => rsx! { "{f.text}" },

@@ -558,6 +558,9 @@ pub enum ButtonAction {
     /// The drawer's theme switcher and settings (taps on the web buttons).
     Theme,
     Settings,
+    /// The task sheet's X and ••• (taps on the web buttons).
+    CloseView,
+    ViewMenu,
 }
 
 /// What a row's long-press menu can do (the desktop's hover actions).
@@ -725,6 +728,8 @@ pub struct ButtonsState {
     /// Glass stand-ins for the drawer's theme and settings buttons, while
     /// the drawer is open.
     pub drawer: Vec<DrawerButton>,
+    /// Glass stand-ins for the task sheet's X and •••, while it's at rest.
+    pub sheet: Vec<DrawerButton>,
     /// Keel's theme ("system" / "light" / "dark"): the native views follow
     /// it rather than the phone's setting.
     pub theme: String,
@@ -733,7 +738,14 @@ pub struct ButtonsState {
 /// The floating buttons for this screen. They step aside while the drawer
 /// or the task view is open (the view's header sits where they float).
 pub fn floating_buttons(searching: bool, drawer_open: bool, view_open: bool) -> ButtonsState {
-    ButtonsState { visible: !drawer_open && !view_open, add: !searching, searching, drawer: Vec::new(), theme: "system".to_string() }
+    ButtonsState {
+        visible: !drawer_open && !view_open,
+        add: !searching,
+        searching,
+        drawer: Vec::new(),
+        sheet: Vec::new(),
+        theme: "system".to_string(),
+    }
 }
 
 /// Where the page drew one of the drawer's header buttons (CSS px, which
@@ -772,6 +784,21 @@ pub fn drawer_buttons(rects: &[WebRect], theme: &str) -> Vec<DrawerButton> {
                 _ => "gearshape",
             };
             DrawerButton { id: r.id.clone(), symbol: symbol.to_string(), x: r.x, y: r.y, w: r.w, h: r.h }
+        })
+        .collect()
+}
+
+/// The task sheet's header buttons as glass: X (close) and ••• (actions).
+pub fn sheet_buttons(rects: &[WebRect]) -> Vec<DrawerButton> {
+    rects
+        .iter()
+        .filter_map(|r| {
+            let symbol = match r.id.as_str() {
+                "tv-close" => "xmark",
+                "tv-more" => "ellipsis",
+                _ => return None,
+            };
+            Some(DrawerButton { id: r.id.clone(), symbol: symbol.to_string(), x: r.x, y: r.y, w: r.w, h: r.h })
         })
         .collect()
 }
@@ -816,6 +843,8 @@ pub fn button_action(name: &str) -> Option<ButtonAction> {
         "search" => Some(ButtonAction::Search),
         "theme" => Some(ButtonAction::Theme),
         "settings" => Some(ButtonAction::Settings),
+        "tv-close" => Some(ButtonAction::CloseView),
+        "tv-more" => Some(ButtonAction::ViewMenu),
         _ => None,
     }
 }
@@ -832,6 +861,8 @@ pub struct Glass {
     pub chosen: Signal<Option<ChosenAction>>,
     /// Where the drawer's header buttons sit (empty while it's closed).
     pub drawer_rects: Signal<Vec<WebRect>>,
+    /// Where the task sheet's X and ••• sit (empty while it's closed or moving).
+    pub sheet_rects: Signal<Vec<WebRect>>,
     /// The settings dialog is open (the drawer's glass buttons step aside).
     pub settings_open: Signal<bool>,
     /// The latest prompt answer, for the caller whose id it carries.
@@ -848,6 +879,7 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
         pressed: Signal::new(None),
         chosen: Signal::new(None),
         drawer_rects: Signal::new(Vec::new()),
+        sheet_rects: Signal::new(Vec::new()),
         settings_open: Signal::new(false),
         answer: Signal::new(None),
     });
@@ -892,6 +924,12 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
                         }
                         Some(ButtonAction::Settings) => {
                             let _ = document::eval(&click_js(".brand .settings-btn"));
+                        }
+                        Some(ButtonAction::CloseView) => {
+                            let _ = document::eval(&click_js(".tv-sheet .tv-head .tv-close"));
+                        }
+                        Some(ButtonAction::ViewMenu) => {
+                            let _ = document::eval(&click_js(".tv-sheet .tv-head .tv-more"));
                         }
                         Some(action) => on_button(action),
                         None => {}
@@ -1298,7 +1336,7 @@ mod tests {
     #[test]
     fn search_swaps_the_search_button_for_close_and_drops_add() {
         let state =
-            |visible, add, searching| ButtonsState { visible, add, searching, drawer: Vec::new(), theme: "system".into() };
+            |visible, add, searching| ButtonsState { visible, add, searching, drawer: Vec::new(), sheet: Vec::new(), theme: "system".into() };
         assert_eq!(floating_buttons(false, false, false), state(true, true, false));
         assert_eq!(floating_buttons(true, false, false), state(true, false, true));
         assert!(!floating_buttons(false, true, false).visible, "hidden while the drawer is open");
@@ -1348,6 +1386,22 @@ mod tests {
         assert_eq!(drawer_buttons(&rects, "system")[0].symbol, "desktopcomputer");
         assert_eq!(button_action("theme"), Some(ButtonAction::Theme));
         assert_eq!(button_action("settings"), Some(ButtonAction::Settings));
+    }
+
+    #[test]
+    fn sheet_buttons_are_glass_x_and_more_at_the_measured_spots() {
+        let rects = vec![
+            WebRect { id: "tv-close".into(), x: 12.0, y: 300.0, w: 36.0, h: 36.0 },
+            WebRect { id: "tv-more".into(), x: 342.0, y: 300.0, w: 36.0, h: 36.0 },
+        ];
+        let b = sheet_buttons(&rects);
+        assert_eq!(b.iter().map(|b| (b.id.as_str(), b.symbol.as_str())).collect::<Vec<_>>(), vec![("tv-close", "xmark"), ("tv-more", "ellipsis")]);
+        assert_eq!((b[1].x, b[1].y, b[1].w, b[1].h), (342.0, 300.0, 36.0, 36.0));
+        assert!(sheet_buttons(&[]).is_empty(), "none while the sheet moves or is closed");
+        assert_eq!(button_action("tv-close"), Some(ButtonAction::CloseView));
+        assert_eq!(button_action("tv-more"), Some(ButtonAction::ViewMenu));
+        let s = ButtonsState { sheet: b, ..floating_buttons(false, false, true) };
+        assert_eq!(serde_json::to_value(&s).unwrap()["sheet"][0]["symbol"], "xmark");
     }
 
     #[test]

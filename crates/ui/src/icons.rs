@@ -35,6 +35,15 @@ pub fn calendar_small() -> String {
     svg(12, "2", r#"<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/>"#)
 }
 
+/// The calendar filled with the date's color (the task view's Date row).
+pub fn calendar_filled() -> String {
+    svg(
+        12,
+        "2",
+        r#"<rect x="4" y="5" width="16" height="15" rx="2" fill="currentColor"/><path d="M8 3v4M16 3v4"/><path d="M5 10h14" style="stroke: var(--bg)"/>"#,
+    )
+}
+
 pub fn clock_small() -> String {
     svg(12, "2", r#"<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>"#)
 }
@@ -55,8 +64,18 @@ pub fn check() -> String {
     svg(11, "3", r#"<path d="M5 12l5 5L20 7"/>"#)
 }
 
+/// The flag's banner, the shape of iOS's `flag` SF Symbol (the priority picker's).
+const FLAG_BANNER: &str = "M5 4.5C7.5 3 10 3 12 4.5S16.5 6 19 4.5v9c-2.5 1.5-5 1.5-7 0s-4.5-1.5-7 0z";
+
+/// The priority flag as an outline (the editor's Priority chip).
 pub fn flag_small() -> String {
-    svg(12, "2", r#"<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>"#)
+    svg(12, "2", &format!(r#"<path d="M5 21V3"/><path d="{FLAG_BANNER}"/>"#))
+}
+
+/// The priority flag filled with its color, like iOS's `flag.fill` in the
+/// priority picker: the picker's items, the task view and the list cards.
+pub fn flag_filled() -> String {
+    svg(12, "2", &format!(r#"<path d="M5 21V3"/><path d="{FLAG_BANNER}" fill="currentColor"/>"#))
 }
 
 /// Renders an SVG string from this module.
@@ -172,6 +191,11 @@ pub fn arrow_right() -> String {
 }
 
 /// The ✕ inside the search field's clear button.
+/// The task view's close button.
+pub fn x() -> String {
+    svg(16, "2.2", r#"<path d="M7 7l10 10M17 7L7 17"/>"#)
+}
+
 pub fn x_small() -> String {
     svg(12, "2.4", r#"<path d="M7 7l10 10M17 7L7 17"/>"#)
 }

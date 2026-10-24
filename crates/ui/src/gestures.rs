@@ -1,5 +1,6 @@
 //! Touch gestures: swipes open and close the sidebar drawer on narrow
-//! layouts, and a long press on a task shows its row actions.
+//! layouts, the task sheet follows a drag down, and a long press on a task
+//! shows its row actions.
 
 use serde::Deserialize;
 
@@ -12,8 +13,12 @@ const MIN_DISTANCE: f64 = 60.0;
 /// ...and stay mostly horizontal (|dy| under this share of |dx|).
 const MAX_SLOPE: f64 = 0.6;
 
-/// A swipe down on the task sheet closes it once it travels this far.
+/// Released past this far down, the task sheet closes...
 const CLOSE_DISTANCE: f64 = 80.0;
+/// ...or sooner on a downward flick this fast (px per ms)...
+const FLICK_SPEED: f64 = 0.5;
+/// ...that travelled at least this far.
+const FLICK_MIN: f64 = 16.0;
 
 /// One finished touch, as reported by [`SWIPE_JS`].
 #[derive(Debug, Clone, Deserialize)]
@@ -27,9 +32,6 @@ pub struct Swipe {
     /// It started in the task view's sheet or its scrim (no drawer swipes there).
     #[serde(default)]
     pub in_sheet: bool,
-    /// It started on the sheet's grabber or header (a swipe down closes it).
-    #[serde(default)]
-    pub on_grip: bool,
 }
 
 /// The drawer state a swipe asks for, if any: right opens, left closes.
@@ -44,16 +46,216 @@ pub fn drawer_swipe(s: &Swipe, open: bool) -> Option<bool> {
     (want != open).then_some(want)
 }
 
-/// A swipe that closes the task sheet: at least [`CLOSE_DISTANCE`] down
-/// and mostly vertical (|dx| under [`MAX_SLOPE`] of dy).
-pub fn is_close_swipe(dx: f64, dy: f64) -> bool {
-    dy >= CLOSE_DISTANCE && dx.abs() <= dy * MAX_SLOPE
+/// Where a touch on the task sheet started, as [`SHEET_DRAG_JS`] sees it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DragStart {
+    /// The sheet's scroll area's `scrollTop` (0 for a touch on the header).
+    pub scroll_top: f64,
+    /// In a popover, a menu, the sub-task editor or a dialog.
+    pub blocked: bool,
+    /// In a text field that has focus (being typed in).
+    pub in_input: bool,
+    /// Viewport width.
+    pub width: f64,
 }
 
-/// Whether a finished touch closes the task sheet (phone layout only).
-pub fn sheet_swipe(s: &Swipe) -> bool {
-    !s.blocked && s.on_grip && s.width < SHEET_MAX && is_close_swipe(s.dx, s.dy)
+/// What a touch on the sheet does, decided on its first move.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SheetDrag {
+    /// Not moved yet.
+    Pending,
+    /// The sheet follows the finger.
+    Drag,
+    /// The content scrolls (the browser's own scrolling).
+    Scroll,
+    /// Left to the page: taps, sideways pill scrolling, fields, menus.
+    Ignore,
 }
+
+/// iOS sheet behaviour: a mostly downward first move drags the sheet when
+/// its content is scrolled to the top; scrolled content scrolls first.
+/// Phone layout only (the desktop panel doesn't move).
+pub fn sheet_drag_action(s: &DragStart, dx: f64, dy: f64) -> SheetDrag {
+    if s.blocked || s.in_input || s.width >= SHEET_MAX {
+        return SheetDrag::Ignore;
+    }
+    if dx == 0.0 && dy == 0.0 {
+        return SheetDrag::Pending;
+    }
+    if dx.abs() > dy.abs() {
+        return SheetDrag::Ignore;
+    }
+    if dy < 0.0 || s.scroll_top > 0.0 {
+        return SheetDrag::Scroll;
+    }
+    SheetDrag::Drag
+}
+
+/// Where a released drag sends the sheet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SheetRelease {
+    /// Slides down and the view closes (saving a pending edit first).
+    Close,
+    /// Back to its resting place.
+    SpringBack,
+}
+
+/// Closes past [`CLOSE_DISTANCE`] (unless flung back up) or on a fast
+/// downward flick; `velocity` is px per ms, positive downward.
+pub fn sheet_release(dy: f64, velocity: f64) -> SheetRelease {
+    let far = dy >= CLOSE_DISTANCE && velocity > -FLICK_SPEED;
+    let flick = velocity >= FLICK_SPEED && dy >= FLICK_MIN;
+    if far || flick {
+        SheetRelease::Close
+    } else {
+        SheetRelease::SpringBack
+    }
+}
+
+/// Exposes [`sheet_drag_action`] and [`sheet_release`] to [`SHEET_DRAG_JS`]
+/// as `window.keelSheet.decide(scrollTop, blocked, inInput, width, dx, dy)`
+/// ("pending" / "drag" / "scroll" / "ignore") and
+/// `window.keelSheet.release(dy, velocity)` ("close" / "spring"). The touch
+/// handlers need the answer synchronously (to cancel the browser's scroll),
+/// so this can't wait for a message round trip.
+pub fn install_sheet_rules() {
+    use wasm_bindgen::prelude::*;
+    let decide = Closure::<dyn Fn(f64, bool, bool, f64, f64, f64) -> String>::new(
+        |scroll_top, blocked, in_input, width, dx, dy| {
+            let s = DragStart { scroll_top, blocked, in_input, width };
+            match sheet_drag_action(&s, dx, dy) {
+                SheetDrag::Pending => "pending",
+                SheetDrag::Drag => "drag",
+                SheetDrag::Scroll => "scroll",
+                SheetDrag::Ignore => "ignore",
+            }
+            .to_string()
+        },
+    );
+    let release = Closure::<dyn Fn(f64, f64) -> String>::new(|dy, velocity| {
+        match sheet_release(dy, velocity) {
+            SheetRelease::Close => "close",
+            SheetRelease::SpringBack => "spring",
+        }
+        .to_string()
+    });
+    let rules = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(&rules, &"decide".into(), decide.as_ref());
+    let _ = js_sys::Reflect::set(&rules, &"release".into(), release.as_ref());
+    let _ = js_sys::Reflect::set(&js_sys::global(), &"keelSheet".into(), &rules);
+    decide.forget();
+    release.forget();
+}
+
+/// What [`SHEET_DRAG_JS`] reports.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SheetMsg {
+    /// A drag was released past the threshold and the sheet slid away.
+    #[serde(default)]
+    pub close: bool,
+    /// The sheet started moving (a drag, or the keyboard shifting the page).
+    #[serde(default)]
+    pub moving: bool,
+    /// The sheet is at rest: where its header's X and ••• are now.
+    #[serde(default)]
+    pub rects: Option<Vec<crate::glass::WebRect>>,
+}
+
+/// The task sheet follows the finger (phone layout). A touch anywhere on
+/// the sheet is classified on its first move by `keelSheet.decide`; a drag
+/// cancels the browser's scroll and moves the sheet (and fades the scrim)
+/// with the finger, never above its resting place. On release
+/// `keelSheet.release` either slides it away and reports `close` (Rust
+/// then closes the view through its save-first path) or springs it back.
+/// Reduced motion snaps instead of animating. It also reports `moving` and,
+/// once at rest again, the header buttons' `rects` (for the iPhone's glass
+/// X and •••); `window.keelMeasureSheet()` measures on demand.
+pub const SHEET_DRAG_JS: &str = r#"
+const BLOCK = '.popover, .menu, .editor, .modal-scrim, .pop-backdrop';
+const FIELD = 'input, textarea, select, [contenteditable]';
+const EASE = 'cubic-bezier(.32,.72,0,1)';
+const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const scrim = () => document.querySelector('.tv-scrim');
+const measure = () => [['tv-close', '.tv-sheet .tv-head .tv-close'], ['tv-more', '.tv-sheet .tv-head .tv-more']].map(([id, sel]) => {
+  const r = document.querySelector(sel)?.getBoundingClientRect();
+  return r && r.width > 0 && { id, x: r.x, y: r.y, w: r.width, h: r.height };
+}).filter(Boolean);
+const settle = async () => {
+  const sheet = document.querySelector('.tv-sheet');
+  if (!sheet) return;
+  await Promise.all(sheet.getAnimations().map((a) => a.finished.catch(() => {})));
+  if (sheet.isConnected && g?.mode !== 'drag') dioxus.send({ rects: measure() });
+};
+window.keelMeasureSheet = settle;
+let g = null;
+const place = (sheet, y, animate) => {
+  const t = animate && !reduce() ? `transform .3s ${EASE}` : 'none';
+  sheet.style.transition = t;
+  sheet.style.transform = y > 0 ? `translateY(${y}px)` : '';
+  const s = scrim();
+  if (s) {
+    s.style.transition = t === 'none' ? 'none' : `opacity .3s ${EASE}`;
+    s.style.opacity = y > 0 ? String(Math.max(0, 1 - y / sheet.offsetHeight)) : '';
+  }
+};
+document.addEventListener('touchstart', (ev) => {
+  g = null;
+  if (ev.touches.length !== 1 || !window.keelSheet) return;
+  const sheet = ev.target.closest?.('.tv-sheet');
+  if (!sheet) return;
+  const t = ev.touches[0];
+  const field = ev.target.closest(FIELD);
+  const scroller = ev.target.closest('.tv-scroll');
+  g = { sheet, x: t.clientX, y: t.clientY, top: scroller ? scroller.scrollTop : 0,
+    blocked: !!ev.target.closest(BLOCK), input: !!field && field.contains(document.activeElement),
+    mode: 'pending', dy: 0, samples: [] };
+}, { passive: true, capture: true });
+document.addEventListener('touchmove', (ev) => {
+  if (!g || g.mode === 'scroll' || g.mode === 'ignore') return;
+  const t = ev.touches[0];
+  const dx = t.clientX - g.x, dy = t.clientY - g.y;
+  if (g.mode === 'pending') {
+    g.mode = keelSheet.decide(g.top, g.blocked, g.input, innerWidth, dx, dy);
+    if (g.mode !== 'drag') return;
+    g.sheet.getAnimations().forEach((a) => a.finish());
+    dioxus.send({ moving: true });
+  }
+  ev.preventDefault();
+  g.dy = Math.max(0, dy);
+  g.samples.push([ev.timeStamp, dy]);
+  if (g.samples.length > 6) g.samples.shift();
+  place(g.sheet, g.dy, false);
+}, { passive: false, capture: true });
+const end = (ev, cancelled) => {
+  const d = g;
+  g = null;
+  if (!d || d.mode !== 'drag') return;
+  const s = d.samples, a = s[0], b = s[s.length - 1];
+  const v = a && b && b[0] > a[0] ? (b[1] - a[1]) / (b[0] - a[0]) : 0;
+  if (!cancelled && keelSheet.release(d.dy, v) === 'close') {
+    place(d.sheet, d.sheet.offsetHeight, true);
+    setTimeout(() => dioxus.send({ close: true }), reduce() ? 0 : 300);
+  } else {
+    place(d.sheet, 0, true);
+    setTimeout(settle, reduce() ? 0 : 320);
+  }
+};
+document.addEventListener('touchend', (ev) => end(ev, false), { passive: true, capture: true });
+document.addEventListener('touchcancel', (ev) => end(ev, true), { passive: true, capture: true });
+// The keyboard shifts the page under the glass buttons: hide them, then
+// measure again once it has stopped moving.
+let moved = null;
+const shifted = () => {
+  if (!document.querySelector('.tv-sheet')) return;
+  dioxus.send({ moving: true });
+  clearTimeout(moved);
+  moved = setTimeout(settle, 250);
+};
+window.visualViewport?.addEventListener('resize', shifted);
+window.visualViewport?.addEventListener('scroll', shifted);
+window.addEventListener('resize', shifted);
+await new Promise(() => {});
+"#;
 
 /// Reports each single-finger touch to Rust as a [`Swipe`].
 pub const SWIPE_JS: &str = r#"
@@ -63,7 +265,7 @@ document.addEventListener('touchstart', (ev) => {
   if (ev.touches.length !== 1) { start = null; return; }
   const t = ev.touches[0];
   const at = (sel) => !!ev.target.closest?.(sel);
-  start = { x: t.clientX, y: t.clientY, blocked: at(BLOCK), in_sheet: at('.tv-sheet, .tv-scrim'), on_grip: at('.tv-grabber, .tv-head') };
+  start = { x: t.clientX, y: t.clientY, blocked: at(BLOCK), in_sheet: at('.tv-sheet, .tv-scrim') };
 }, { passive: true });
 document.addEventListener('touchend', (ev) => {
   if (!start) return;
@@ -125,7 +327,7 @@ mod tests {
     use super::*;
 
     fn swipe(dx: f64, dy: f64) -> Swipe {
-        Swipe { dx, dy, width: 390.0, blocked: false, in_sheet: false, on_grip: false }
+        Swipe { dx, dy, width: 390.0, blocked: false, in_sheet: false }
     }
 
     #[test]
@@ -151,26 +353,58 @@ mod tests {
     }
 
     #[test]
-    fn close_swipe_needs_mostly_downward_80px() {
-        assert!(is_close_swipe(0.0, 90.0));
-        assert!(!is_close_swipe(0.0, 60.0), "too short");
-        assert!(!is_close_swipe(90.0, 90.0), "diagonal");
-        assert!(!is_close_swipe(0.0, -90.0), "upward");
+    fn no_drawer_swipe_from_the_sheet() {
+        assert_eq!(drawer_swipe(&Swipe { in_sheet: true, ..swipe(120.0, 0.0) }, false), None);
+    }
+
+    fn start(scroll_top: f64) -> DragStart {
+        DragStart { scroll_top, blocked: false, in_input: false, width: 390.0 }
     }
 
     #[test]
-    fn sheet_closes_from_its_grip_on_the_phone_only() {
-        let grip = Swipe { on_grip: true, in_sheet: true, ..swipe(0.0, 120.0) };
-        assert!(sheet_swipe(&grip));
-        assert!(!sheet_swipe(&Swipe { on_grip: false, ..grip.clone() }), "content scrolls instead");
-        assert!(!sheet_swipe(&Swipe { width: 1280.0, ..grip.clone() }), "desktop panel");
-        assert_eq!(drawer_swipe(&Swipe { in_sheet: true, ..swipe(120.0, 0.0) }, false), None, "no drawer from the sheet");
+    fn a_downward_drag_at_the_top_moves_the_sheet() {
+        assert_eq!(sheet_drag_action(&start(0.0), 2.0, 9.0), SheetDrag::Drag);
     }
 
     #[test]
-    fn a_drag_in_a_blocked_target_never_closes_the_sheet() {
-        let grip = Swipe { on_grip: true, in_sheet: true, blocked: true, ..swipe(0.0, 120.0) };
-        assert!(!sheet_swipe(&grip), "a drag inside the ••• menu");
+    fn scrolled_content_scrolls_first() {
+        assert_eq!(sheet_drag_action(&start(40.0), 0.0, 9.0), SheetDrag::Scroll);
+    }
+
+    #[test]
+    fn an_upward_move_scrolls_the_content() {
+        assert_eq!(sheet_drag_action(&start(0.0), 0.0, -9.0), SheetDrag::Scroll);
+    }
+
+    #[test]
+    fn a_sideways_move_is_left_alone() {
+        // The pill row scrolls sideways, rows and circles keep their taps.
+        assert_eq!(sheet_drag_action(&start(0.0), 12.0, 5.0), SheetDrag::Ignore);
+        assert_eq!(sheet_drag_action(&start(0.0), -12.0, 5.0), SheetDrag::Ignore);
+    }
+
+    #[test]
+    fn no_movement_yet_waits() {
+        assert_eq!(sheet_drag_action(&start(0.0), 0.0, 0.0), SheetDrag::Pending);
+    }
+
+    #[test]
+    fn inputs_menus_and_the_desktop_panel_never_drag() {
+        let blocked = DragStart { blocked: true, ..start(0.0) };
+        assert_eq!(sheet_drag_action(&blocked, 0.0, 9.0), SheetDrag::Ignore, "inside the ••• menu or a popover");
+        let typing = DragStart { in_input: true, ..start(0.0) };
+        assert_eq!(sheet_drag_action(&typing, 0.0, 9.0), SheetDrag::Ignore, "in a field being edited");
+        let wide = DragStart { width: 1280.0, ..start(0.0) };
+        assert_eq!(sheet_drag_action(&wide, 0.0, 9.0), SheetDrag::Ignore, "desktop panel");
+    }
+
+    #[test]
+    fn release_closes_past_80px_or_on_a_flick() {
+        assert_eq!(sheet_release(90.0, 0.0), SheetRelease::Close);
+        assert_eq!(sheet_release(60.0, 0.1), SheetRelease::SpringBack, "short and slow");
+        assert_eq!(sheet_release(40.0, 0.8), SheetRelease::Close, "a fast flick down");
+        assert_eq!(sheet_release(6.0, 0.8), SheetRelease::SpringBack, "a twitch, not a flick");
+        assert_eq!(sheet_release(120.0, -0.6), SheetRelease::SpringBack, "flung back up");
     }
 
     #[test]

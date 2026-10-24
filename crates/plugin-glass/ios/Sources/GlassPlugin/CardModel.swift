@@ -234,7 +234,8 @@ struct ActionMenu: Codable, Equatable {
   let items: [Item]
 }
 
-/// One of the drawer's header buttons, at the spot the page drew it.
+/// A web button drawn as glass (the drawer's header buttons, the task
+/// sheet's X and •••), at the spot the page drew it.
 struct DrawerButton: Codable, Equatable {
   let id: String
   let symbol: String
@@ -285,6 +286,8 @@ final class CardModel: ObservableObject {
   @Published var searching = false
   /// Glass stand-ins for the open drawer's header buttons.
   @Published var drawerButtons: [DrawerButton] = []
+  /// Glass stand-ins for the task sheet's X and ••• (empty while it moves).
+  @Published var sheetButtons: [DrawerButton] = []
 
   /// Window-space frames of the controls that take touches while the card is closed.
   var hitRects: [String: CGRect] = [:]

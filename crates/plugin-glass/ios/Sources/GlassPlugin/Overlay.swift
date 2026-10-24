@@ -44,7 +44,8 @@ struct OverlayView: View {
           .transition(.move(edge: .bottom).combined(with: .opacity))
       }
       if !model.isOpen {
-        DrawerButtons(model: model)
+        PlacedButtons(model: model, buttons: model.drawerButtons)
+        PlacedButtons(model: model, buttons: model.sheetButtons)
       }
     }
     // Picker-only: the chip's sheet alone. Picks are saved as they're made,

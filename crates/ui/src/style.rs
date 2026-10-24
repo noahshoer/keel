@@ -492,12 +492,13 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .card-flag.p3 { color: var(--p3); }
 .card-chev { display: inline-flex; color: var(--muted); }
 /* Task view (task_view/view.rs): a sheet below 900px, a panel from 900px. */
-/* Phone: a sheet from the bottom with the list showing above it, over a
-   light scrim (a tap closes it); a swipe down on the grabber or header closes
-   it too (gestures.rs). The sheet (main.rs) stays mounted while views push
+/* Phone: a sheet from the bottom, 67% of the screen, with the list showing
+   above it over a light scrim (a tap closes it). It follows a drag down from
+   anywhere on it and closes past a threshold (gestures.rs SHEET_DRAG_JS sets
+   its transform inline). The sheet (main.rs) stays mounted while views push
    inside it, so it slides up once per open. Its content scrolls inside. */
 .tv-scrim { position: fixed; inset: 0; z-index: 39; background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
-.tv-sheet { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; top: max(56px, calc(env(safe-area-inset-top) + 8px));
+.tv-sheet { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; height: 67vh; height: 67dvh;
   display: flex; flex-direction: column; background: var(--app-bg); border-radius: 26px 26px 0 0;
   box-shadow: 0 -8px 30px rgba(0,0,0,.18); animation: sheet-up .34s cubic-bezier(.32,.72,0,1); }
 .tv-grabber { flex: none; display: flex; justify-content: center; padding: 7px 0 1px; }
@@ -508,7 +509,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Wide: a 360px panel on the right; the list narrows beside it and stays usable. */
 @media (min-width: 900px) {
   .tv-scrim, .tv-grabber { display: none; }
-  .tv-sheet { left: auto; top: 0; width: 360px; border-radius: 0; border-left: 1px solid var(--border); box-shadow: none;
+  .tv-sheet { left: auto; top: 0; height: auto; width: 360px; border-radius: 0; border-left: 1px solid var(--border); box-shadow: none;
     animation: panel-in .2s var(--ease); }
   .app.view-open .main { margin-right: calc(360px + 8px); }
 }
@@ -516,11 +517,14 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; }
 .tv-back { display: inline-flex; align-items: center; gap: 2px; width: auto; padding: 0 8px 0 4px; color: var(--accent); }
 .tv-crumb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
-.tv-head-actions { display: inline-flex; align-items: center; gap: 4px; flex: none; }
-.tv-close { border: none; background: none; cursor: pointer; color: var(--accent); font: inherit; font-weight: 600;
-  display: inline-flex; align-items: center; padding: 4px 8px; border-radius: var(--r); }
-.tv-close .tv-x { display: none; color: var(--muted); }
-@media (min-width: 900px) { .tv-close .tv-done-text { display: none; } .tv-close .tv-x { display: inline-flex; } }
+.tv-head-actions { flex: none; }
+/* X (top left) and •••: round, like the iPhone's glass buttons, which are
+   drawn over them while the sheet is at rest (glass-head, main.rs). */
+.tv-round { flex: none; width: 36px; height: 36px; padding: 0; border: none; border-radius: 50%; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--text);
+  background: color-mix(in srgb, var(--text) 7%, transparent); }
+@media (hover: hover) { .tv-round:hover { background: color-mix(in srgb, var(--text) 12%, transparent); } }
+.native-glass .tv-sheet.glass-head .tv-head .tv-round { visibility: hidden; }
 .menu-item.danger { color: var(--p1); }
 .tv-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   padding: 4px 12px calc(24px + env(safe-area-inset-bottom)); }
@@ -546,6 +550,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   cursor: pointer; font: inherit; font-size: 14px; color: var(--text); text-align: left; padding: 4px 6px; border-radius: var(--r);
   overflow-wrap: anywhere; }
 .tv-field-btn .icon, .tv-field-btn .chip-icon { flex: none; color: var(--muted); }
+/* The flag and calendar are filled with the priority's and the date's color. */
+.tv-field-btn .pri-1, .tv-field-btn .pri-1 .icon { color: var(--p1); }
+.tv-field-btn .pri-2, .tv-field-btn .pri-2 .icon { color: var(--p2); }
+.tv-field-btn .pri-3, .tv-field-btn .pri-3 .icon { color: var(--p3); }
+.tv-field-btn.due-chip .icon, .tv-field-btn.due-chip .chip-icon { color: inherit; }
 @media (hover: hover) { .tv-field-btn:hover { background: var(--hover); } }
 .tv-field-btn.tv-repeat { color: var(--due-week); }
 .tv-pills { display: flex; gap: 6px; padding: 10px 12px; overflow-x: auto; scrollbar-width: none; }

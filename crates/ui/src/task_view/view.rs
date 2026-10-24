@@ -196,7 +196,7 @@ pub fn TaskView(
         save_drafts.call(());
         go(nav, to);
     });
-    // A tap on the scrim or a swipe down on the sheet's grip.
+    // A tap on the scrim or a drag that pulled the sheet down.
     use_effect(move || {
         let mut flag = nav.close_asked;
         if flag() {
@@ -317,24 +317,24 @@ pub fn TaskView(
                         today,
                     );
                     let text = if v.repeat != "none" { format!("{text} · {repeat_label}") } else { text };
-                    (format!("tv-field-btn due-chip {cls}"), text, Some(icons::calendar_small()))
+                    (format!("tv-field-btn due-chip {cls}"), text, Some((icons::calendar_filled(), "")))
                 }
                 (Some(Field::Deadline), None) => (
                     "tv-field-btn deadline-chip set".to_string(),
                     format!("Deadline {}", deadline_text(NaiveDate::parse_from_str(&v.deadline, "%Y-%m-%d").ok(), today)),
-                    Some(icons::target_small()),
+                    Some((icons::target_small(), "")),
                 ),
                 (Some(Field::Priority), None) => {
-                    ("tv-field-btn".to_string(), format!("Priority {}", v.priority), Some(icons::flag_small()))
+                    ("tv-field-btn".to_string(), format!("Priority {}", v.priority), Some((icons::flag_filled(), flag_class(&v.priority))))
                 }
-                (Some(Field::Labels), None) => ("tv-field-btn".to_string(), v.labels.join(", "), Some(icons::tag_small())),
+                (Some(Field::Labels), None) => ("tv-field-btn".to_string(), v.labels.join(", "), Some((icons::tag_small(), ""))),
                 (Some(Field::Reminders), None) => {
-                    ("tv-field-btn".to_string(), reminders_text(&v.reminders, today), Some(icons::bell_small()))
+                    ("tv-field-btn".to_string(), reminders_text(&v.reminders, today), Some((icons::bell_small(), "")))
                 }
                 (_, None) => (
                     "tv-field-btn".to_string(),
                     location_text(&v.project_id, v.section_id.as_ref(), &projects, &sections),
-                    Some(icons::hash_small()),
+                    Some((icons::hash_small(), "")),
                 ),
             };
             let chip = native_chip(which, m);
@@ -344,8 +344,8 @@ pub fn TaskView(
                         pick_native.call(chip);
                     }
                 },
-                    if let Some(svg) = icon {
-                        span { class: "chip-icon", Icon { svg } }
+                    if let Some((svg, color)) = icon {
+                        span { class: "chip-icon {color}", Icon { svg } }
                     }
                     "{text}"
                 }
@@ -365,6 +365,7 @@ pub fn TaskView(
                         open,
                         rule: repeat_rule.clone(),
                         face: face(&format!("due-chip {cls}"), text),
+                        icon: icons::calendar_filled(),
                         on_change: move |(date, time): (String, String)| pick.call(Pick::Date { date, time }),
                     }
                     // A rule shows in the date's row; without one it's a pill.
@@ -415,7 +416,7 @@ pub fn TaskView(
                 Menu {
                     id: "priority",
                     title: "Priority",
-                    icon: icons::flag_small(),
+                    icon: icons::flag_filled(),
                     icon_class: flag_class(&v.priority),
                     text: String::new(),
                     items: priority_items(),
@@ -479,6 +480,14 @@ pub fn TaskView(
                 }
             }
             div { class: "tv-head",
+                button {
+                    r#type: "button",
+                    class: "tv-close tv-round",
+                    title: "Close",
+                    aria_label: "Close",
+                    onclick: move |_| navigate.call(NavTo::Close),
+                    Icon { svg: icons::x() }
+                }
                 if depth > 1 {
                     button {
                         r#type: "button",
@@ -490,53 +499,42 @@ pub fn TaskView(
                     }
                 }
                 span { class: "tv-crumb", "{crumb}" }
-                span { class: "tv-head-actions",
-                    div { class: "chip-wrap",
-                        button {
-                            r#type: "button",
-                            class: "icon-btn tv-more",
-                            title: "More",
-                            aria_label: "More",
-                            onclick: {
-                                let (target, title) = (menu_target.clone(), task.content.clone());
-                                move |_| {
-                                    if native {
-                                        let (target, title) = (target.clone(), title.clone());
-                                        let items = view_actions(recurring);
-                                        spawn(async move { api::glass_actions(&target, &title, items).await });
-                                    } else {
-                                        more_open.set(!more_open());
-                                    }
+                div { class: "chip-wrap tv-head-actions",
+                    button {
+                        r#type: "button",
+                        class: "tv-more tv-round",
+                        title: "More",
+                        aria_label: "More",
+                        onclick: {
+                            let (target, title) = (menu_target.clone(), task.content.clone());
+                            move |_| {
+                                if native {
+                                    let (target, title) = (target.clone(), title.clone());
+                                    let items = view_actions(recurring);
+                                    spawn(async move { api::glass_actions(&target, &title, items).await });
+                                } else {
+                                    more_open.set(!more_open());
                                 }
-                            },
-                            Icon { svg: icons::more() }
-                        }
-                        if more_open() {
-                            div { class: "popover menu",
-                                onmounted: move |_| crate::pickers::place_popover(),
-                                for (action, label, destructive) in view_actions(recurring).into_iter().map(|i| (i.id, i.label, i.destructive)) {
-                                    button {
-                                        key: "{label}",
-                                        r#type: "button",
-                                        class: if destructive { "menu-item danger" } else { "menu-item" },
-                                        onclick: move |_| {
-                                            more_open.set(false);
-                                            on_action.call(action);
-                                        },
-                                        span { class: "menu-label", "{label}" }
-                                    }
+                            }
+                        },
+                        Icon { svg: icons::more() }
+                    }
+                    if more_open() {
+                        div { class: "popover menu",
+                            onmounted: move |_| crate::pickers::place_popover(),
+                            for (action, label, destructive) in view_actions(recurring).into_iter().map(|i| (i.id, i.label, i.destructive)) {
+                                button {
+                                    key: "{label}",
+                                    r#type: "button",
+                                    class: if destructive { "menu-item danger" } else { "menu-item" },
+                                    onclick: move |_| {
+                                        more_open.set(false);
+                                        on_action.call(action);
+                                    },
+                                    span { class: "menu-label", "{label}" }
                                 }
                             }
                         }
-                    }
-                    button {
-                        r#type: "button",
-                        class: "tv-close",
-                        title: "Close",
-                        aria_label: "Close",
-                        onclick: move |_| navigate.call(NavTo::Close),
-                        span { class: "tv-done-text", "Done" }
-                        span { class: "tv-x", Icon { svg: icons::x_small() } }
                     }
                 }
             }

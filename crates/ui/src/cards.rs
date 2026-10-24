@@ -85,7 +85,7 @@ pub fn CardHead(task: Task, progress: Option<Progress>, today: NaiveDate) -> Ele
     rsx! {
         div { class: "card-head", title: "Open task", onclick: move |_| nav.open(id.clone()),
             if let Some(cls) = flag_class(task.priority) {
-                span { class: cls, Icon { svg: icons::flag_small() } }
+                span { class: cls, Icon { svg: icons::flag_filled() } }
             }
             span { class: "pname", "{task.content}" }
             span { class: "card-head-side",

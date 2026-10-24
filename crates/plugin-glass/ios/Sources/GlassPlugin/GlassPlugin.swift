@@ -31,6 +31,7 @@ class ButtonsArgs: Decodable {
   let add: Bool
   let searching: Bool
   let drawer: [DrawerButton]
+  let sheet: [DrawerButton]
   let theme: String
 }
 
@@ -127,6 +128,13 @@ class GlassPlugin: Plugin {
       self.model.addVisible = args.add
       self.model.searching = args.searching
       withAnimation(.easeOut(duration: 0.18)) { self.model.drawerButtons = args.drawer }
+      // The sheet's buttons vanish at once when it starts moving (they'd
+      // trail behind it) and fade in where it came to rest.
+      if args.sheet.isEmpty {
+        self.model.sheetButtons = []
+      } else {
+        withAnimation(.easeOut(duration: 0.15)) { self.model.sheetButtons = args.sheet }
+      }
     }
     invoke.resolve()
   }

@@ -98,7 +98,7 @@ pub struct TaskViewNav {
     /// Set when a view should open with its "Add sub-task" editor showing;
     /// the view clears it.
     pub add_sub: Signal<bool>,
-    /// Set by a tap on the sheet's scrim or a swipe down on its grip: the
+    /// Set by a tap on the sheet's scrim or a drag that pulls it down: the
     /// view saves any pending edit, then closes, and clears it.
     pub close_asked: Signal<bool>,
     /// The view's completion circles ignore taps (see [`TaskViewNav::hold_circles`]).

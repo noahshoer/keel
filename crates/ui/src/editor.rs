@@ -236,7 +236,7 @@ pub(crate) fn flag_class(priority: &str) -> &'static str {
 pub(crate) fn priority_items() -> Vec<MenuItem> {
     ["1", "2", "3", "4"]
         .iter()
-        .map(|p| MenuItem::new(*p, format!("Priority {p}")).icon(icons::flag_small(), flag_class(p)))
+        .map(|p| MenuItem::new(*p, format!("Priority {p}")).icon(icons::flag_filled(), flag_class(p)))
         .collect()
 }
 

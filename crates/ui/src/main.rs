@@ -276,7 +276,11 @@ fn App() -> Element {
             let next = if *view.peek() == View::Search { last_view.peek().clone() } else { View::Search };
             view.set(next);
         }
-        glass::ButtonAction::AddTask | glass::ButtonAction::Theme | glass::ButtonAction::Settings => {}
+        glass::ButtonAction::AddTask
+        | glass::ButtonAction::Theme
+        | glass::ButtonAction::Settings
+        | glass::ButtonAction::CloseView
+        | glass::ButtonAction::ViewMenu => {}
     });
     // Measure the drawer's header buttons each time it opens.
     use_effect(move || {
@@ -284,13 +288,33 @@ fn App() -> Element {
             glass.measure_drawer();
         }
     });
-    // The floating buttons step aside while the drawer or the task view is open.
+    // Measure the task sheet's header buttons each time it opens (once it
+    // has slid up); forget them when it closes.
+    let mut sheet_was_open = use_signal(|| false);
+    use_effect(move || {
+        let open = !nav.stack.read().0.is_empty();
+        if open == *sheet_was_open.peek() {
+            return;
+        }
+        sheet_was_open.set(open);
+        if !open {
+            let mut rects = glass.sheet_rects;
+            rects.set(Vec::new());
+        } else if *glass.native.peek() {
+            let _ = document::eval("window.keelMeasureSheet?.();");
+        }
+    });
+    // The floating buttons step aside while the drawer or the task view is
+    // open; the view's X and ••• are glass while its sheet is at rest.
     use_effect(move || {
         let view_open = !nav.stack.read().0.is_empty();
         let mut state = glass::floating_buttons(view() == View::Search, drawer(), view_open);
         state.theme = theme();
         if drawer() && !(glass.settings_open)() {
             state.drawer = glass::drawer_buttons(&(glass.drawer_rects)(), &theme());
+        }
+        if view_open && !(glass.settings_open)() {
+            state.sheet = glass::sheet_buttons(&(glass.sheet_rects)());
         }
         if (glass.native)() {
             spawn(async move { api::glass_buttons(state).await });
@@ -330,8 +354,24 @@ fn App() -> Element {
                 if let Some(open) = gestures::drawer_swipe(&s, open_now) {
                     drawer.set(open);
                 }
-                if gestures::sheet_swipe(&s) {
+            }
+        });
+    });
+    // Touch: the task sheet follows a drag down and closes past a threshold.
+    use_hook(move || {
+        gestures::install_sheet_rules();
+        spawn(async move {
+            let mut drags = document::eval(gestures::SHEET_DRAG_JS);
+            let mut rects = glass.sheet_rects;
+            while let Ok(m) = drags.recv::<gestures::SheetMsg>().await {
+                if m.close {
                     nav.ask_close();
+                }
+                if m.moving && !rects.peek().is_empty() {
+                    rects.set(Vec::new());
+                }
+                if let Some(r) = m.rects.filter(|_| *glass.native.peek()) {
+                    rects.set(r);
                 }
             }
         });
@@ -492,7 +532,7 @@ fn App() -> Element {
                     // pop inside, so the entrance plays once per open.
                     if let Some(d) = open_task.clone() {
                         div { class: "tv-scrim", onclick: move |_| nav.ask_close() }
-                        div { class: "tv-sheet",
+                        div { class: if (glass.sheet_rects)().is_empty() { "tv-sheet" } else { "tv-sheet glass-head" },
                             div { class: "tv-grabber", aria_hidden: "true" }
                             task_view::view::TaskView {
                                 key: "{d.task.id}",
