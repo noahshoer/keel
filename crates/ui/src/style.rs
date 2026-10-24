@@ -493,23 +493,29 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .card-chev { display: inline-flex; color: var(--muted); }
 /* Task view (task_view/view.rs): a sheet below 900px, a panel from 900px. */
 /* Phone: a sheet from the bottom, 67% of the screen, with the list showing
-   above it over a light scrim (a tap closes it). It follows a drag down from
-   anywhere on it and closes past a threshold (gestures.rs SHEET_DRAG_JS sets
-   its transform inline). The sheet (main.rs) stays mounted while views push
+   above it over a light scrim (a tap closes it). It follows a drag from
+   anywhere on it, up to its large height or down to close (gestures.rs
+   SHEET_DRAG_JS sets its transform inline). The sheet (main.rs) stays mounted while views push
    inside it, so it slides up once per open. Its content scrolls inside. */
 .tv-scrim { position: fixed; inset: 0; z-index: 39; background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
-.tv-sheet { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; height: 67vh; height: 67dvh;
+/* Two heights: medium (67%, where it opens) and large (.tv-large, near full
+   screen), both kept in the visible area above the keyboard (--vv-top,
+   --vv-h, --kb are set by gestures.rs from the visual viewport). */
+:root { --tv-gap: max(56px, calc(env(safe-area-inset-top) + 8px)); }
+.tv-sheet { position: fixed; z-index: 40; left: 0; right: 0; bottom: var(--kb, 0px); height: 67vh; height: 67dvh;
+  max-height: calc(var(--vv-h, 100dvh) - var(--tv-gap));
   display: flex; flex-direction: column; background: var(--app-bg); border-radius: 26px 26px 0 0;
   box-shadow: 0 -8px 30px rgba(0,0,0,.18); animation: sheet-up .34s cubic-bezier(.32,.72,0,1); }
 .tv-grabber { flex: none; display: flex; justify-content: center; padding: 7px 0 1px; }
 .tv-grabber::before { content: ''; width: 38px; height: 5px; border-radius: 3px; background: var(--border-strong); }
 .task-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+@media (max-width: 899px) { .tv-sheet.tv-large { height: auto; top: calc(var(--vv-top, 0px) + var(--tv-gap)); } }
 @keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes panel-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 /* Wide: a 360px panel on the right; the list narrows beside it and stays usable. */
 @media (min-width: 900px) {
   .tv-scrim, .tv-grabber { display: none; }
-  .tv-sheet { left: auto; top: 0; height: auto; width: 360px; border-radius: 0; border-left: 1px solid var(--border); box-shadow: none;
+  .tv-sheet { left: auto; top: 0; bottom: 0; height: auto; max-height: none; width: 360px; border-radius: 0; border-left: 1px solid var(--border); box-shadow: none;
     animation: panel-in .2s var(--ease); }
   .app.view-open .main { margin-right: calc(360px + 8px); }
 }
@@ -519,13 +525,13 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-crumb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
 .tv-head-actions { flex: none; }
 /* X (top left) and •••: round, like the iPhone's glass buttons, which are
-   drawn over them while the sheet is at rest (glass-head, main.rs). */
+   drawn in their place there (the web ones stay hidden; gestures.rs). */
 .tv-round { flex: none; width: 36px; height: 36px; padding: 0; border: none; border-radius: 50%; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center; color: var(--text);
   background: color-mix(in srgb, var(--text) 7%, transparent); }
 @media (hover: hover) { .tv-round:hover { background: color-mix(in srgb, var(--text) 12%, transparent); } }
 .native-glass .tv-round { width: 40px; height: 40px; }
-.native-glass .tv-sheet.glass-head .tv-head .tv-round { visibility: hidden; }
+.native-glass .tv-sheet .tv-head .tv-round { visibility: hidden; }
 .menu-item.danger { color: var(--p1); }
 .tv-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   padding: 4px 12px calc(24px + env(safe-area-inset-bottom)); }

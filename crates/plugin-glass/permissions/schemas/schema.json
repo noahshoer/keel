@@ -391,6 +391,18 @@
           "markdownDescription": "Denies the remove_listener command without any pre-configured scope."
         },
         {
+          "description": "Enables the sheet command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-sheet",
+          "markdownDescription": "Enables the sheet command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the sheet command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-sheet",
+          "markdownDescription": "Denies the sheet command without any pre-configured scope."
+        },
+        {
           "description": "Enables the show command without any pre-configured scope.",
           "type": "string",
           "const": "allow-show",
@@ -415,10 +427,10 @@
           "markdownDescription": "Denies the update command without any pre-configured scope."
         },
         {
-          "description": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-diag`\n- `allow-actions`\n- `allow-prompt`\n- `allow-register-listener`\n- `allow-remove-listener`",
+          "description": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-diag`\n- `allow-sheet`\n- `allow-actions`\n- `allow-prompt`\n- `allow-register-listener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-diag`\n- `allow-actions`\n- `allow-prompt`\n- `allow-register-listener`\n- `allow-remove-listener`"
+          "markdownDescription": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-diag`\n- `allow-sheet`\n- `allow-actions`\n- `allow-prompt`\n- `allow-register-listener`\n- `allow-remove-listener`"
         }
       ]
     }

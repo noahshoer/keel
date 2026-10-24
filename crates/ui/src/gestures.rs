@@ -17,8 +17,10 @@ const MAX_SLOPE: f64 = 0.6;
 const CLOSE_DISTANCE: f64 = 80.0;
 /// ...or sooner on a downward flick this fast (px per ms)...
 const FLICK_SPEED: f64 = 0.5;
-/// ...that travelled at least this far.
+/// ...that travelled at least this far. From the large height, only a
+/// flick this fast closes it outright (a normal flick steps down to medium).
 const FLICK_MIN: f64 = 16.0;
+const STRONG_FLICK: f64 = 1.5;
 /// A touch on the sheet is a tap until it moves this far either way.
 const DRAG_SLOP: f64 = 8.0;
 
@@ -61,6 +63,16 @@ pub struct DragStart {
     pub field_focused: bool,
     /// Viewport width.
     pub width: f64,
+    /// The height the sheet was resting at.
+    pub detent: Detent,
+}
+
+/// The sheet's two resting heights on the phone: medium (67% of the
+/// screen, where it opens) and large (nearly full screen).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Detent {
+    Medium,
+    Large,
 }
 
 /// What a touch on the sheet does, decided once it moves past the slop.
@@ -76,14 +88,18 @@ pub enum SheetDrag {
     Ignore,
 }
 
-/// iOS sheet behaviour, so the sheet drags from anywhere on it: once the
-/// touch has moved [`DRAG_SLOP`], a mostly downward move drags the sheet
-/// when its content is scrolled to the top; scrolled content scrolls first;
-/// a sideways (or exactly diagonal) move is left to the page. A text field
-/// drags too, unless it has focus (then the touch is for the text). Popovers,
-/// menus, the editor and the desktop panel never drag.
+/// iOS sheet behaviour, so the sheet drags from anywhere on it. Once the
+/// touch has moved [`DRAG_SLOP`], a sideways (or exactly diagonal) move is
+/// left to the page; a mostly vertical one:
+/// - up at medium expands the sheet (even over scrolled content); up at
+///   large scrolls the content;
+/// - down drags the sheet when its content is scrolled to the top, and
+///   scrolls the content otherwise.
+///
+/// A text field drags too, unless it has focus (then the touch is for the
+/// text). Popovers, menus, the editor and the desktop panel never drag.
 pub fn sheet_drag_action(s: &DragStart, dx: f64, dy: f64) -> SheetDrag {
-    if s.blocked || (s.in_field && s.field_focused) || s.width >= SHEET_MAX {
+    if excluded(s) {
         return SheetDrag::Ignore;
     }
     if dx.abs() < DRAG_SLOP && dy.abs() < DRAG_SLOP {
@@ -92,58 +108,134 @@ pub fn sheet_drag_action(s: &DragStart, dx: f64, dy: f64) -> SheetDrag {
     if dx.abs() >= dy.abs() {
         return SheetDrag::Ignore;
     }
-    if dy < 0.0 || s.scroll_top > 0.0 {
-        return SheetDrag::Scroll;
+    vertical(s, dy)
+}
+
+fn excluded(s: &DragStart) -> bool {
+    s.blocked || (s.in_field && s.field_focused) || s.width >= SHEET_MAX
+}
+
+/// A mostly vertical move's effect (see [`sheet_drag_action`]).
+fn vertical(s: &DragStart, dy: f64) -> SheetDrag {
+    match (dy < 0.0, s.detent) {
+        (true, Detent::Medium) => SheetDrag::Drag,
+        (true, Detent::Large) => SheetDrag::Scroll,
+        (false, _) if s.scroll_top > 0.0 => SheetDrag::Scroll,
+        (false, _) => SheetDrag::Drag,
     }
-    SheetDrag::Drag
 }
 
 /// While still [`SheetDrag::Pending`], whether a move cancels the browser's
-/// scroll: only a downward, not-sideways-leaning move that could become a
-/// drag (iOS would otherwise start an overscroll it won't give back).
+/// scroll: only a vertical, not-sideways-leaning move that would become a
+/// drag (iOS would otherwise start a scroll it won't give back). A move
+/// leaning sideways is left alone, so the pill row still scrolls.
 pub fn holds_scroll(s: &DragStart, dx: f64, dy: f64) -> bool {
-    !s.blocked
-        && !(s.in_field && s.field_focused)
-        && s.width < SHEET_MAX
-        && s.scroll_top <= 0.0
-        && dy > 0.0
-        && dy >= dx.abs()
+    !excluded(s) && dy != 0.0 && dy.abs() >= dx.abs() && vertical(s, dy) == SheetDrag::Drag
+}
+
+/// The sheet's offset below its large height while dragged: it follows the
+/// finger from where it started (`start`: 0 at large, the medium offset at
+/// medium), never above the large height.
+pub fn drag_offset(start: f64, dy: f64) -> f64 {
+    (start + dy).max(0.0)
 }
 
 /// Where a released drag sends the sheet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SheetRelease {
+pub enum Settle {
+    Large,
+    Medium,
     /// Slides down and the view closes (saving a pending edit first).
     Close,
-    /// Back to its resting place.
-    SpringBack,
 }
 
-/// Closes past [`CLOSE_DISTANCE`] (unless flung back up) or on a fast
-/// downward flick; `velocity` is px per ms, positive downward.
-pub fn sheet_release(dy: f64, velocity: f64) -> SheetRelease {
-    let far = dy >= CLOSE_DISTANCE && velocity > -FLICK_SPEED;
-    let flick = velocity >= FLICK_SPEED && dy >= FLICK_MIN;
-    if far || flick {
-        SheetRelease::Close
-    } else {
-        SheetRelease::SpringBack
+/// The release decision. `y` is the sheet's offset below its large height,
+/// `medium` the medium height's offset, `velocity` px per ms (positive down).
+/// - From medium: down past [`CLOSE_DISTANCE`] (unless flung back up) or a
+///   downward flick closes; up a third of the way to large (unless flung
+///   back down) or an upward flick reaches large; otherwise back to medium.
+/// - From large: past medium by [`CLOSE_DISTANCE`] or a strong flick closes;
+///   down a third of the way to medium (unless flung back up) or a flick
+///   settles at medium; otherwise back to large.
+pub fn sheet_settle(from: Detent, y: f64, medium: f64, velocity: f64) -> Settle {
+    let medium = medium.max(0.0);
+    let flick_down = velocity >= FLICK_SPEED;
+    let flick_up = velocity <= -FLICK_SPEED;
+    match from {
+        Detent::Medium => {
+            let (down, up) = (y - medium, medium - y);
+            if (down >= CLOSE_DISTANCE && !flick_up) || (flick_down && down >= FLICK_MIN) {
+                Settle::Close
+            } else if (up > 0.0 && up >= medium / 3.0 && !flick_down) || (flick_up && up >= FLICK_MIN) {
+                Settle::Large
+            } else {
+                Settle::Medium
+            }
+        }
+        Detent::Large => {
+            if (y >= medium + CLOSE_DISTANCE && !flick_up) || (velocity >= STRONG_FLICK && y >= FLICK_MIN) {
+                Settle::Close
+            } else if (y >= medium / 3.0 && !flick_up) || (flick_down && y >= FLICK_MIN) {
+                Settle::Medium
+            } else {
+                Settle::Large
+            }
+        }
     }
 }
 
-/// Exposes [`sheet_drag_action`], [`holds_scroll`] and [`sheet_release`] to
-/// [`SHEET_DRAG_JS`] as `window.keelSheet.decide(start, dx, dy)` ("pending" /
-/// "drag" / "scroll" / "ignore"), `keelSheet.hold(start, dx, dy)` (bool), where
-/// `start` is `[scrollTop, blocked, inField, fieldFocused, width]`, and
-/// `window.keelSheet.release(dy, velocity)` ("close" / "spring"). The touch
-/// handlers need the answer synchronously (to cancel the browser's scroll),
-/// so this can't wait for a message round trip.
+/// Where a settled sheet rests, as an offset below the large height (0 at
+/// large). Close isn't a resting place: infinity (the caller slides it off).
+pub fn settle_offset(settle: Settle, medium: f64) -> f64 {
+    match settle {
+        Settle::Large => 0.0,
+        Settle::Medium => medium.max(0.0),
+        Settle::Close => f64::INFINITY,
+    }
+}
+
+/// Exposes the sheet's rules to [`SHEET_DRAG_JS`] as `window.keelSheet`:
+/// - `decide(start, dx, dy)`: "pending" / "drag" / "scroll" / "ignore"
+///   ([`sheet_drag_action`]); `hold(start, dx, dy)`: bool ([`holds_scroll`]).
+///   `start` is `[scrollTop, blocked, inField, fieldFocused, width, detent]`.
+/// - `drag(start, dy)`: [`drag_offset`].
+/// - `settle(detent, y, medium, velocity)`: "large" / "medium" / "close"
+///   ([`sheet_settle`]); `rest(settle, medium)`: [`settle_offset`].
+/// - `glass(rects, sheetTop, vvLeft, vvTop)`: the glass X and •••
+///   ([`crate::glass::sheet_glass`]); `screenTop(largeTop, y, vvTop)`.
+///
+/// `detent` / `settle` are "medium" / "large" / "close". The touch handlers
+/// need the answers synchronously (to cancel the browser's scroll), so this
+/// can't wait for a message round trip.
 pub fn install_sheet_rules() {
+    use crate::glass::{sheet_glass, sheet_screen_top, WebRect};
     use wasm_bindgen::prelude::*;
+    fn detent(v: &JsValue) -> Detent {
+        if v.as_string().as_deref() == Some("large") {
+            Detent::Large
+        } else {
+            Detent::Medium
+        }
+    }
     fn start(a: &js_sys::Array) -> DragStart {
         let n = |i| a.get(i).as_f64().unwrap_or(0.0);
         let b = |i| a.get(i).as_bool().unwrap_or(false);
-        DragStart { scroll_top: n(0), blocked: b(1), in_field: b(2), field_focused: b(3), width: n(4) }
+        DragStart {
+            scroll_top: n(0),
+            blocked: b(1),
+            in_field: b(2),
+            field_focused: b(3),
+            width: n(4),
+            detent: detent(&a.get(5)),
+        }
+    }
+    fn name(s: Settle) -> String {
+        match s {
+            Settle::Large => "large",
+            Settle::Medium => "medium",
+            Settle::Close => "close",
+        }
+        .to_string()
     }
     let decide = Closure::<dyn Fn(js_sys::Array, f64, f64) -> String>::new(|a: js_sys::Array, dx, dy| {
         match sheet_drag_action(&start(&a), dx, dy) {
@@ -157,21 +249,43 @@ pub fn install_sheet_rules() {
     let hold = Closure::<dyn Fn(js_sys::Array, f64, f64) -> bool>::new(|a: js_sys::Array, dx, dy| {
         holds_scroll(&start(&a), dx, dy)
     });
-    let release = Closure::<dyn Fn(f64, f64) -> String>::new(|dy, velocity| {
-        match sheet_release(dy, velocity) {
-            SheetRelease::Close => "close",
-            SheetRelease::SpringBack => "spring",
-        }
-        .to_string()
+    let drag = Closure::<dyn Fn(f64, f64) -> f64>::new(drag_offset);
+    let settle = Closure::<dyn Fn(JsValue, f64, f64, f64) -> String>::new(|d: JsValue, y, medium, v| {
+        name(sheet_settle(detent(&d), y, medium, v))
     });
+    let rest = Closure::<dyn Fn(JsValue, f64) -> f64>::new(|s: JsValue, medium| {
+        let s = match s.as_string().as_deref() {
+            Some("large") => Settle::Large,
+            Some("medium") => Settle::Medium,
+            _ => Settle::Close,
+        };
+        settle_offset(s, medium)
+    });
+    let glass = Closure::<dyn Fn(JsValue, f64, f64, f64) -> JsValue>::new(|rects: JsValue, top, left, vv_top| {
+        let rects: Vec<WebRect> = serde_wasm_bindgen::from_value(rects).unwrap_or_default();
+        let s = serde_wasm_bindgen::Serializer::json_compatible();
+        serde::Serialize::serialize(&sheet_glass(&rects, top, left, vv_top), &s).unwrap_or(JsValue::NULL)
+    });
+    let screen_top = Closure::<dyn Fn(f64, f64, f64) -> f64>::new(sheet_screen_top);
     let rules = js_sys::Object::new();
-    let _ = js_sys::Reflect::set(&rules, &"decide".into(), decide.as_ref());
-    let _ = js_sys::Reflect::set(&rules, &"hold".into(), hold.as_ref());
-    let _ = js_sys::Reflect::set(&rules, &"release".into(), release.as_ref());
+    let set = |k: &str, f: &JsValue| {
+        let _ = js_sys::Reflect::set(&rules, &k.into(), f);
+    };
+    set("decide", decide.as_ref());
+    set("hold", hold.as_ref());
+    set("drag", drag.as_ref());
+    set("settle", settle.as_ref());
+    set("rest", rest.as_ref());
+    set("glass", glass.as_ref());
+    set("screenTop", screen_top.as_ref());
     let _ = js_sys::Reflect::set(&js_sys::global(), &"keelSheet".into(), &rules);
     decide.forget();
     hold.forget();
-    release.forget();
+    drag.forget();
+    settle.forget();
+    rest.forget();
+    glass.forget();
+    screen_top.forget();
 }
 
 /// What [`SHEET_DRAG_JS`] reports.
@@ -180,65 +294,100 @@ pub struct SheetMsg {
     /// A drag was released past the threshold and the sheet slid away.
     #[serde(default)]
     pub close: bool,
-    /// The sheet started moving (a drag, or the keyboard shifting the page).
-    #[serde(default)]
-    pub moving: bool,
-    /// The sheet is at rest: where its header's X and ••• are now.
-    #[serde(default)]
-    pub rects: Option<Vec<crate::glass::WebRect>>,
 }
 
-/// The task sheet follows the finger (phone layout). A touch anywhere on
-/// the sheet is classified by `keelSheet.decide` once it passes the slop
-/// (until then `keelSheet.hold` says whether to cancel the browser's scroll);
-/// a drag cancels the browser's scroll and moves the sheet (and fades the scrim)
-/// with the finger, never above its resting place. On release
-/// `keelSheet.release` either slides it away and reports `close` (Rust
-/// then closes the view through its save-first path) or springs it back.
-/// Reduced motion snaps instead of animating. It also reports `moving` and,
-/// once at rest again, the header buttons' `rects` (for the iPhone's glass
-/// X and •••); `window.keelMeasureSheet()` measures on demand.
+/// The task sheet follows the finger between its two heights (phone layout).
+/// A touch anywhere on the sheet is classified by `keelSheet.decide` once it
+/// passes the slop (until then `keelSheet.hold` says whether to cancel the
+/// browser's scroll). A drag switches the sheet to its large layout
+/// (`.tv-large`) and moves it with `translateY` below that, so it can grow
+/// and shrink with the finger; on release `keelSheet.settle` picks large,
+/// medium (the 67% layout, swapped back in once it has settled there) or
+/// close (it slides off, then `{close}` goes to Rust, which closes the view
+/// through its save-first path). Reduced motion snaps.
+///
+/// iPhone: the glass X and ••• (`plugin:glass|sheet`) are told where the
+/// sheet's top is on screen: with the sheet's first frame as it opens (they
+/// ride its slide-up with the same curve), every frame of a drag, the target
+/// and duration of each settle, and on every viewport change (the keyboard).
+/// So they never hide and the web buttons never show in their place.
+///
+/// The keyboard: `--vv-top`, `--vv-h` and `--kb` (on the root) keep the
+/// sheet inside the visible area, above the keyboard, header in view.
 pub const SHEET_DRAG_JS: &str = r#"
 const BLOCK = '.popover, .menu, .editor, .modal-scrim, .pop-backdrop';
 const FIELD = 'input, textarea, select, [contenteditable]';
 const EASE = 'cubic-bezier(.32,.72,0,1)';
+const SETTLE_S = 0.3;
 const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const sheetEl = () => document.querySelector('.tv-sheet');
 const scrim = () => document.querySelector('.tv-scrim');
-const measure = () => [['tv-close', '.tv-sheet .tv-head .tv-close'], ['tv-more', '.tv-sheet .tv-head .tv-more']].map(([id, sel]) => {
-  const r = document.querySelector(sel)?.getBoundingClientRect();
-  // On screen: the keyboard can pan the visual viewport over the layout one.
-  const v = window.visualViewport;
-  return r && r.width > 0 && { id, x: r.x - (v?.offsetLeft ?? 0), y: r.y - (v?.offsetTop ?? 0), w: r.width, h: r.height };
-}).filter(Boolean);
-// Where the sheet is on screen: its layout rect plus the visual viewport's
-// pan, zoom and height (the keyboard moves those, not the layout rect).
-const rectKey = (el) => {
-  const r = el.getBoundingClientRect(), v = window.visualViewport;
-  const pan = v ? [v.offsetLeft, v.offsetTop, v.scale * 100, v.height] : [];
-  return [r.x, r.y, r.width, r.height, ...pan].map(Math.round).join();
+const vvTop = () => window.visualViewport?.offsetTop ?? 0;
+const native = () => document.body.classList.contains('native-glass');
+// Numbered, so a message overtaken by a later one is dropped in Swift.
+let seqOut = 0;
+const send = (m) => { if (native()) window.__TAURI__?.core.invoke('plugin:glass|sheet', { ...m, seq: ++seqOut }).catch(() => {}); };
+let frame = null, frameTop = 0;
+// One position per animation frame while the sheet follows the finger.
+const follow = (top) => {
+  frameTop = top;
+  if (frame === null) frame = requestAnimationFrame(() => { frame = null; send({ top: frameTop, duration: 0 }); });
 };
-window.keelSheetKey = () => { const s = document.querySelector('.tv-sheet'); return s ? rectKey(s) : ''; };
-let lastRect = '';
-const settle = async () => {
-  const sheet = document.querySelector('.tv-sheet');
-  if (!sheet) return;
-  await Promise.all(sheet.getAnimations().map((a) => a.finished.catch(() => {})));
-  if (!sheet.isConnected || g?.mode === 'drag') return;
-  lastRect = rectKey(sheet);
-  dioxus.send({ rects: measure() });
+// A glide in step with the page's own animation: same start (wall clock),
+// duration and curve, so Swift draws the glass where the sheet is each frame.
+const glide = (top, s, extra = {}) => {
+  if (frame !== null) { cancelAnimationFrame(frame); frame = null; }
+  send({ top, duration: s, start: Date.now(), ...extra });
 };
-window.keelMeasureSheet = settle;
-let g = null;
-const place = (sheet, y, animate) => {
-  const t = animate && !reduce() ? `transform .3s ${EASE}` : 'none';
-  sheet.style.transition = t;
-  sheet.style.transform = y > 0 ? `translateY(${y}px)` : '';
-  const s = scrim();
-  if (s) {
-    s.style.transition = t === 'none' ? 'none' : `opacity .3s ${EASE}`;
-    s.style.opacity = y > 0 ? String(Math.max(0, 1 - y / sheet.offsetHeight)) : '';
+const shiftOf = (el) => new DOMMatrix(getComputedStyle(el).transform).m42 || 0;
+const measureGlass = (sheet) => {
+  const r = sheet.getBoundingClientRect();
+  const rects = [['tv-close', '.tv-head .tv-close'], ['tv-more', '.tv-head .tv-more']].map(([id, sel]) => {
+    const b = sheet.querySelector(sel)?.getBoundingClientRect();
+    return b && b.width > 0 && { id, x: b.x, y: b.y, w: b.width, h: b.height };
+  }).filter(Boolean);
+  return keelSheet.glass(rects, r.top, window.visualViewport?.offsetLeft ?? 0, vvTop());
+};
+window.keelSheetOpened = (tries = 0) => {
+  const sheet = sheetEl();
+  if (!window.keelSheet) return;
+  const glass = sheet && measureGlass(sheet);
+  if (!glass || glass.buttons.length < 2) {
+    if (tries < 10) requestAnimationFrame(() => keelSheetOpened(tries + 1));
+    return;
+  }
+  sheet.dataset.detent = 'medium';
+  // The slide-up (sheet-up): from one sheet height down to its resting place.
+  const anim = sheet.getAnimations()[0];
+  const rest = glass.top - shiftOf(sheet);
+  if (!anim || reduce()) { send({ buttons: glass.buttons, top: rest, duration: 0 }); return; }
+  const begun = anim.startTime === null ? 0 : document.timeline.currentTime - anim.startTime;
+  const secs = anim.effect.getComputedTiming().endTime / 1000;
+  glide(rest, secs, { buttons: glass.buttons, from: rest + sheet.offsetHeight, start: Date.now() - begun });
+};
+// Both layouts' tops (no transform): `M` is how far medium sits below large.
+const heights = (sheet) => {
+  const was = sheet.classList.contains('tv-large'), keep = sheet.style.transform;
+  sheet.style.transform = 'none';
+  sheet.classList.remove('tv-large');
+  const m = sheet.getBoundingClientRect();
+  sheet.classList.add('tv-large');
+  const l = sheet.getBoundingClientRect();
+  if (!was) sheet.classList.remove('tv-large');
+  sheet.style.transform = keep;
+  return { M: m.top - l.top, largeTop: l.top, mediumH: m.height };
+};
+const place = (d, y, s) => {
+  const t = s > 0 ? `transform ${s}s ${EASE}` : 'none';
+  d.sheet.style.transition = t;
+  d.sheet.style.transform = `translateY(${y}px)`;
+  const sc = scrim();
+  if (sc) {
+    sc.style.transition = s > 0 ? `opacity ${s}s ${EASE}` : 'none';
+    sc.style.opacity = String(Math.max(0, Math.min(1, 1 - (y - Math.max(0, d.M)) / d.mediumH)));
   }
 };
+let g = null, seq = 0;
 document.addEventListener('touchstart', (ev) => {
   g = null;
   if (ev.touches.length !== 1 || !window.keelSheet) return;
@@ -247,8 +396,9 @@ document.addEventListener('touchstart', (ev) => {
   const t = ev.touches[0];
   const field = ev.target.closest(FIELD);
   const scroller = ev.target.closest('.tv-scroll');
-  g = { sheet, x: t.clientX, y: t.clientY, mode: 'pending', dy: 0, samples: [],
-    start: [scroller ? scroller.scrollTop : 0, !!ev.target.closest(BLOCK), !!field, !!field && field.contains(document.activeElement), innerWidth] };
+  g = { sheet, x: t.clientX, y: t.clientY, mode: 'pending', samples: [],
+    start: [scroller ? scroller.scrollTop : 0, !!ev.target.closest(BLOCK), !!field,
+      !!field && field.contains(document.activeElement), innerWidth, sheet.dataset.detent || 'medium'] };
 }, { passive: true, capture: true });
 document.addEventListener('touchmove', (ev) => {
   if (!g || g.mode === 'scroll' || g.mode === 'ignore') return;
@@ -258,47 +408,61 @@ document.addEventListener('touchmove', (ev) => {
     g.mode = keelSheet.decide(g.start, dx, dy);
     if (g.mode === 'pending' && keelSheet.hold(g.start, dx, dy)) ev.preventDefault();
     if (g.mode !== 'drag') return;
+    seq++;
     g.sheet.getAnimations().forEach((a) => a.finish());
-    dioxus.send({ moving: true });
+    Object.assign(g, heights(g.sheet), { dy0: dy });
+    g.from = g.start[5] === 'large' ? 0 : Math.max(0, g.M);
+    g.sheet.classList.add('tv-large');
   }
   ev.preventDefault();
-  g.dy = Math.max(0, dy);
+  g.yNow = keelSheet.drag(g.from, dy - g.dy0);
   g.samples.push([ev.timeStamp, dy]);
   if (g.samples.length > 6) g.samples.shift();
-  place(g.sheet, g.dy, false);
+  place(g, g.yNow, 0);
+  follow(keelSheet.screenTop(g.largeTop, g.yNow, vvTop()));
 }, { passive: false, capture: true });
-const end = (ev, cancelled) => {
+const end = (cancelled) => {
   const d = g;
   g = null;
   if (!d || d.mode !== 'drag') return;
   const s = d.samples, a = s[0], b = s[s.length - 1];
   const v = a && b && b[0] > a[0] ? (b[1] - a[1]) / (b[0] - a[0]) : 0;
-  if (!cancelled && keelSheet.release(d.dy, v) === 'close') {
-    place(d.sheet, d.sheet.offsetHeight, true);
-    setTimeout(() => dioxus.send({ close: true }), reduce() ? 0 : 300);
-  } else {
-    place(d.sheet, 0, true);
-    setTimeout(settle, reduce() ? 0 : 320);
+  const to = cancelled ? d.start[5] : keelSheet.settle(d.start[5], d.yNow, d.M, v);
+  const secs = reduce() ? 0 : SETTLE_S;
+  // Close slides it just past the bottom of the screen.
+  const target = to === 'close' ? innerHeight - d.largeTop + 40 : keelSheet.rest(to, d.M);
+  place(d, target, secs);
+  glide(keelSheet.screenTop(d.largeTop, target, vvTop()), secs);
+  const mine = seq;
+  setTimeout(() => {
+    if (to === 'close') { dioxus.send({ close: true }); return; }
+    if (mine !== seq || !d.sheet.isConnected) return;
+    d.sheet.dataset.detent = to;
+    if (to === 'medium') d.sheet.classList.remove('tv-large');
+    d.sheet.style.transition = 'none';
+    d.sheet.style.transform = '';
+    const sc = scrim();
+    if (sc) { sc.style.transition = 'none'; sc.style.opacity = ''; }
+  }, secs * 1000);
+};
+document.addEventListener('touchend', () => end(false), { passive: true, capture: true });
+document.addEventListener('touchcancel', () => end(true), { passive: true, capture: true });
+// The keyboard: keep the sheet in the visible area above it, and tell the
+// glass where the sheet now is (it never hides).
+const viewport = () => {
+  const v = window.visualViewport, root = document.documentElement;
+  if (v) {
+    root.style.setProperty('--vv-top', `${v.offsetTop}px`);
+    root.style.setProperty('--vv-h', `${v.height}px`);
+    root.style.setProperty('--kb', `${Math.max(0, root.clientHeight - v.offsetTop - v.height)}px`);
   }
+  const sheet = sheetEl();
+  if (sheet && !(g && g.mode === 'drag')) follow(sheet.getBoundingClientRect().top - vvTop());
 };
-document.addEventListener('touchend', (ev) => end(ev, false), { passive: true, capture: true });
-document.addEventListener('touchcancel', (ev) => end(ev, true), { passive: true, capture: true });
-// The keyboard shifts the page under the glass buttons: hide them, then
-// measure again once it has stopped moving.
-let moved = null;
-const shifted = () => {
-  const sheet = document.querySelector('.tv-sheet');
-  if (!sheet) return;
-  const key = rectKey(sheet);
-  if (key === lastRect) return;
-  lastRect = key;
-  dioxus.send({ moving: true });
-  clearTimeout(moved);
-  moved = setTimeout(settle, 250);
-};
-window.visualViewport?.addEventListener('resize', shifted);
-window.visualViewport?.addEventListener('scroll', shifted);
-window.addEventListener('resize', shifted);
+window.keelSheetViewport = viewport;
+window.visualViewport?.addEventListener('resize', viewport);
+window.visualViewport?.addEventListener('scroll', viewport);
+window.addEventListener('resize', viewport);
 await new Promise(() => {});
 "#;
 
@@ -403,12 +567,43 @@ mod tests {
     }
 
     fn start(scroll_top: f64) -> DragStart {
-        DragStart { scroll_top, blocked: false, in_field: false, field_focused: false, width: 390.0 }
+        DragStart { scroll_top, blocked: false, in_field: false, field_focused: false, width: 390.0, detent: Detent::Medium }
+    }
+
+    fn large(scroll_top: f64) -> DragStart {
+        DragStart { detent: Detent::Large, ..start(scroll_top) }
     }
 
     #[test]
     fn a_downward_drag_at_the_top_moves_the_sheet() {
         assert_eq!(sheet_drag_action(&start(0.0), 2.0, 9.0), SheetDrag::Drag);
+        assert_eq!(sheet_drag_action(&large(0.0), 2.0, 9.0), SheetDrag::Drag);
+    }
+
+    #[test]
+    fn scrolled_content_scrolls_first_on_the_way_down() {
+        assert_eq!(sheet_drag_action(&start(40.0), 0.0, 9.0), SheetDrag::Scroll);
+        assert_eq!(sheet_drag_action(&large(40.0), 0.0, 9.0), SheetDrag::Scroll);
+    }
+
+    #[test]
+    fn an_upward_drag_at_medium_expands_the_sheet() {
+        // iOS: the sheet grows to its large height before the content scrolls.
+        assert_eq!(sheet_drag_action(&start(0.0), 0.0, -9.0), SheetDrag::Drag);
+        assert_eq!(sheet_drag_action(&start(40.0), 0.0, -9.0), SheetDrag::Drag, "even over scrolled content");
+    }
+
+    #[test]
+    fn an_upward_drag_at_large_scrolls_the_content() {
+        assert_eq!(sheet_drag_action(&large(0.0), 0.0, -9.0), SheetDrag::Scroll);
+    }
+
+    #[test]
+    fn a_sideways_move_is_left_alone() {
+        // The pill row scrolls sideways, rows and circles keep their taps.
+        assert_eq!(sheet_drag_action(&start(0.0), 12.0, 5.0), SheetDrag::Ignore);
+        assert_eq!(sheet_drag_action(&start(0.0), -12.0, -5.0), SheetDrag::Ignore, "also sideways-and-up at medium");
+        assert_eq!(sheet_drag_action(&large(0.0), -12.0, 5.0), SheetDrag::Ignore);
     }
 
     #[test]
@@ -416,6 +611,7 @@ mod tests {
         // A jittery tap on a row, circle or pill stays a tap.
         assert_eq!(sheet_drag_action(&start(0.0), 2.0, 7.9), SheetDrag::Pending);
         assert_eq!(sheet_drag_action(&start(0.0), -7.9, 3.0), SheetDrag::Pending);
+        assert_eq!(sheet_drag_action(&start(0.0), 0.0, -7.9), SheetDrag::Pending);
         assert_eq!(sheet_drag_action(&start(0.0), 0.0, 8.0), SheetDrag::Drag, "past the slop");
     }
 
@@ -429,6 +625,7 @@ mod tests {
     #[test]
     fn a_diagonal_tie_is_not_a_drag() {
         assert_eq!(sheet_drag_action(&start(0.0), 10.0, 10.0), SheetDrag::Ignore);
+        assert_eq!(sheet_drag_action(&start(0.0), 10.0, -10.0), SheetDrag::Ignore);
     }
 
     #[test]
@@ -439,67 +636,75 @@ mod tests {
         assert_eq!(sheet_drag_action(&unfocused, 0.0, 12.0), SheetDrag::Drag);
         let focused = DragStart { in_field: true, field_focused: true, ..start(0.0) };
         assert_eq!(sheet_drag_action(&focused, 0.0, 12.0), SheetDrag::Ignore);
-    }
-
-    #[test]
-    fn a_pending_downward_move_at_the_top_holds_the_scroll() {
-        // So iOS doesn't start a scroll before the drag is decided.
-        assert!(holds_scroll(&start(0.0), 1.0, 3.0));
-        assert!(!holds_scroll(&start(0.0), 4.0, 3.0), "leaning sideways: the pills may scroll");
-        assert!(!holds_scroll(&start(20.0), 0.0, 3.0), "scrolled content scrolls");
-        assert!(!holds_scroll(&start(0.0), 0.0, -3.0), "upward scrolls");
-        assert!(!holds_scroll(&DragStart { blocked: true, ..start(0.0) }, 0.0, 3.0));
-    }
-
-    #[test]
-    fn scrolled_content_scrolls_first() {
-        assert_eq!(sheet_drag_action(&start(40.0), 0.0, 9.0), SheetDrag::Scroll);
-    }
-
-    #[test]
-    fn an_upward_move_scrolls_the_content() {
-        assert_eq!(sheet_drag_action(&start(0.0), 0.0, -9.0), SheetDrag::Scroll);
-    }
-
-    #[test]
-    fn a_sideways_move_is_left_alone() {
-        // The pill row scrolls sideways, rows and circles keep their taps.
-        assert_eq!(sheet_drag_action(&start(0.0), 12.0, 5.0), SheetDrag::Ignore);
-        assert_eq!(sheet_drag_action(&start(0.0), -12.0, 5.0), SheetDrag::Ignore);
-    }
-
-    #[test]
-    fn no_movement_yet_waits() {
-        assert_eq!(sheet_drag_action(&start(0.0), 0.0, 0.0), SheetDrag::Pending);
+        assert_eq!(sheet_drag_action(&focused, 0.0, -12.0), SheetDrag::Ignore);
     }
 
     #[test]
     fn inputs_menus_and_the_desktop_panel_never_drag() {
         let blocked = DragStart { blocked: true, ..start(0.0) };
         assert_eq!(sheet_drag_action(&blocked, 0.0, 9.0), SheetDrag::Ignore, "inside the ••• menu or a popover");
-        let typing = DragStart { in_field: true, field_focused: true, ..start(0.0) };
-        assert_eq!(sheet_drag_action(&typing, 0.0, 9.0), SheetDrag::Ignore, "in a field being edited");
         let wide = DragStart { width: 1280.0, ..start(0.0) };
         assert_eq!(sheet_drag_action(&wide, 0.0, 9.0), SheetDrag::Ignore, "desktop panel");
+        assert_eq!(sheet_drag_action(&wide, 0.0, -9.0), SheetDrag::Ignore, "desktop panel");
     }
 
     #[test]
-    fn release_closes_past_80px_or_on_a_flick() {
-        assert_eq!(sheet_release(90.0, 0.0), SheetRelease::Close);
-        assert_eq!(sheet_release(80.0, 0.0), SheetRelease::Close, "exactly 80px");
-        assert_eq!(sheet_release(79.0, 0.0), SheetRelease::SpringBack);
-        assert_eq!(sheet_release(60.0, 0.1), SheetRelease::SpringBack, "short and slow");
-        assert_eq!(sheet_release(40.0, 0.8), SheetRelease::Close, "a fast flick down");
-        assert_eq!(sheet_release(6.0, 0.8), SheetRelease::SpringBack, "a twitch, not a flick");
-        assert_eq!(sheet_release(120.0, -0.6), SheetRelease::SpringBack, "flung back up");
+    fn a_pending_move_holds_the_scroll_only_when_it_could_drag() {
+        // So iOS doesn't start a scroll before the drag is decided.
+        assert!(holds_scroll(&start(0.0), 1.0, 3.0));
+        assert!(holds_scroll(&start(40.0), 1.0, -3.0), "upward at medium expands");
+        assert!(!holds_scroll(&start(0.0), 4.0, 3.0), "leaning sideways: the pills may scroll");
+        assert!(!holds_scroll(&start(20.0), 0.0, 3.0), "scrolled content scrolls");
+        assert!(!holds_scroll(&large(0.0), 0.0, -3.0), "upward at large scrolls");
+        assert!(!holds_scroll(&DragStart { blocked: true, ..start(0.0) }, 0.0, 3.0));
+        assert!(!holds_scroll(&start(0.0), 0.0, 0.0));
     }
 
     #[test]
-    fn the_keyboard_panning_the_viewport_counts_as_moving_the_sheet() {
-        // The layout rect doesn't change when the keyboard pans the visual
-        // viewport; the glass buttons must still be measured again.
-        assert!(SHEET_DRAG_JS.contains("[v.offsetLeft, v.offsetTop, v.scale * 100, v.height]"));
-        assert!(SHEET_DRAG_JS.contains("y: r.y - (v?.offsetTop ?? 0)"));
+    fn the_sheet_follows_the_finger_but_not_above_large() {
+        assert_eq!(drag_offset(300.0, 50.0), 350.0);
+        assert_eq!(drag_offset(300.0, -120.0), 180.0);
+        assert_eq!(drag_offset(300.0, -400.0), 0.0, "stops at the large height");
+        assert_eq!(drag_offset(0.0, -30.0), 0.0);
+    }
+
+    // The medium detent sits 300px below the large one in these tests.
+    const M: f64 = 300.0;
+
+    #[test]
+    fn from_medium_a_drag_down_closes_past_80px_or_on_a_flick() {
+        assert_eq!(sheet_settle(Detent::Medium, M + 80.0, M, 0.0), Settle::Close, "exactly 80px");
+        assert_eq!(sheet_settle(Detent::Medium, M + 79.0, M, 0.0), Settle::Medium);
+        assert_eq!(sheet_settle(Detent::Medium, M + 40.0, M, 0.8), Settle::Close, "a fast flick down");
+        assert_eq!(sheet_settle(Detent::Medium, M + 6.0, M, 0.8), Settle::Medium, "a twitch, not a flick");
+        assert_eq!(sheet_settle(Detent::Medium, M + 120.0, M, -0.6), Settle::Medium, "flung back up");
+    }
+
+    #[test]
+    fn from_medium_a_drag_up_reaches_large_past_a_third_or_on_a_flick() {
+        assert_eq!(sheet_settle(Detent::Medium, M - 100.0, M, 0.0), Settle::Large, "a third of the way");
+        assert_eq!(sheet_settle(Detent::Medium, M - 99.0, M, 0.0), Settle::Medium);
+        assert_eq!(sheet_settle(Detent::Medium, M - 40.0, M, -0.8), Settle::Large, "an upward flick");
+        assert_eq!(sheet_settle(Detent::Medium, M - 200.0, M, 0.8), Settle::Medium, "flung back down");
+    }
+
+    #[test]
+    fn from_large_a_short_drag_settles_at_medium_and_a_long_one_closes() {
+        assert_eq!(sheet_settle(Detent::Large, 100.0, M, 0.0), Settle::Medium, "a third of the way to medium");
+        assert_eq!(sheet_settle(Detent::Large, 99.0, M, 0.0), Settle::Large, "barely moved");
+        assert_eq!(sheet_settle(Detent::Large, 40.0, M, 0.8), Settle::Medium, "a flick: one step down");
+        assert_eq!(sheet_settle(Detent::Large, M + 79.0, M, 0.0), Settle::Medium, "short of medium + 80px");
+        assert_eq!(sheet_settle(Detent::Large, M + 80.0, M, 0.0), Settle::Close, "past medium by 80px");
+        assert_eq!(sheet_settle(Detent::Large, 60.0, M, 2.0), Settle::Close, "a strong flick");
+        assert_eq!(sheet_settle(Detent::Large, 200.0, M, -0.8), Settle::Large, "flung back up");
+    }
+
+    #[test]
+    fn settle_positions() {
+        assert_eq!(settle_offset(Settle::Large, M), 0.0);
+        assert_eq!(settle_offset(Settle::Medium, M), M);
+        // With the keyboard up the two heights can meet: medium is never above large.
+        assert_eq!(settle_offset(Settle::Medium, -20.0), 0.0);
     }
 
     #[test]

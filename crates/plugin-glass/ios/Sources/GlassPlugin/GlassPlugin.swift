@@ -31,8 +31,22 @@ class ButtonsArgs: Decodable {
   let add: Bool
   let searching: Bool
   let drawer: [DrawerButton]
-  let sheet: [DrawerButton]
   let theme: String
+}
+
+/// The task sheet's glass X and ••• (`plugin:glass|sheet`): `buttons` (y from
+/// the sheet's top; absent keeps the current ones, empty removes them) and
+/// the sheet's top on screen, at once or gliding there over `duration` from
+/// `start` (wall-clock ms, when the page's own animation began) and `from`
+/// (where it began; absent = where the glass is now). `seq` orders the
+/// messages (an older one arriving late is dropped).
+class SheetArgs: Decodable {
+  let buttons: [DrawerButton]?
+  let top: CGFloat
+  let from: CGFloat?
+  let start: Double?
+  let duration: Double
+  let seq: Int?
 }
 
 /// Draws Keel's Liquid Glass composer, editor, pickers and floating buttons
@@ -128,13 +142,14 @@ class GlassPlugin: Plugin {
       self.model.addVisible = args.add
       self.model.searching = args.searching
       withAnimation(.easeOut(duration: 0.18)) { self.model.drawerButtons = args.drawer }
-      // The sheet's buttons vanish at once when it starts moving (they'd
-      // trail behind it) and fade in where it came to rest.
-      if args.sheet.isEmpty {
-        self.model.sheetButtons = []
-      } else {
-        withAnimation(.easeOut(duration: 0.15)) { self.model.sheetButtons = args.sheet }
-      }
+    }
+    invoke.resolve()
+  }
+
+  @objc public func sheet(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(SheetArgs.self)
+    DispatchQueue.main.async {
+      self.model.placeSheet(args)
     }
     invoke.resolve()
   }

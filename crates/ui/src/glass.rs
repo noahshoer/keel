@@ -728,8 +728,6 @@ pub struct ButtonsState {
     /// Glass stand-ins for the drawer's theme and settings buttons, while
     /// the drawer is open.
     pub drawer: Vec<DrawerButton>,
-    /// Glass stand-ins for the task sheet's X and •••, while it's at rest.
-    pub sheet: Vec<DrawerButton>,
     /// Keel's theme ("system" / "light" / "dark"): the native views follow
     /// it rather than the phone's setting.
     pub theme: String,
@@ -743,7 +741,6 @@ pub fn floating_buttons(searching: bool, drawer_open: bool, view_open: bool) -> 
         add: !searching,
         searching,
         drawer: Vec::new(),
-        sheet: Vec::new(),
         theme: "system".to_string(),
     }
 }
@@ -801,6 +798,32 @@ pub fn sheet_buttons(rects: &[WebRect]) -> Vec<DrawerButton> {
             Some(DrawerButton { id: r.id.clone(), symbol: symbol.to_string(), x: r.x, y: r.y, w: r.w, h: r.h })
         })
         .collect()
+}
+
+/// The task sheet's glass X and ••• (`plugin:glass|sheet`): each button's
+/// `y` is from the sheet's top, and `top` is where that top is on screen,
+/// so moving the sheet only needs a new `top`.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct SheetGlass {
+    pub buttons: Vec<DrawerButton>,
+    pub top: f64,
+}
+
+/// [`SheetGlass`] from the web buttons' rects and the sheet's top (layout
+/// px, as measured), less the visual viewport's pan (the keyboard can move
+/// the visible area over the page; the glass is drawn on screen).
+pub fn sheet_glass(rects: &[WebRect], sheet_top: f64, vv_left: f64, vv_top: f64) -> SheetGlass {
+    let buttons = sheet_buttons(rects)
+        .into_iter()
+        .map(|b| DrawerButton { x: b.x - vv_left, y: b.y - sheet_top, ..b })
+        .collect();
+    SheetGlass { buttons, top: sheet_top - vv_top }
+}
+
+/// The sheet's top on screen when it sits `y` below its large height,
+/// whose top is `large_top` (layout px).
+pub fn sheet_screen_top(large_top: f64, y: f64, vv_top: f64) -> f64 {
+    large_top + y - vv_top
 }
 
 /// Measures the drawer's theme and settings buttons: once when asked (`go`
@@ -861,8 +884,6 @@ pub struct Glass {
     pub chosen: Signal<Option<ChosenAction>>,
     /// Where the drawer's header buttons sit (empty while it's closed).
     pub drawer_rects: Signal<Vec<WebRect>>,
-    /// Where the task sheet's X and ••• sit (empty while it's closed or moving).
-    pub sheet_rects: Signal<Vec<WebRect>>,
     /// The settings dialog is open (the drawer's glass buttons step aside).
     pub settings_open: Signal<bool>,
     /// The latest prompt answer, for the caller whose id it carries.
@@ -879,7 +900,6 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
         pressed: Signal::new(None),
         chosen: Signal::new(None),
         drawer_rects: Signal::new(Vec::new()),
-        sheet_rects: Signal::new(Vec::new()),
         settings_open: Signal::new(false),
         answer: Signal::new(None),
     });
@@ -1336,7 +1356,7 @@ mod tests {
     #[test]
     fn search_swaps_the_search_button_for_close_and_drops_add() {
         let state =
-            |visible, add, searching| ButtonsState { visible, add, searching, drawer: Vec::new(), sheet: Vec::new(), theme: "system".into() };
+            |visible, add, searching| ButtonsState { visible, add, searching, drawer: Vec::new(), theme: "system".into() };
         assert_eq!(floating_buttons(false, false, false), state(true, true, false));
         assert_eq!(floating_buttons(true, false, false), state(true, false, true));
         assert!(!floating_buttons(false, true, false).visible, "hidden while the drawer is open");
@@ -1389,19 +1409,26 @@ mod tests {
     }
 
     #[test]
-    fn sheet_buttons_are_glass_x_and_more_at_the_measured_spots() {
+    fn sheet_glass_places_x_and_more_relative_to_the_sheet_top() {
+        // Measured with the sheet's top at 300 (layout px) and the keyboard
+        // having panned the visual viewport 120px down.
         let rects = vec![
-            WebRect { id: "tv-close".into(), x: 12.0, y: 300.0, w: 36.0, h: 36.0 },
-            WebRect { id: "tv-more".into(), x: 342.0, y: 300.0, w: 36.0, h: 36.0 },
+            WebRect { id: "tv-close".into(), x: 12.0, y: 318.0, w: 40.0, h: 40.0 },
+            WebRect { id: "tv-more".into(), x: 350.0, y: 318.0, w: 40.0, h: 40.0 },
+            WebRect { id: "other".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0 },
         ];
-        let b = sheet_buttons(&rects);
-        assert_eq!(b.iter().map(|b| (b.id.as_str(), b.symbol.as_str())).collect::<Vec<_>>(), vec![("tv-close", "xmark"), ("tv-more", "ellipsis")]);
-        assert_eq!((b[1].x, b[1].y, b[1].w, b[1].h), (342.0, 300.0, 36.0, 36.0));
-        assert!(sheet_buttons(&[]).is_empty(), "none while the sheet moves or is closed");
+        let g = sheet_glass(&rects, 300.0, 0.0, 120.0);
+        let ids: Vec<_> = g.buttons.iter().map(|b| (b.id.as_str(), b.symbol.as_str())).collect();
+        assert_eq!(ids, vec![("tv-close", "xmark"), ("tv-more", "ellipsis")]);
+        assert_eq!((g.buttons[0].x, g.buttons[0].y, g.buttons[0].w), (12.0, 18.0, 40.0), "y from the sheet's top");
+        assert_eq!(g.top, 180.0, "the sheet's top on screen");
+        // Moving the sheet later only needs a new top on screen.
+        assert_eq!(sheet_screen_top(300.0, 150.0, 120.0), 330.0);
         assert_eq!(button_action("tv-close"), Some(ButtonAction::CloseView));
         assert_eq!(button_action("tv-more"), Some(ButtonAction::ViewMenu));
-        let s = ButtonsState { sheet: b, ..floating_buttons(false, false, true) };
-        assert_eq!(serde_json::to_value(&s).unwrap()["sheet"][0]["symbol"], "xmark");
+        let json = serde_json::to_value(&g).unwrap();
+        assert_eq!(json["buttons"][1]["symbol"], "ellipsis");
+        assert_eq!(json["top"], 180.0);
     }
 
     #[test]
