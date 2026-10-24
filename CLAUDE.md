@@ -21,6 +21,8 @@ After iOS: **sync** (dormant by design). Every change already goes through an id
 
 v1 features done: projects, sections, sub-tasks, labels, filters (query language), priorities, due dates and times, deadlines, recurrence (incl. intervals, yearly, last day/workday, nth weekday), streaks, natural-language quick add with live highlighting, search, completed-task view, local notifications (global rule + per-task reminders + daily summary), dark mode, responsive layout, and Todoist CSV import (Settings → Import; `core::import::{csv, todoist}`, `AppService::import_todoist_csv`).
 
+Task view (2026-10-23, spec `docs/superpowers/specs/2026-10-23-task-view-design.md`): tapping a task opens its view, a sheet on the phone (swipe down on the header or tap the scrim to close) and a 360px right panel on desktop windows at least 900px wide (`ui::task_view::{nav, view, fields}`). It has the title and description edited in place, field rows plus dotted "+ Field" pills for what's missing (each opens the native picker on iPhone and saves at once), a ••• menu (Streak on repeating tasks, Delete), and a sub-task card ("x of y · Show completed", "+ Add sub-task"). Opening a sub-task pushes its view; Back pops it. Lists are cards (`core::views::cards`, `ui::cards`): sub-tasks are hidden under their parent's "x/y" count, and dated views group matching sub-tasks under their top-level parent's header. Completing a parent completes its sub-tasks; completing a repeating parent moves its date and unchecks its sub-tasks (part of `TaskComplete`, no new `Action`); deleting a task deletes its sub-tree.
+
 ## Layout
 
 | Crate | Package | What |
