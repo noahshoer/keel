@@ -524,6 +524,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   display: inline-flex; align-items: center; justify-content: center; color: var(--text);
   background: color-mix(in srgb, var(--text) 7%, transparent); }
 @media (hover: hover) { .tv-round:hover { background: color-mix(in srgb, var(--text) 12%, transparent); } }
+.native-glass .tv-round { width: 40px; height: 40px; }
 .native-glass .tv-sheet.glass-head .tv-head .tv-round { visibility: hidden; }
 .menu-item.danger { color: var(--p1); }
 .tv-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
