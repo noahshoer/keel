@@ -134,7 +134,8 @@ pub struct CardState {
     pub chips: Vec<ChipState>,
     pub can_submit: bool,
     pub picker: PickerData,
-    /// Shows only this chip's picker, no card; a pick saves at once.
+    /// Shows only this chip's picker, no card. Each pick saves at once; a
+    /// single-choice picker then closes (`closes_on_pick`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub only_picker: Option<ChipId>,
 }
@@ -489,6 +490,18 @@ pub fn apply_event(v: &mut EditorValues, ev: &GlassEvent, mode: CardMode, ctx: &
     Outcome::Changed
 }
 
+
+/// A picker-only save that keeps the picker open: the picked values become
+/// the base for the next pick, and the save diffs from the returned one.
+pub fn begin_save(initial: &mut EditorValues, values: &EditorValues) -> EditorValues {
+    std::mem::replace(initial, values.clone())
+}
+
+/// After a failed picker-only save, the picker shows what was saved before.
+pub fn restore_failed_save(initial: &mut EditorValues, values: &mut EditorValues, before: EditorValues) {
+    *values = before.clone();
+    *initial = before;
+}
 
 /// What the values become after a submit: adding resets the card for the
 /// next task (it stays open); editing closes it.
@@ -1017,15 +1030,23 @@ impl Glass {
             Outcome::Save => {
                 let Some(id) = s.task_id.clone() else { return };
                 let mut reload = s.reload;
-                // Saved values become the base for the next save; a failed
-                // save shows the last saved ones again.
-                match save_edit(id, s.initial.clone(), s.values.clone(), s.existing.clone()).await {
-                    Ok(_) => s.initial = s.values.clone(),
-                    Err(_) => s.values = s.initial.clone(),
-                }
+                // The sheet shows the pick before the save is awaited, so a
+                // quick second tap builds on it.
+                let before = begin_save(&mut s.initial, &s.values);
+                let after = s.values.clone();
+                let existing = s.existing.clone();
                 let state = card_state(&s.values, s.mode, &s.ctx);
                 self.session.set(Some(s));
                 api::glass_update(&state).await;
+                if save_edit(id, before.clone(), after, existing).await.is_err() {
+                    let open = self.session.peek().clone();
+                    if let Some(mut s) = open {
+                        restore_failed_save(&mut s.initial, &mut s.values, before);
+                        let state = card_state(&s.values, s.mode, &s.ctx);
+                        self.session.set(Some(s));
+                        api::glass_update(&state).await;
+                    }
+                }
                 reload += 1;
             }
             Outcome::Submit => {
@@ -1565,5 +1586,21 @@ mod tests {
         c.only_picker = Some(ChipId::Date);
         let ev = GlassEvent::Pick { pick: Pick::Date { date: "2026-10-20".into(), time: String::new() } };
         assert_eq!(apply_event(&mut v, &ev, CardMode::Edit, &c), Outcome::Save);
+    }
+
+    #[test]
+    fn a_staying_pick_moves_the_base_before_its_save() {
+        // The sheet is updated from `values` before the save is awaited, so
+        // a quick second tap builds on the first; the save diffs from the
+        // base it took.
+        let mut initial = blank("x");
+        let mut values = blank("x");
+        values.labels = vec!["home".into()];
+        let before = begin_save(&mut initial, &values);
+        assert_eq!(before.labels, Vec::<String>::new());
+        assert_eq!(initial, values, "the next pick diffs from this one");
+        // The save failed: both go back to what was saved before it.
+        restore_failed_save(&mut initial, &mut values, before.clone());
+        assert_eq!((initial, values), (before.clone(), before));
     }
 }

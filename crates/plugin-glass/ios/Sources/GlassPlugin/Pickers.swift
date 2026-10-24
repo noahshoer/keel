@@ -81,7 +81,7 @@ struct PickerSheet: View {
       Group {
         if let p = model.state?.picker {
           switch id {
-          case .date: DateSheet(picker: p, pick: send, send: { model.send($0) })
+          case .date: DateSheet(picker: p, showRepeat: model.pickerOnly, pick: send, send: { model.send($0) })
           case .deadline: DeadlineSheet(picker: p, pick: send)
           case .labels: LabelsSheet(picker: p, pick: send)
           case .reminders: RemindersSheet(picker: p, pick: send)
@@ -151,6 +151,9 @@ struct RepeatSheet: View {
 
 struct DateSheet: View {
   let picker: PickerData
+  /// Picker-only (the task view): the sheet edits the repeat too, as the
+  /// card's own Repeat chip does there.
+  let showRepeat: Bool
   let pick: (Pick) -> Void
   /// For the calendar's month navigation (handled in Rust).
   let send: (CardEvent) -> Void
@@ -198,6 +201,21 @@ struct DateSheet: View {
         } else {
           Button("Add time") {
             pick(.date(date: picker.date.isEmpty ? dayFormat.string(from: Date()) : picker.date, time: "09:00"))
+          }
+        }
+      }
+      if showRepeat {
+        Section("Repeat") {
+          ForEach(picker.repeatOptions, id: \.self) { opt in
+            Button {
+              pick(.repeat(opt[0]))
+            } label: {
+              HStack {
+                Text(opt[1]).foregroundStyle(Color.primary)
+                Spacer()
+                if picker.repeat == opt[0] { Image(systemName: "checkmark").foregroundStyle(keelGreen) }
+              }
+            }
           }
         }
       }

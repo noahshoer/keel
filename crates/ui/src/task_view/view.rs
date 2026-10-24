@@ -62,17 +62,22 @@ fn view_actions(recurring: bool) -> Vec<ActionItem> {
     items
 }
 
-/// The native picker for a field row or pill (Repeat has no row: its rule
-/// shows in Date's).
-fn native_chip(field: Option<Field>, missing: Option<Missing>) -> ChipId {
-    match (field, missing) {
-        (_, Some(Missing::Repeat)) => ChipId::Repeat,
-        (Some(Field::Deadline), _) => ChipId::Deadline,
-        (Some(Field::Priority), _) => ChipId::Priority,
-        (Some(Field::Labels), _) => ChipId::Labels,
-        (Some(Field::Reminders), _) => ChipId::Reminders,
-        (Some(Field::Location), _) => ChipId::Location,
-        _ => ChipId::Date,
+/// The native picker for a field row or pill. Repeat has no row: a rule
+/// is edited in Date's sheet. Description is typed in place (None).
+fn native_chip(field: Option<Field>, missing: Option<Missing>) -> Option<ChipId> {
+    let field = match (field, missing) {
+        (_, Some(Missing::Repeat)) => return Some(ChipId::Repeat),
+        (Some(f), _) | (None, Some(Missing::Field(f))) => f,
+        (None, None) => return None,
+    };
+    match field {
+        Field::Description => None,
+        Field::Date => Some(ChipId::Date),
+        Field::Deadline => Some(ChipId::Deadline),
+        Field::Priority => Some(ChipId::Priority),
+        Field::Labels => Some(ChipId::Labels),
+        Field::Reminders => Some(ChipId::Reminders),
+        Field::Location => Some(ChipId::Location),
     }
 }
 
@@ -342,7 +347,11 @@ pub fn TaskView(
             };
             let chip = native_chip(which, m);
             return rsx! {
-                button { r#type: "button", class: "{class}", onclick: move |_| pick_native.call(chip),
+                button { r#type: "button", class: "{class}", onclick: move |_| {
+                    if let Some(chip) = chip {
+                        pick_native.call(chip);
+                    }
+                },
                     if let Some(svg) = icon {
                         span { class: "chip-icon", Icon { svg } }
                     }
@@ -748,5 +757,30 @@ fn GrowingText(
                 onblur: move |_| on_commit.call(()),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_field_opens_its_own_native_picker() {
+        let rows = [
+            (Field::Date, ChipId::Date),
+            (Field::Deadline, ChipId::Deadline),
+            (Field::Priority, ChipId::Priority),
+            (Field::Labels, ChipId::Labels),
+            (Field::Reminders, ChipId::Reminders),
+            (Field::Location, ChipId::Location),
+        ];
+        for (f, chip) in rows {
+            assert_eq!(native_chip(Some(f), None), Some(chip), "{f:?} row");
+            assert_eq!(native_chip(None, Some(Missing::Field(f))), Some(chip), "{f:?} pill");
+        }
+        assert_eq!(native_chip(None, Some(Missing::Repeat)), Some(ChipId::Repeat));
+        // Description is typed in place, not picked.
+        assert_eq!(native_chip(Some(Field::Description), None), None);
+        assert_eq!(native_chip(None, Some(Missing::Field(Field::Description))), None);
     }
 }

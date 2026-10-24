@@ -85,14 +85,25 @@ enum Demo {
           }
         }
         // KEEL_GLASS_LABELS="a;b": toggles each label on in the open Labels
-        // sheet, a second apart (as its rows do), then closes it like Done.
-        if let names = ProcessInfo.processInfo.environment["KEEL_GLASS_LABELS"]?.components(separatedBy: ";") {
+        // sheet (as its rows do), KEEL_GLASS_GAP ms apart (default 1000),
+        // then closes it like Done.
+        let env = ProcessInfo.processInfo.environment
+        let gap = Double(env["KEEL_GLASS_GAP"].flatMap(Int.init) ?? 1000) / 1000
+        if let names = env["KEEL_GLASS_LABELS"]?.components(separatedBy: ";") {
           for (i, name) in names.enumerated() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i + 1)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1 + Double(i) * gap) {
               model.send(.pick(.labels((model.state?.picker.labels ?? []) + [name])))
             }
           }
-          DispatchQueue.main.asyncAfter(deadline: .now() + Double(names.count) + 4) { model.picker = nil }
+          DispatchQueue.main.asyncAfter(deadline: .now() + 5 + Double(names.count) * gap) { model.picker = nil }
+        }
+        // KEEL_GLASS_REPEAT="weekly;none": picks each repeat option, 3 s
+        // apart, then closes the sheet like Done.
+        if let values = env["KEEL_GLASS_REPEAT"]?.components(separatedBy: ";") {
+          for (i, v) in values.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1 + Double(i) * 3) { model.send(.pick(.repeat(v))) }
+          }
+          DispatchQueue.main.asyncAfter(deadline: .now() + 1 + Double(values.count) * 3) { model.picker = nil }
         }
         if let p = pickPriority {
           DispatchQueue.main.asyncAfter(deadline: .now() + 1) {

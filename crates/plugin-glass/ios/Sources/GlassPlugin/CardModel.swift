@@ -147,7 +147,8 @@ struct CardState: Codable, Equatable {
   let canSubmit: Bool
   let picker: PickerData
   /// Picker-only (the task view): this chip's picker shows alone, without
-  /// the card or the keyboard, and its first pick is saved.
+  /// the card or the keyboard. Each pick is saved; a single-choice picker
+  /// then closes, the others stay open until dismissed.
   let onlyPicker: ChipId?
 }
 
