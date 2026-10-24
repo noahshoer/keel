@@ -51,8 +51,8 @@ On the iPhone you can't see a task's sub-tasks. Tapping a task opens the edit ca
    - Today, completing a repeating parent leaves its sub-tasks as they are, so ticked ones stay ticked (`Action::TaskComplete`, recurring branch in `crates/core/src/commands.rs`).
    - The reset covers every non-repeating descendant, not just direct sub-tasks (my call; it mirrors how completing a one-off parent completes every descendant).
    - A sub-task that repeats on its own keeps its own schedule and isn't reset by the parent (my call, matching how completing a one-off parent already skips repeating children).
-   - It's new behavior for logged commands, so record it as a new `Action` variant (e.g. a reset written next to the `TaskComplete`) rather than changing what an old `TaskComplete` does on replay (my call; the exact shape is the builder's).
-10. **Header buttons (my call):** the right side has a close button (Done on the phone, which only closes the sheet and never completes anything; ✕ on desktop) and a ••• menu with Delete, plus Streak for a repeating task. Back appears on the left when you're inside a sub-task. The long-press menu and the desktop hover buttons in the list stay as they are.
+   - It's part of `TaskComplete` itself. Completions already in the log simply adopt the new behavior if replayed (Noah).
+10. **Header buttons (my call):** the right side has a close button (Done on the phone, which only closes the sheet and never completes anything; ✕ on desktop) and a ••• menu with Delete, plus Streak for a repeating task. Deleting a task deletes all of its sub-tasks too (Noah; core already does this). Back appears on the left when you're inside a sub-task. The long-press menu and the desktop hover buttons in the list stay as they are.
 
 Mockups (git-ignored; open on the Mac): `.superpowers/brainstorm/mockups/task-view-layout.html` (sheet vs full page, desktop panel) and `task-view-layout-v5.html` (the chosen phone layout: dotted pills; partial and all-done sub-task cards); `dated-subtasks-v3.html` (list cards, option I chosen); `parent-due-today.html` (parent due the same day; all sub-tasks done shows "5/5 ✓").
 
