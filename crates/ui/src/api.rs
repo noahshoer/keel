@@ -265,6 +265,9 @@ pub async fn move_task(id: Id, project_id: Id, section_id: Option<Id>) -> Result
     dispatch(&command(Action::TaskMove { id, project_id, section_id }, false)).await
 }
 
+/// No UI since lists stopped nesting sub-tasks (the task view shows them);
+/// `is_collapsed` stays in the data model.
+#[allow(dead_code)]
 pub async fn set_collapsed(id: Id, collapsed: bool) -> Result<ApplyResult, String> {
     dispatch(&command(
         Action::TaskUpdate {

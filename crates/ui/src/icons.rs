@@ -98,16 +98,6 @@ pub fn check_circle() -> String {
     svg(16, "1.6", r#"<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>"#)
 }
 
-/// Small down-chevron; rotated by CSS when collapsed.
-pub fn chevron() -> String {
-    svg(14, "2", r#"<path d="M6 9l6 6 6-6"/>"#)
-}
-
-/// "Add sub-task": a branch arrow.
-pub fn subtask() -> String {
-    svg(18, "1.6", r#"<path d="M6 4v8a4 4 0 0 0 4 4h8"/><path d="M15 13l3 3-3 3"/>"#)
-}
-
 pub fn search() -> String {
     svg(20, "1.7", r#"<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>"#)
 }

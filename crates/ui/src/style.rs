@@ -223,7 +223,6 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .section-title .muted { color: var(--muted); font-weight: 400; font-size: 13px; }
 
 /* Task rows: a soft list, rounded highlight on hover */
-.task-slot { display: contents; }
 .task { border-radius: var(--r-md); }
 .task-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 10px 9px; border-radius: var(--r-md); }
 @media (hover: hover) { .task:not(.completed) .task-row:hover { background: var(--row-hover); } }
@@ -420,6 +419,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .check { position: relative; width: 24px; height: 24px; min-width: 24px; margin-top: 0; border-width: 1.75px; }
   .check::after { content: ''; position: absolute; inset: -10px; }
   .task-project { font-size: 13px; }
+  .task-count { font-size: 14px; line-height: 23px; }
+  .task-title .done-check { margin-top: 1.5px; }
+  .card-head { font-size: 14px; padding: 11px 8px 10px; }
   /* Sidebar: bigger rows, icons and logo to match the task rows. */
   .brand { font-size: 20px; gap: 12px; padding: 6px 8px 20px; }
   .brand-mark, .brand-mark svg { width: 40px; height: 40px; }
@@ -451,7 +453,6 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .check.done .icon { opacity: 1; transform: none; }
 .task.completed { animation: fade-up .2s var(--ease); }
 .task.completed .task-content { text-decoration: line-through; color: var(--muted); }
-.task.completed .task-body { cursor: default; }
 .done-when { color: var(--muted); }
 .nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-actions { display: none; gap: 0; }
@@ -465,13 +466,32 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .confirm-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .confirm-actions .btn { padding: 6px 11px; font-size: 12px; }
 
-/* Sub-tasks + sections */
+/* Cards: every top-level task is one; in dated views a matching sub-task sits
+   inside its parent's card, under a context-only header (cards.rs). */
 .task { position: relative; }
-.chevron { position: absolute; left: -22px; top: 10px; width: 20px; height: 20px; padding: 0;
-  border: none; background: none; color: var(--muted); cursor: pointer; border-radius: var(--r-sm);
-  display: flex; align-items: center; justify-content: center; transition: transform .18s var(--ease), background-color .16s; }
-@media (hover: hover) { .chevron:hover { background: var(--icon-hover); color: var(--text); } }
-.chevron.collapsed { transform: rotate(-90deg); }
+.task-card { background: var(--panel); border-radius: 12px; margin-bottom: 8px; overflow: hidden; }
+.task-card > * + * { border-top: 1px solid var(--border); }
+.task-card .task, .task-card .task-row { border-radius: 0; }
+@media (hover: hover) { .task-card .task:not(.completed) .task-row:hover { background: var(--hover); } }
+.task-card .task.pressed .task-row { background: var(--hover); }
+.task-title { display: flex; align-items: flex-start; gap: 6px; }
+.task-title .task-content { min-width: 0; overflow-wrap: anywhere; }
+.task-count { flex: none; font-size: 12px; line-height: 20px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.done-check { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; }
+.card-head { display: flex; align-items: center; gap: 8px; padding: 9px 10px 8px; font-size: 13px;
+  color: var(--muted); cursor: pointer; }
+@media (hover: hover) { .card-head:hover { background: var(--hover); } }
+.card-head:active { background: var(--hover); }
+.card-head .pname { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--text); font-weight: 600; }
+.card-head-side { display: inline-flex; align-items: center; gap: 6px; flex: none; white-space: nowrap; }
+.card-head .task-count { line-height: inherit; font-size: inherit; }
+.card-flag { display: inline-flex; flex: none; }
+.card-flag.p1 { color: var(--p1); }
+.card-flag.p2 { color: var(--p2); }
+.card-flag.p3 { color: var(--p3); }
+.card-chev { display: inline-flex; color: var(--muted); }
+/* Sections */
 .section-block { margin-top: 18px; }
 .section-row { position: relative; }
 .section-actions { display: none; margin-left: auto; gap: 2px; }
@@ -602,8 +622,6 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .view-title { font-size: 22px; }
   .view-toggle { padding: 6px 8px; }
   .section-title { padding-left: 8px; padding-right: 8px; }
-  /* Parent chevrons sit in the (now thin) gutter. */
-  .chevron { left: -16px; width: 16px; }
   /* Row actions float over the row instead of reserving width for the title. */
   .task-row { gap: 10px; padding: 10px 8px 9px; }
   .task-actions { position: absolute; top: 4px; right: 4px; padding: 2px; border-radius: var(--r);
@@ -631,7 +649,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Touch: tapped controls keep WebKit's sticky :hover, so hover styles are
    mouse-only (above); a brief press state gives touch its feedback. */
 @media (hover: none) {
-  .icon-btn:active, .view-toggle:active, .chevron:active { background: var(--icon-hover); }
+  .icon-btn:active, .view-toggle:active { background: var(--icon-hover); }
   .chip:active, .menu-item:active, .cal-day:active, .label-opt:active { background: var(--hover); }
 }
 /* Completing a task (completion.rs): the circle fills with the priority
