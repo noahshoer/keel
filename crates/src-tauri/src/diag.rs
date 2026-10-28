@@ -68,6 +68,21 @@ pub fn set_enabled(on: bool) {
     }
 }
 
+/// Switching the setting on starts a new log; the last one is kept as
+/// `diag.1.log`.
+fn start_fresh() {
+    #[cfg(target_os = "ios")]
+    if let Some(sink) = SINK.get() {
+        tauri_plugin_glass::diag_fresh(&sink.app);
+    }
+    #[cfg(not(target_os = "ios"))]
+    if let Some(sink) = SINK.get() {
+        if let Ok(f) = sink.file.lock() {
+            let _ = f.start_fresh();
+        }
+    }
+}
+
 /// Adds a line to the log; does nothing while logging is off.
 pub fn log(source: &str, msg: &str) {
     if !enabled() {
@@ -91,6 +106,9 @@ pub fn diag_enabled() -> bool {
 #[tauri::command(rename_all = "snake_case")]
 pub async fn set_diag_enabled(state: tauri::State<'_, AppService>, on: bool) -> Result<(), String> {
     state.set_diag_enabled(on).map_err(|e| e.to_string())?;
+    if on && !enabled() {
+        start_fresh();
+    }
     set_enabled(on);
     Ok(())
 }

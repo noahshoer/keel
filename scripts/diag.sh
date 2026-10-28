@@ -40,21 +40,18 @@ if [ -n "$udid" ]; then
   src="sim"
 else
   if [ "$fresh" = 1 ]; then
-    # devicectl can't delete files; replace the log with an empty one.
-    : > "$OUT/.empty"
-    for f in diag.log diag.1.log; do
-      xcrun devicectl device copy to --device "$PHONE" --domain-type appDataContainer \
-        --domain-identifier "$BUNDLE" --source "$OUT/.empty" --destination "Library/Caches/$f" \
-        --remove-existing-content true >/dev/null || true
-    done
-    rm -f "$OUT/.empty"
-    echo "Cleared the phone's log."
-    exit 0
+    # Never write into the phone's app container from here: `devicectl device
+    # copy to --remove-existing-content` empties the whole container (it wiped
+    # keel.db on 2026-10-28). On the phone, switching Diagnostics logging on
+    # in Settings starts a fresh log (the last one becomes diag.1.log).
+    echo "--fresh only works for a simulator. On the phone, switch Diagnostics logging off, then on, in Settings: that starts a fresh log." >&2
+    exit 1
   fi
   for f in diag.1.log diag.log; do
     xcrun devicectl device copy from --device "$PHONE" --domain-type appDataContainer \
       --domain-identifier "$BUNDLE" --source "Library/Caches/$f" \
       --destination "$OUT/$stamp-phone-$f" >/dev/null 2>&1 || rm -f "$OUT/$stamp-phone-$f"
+    [ -s "$OUT/$stamp-phone-$f" ] || rm -f "$OUT/$stamp-phone-$f"
   done
   src="phone"
 fi

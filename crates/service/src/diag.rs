@@ -30,6 +30,16 @@ impl DiagLog {
         DiagLog { path: dir.join("diag.log"), previous: dir.join("diag.1.log"), cap }
     }
 
+    /// A new log for a new session: the current file becomes the previous
+    /// one. Only ever touches `diag.log` and `diag.1.log`.
+    pub fn start_fresh(&self) -> io::Result<()> {
+        if !self.path.exists() {
+            return Ok(());
+        }
+        let _ = fs::remove_file(&self.previous);
+        fs::rename(&self.path, &self.previous)
+    }
+
     pub fn append(&self, source: &str, msg: &str) -> io::Result<()> {
         let line = format_line(chrono::Utc::now().timestamp_millis(), source, msg);
         if fs::metadata(&self.path).map(|m| m.len()).unwrap_or(0) >= self.cap {

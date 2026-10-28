@@ -50,3 +50,50 @@ fn rolls_over_at_the_cap_keeping_one_previous_file() {
     // The newest line survives in the current file.
     assert!(std::fs::read_to_string(&cur).unwrap().contains("line number 39"));
 }
+
+#[test]
+fn start_fresh_keeps_the_last_run_as_the_previous_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let log = DiagLog::new(dir.path());
+    log.append("js", "old run").unwrap();
+    log.start_fresh().unwrap();
+    log.append("js", "new run").unwrap();
+    let cur = std::fs::read_to_string(dir.path().join("diag.log")).unwrap();
+    let prev = std::fs::read_to_string(dir.path().join("diag.1.log")).unwrap();
+    assert!(cur.contains("new run") && !cur.contains("old run"));
+    assert!(prev.contains("old run"));
+    // Nothing to keep yet: still fine.
+    let empty = tempfile::tempdir().unwrap();
+    DiagLog::new(empty.path()).start_fresh().unwrap();
+}
+
+/// On desktop the log sits next to keel.db: logging, rolling over, starting
+/// fresh and switching the setting must leave every other file alone.
+#[test]
+fn logging_never_touches_the_database_or_other_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("keel.db");
+    let svc = AppService::open(db.to_str().unwrap()).unwrap();
+    svc.set_diag_enabled(true).unwrap();
+    let others = ["notes.txt", "backup.db", "diag.2.log"];
+    for f in others {
+        std::fs::write(dir.path().join(f), f).unwrap();
+    }
+    let log = DiagLog::with_cap(dir.path(), 100);
+    for i in 0..30 {
+        log.append("js", &format!("line {i}")).unwrap();
+    }
+    log.start_fresh().unwrap();
+    log.start_fresh().unwrap();
+    svc.set_diag_enabled(false).unwrap();
+    drop(svc);
+    for f in others {
+        assert_eq!(std::fs::read_to_string(dir.path().join(f)).unwrap(), f);
+    }
+    let svc = AppService::open(db.to_str().unwrap()).unwrap();
+    assert!(!svc.diag_enabled().unwrap());
+    let mut names: Vec<_> = std::fs::read_dir(dir.path()).unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+    names.sort();
+    assert!(names.iter().all(|n| n.starts_with("keel.db") || others.contains(&n.as_str()) || n == "diag.log" || n == "diag.1.log"), "{names:?}");
+}

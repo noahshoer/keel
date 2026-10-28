@@ -29,6 +29,17 @@ enum Diag {
     if on { log("---- diagnostics on") }
   }
 
+  /// A new log: the current file becomes diag.1.log. Only ever touches
+  /// these two files in Caches, never the app's data (keel.db).
+  static func startFresh() {
+    queue.async {
+      let fm = FileManager.default
+      guard fm.fileExists(atPath: url.path) else { return }
+      try? fm.removeItem(at: previous)
+      try? fm.moveItem(at: url, to: previous)
+    }
+  }
+
   /// One line, written only while logging is on. `source` is "swift" for
   /// native lines; the page and Rust send theirs through `GlassPlugin.diag`.
   static func log(_ text: String, source: String = "swift") {

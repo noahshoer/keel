@@ -23,6 +23,7 @@ class DiagArgs: Decodable {
   let enabled: Bool?
   let source: String?
   let line: String?
+  let fresh: Bool?
 }
 
 class ButtonsArgs: Decodable {
@@ -112,6 +113,7 @@ class GlassPlugin: Plugin {
   /// the page's and its own lines here.
   @objc public func diag(_ invoke: Invoke) throws {
     let args = try invoke.parseArgs(DiagArgs.self)
+    if args.fresh == true { Diag.startFresh() }
     if let on = args.enabled { Diag.setEnabled(on) }
     if let line = args.line { Diag.log(line, source: args.source ?? "js") }
     invoke.resolve()

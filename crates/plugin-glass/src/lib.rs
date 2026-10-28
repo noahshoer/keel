@@ -30,6 +30,8 @@ struct DiagArgs<'a> {
     enabled: Option<bool>,
     source: Option<&'a str>,
     line: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fresh: Option<bool>,
 }
 
 /// Talks to the Swift diagnostics log (iOS; a no-op elsewhere): `enabled`
@@ -45,7 +47,20 @@ pub fn diag<R: Runtime>(
     {
         use tauri::Manager;
         if let Some(h) = _app.try_state::<GlassHandle<R>>() {
-            let args = DiagArgs { enabled: _enabled, source: Some(_source), line: _line };
+            let args = DiagArgs { enabled: _enabled, source: Some(_source), line: _line, fresh: None };
+            let _ = h.0.run_mobile_plugin::<()>("diag", args);
+        }
+    }
+}
+
+/// Starts a new diagnostics log on iOS (the last one becomes diag.1.log);
+/// a no-op elsewhere.
+pub fn diag_fresh<R: Runtime>(_app: &tauri::AppHandle<R>) {
+    #[cfg(target_os = "ios")]
+    {
+        use tauri::Manager;
+        if let Some(h) = _app.try_state::<GlassHandle<R>>() {
+            let args = DiagArgs { enabled: None, source: None, line: None, fresh: Some(true) };
             let _ = h.0.run_mobile_plugin::<()>("diag", args);
         }
     }
