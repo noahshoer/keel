@@ -1,3 +1,4 @@
+use keel_core::commands::{Action, Command};
 use keel_service::diag::{format_line, DiagLog};
 use keel_service::AppService;
 
@@ -68,12 +69,31 @@ fn start_fresh_keeps_the_last_run_as_the_previous_file() {
 }
 
 /// On desktop the log sits next to keel.db: logging, rolling over, starting
-/// fresh and switching the setting must leave every other file alone.
+/// fresh and switching the setting must keep the database (file and tasks)
+/// and leave every other file alone.
 #[test]
 fn logging_never_touches_the_database_or_other_files() {
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("keel.db");
     let svc = AppService::open(db.to_str().unwrap()).unwrap();
+    let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap();
+    svc.dispatch(Command {
+        uuid: "u1".to_string(),
+        temp_id: Some("tmp-1".to_string()),
+        action: Action::TaskAdd {
+            content: "keep me".to_string(),
+            project_id: inbox.id.clone(),
+            description: None,
+            priority: None,
+            due: None,
+            labels: None,
+            parent_id: None,
+            section_id: None,
+            recurrence: None,
+            deadline: None,
+        },
+    })
+    .unwrap();
     svc.set_diag_enabled(true).unwrap();
     let others = ["notes.txt", "backup.db", "diag.2.log"];
     for f in others {
@@ -86,12 +106,18 @@ fn logging_never_touches_the_database_or_other_files() {
     log.start_fresh().unwrap();
     log.start_fresh().unwrap();
     svc.set_diag_enabled(false).unwrap();
+    svc.set_diag_enabled(true).unwrap();
+    svc.set_diag_enabled(false).unwrap();
     drop(svc);
+    // Checked before reopening: opening would quietly create a new database.
+    assert!(db.exists(), "keel.db was deleted");
     for f in others {
         assert_eq!(std::fs::read_to_string(dir.path().join(f)).unwrap(), f);
     }
     let svc = AppService::open(db.to_str().unwrap()).unwrap();
     assert!(!svc.diag_enabled().unwrap());
+    let tasks = svc.list_tasks(inbox.id.as_str()).unwrap();
+    assert_eq!(tasks.iter().map(|t| t.content.as_str()).collect::<Vec<_>>(), ["keep me"]);
     let mut names: Vec<_> = std::fs::read_dir(dir.path()).unwrap()
         .map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
     names.sort();
