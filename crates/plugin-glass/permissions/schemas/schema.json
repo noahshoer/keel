@@ -319,6 +319,18 @@
           "markdownDescription": "Denies the buttons command without any pre-configured scope."
         },
         {
+          "description": "Enables the diag command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-diag",
+          "markdownDescription": "Enables the diag command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the diag command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-diag",
+          "markdownDescription": "Denies the diag command without any pre-configured scope."
+        },
+        {
           "description": "Enables the hide command without any pre-configured scope.",
           "type": "string",
           "const": "allow-hide",
@@ -403,10 +415,10 @@
           "markdownDescription": "Denies the update command without any pre-configured scope."
         },
         {
-          "description": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-actions`\n- `allow-prompt`\n- `allow-register-listener`\n- `allow-remove-listener`",
+          "description": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-diag`\n- `allow-actions`\n- `allow-prompt`\n- `allow-register-listener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-actions`\n- `allow-prompt`\n- `allow-register-listener`\n- `allow-remove-listener`"
+          "markdownDescription": "Everything the Keel web UI uses\n#### This default permission set includes:\n\n- `allow-is-available`\n- `allow-show`\n- `allow-update`\n- `allow-hide`\n- `allow-buttons`\n- `allow-diag`\n- `allow-actions`\n- `allow-prompt`\n- `allow-register-listener`\n- `allow-remove-listener`"
         }
       ]
     }

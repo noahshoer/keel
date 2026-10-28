@@ -295,6 +295,7 @@ final class CardModel: ObservableObject {
   var shown: CardState?
 
   func show(_ s: CardState) {
+    Diag.log("CARD show")
     shown = s
     state = s
     description = s.description
@@ -311,6 +312,7 @@ final class CardModel: ObservableObject {
   /// keyboard is dismissed first (it otherwise waits for the card to be
   /// gone), and the card leaves over the keyboard's own ~0.25 s.
   func hide() {
+    Diag.log("CARD hide")
     guard state != nil else { return }
     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     withAnimation(.easeOut(duration: 0.25)) {
