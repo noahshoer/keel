@@ -1,3 +1,4 @@
+mod diag;
 mod editor;
 mod filters;
 mod gestures;
@@ -228,6 +229,10 @@ fn App() -> Element {
     // on wide windows, where the sidebar is always shown).
     let mut drawer = use_signal(|| false);
     use_hook(|| theme::apply(&theme.peek()));
+    // Diagnostics logging (off unless the setting or KEEL_DIAG turns it on).
+    use_hook(|| {
+        spawn(diag::init());
+    });
     // Quick add: Backspace right after a highlight un-highlights it.
     use_hook(|| {
         let _ = document::eval(editor::UNHIGHLIGHT_KEY_JS);

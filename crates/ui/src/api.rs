@@ -344,6 +344,20 @@ pub async fn test_notification() -> Result<(), String> {
     invoke::<_, ()>("test_notification", &NoArgs {}).await
 }
 
+/// Whether diagnostics logging is on (Settings switch or `KEEL_DIAG=1`).
+pub async fn diag_enabled() -> Result<bool, String> {
+    invoke("diag_enabled", &NoArgs {}).await
+}
+
+#[derive(Serialize)]
+struct OnArg {
+    on: bool,
+}
+
+pub async fn set_diag_enabled(on: bool) -> Result<(), String> {
+    invoke::<_, ()>("set_diag_enabled", &OnArg { on }).await
+}
+
 pub async fn search(query: &str) -> Result<SearchResults, String> {
     invoke("search", &QueryArg { query }).await
 }
