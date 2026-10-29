@@ -35,12 +35,7 @@ pub fn Sidebar(
     };
     let theme_title = theme::label(&theme_pref());
     let mut show_settings = use_signal(|| false);
-    // The drawer's glass buttons (iPhone) hide while settings is open.
     let glass = crate::glass::use_glass();
-    use_effect(move || {
-        let mut open = glass.settings_open;
-        open.set(show_settings());
-    });
     // iPhone: the + buttons ask with a native prompt (a web form there gets
     // no keyboard and lingers in the drawer).
     use_prompt_answer("new-project".into(), move |values| {

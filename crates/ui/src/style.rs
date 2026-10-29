@@ -419,7 +419,13 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .float-btns.dim .float-btn { opacity: .35; }
 /* iPhone: glass stand-ins cover the drawer's theme and settings buttons
    (glass::DRAWER_JS); the web ones stay in place, invisible, to be tapped. */
-.native-glass .brand .icon-btn { visibility: hidden; }
+/* iPhone: the theme and settings buttons hold their glass in layers of their
+   own (PageGlass), so it slides with the drawer; they draw nothing else.
+   38px: PageGlass tells its groups apart by size (menu / search 44, the
+   task sheet's X / ••• 40), and these stay laid out while the drawer is shut. */
+.native-glass .brand .icon-btn { will-change: opacity; width: 38px; height: 38px; padding: 0; background: transparent;
+  display: inline-flex; align-items: center; justify-content: center; }
+.native-glass:not(.drawer-glass-off) .brand .icon-btn > * { visibility: hidden; }
 .native-glass .brand .settings-btn { margin-left: 10px; }
 .native-glass .content { padding-top: calc(env(safe-area-inset-top) + 60px); padding-bottom: 120px; }
 /* Touch: Todoist-sized rows (a little shorter) with a bigger check circle,

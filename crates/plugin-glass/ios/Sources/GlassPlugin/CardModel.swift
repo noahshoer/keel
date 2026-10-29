@@ -284,8 +284,6 @@ final class CardModel: ObservableObject {
   @Published var addVisible = true
   /// In Search, the search button closes it.
   @Published var searching = false
-  /// Glass stand-ins for the open drawer's header buttons.
-  @Published var drawerButtons: [DrawerButton] = []
   /// Window-space frames of the controls that take touches while the card is closed.
   var hitRects: [String: CGRect] = [:]
 

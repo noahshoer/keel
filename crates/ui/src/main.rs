@@ -308,11 +308,20 @@ fn App() -> Element {
         let searching = view() == View::Search;
         let mut state = glass::floating_buttons(searching, drawer(), view_open);
         state.theme = theme();
-        if drawer() && !(glass.settings_open)() {
+        if drawer() {
             state.drawer = glass::drawer_buttons(&(glass.drawer_rects)(), &theme());
         }
         if (glass.native)() {
+            let drawer_open = drawer();
             spawn(async move {
+                // Closing: the drawer's glass rides it out, so it goes only
+                // once the slide has finished (unless it opened again).
+                if !drawer_open {
+                    let _ = document::eval(DRAWER_SETTLED_JS).recv::<bool>().await;
+                    if *drawer.peek() {
+                        return;
+                    }
+                }
                 let rects = document::eval(FLOAT_MEASURE_JS).recv::<Vec<glass::WebRect>>().await.unwrap_or_default();
                 state.floating = glass::float_buttons(&rects, searching);
                 api::glass_buttons(state).await
@@ -578,6 +587,13 @@ fn App() -> Element {
         }
     }
 }
+
+/// Resolves once the drawer has finished sliding (at once if it isn't).
+const DRAWER_SETTLED_JS: &str = r#"
+const sb = document.querySelector('.sidebar');
+await Promise.all((sb ? sb.getAnimations() : []).map((a) => a.finished.catch(() => {})));
+dioxus.send(true);
+"#;
 
 /// The page's menu and search placeholders, once both are laid out (a few
 /// frames at most after a render).

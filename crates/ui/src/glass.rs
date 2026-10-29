@@ -841,30 +841,22 @@ pub fn sheet_glass(rects: &[WebRect], sheet_top: f64, vv_left: f64, vv_top: f64)
 
 
 /// Measures the drawer's theme and settings buttons: once when asked (`go`
-/// is sent after the drawer opens), and again whenever the drawer itself
-/// scrolls. (An earlier version watched every DOM change and fed back into
-/// rendering when the settings dialog opened, freezing the page.)
+/// is sent as the drawer opens), at their resting place: less the drawer's
+/// slide so far (the glass rides the drawer's own layer from there).
 const MEASURE_FN: &str = r#"
-const measure = () => [['theme', '.brand .theme-toggle'], ['settings', '.brand .settings-btn']].map(([id, sel]) => {
-  const r = document.querySelector(sel)?.getBoundingClientRect();
-  return r && { id, x: r.x, y: r.y, w: r.width, h: r.height };
-}).filter(Boolean);
+const measure = () => {
+  const sb = document.querySelector('.sidebar');
+  const dx = sb ? new DOMMatrix(getComputedStyle(sb).transform).m41 : 0;
+  return [['theme', '.brand .theme-toggle'], ['settings', '.brand .settings-btn']].map(([id, sel]) => {
+    const r = document.querySelector(sel)?.getBoundingClientRect();
+    return r && r.width > 0 && { id, x: r.x - dx, y: r.y, w: r.width, h: r.height };
+  }).filter(Boolean);
+};
 "#;
 
-/// Re-measures whenever the drawer itself scrolls.
-const DRAWER_SCROLL_JS: &str = r#"
-let timer = null;
-document.addEventListener('scroll', (ev) => {
-  if (!ev.target.classList?.contains('sidebar')) return;
-  clearTimeout(timer);
-  timer = setTimeout(() => dioxus.send(measure()), 16);
-}, true);
-await new Promise(() => {});
-"#;
-
-/// One reading, once the drawer has finished sliding in.
+/// One reading, as the drawer starts sliding in (once it's laid out).
 const DRAWER_ONCE_JS: &str = r#"
-await new Promise((r) => setTimeout(r, 320));
+await new Promise((r) => requestAnimationFrame(r));
 dioxus.send(measure());
 "#;
 
@@ -896,8 +888,6 @@ pub struct Glass {
     pub chosen: Signal<Option<ChosenAction>>,
     /// Where the drawer's header buttons sit (empty while it's closed).
     pub drawer_rects: Signal<Vec<WebRect>>,
-    /// The settings dialog is open (the drawer's glass buttons step aside).
-    pub settings_open: Signal<bool>,
     /// The latest prompt answer, for the caller whose id it carries.
     pub answer: Signal<Option<PromptAnswer>>,
 }
@@ -912,7 +902,6 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
         pressed: Signal::new(None),
         chosen: Signal::new(None),
         drawer_rects: Signal::new(Vec::new()),
-        settings_open: Signal::new(false),
         answer: Signal::new(None),
     });
     use_hook(move || {
@@ -935,13 +924,6 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
                     if let Some(a) = msg.answer.and_then(|j| serde_json::from_str::<PromptAnswer>(&j).ok()) {
                         answer.set(Some(a));
                     }
-                }
-            });
-            spawn(async move {
-                let mut rects = glass.drawer_rects;
-                let mut spots = document::eval(&format!("{MEASURE_FN}{DRAWER_SCROLL_JS}"));
-                while let Ok(r) = spots.recv::<Vec<WebRect>>().await {
-                    rects.set(r);
                 }
             });
             spawn(async move {
@@ -1048,7 +1030,7 @@ impl Glass {
         spawn(async move { api::glass_prompt(&prompt).await });
     }
 
-    /// Measures the drawer's header buttons once it has slid in (iPhone).
+    /// Measures the drawer's header buttons as it opens (iPhone).
     pub fn measure_drawer(self) {
         if !*self.native.peek() {
             return;

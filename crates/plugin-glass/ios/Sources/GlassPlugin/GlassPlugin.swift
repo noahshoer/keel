@@ -52,6 +52,9 @@ class GlassPlugin: Plugin {
   lazy var sheetGlass = PageGlass(
     webview: webview, name: "sheet", font: .system(size: 18, weight: .medium),
     fallback: "document.querySelector('.tv-sheet')?.classList.remove('glass-head')")
+  lazy var drawerGlass = PageGlass(
+    webview: webview, name: "drawer", font: .system(size: 18, weight: .medium),
+    fallback: "document.body.classList.add('drawer-glass-off')")
   lazy var floatGlass = PageGlass(
     webview: webview, name: "float", font: .body.weight(.semibold),
     fallback: "document.querySelector('.float-btns')?.classList.remove('float-glass')")
@@ -139,7 +142,9 @@ class GlassPlugin: Plugin {
       self.model.buttonsVisible = args.visible
       self.model.addVisible = args.add
       self.model.searching = args.searching
-      withAnimation(.easeOut(duration: 0.18)) { self.model.drawerButtons = args.drawer }
+      // The drawer's theme and settings buttons ride its slide (the page
+      // sends none once it has slid away).
+      if args.drawer.isEmpty { self.drawerGlass.hide() } else { self.drawerGlass.show(args.drawer) }
       if let floating = args.floating {
         if floating.isEmpty { self.floatGlass.hide() } else { self.floatGlass.show(floating) }
       }

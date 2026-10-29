@@ -78,10 +78,11 @@ final class PageGlass: NSObject {
       missing = 0
       return
     }
-    let hosts = Self.compositingViews(in: webview)
+    let ours = Set(placed.values.map { ObjectIdentifier($0.view) })
+    let hosts = Self.compositingViews(in: webview).filter { !Self.holdsOtherGlass($0, ours: ours) }
     var found = true
     for b in lost {
-      guard let host = Self.best(for: b, among: hosts, in: webview) else {
+      guard let host = best(for: b, among: hosts, in: webview) else {
         found = false
         continue
       }
@@ -118,12 +119,26 @@ final class PageGlass: NSObject {
     return out
   }
 
-  /// The view of `b`'s size nearest its measured x (one button is left, the
-  /// other right).
-  private static func best(for b: DrawerButton, among views: [UIView], in webview: WKWebView) -> UIView? {
-    views
-      .filter { fits($0, b) }
-      .map { ($0, abs($0.convert($0.bounds, to: webview).minX - b.x)) }
+  /// Another `PageGlass`'s button is already inside (the X and the drawer's
+  /// buttons are the same size).
+  private static func holdsOtherGlass(_ v: UIView, ours: Set<ObjectIdentifier>) -> Bool {
+    v.subviews.contains { String(describing: type(of: $0)).contains("HostingView") && !ours.contains(ObjectIdentifier($0)) }
+  }
+
+  /// The view for `b`: with as many views of its size as buttons wanted,
+  /// the one in the same left-to-right place (it holds mid-slide, when
+  /// every x is off by the same amount); else the one nearest its measured x.
+  /// Each group of buttons has a size of its own (the page's CSS), so a
+  /// group never takes another's views.
+  private func best(for b: DrawerButton, among views: [UIView], in webview: WKWebView) -> UIView? {
+    let x = { (v: UIView) in v.convert(v.bounds, to: webview).minX }
+    let sized = views.filter { Self.fits($0, b) }.sorted { x($0) < x($1) }
+    let peers = wanted.filter { abs($0.w - b.w) < 1 && abs($0.h - b.h) < 1 }.sorted { $0.x < $1.x }
+    if sized.count == peers.count, let i = peers.firstIndex(where: { $0.id == b.id }) {
+      return sized[i]
+    }
+    return sized
+      .map { ($0, abs(x($0) - b.x)) }
       .filter { $0.1 < 8 }
       .min { $0.1 < $1.1 }?
       .0

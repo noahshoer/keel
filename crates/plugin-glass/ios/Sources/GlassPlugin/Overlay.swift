@@ -43,9 +43,6 @@ struct OverlayView: View {
         CardView(model: model)
           .transition(.move(edge: .bottom).combined(with: .opacity))
       }
-      if !model.isOpen {
-        PlacedButtons(model: model, buttons: model.drawerButtons)
-      }
     }
     // Picker-only: the chip's sheet alone. Picks are saved as they're made,
     // so closing it (Done, a swipe) just ends the session.
