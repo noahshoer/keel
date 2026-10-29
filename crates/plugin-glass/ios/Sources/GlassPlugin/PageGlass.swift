@@ -39,13 +39,14 @@ final class PageGlass: NSObject {
   }
 
   func show(_ buttons: [DrawerButton]) {
-    // The same buttons with a new symbol (search turning into close) change
-    // in place; anything else starts over.
-    if buttons.map(\.id) != wanted.map(\.id) {
-      removeAll()
-    } else {
-      for b in buttons { placed[b.id]?.rootView = PageGlassButton(symbol: b.symbol, size: max(b.w, b.h), font: font) }
+    // Buttons that stay keep their glass (a new symbol changes in place:
+    // search turning into close); gone ones are removed, new ones found.
+    let ids = Set(buttons.map(\.id))
+    for id in placed.keys where !ids.contains(id) {
+      placed[id]?.view.removeFromSuperview()
+      placed[id] = nil
     }
+    for b in buttons { placed[b.id]?.rootView = PageGlassButton(symbol: b.symbol, size: max(b.w, b.h), font: font) }
     wanted = buttons
     missing = 0
     if link == nil {

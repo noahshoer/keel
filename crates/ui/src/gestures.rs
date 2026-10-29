@@ -355,7 +355,7 @@ const send = (m) => {
 const shiftOf = (el) => new DOMMatrix(getComputedStyle(el).transform).m42 || 0;
 const measureGlass = (sheet) => {
   const r = sheet.getBoundingClientRect();
-  const rects = [['tv-close', '.tv-head .tv-close'], ['tv-more', '.tv-head .tv-more']].map(([id, sel]) => {
+  const rects = [['tv-close', '.tv-head .tv-close'], ['tv-back', '.tv-head .tv-back'], ['tv-more', '.tv-head .tv-more']].map(([id, sel]) => {
     const b = sheet.querySelector(sel)?.getBoundingClientRect();
     return b && b.width > 0 && { id, x: b.x, y: b.y, w: b.width, h: b.height };
   }).filter(Boolean);
@@ -374,6 +374,13 @@ window.keelSheetOpened = (tries = 0) => {
   sheet.classList.add('glass-head');
   send({ buttons: glass.buttons });
 };
+// A sub-task's view pushed or popped: the ‹ comes or goes.
+window.keelSheetGlassUpdate = () => requestAnimationFrame(() => {
+  const sheet = sheetEl();
+  if (!sheet || !sheet.classList.contains('glass-head')) return;
+  const glass = measureGlass(sheet);
+  if (glass && glass.buttons.length >= 2) send({ buttons: glass.buttons });
+});
 // Both layouts' tops (no transform): `M` is how far medium sits below large.
 const heights = (sheet) => {
   const was = sheet.classList.contains('tv-large'), keep = sheet.style.transform;

@@ -417,8 +417,6 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   will-change: opacity; transition: opacity .2s var(--ease); }
 .float-glass .float-btn > * { visibility: hidden; }
 .float-btns.dim .float-btn { opacity: .35; }
-/* iPhone: glass stand-ins cover the drawer's theme and settings buttons
-   (glass::DRAWER_JS); the web ones stay in place, invisible, to be tapped. */
 /* iPhone: the theme and settings buttons hold their glass in layers of their
    own (PageGlass), so it slides with the drawer; they draw nothing else.
    38px: PageGlass tells its groups apart by size (menu / search 44, the
@@ -612,9 +610,37 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-sub.done .task-content { text-decoration: line-through; color: var(--muted); }
 .tv-add-sub { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; border: none;
   border-top: 1px solid var(--border); background: none; color: var(--accent); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
-.tv-subtasks > .tv-add-sub:first-child { border-top: none; }
+.tv-sub-list > .tv-add-sub:first-child { border-top: none; }
 .tv-add-editor { border-top: 1px solid var(--border); padding: 8px; }
 .tv-card .streak-panel { margin: 10px 12px; }
+/* iPhone: iOS sizes (17pt text, 44pt rows, 16pt margins and gaps). The
+   header holds the glass X, ‹ (in a sub-task's view) and •••, with the
+   parent's or project's name small in the middle; the sub-tasks' heading
+   sits above their card. */
+.native-glass .tv-head { position: relative; padding: 8px 14px 4px; gap: 10px; }
+.native-glass .tv-crumb { position: absolute; left: 0; right: 0; padding: 0 112px; text-align: center; pointer-events: none; }
+.native-glass .tv-head-actions { margin-left: auto; }
+.native-glass .tv-sheet.glass-head .tv-head .tv-back { width: 40px; height: 40px; padding: 0; border-radius: 50%;
+  justify-content: center; will-change: opacity; background: transparent; }
+.native-glass .tv-sheet.glass-head .tv-head .tv-back > * { display: none; }
+.native-glass .tv-scroll { padding-left: 16px; padding-right: 16px; }
+.native-glass .tv-titleline { margin: 8px 0 16px; gap: 12px; }
+.native-glass .tv-title { font-size: 22px; line-height: 28px; font-weight: 700; }
+.native-glass .tv-desc { font-size: 15px; line-height: 21px; }
+.native-glass .tv-card { margin-bottom: 16px; }
+.native-glass .tv-row { min-height: 44px; padding: 0 8px; }
+.native-glass .tv-field-btn { font-size: 17px; }
+.native-glass .tv-pills { gap: 8px; padding: 10px 14px 12px; }
+.native-glass .tv-pill { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; font-size: 14px; }
+.native-glass .tv-subtasks { background: none; border-radius: 0; overflow: visible; }
+.native-glass .tv-sub-head { padding: 0 14px 6px; font-size: 13px; }
+.native-glass .tv-sub-head b { font-size: 13px; font-weight: 400; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
+.native-glass .tv-toggle { color: var(--accent); }
+.native-glass .tv-sub-list { background: var(--bg); border-radius: 12px; overflow: hidden; }
+.native-glass .tv-progress { height: 3px; margin: 12px 14px 4px; }
+.native-glass .tv-sub { min-height: 44px; padding: 0 14px; gap: 12px; }
+.native-glass .tv-sub-body { font-size: 17px; }
+.native-glass .tv-add-sub { min-height: 44px; padding: 0 14px; font-size: 17px; }
 /* Sections */
 .section-block { margin-top: 18px; }
 .section-row { position: relative; }

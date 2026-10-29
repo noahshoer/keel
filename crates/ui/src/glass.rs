@@ -804,13 +804,15 @@ pub fn float_buttons(rects: &[WebRect], searching: bool) -> Vec<DrawerButton> {
         .collect()
 }
 
-/// The task sheet's header buttons as glass: X (close) and ••• (actions).
+/// The task sheet's header buttons as glass: X (close), ‹ (back, in a
+/// sub-task's view) and ••• (actions).
 pub fn sheet_buttons(rects: &[WebRect]) -> Vec<DrawerButton> {
     rects
         .iter()
         .filter_map(|r| {
             let symbol = match r.id.as_str() {
                 "tv-close" => "xmark",
+                "tv-back" => "chevron.left",
                 "tv-more" => "ellipsis",
                 _ => return None,
             };
@@ -1427,11 +1429,12 @@ mod tests {
         let rects = vec![
             WebRect { id: "tv-close".into(), x: 12.0, y: 318.0, w: 40.0, h: 40.0 },
             WebRect { id: "tv-more".into(), x: 350.0, y: 318.0, w: 40.0, h: 40.0 },
+            WebRect { id: "tv-back".into(), x: 60.0, y: 318.0, w: 40.0, h: 40.0 },
             WebRect { id: "other".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0 },
         ];
         let g = sheet_glass(&rects, 300.0, 0.0, 120.0);
         let ids: Vec<_> = g.buttons.iter().map(|b| (b.id.as_str(), b.symbol.as_str())).collect();
-        assert_eq!(ids, vec![("tv-close", "xmark"), ("tv-more", "ellipsis")]);
+        assert_eq!(ids, vec![("tv-close", "xmark"), ("tv-more", "ellipsis"), ("tv-back", "chevron.left")]);
         assert_eq!((g.buttons[0].x, g.buttons[0].y, g.buttons[0].w), (12.0, 18.0, 40.0), "y from the sheet's top");
         assert_eq!(g.top, 180.0, "the sheet's top on screen");
         // The glass doesn't send taps: the web buttons under it take them.

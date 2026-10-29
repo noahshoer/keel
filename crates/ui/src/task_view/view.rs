@@ -612,7 +612,7 @@ pub fn TaskView(
                     div { class: "tv-card", StreakPanel { task: task.clone(), reload } }
                 }
                 div { class: "tv-card tv-subtasks",
-                    if let Some((p, (count, toggle_text, all_done))) = header {
+                    if let Some((_, (count, toggle_text, all_done))) = header.clone() {
                         div { class: "tv-sub-head",
                             b { "Sub-tasks" }
                             span { class: "tv-sub-side",
@@ -631,55 +631,59 @@ pub fn TaskView(
                                 }
                             }
                         }
-                        div { class: "tv-progress",
-                            i { style: "width: {p.done * 100 / p.total.max(1)}%" }
-                        }
                     }
-                    for row in detail.visible.iter().cloned() {
-                        SubtaskRow { key: "{row.task.id}", row, on_open: move |id: Id| navigate.call(NavTo::Push(id)), reload }
-                    }
-                    if adding() && !native {
-                        div { class: "tv-add-editor",
-                            TaskEditor {
-                                initial: sub_defaults.clone(),
-                                projects: projects.clone(),
-                                sections: sections.clone(),
-                                labels: labels.clone(),
-                                keep_label: None,
-                                submit_text: "Add sub-task".to_string(),
-                                quick_add: true,
-                                keep_open: true,
-                                on_submit: {
-                                    let (p, s, l) = (projects.clone(), sections.clone(), labels.clone());
-                                    move |v: EditorValues| {
-                                        let (p, s, l) = (p.clone(), s.clone(), l.clone());
-                                        spawn_forever(async move {
-                                            let _ = add_from_editor(v, p, s, l).await;
-                                            reload += 1;
-                                        });
-                                    }
-                                },
-                                on_cancel: move |_| adding.set(false),
-                                reload,
+                    div { class: "tv-sub-list",
+                        if let Some((p, _)) = header {
+                            div { class: "tv-progress",
+                                i { style: "width: {p.done * 100 / p.total.max(1)}%" }
                             }
                         }
-                    } else {
-                        button {
-                            r#type: "button",
-                            class: "tv-add-sub",
-                            onclick: {
-                                let d = sub_defaults.clone();
-                                let (p, s, l) = (projects.clone(), sections.clone(), labels.clone());
-                                move |_| {
-                                    if native {
-                                        glass.add(d.clone(), p.clone(), s.clone(), l.clone(), reload);
-                                    } else {
-                                        adding.set(true);
-                                    }
+                        for row in detail.visible.iter().cloned() {
+                            SubtaskRow { key: "{row.task.id}", row, on_open: move |id: Id| navigate.call(NavTo::Push(id)), reload }
+                        }
+                        if adding() && !native {
+                            div { class: "tv-add-editor",
+                                TaskEditor {
+                                    initial: sub_defaults.clone(),
+                                    projects: projects.clone(),
+                                    sections: sections.clone(),
+                                    labels: labels.clone(),
+                                    keep_label: None,
+                                    submit_text: "Add sub-task".to_string(),
+                                    quick_add: true,
+                                    keep_open: true,
+                                    on_submit: {
+                                        let (p, s, l) = (projects.clone(), sections.clone(), labels.clone());
+                                        move |v: EditorValues| {
+                                            let (p, s, l) = (p.clone(), s.clone(), l.clone());
+                                            spawn_forever(async move {
+                                                let _ = add_from_editor(v, p, s, l).await;
+                                                reload += 1;
+                                            });
+                                        }
+                                    },
+                                    on_cancel: move |_| adding.set(false),
+                                    reload,
                                 }
-                            },
-                            Icon { svg: icons::plus(14) }
-                            "Add sub-task"
+                            }
+                        } else {
+                            button {
+                                r#type: "button",
+                                class: "tv-add-sub",
+                                onclick: {
+                                    let d = sub_defaults.clone();
+                                    let (p, s, l) = (projects.clone(), sections.clone(), labels.clone());
+                                    move |_| {
+                                        if native {
+                                            glass.add(d.clone(), p.clone(), s.clone(), l.clone(), reload);
+                                        } else {
+                                            adding.set(true);
+                                        }
+                                    }
+                                },
+                                Icon { svg: icons::plus(14) }
+                                "Add sub-task"
+                            }
                         }
                     }
                 }

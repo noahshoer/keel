@@ -301,6 +301,16 @@ fn App() -> Element {
             spawn(async move { api::glass_sheet_hide().await });
         }
     });
+    // A sub-task's view pushed or popped: the glass ‹ comes or goes.
+    let mut sheet_depth = use_signal(|| 0usize);
+    use_effect(move || {
+        let depth = nav.stack.read().0.len();
+        let was = *sheet_depth.peek();
+        sheet_depth.set(depth);
+        if (glass.native)() && depth > 0 && was > 0 && depth != was {
+            let _ = document::eval("window.keelSheetGlassUpdate?.();");
+        }
+    });
     // The floating + steps aside while the drawer or the task view is open;
     // the menu and search are glass inside the page's placeholders.
     use_effect(move || {
