@@ -119,6 +119,7 @@ pub fn SettingsDialog(on_close: EventHandler<()>, reload: Signal<u32>) -> Elemen
     let mut importing = use_signal(|| false);
     let mut permission = use_signal(String::new);
     let mut when_closed = use_signal(|| None::<bool>);
+    let mut diag_on = use_signal(|| false);
     let mut upcoming = use_signal(Vec::<PlannedReminder>::new);
     let mut message = use_signal(|| None::<String>);
     let mut open: OpenPop = use_signal(|| None);
@@ -133,6 +134,9 @@ pub fn SettingsDialog(on_close: EventHandler<()>, reload: Signal<u32>) -> Elemen
             }
             if let Ok(c) = api::reminders_when_closed().await {
                 when_closed.set(Some(c));
+            }
+            if let Ok(d) = api::diag_enabled().await {
+                diag_on.set(d);
             }
             upcoming.set(api::upcoming_reminders().await.unwrap_or_default());
         });
@@ -317,6 +321,31 @@ pub fn SettingsDialog(on_close: EventHandler<()>, reload: Signal<u32>) -> Elemen
                 }
                 h3 { class: "modal-section", "Appearance" }
                 CompletionSetting {}
+                h3 { class: "modal-section", "Diagnostics" }
+                div { class: "setting-row",
+                    div { class: "setting-text",
+                        div { class: "setting-name", "Diagnostics logging" }
+                        div { class: "setting-hint", "Writes a log for bug reports. Off by default." }
+                    }
+                    button {
+                        class: if diag_on() { "switch on" } else { "switch" },
+                        role: "switch",
+                        aria_checked: "{diag_on()}",
+                        title: "Diagnostics logging",
+                        onclick: move |_| {
+                            let next = !diag_on();
+                            diag_on.set(next);
+                            spawn(async move {
+                                if api::set_diag_enabled(next).await.is_ok() {
+                                    crate::diag::set_active(next);
+                                } else {
+                                    diag_on.set(!next);
+                                }
+                            });
+                        },
+                        span { class: "knob" }
+                    }
+                }
                 h3 { class: "modal-section", "Import" }
                 div { class: "setting-row",
                     div { class: "setting-text",

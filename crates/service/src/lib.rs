@@ -2,6 +2,8 @@
 //! and exposes dispatch/query operations. The Tauri layer is a thin wrapper
 //! over this.
 
+pub mod diag;
+
 use chrono::{Local, NaiveDate, NaiveDateTime};
 use keel_core::commands::{apply_at, Action, ApplyResult, Command};
 use keel_core::import::todoist::{self, ImportOp, ImportSummary};
@@ -17,6 +19,7 @@ use keel_storage::SqliteRepo;
 
 const REMINDER_SETTINGS_KEY: &str = "reminders";
 const SCHEDULED_IDS_KEY: &str = "reminders_scheduled_ids";
+const DIAG_KEY: &str = "diag_enabled";
 
 pub struct AppService {
     repo: SqliteRepo,
@@ -349,6 +352,15 @@ impl AppService {
     pub fn set_reminder_settings(&self, settings: &ReminderSettings) -> Result<(), RepoError> {
         let json = serde_json::to_string(settings).map_err(|e| RepoError::Backend(e.to_string()))?;
         self.repo.set_setting(REMINDER_SETTINGS_KEY, &json)
+    }
+
+    /// Whether diagnostics logging is on for this device (off by default).
+    pub fn diag_enabled(&self) -> Result<bool, RepoError> {
+        Ok(self.repo.get_setting(DIAG_KEY)?.as_deref() == Some("1"))
+    }
+
+    pub fn set_diag_enabled(&self, on: bool) -> Result<(), RepoError> {
+        self.repo.set_setting(DIAG_KEY, if on { "1" } else { "0" })
     }
 
     /// Ids of the notifications last handed to the OS (mobile), so the next

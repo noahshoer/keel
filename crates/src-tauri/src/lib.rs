@@ -2,6 +2,7 @@
 //! All domain logic lives in the service/core crates; this layer only
 //! bridges the webview to them.
 
+mod diag;
 mod notifications;
 
 use tauri_plugin_notification::NotificationExt;
@@ -210,6 +211,7 @@ pub fn run() {
             let svc = AppService::open(db_path.to_str().expect("utf-8 db path"))
                 .expect("open local store");
             app.manage(svc);
+            diag::init(app.handle(), &app.state::<AppService>(), &dir);
             app.manage(notifications::Reminders::default());
             notifications::resync(app.handle());
             #[cfg(desktop)]
@@ -240,6 +242,9 @@ pub fn run() {
             upcoming_reminders,
             notification_permission,
             reminders_when_closed,
+            diag::diag_enabled,
+            diag::set_diag_enabled,
+            diag::diag_log,
             request_notification_permission,
             test_notification
         ])

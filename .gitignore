@@ -20,3 +20,6 @@ crates/src-tauri/gen/schemas/
 
 # Local Claude Code preview config
 .claude/
+
+# Pulled diagnostics logs (scripts/diag.sh)
+diag-logs/

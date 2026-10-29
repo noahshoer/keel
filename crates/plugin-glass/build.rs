@@ -7,6 +7,7 @@ const COMMANDS: &[&str] = &[
     "update",
     "hide",
     "buttons",
+    "diag",
     "actions",
     "prompt",
     "register_listener",
