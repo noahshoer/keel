@@ -17,6 +17,7 @@ const send = (src, msg) => {
 export function __diag_log(src, msg) { send(src, msg); }
 export function __diag_set(on) {
   window.__keelDiag = on;
+  if (on) send('js', `diagnostics on; ${navigator.userAgent}; inner ${innerWidth}x${innerHeight}`);
   if (!on || installed) return;
   installed = true;
   window.addEventListener('error', (e) => {
@@ -32,7 +33,6 @@ export function __diag_set(on) {
     const v = window.visualViewport;
     send('viewport', `resize ${v.width.toFixed(0)}x${v.height.toFixed(1)} top ${v.offsetTop.toFixed(1)} scale ${v.scale}`);
   });
-  send('js', `diagnostics on; ${navigator.userAgent}; inner ${innerWidth}x${innerHeight}`);
 }
 "#)]
 extern "C" {
