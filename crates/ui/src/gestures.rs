@@ -544,23 +544,23 @@ const end = (cancelled) => {
 // Back button is clicked (so a pending edit saves, as for a tap on ‹),
 // otherwise it springs back. Only where a Back exists.
 let e = null;
-// The top view's content, not the parent's (its view sits inside, in `.tv-peek`).
-const edgeEls = (sheet) => [sheet.querySelector(':scope > .task-view > .tv-body > .tv-scroll')].filter(Boolean);
-// The parent's view (`.tv-peek`, kept hidden under the content) comes in
-// from a third of a width to the left, as in iOS, while the content leaves.
+// The view under (`.tv-under`, mounted but hidden) comes in from a third of
+// a width to the left, as in iOS, while the top view's content leaves.
+const topBody = (sheet) => sheet.querySelector('.tv-stack > .task-view:not(.tv-under) > .tv-body');
+const under = (sheet) => sheet.querySelector('.tv-stack > .tv-under');
 const edgeMove = (d, x, secs) => {
   const t = secs > 0 ? `transform ${secs}s ${EASE}` : 'none';
-  const peek = d.sheet.querySelector('.tv-peek');
   const share = Math.min(1, x / innerWidth);
-  for (const el of edgeEls(d.sheet)) {
-    el.style.transition = t;
-    el.style.transform = x ? `translateX(${x}px)` : '';
-    el.style.boxShadow = x ? '-6px 0 18px rgba(0,0,0,.12)' : '';
+  const body = topBody(d.sheet), u = under(d.sheet), ub = u?.querySelector(':scope > .tv-body');
+  if (body) {
+    body.style.transition = t;
+    body.style.transform = x ? `translateX(${x}px)` : '';
+    body.style.boxShadow = x ? '-6px 0 18px rgba(0,0,0,.12)' : '';
   }
-  if (peek) {
-    peek.style.visibility = x ? 'visible' : '';
-    peek.style.transition = t;
-    peek.style.transform = x ? `translateX(${-innerWidth / 3 * (1 - share)}px)` : '';
+  if (u) u.style.visibility = x ? 'visible' : '';
+  if (ub) {
+    ub.style.transition = t;
+    ub.style.transform = x ? `translateX(${-innerWidth / 3 * (1 - share)}px)` : '';
   }
 };
 document.addEventListener('touchstart', (ev) => {
@@ -588,25 +588,37 @@ document.addEventListener('touchmove', (ev) => {
   if (e.samples.length > 6) e.samples.shift();
   edgeMove(e, e.dx, 0);
 }, { passive: false, capture: true });
-const edgeEnd = (cancelled) => {
+const edgeEnd = (cancelled, at) => {
   const d = e;
   e = null;
   if (!d || d.mode !== 'drag') return;
+  // The lift counts as a sample, so a pause before it isn't read as a flick.
+  d.samples.push([at, d.dx]);
   const s = d.samples, a = s[0], b = s[s.length - 1];
   const v = a && b && b[0] > a[0] ? (b[1] - a[1]) / (b[0] - a[0]) : 0;
   const secs = reduce() ? 0 : SETTLE_S;
   if (cancelled || !keelSheet.edgeCommits(d.dx, v, innerWidth)) { edgeMove(d, 0, secs); return; }
   edgeMove(d, innerWidth, secs);
+  // Back keeps the view under mounted and makes it the top one. It stays
+  // shown until it has lost `.tv-under`, then the swipe's styles go (it's at
+  // rest by now, so nothing moves). The leaving view stays off to the right
+  // until it's removed.
+  const u = under(d.sheet), ub = u?.querySelector(':scope > .tv-body');
+  const settle = (frames) => {
+    if (u && u.isConnected && u.classList.contains('tv-under') && frames > 0) {
+      requestAnimationFrame(() => settle(frames - 1));
+      return;
+    }
+    if (u) u.style.visibility = '';
+    if (ub) { ub.style.transition = 'none'; ub.style.transform = ''; }
+  };
   setTimeout(() => {
     d.sheet.querySelector('.tv-back')?.click();
-    // The parent's content takes the place; bring the element back unseen.
-    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
-      edgeMove(d, 0, 0);
-    }, 60)));
+    settle(120);
   }, secs * 1000);
 };
-document.addEventListener('touchend', () => edgeEnd(false), { passive: true, capture: true });
-document.addEventListener('touchcancel', () => edgeEnd(true), { passive: true, capture: true });
+document.addEventListener('touchend', (ev) => edgeEnd(false, ev.timeStamp), { passive: true, capture: true });
+document.addEventListener('touchcancel', (ev) => edgeEnd(true, ev.timeStamp), { passive: true, capture: true });
 // The X and the scrim: the sheet slides down off the screen, then closes the
 // way a drag past the threshold does (`{close}`). False on the desktop panel
 // (at least 900px wide), which closes at once.

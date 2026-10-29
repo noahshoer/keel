@@ -22,12 +22,17 @@ await sleep(800);
 check(`after short swipe: ${title()} back=${!!document.querySelector('.tv-back')}`);
 // Held half way: the parent shows under the sliding content.
 touch('touchstart', 6, 400);
-for (let i = 1; i <= 8; i++) { await sleep(16); touch('touchmove', 6 + (150 * i) / 8, 400); }
-const pk = document.querySelector('.tv-peek');
-check(`mid-drag: peek ${pk && getComputedStyle(pk).visibility} "${pk?.querySelector('.tv-title textarea')?.value}" at ${pk?.style.transform}; top moved ${document.querySelector('.tv-sheet > .task-view > .tv-body > .tv-scroll')?.style.transform}`);
+for (let i = 1; i <= 8; i++) { await sleep(16); touch('touchmove', 6 + (120 * i) / 8, 400); }
+const pk = document.querySelector('.tv-under');
+check(`mid-drag: under ${pk && getComputedStyle(pk).visibility} "${pk?.querySelector('.tv-title textarea')?.value}" at ${pk?.querySelector('.tv-body')?.style.transform}; top moved ${document.querySelector('.task-view:not(.tv-under) > .tv-body')?.style.transform}`);
 await sleep(2500);
-touch('touchend', 156, 400);
+touch('touchend', 126, 400);
 await sleep(1500);
+const parentEl = document.querySelector('.tv-under');
+parentEl.dataset.mark = 'kept';
+check(`before: under ${parentEl.dataset.viewId} views ${document.querySelectorAll('.tv-stack > .task-view').length}`);
 await swipe(250);
 await sleep(1200);
+const now = document.querySelector('.tv-stack > .task-view');
+check(`parent kept, not remounted: ${now === parentEl} marked ${document.querySelector('[data-mark]')?.className} now ${now?.className} ${now?.dataset.viewId}; views ${document.querySelectorAll('.tv-stack > .task-view').length}; styles left "${now?.style.visibility}${now?.querySelector('.tv-body')?.style.transform}"`);
 check(`after long swipe: ${title()} back=${!!document.querySelector('.tv-back')}`);
