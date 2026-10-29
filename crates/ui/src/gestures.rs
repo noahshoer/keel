@@ -326,6 +326,16 @@ pub struct SheetMsg {
 ///
 /// The keyboard: `--vv-top`, `--vv-h` and `--kb` (on the root) keep the
 /// sheet inside the visible area, above the keyboard, header in view.
+/// Slides the task sheet down off the screen (phone layout); the page then
+/// asks the view to close, as a drag past the threshold does. False on the
+/// desktop panel, which the caller closes at once.
+pub async fn slide_close() -> bool {
+    dioxus::prelude::document::eval("dioxus.send(window.keelSheetSlideClose?.() === true);")
+        .recv::<bool>()
+        .await
+        .unwrap_or(false)
+}
+
 pub const SHEET_DRAG_JS: &str = r#"
 const BLOCK = '.popover, .menu, .editor, .modal-scrim, .pop-backdrop';
 const FIELD = 'input, textarea, select, [contenteditable]';
@@ -446,6 +456,29 @@ const end = (cancelled) => {
     const sc = scrim();
     if (sc) { sc.style.transition = 'none'; sc.style.opacity = ''; }
   }, secs * 1000);
+};
+// The X and the scrim: the sheet slides down off the screen, then closes the
+// way a drag past the threshold does (`{close}`). False on the desktop panel
+// (at least 900px wide), which closes at once.
+let closing = false;
+window.keelSheetSlideClose = () => {
+  const sheet = sheetEl();
+  if (!sheet || !window.keelSheet || innerWidth >= 900) return false;
+  if (closing) return true;
+  closing = true;
+  seq++;
+  g = null;
+  const d = { sheet, ...heights(sheet) };
+  sheet.getAnimations().forEach((a) => a.finish());
+  const settling = sheet.classList.contains('tv-large') ? shiftOf(sheet) : null;
+  const from = keelSheet.from(sheet.dataset.detent || 'medium', settling, d.M);
+  sheet.classList.add('tv-large');
+  place(d, from, 0);
+  sheet.getBoundingClientRect();
+  const secs = reduce() ? 0 : SETTLE_S;
+  place(d, innerHeight - d.largeTop + 40, secs);
+  setTimeout(() => { closing = false; dioxus.send({ close: true }); }, secs * 1000);
+  return true;
 };
 document.addEventListener('touchend', () => end(false), { passive: true, capture: true });
 document.addEventListener('touchcancel', () => end(true), { passive: true, capture: true });

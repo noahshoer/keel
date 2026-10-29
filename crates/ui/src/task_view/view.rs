@@ -485,7 +485,14 @@ pub fn TaskView(
                     class: "tv-close tv-round",
                     title: "Close",
                     aria_label: "Close",
-                    onclick: move |_| navigate.call(NavTo::Close),
+                    // On the phone layout the sheet slides down first.
+                    onclick: move |_| {
+                        spawn(async move {
+                            if !crate::gestures::slide_close().await {
+                                navigate.call(NavTo::Close);
+                            }
+                        });
+                    },
                     Icon { svg: icons::x() }
                 }
                 if depth > 1 {

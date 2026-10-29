@@ -518,7 +518,16 @@ fn App() -> Element {
                     // The scrim and sheet stay mounted while views push and
                     // pop inside, so the entrance plays once per open.
                     if let Some(d) = open_task.clone() {
-                        div { class: "tv-scrim", onclick: move |_| nav.ask_close() }
+                        div {
+                            class: "tv-scrim",
+                            onclick: move |_| {
+                                spawn(async move {
+                                    if !gestures::slide_close().await {
+                                        nav.ask_close();
+                                    }
+                                });
+                            },
+                        }
                         div { class: "tv-sheet",
                             div { class: "tv-grabber", aria_hidden: "true" }
                             task_view::view::TaskView {
