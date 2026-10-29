@@ -404,6 +404,16 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* iPhone: native glass buttons float over the header (menu left, search
    right) and the list (+ bottom right); keep their spots clear. */
 .native-glass .menu-btn { display: none; }
+/* iPhone: the menu and search float at the top. Each holds its glass in a
+   compositing layer of its own (SheetGlass.swift), so the task view's scrim
+   and sheet, above them, dim and cover them; the scrim takes their taps. */
+.float-btns { position: fixed; z-index: 30; top: env(safe-area-inset-top); left: 14px; right: 14px; height: 44px;
+  display: flex; justify-content: space-between; pointer-events: none; }
+.float-btn { pointer-events: auto; width: 44px; height: 44px; padding: 0; border: none; border-radius: 50%;
+  background: transparent; color: var(--text); display: inline-flex; align-items: center; justify-content: center;
+  will-change: opacity; transition: opacity .2s var(--ease); }
+.float-glass .float-btn > * { visibility: hidden; }
+.float-btns.dim .float-btn { opacity: .35; }
 /* iPhone: glass stand-ins cover the drawer's theme and settings buttons
    (glass::DRAWER_JS); the web ones stay in place, invisible, to be tapped. */
 .native-glass .brand .icon-btn { visibility: hidden; }

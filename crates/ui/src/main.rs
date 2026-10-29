@@ -301,16 +301,22 @@ fn App() -> Element {
             spawn(async move { api::glass_sheet_hide().await });
         }
     });
-    // The floating buttons step aside while the drawer or the task view is open.
+    // The floating + steps aside while the drawer or the task view is open;
+    // the menu and search are glass inside the page's placeholders.
     use_effect(move || {
         let view_open = !nav.stack.read().0.is_empty();
-        let mut state = glass::floating_buttons(view() == View::Search, drawer(), view_open);
+        let searching = view() == View::Search;
+        let mut state = glass::floating_buttons(searching, drawer(), view_open);
         state.theme = theme();
         if drawer() && !(glass.settings_open)() {
             state.drawer = glass::drawer_buttons(&(glass.drawer_rects)(), &theme());
         }
         if (glass.native)() {
-            spawn(async move { api::glass_buttons(state).await });
+            spawn(async move {
+                let rects = document::eval(FLOAT_MEASURE_JS).recv::<Vec<glass::WebRect>>().await.unwrap_or_default();
+                state.floating = glass::float_buttons(&rects, searching);
+                api::glass_buttons(state).await
+            });
         }
     });
     // Search slides in and out: a still copy of the page being left is
@@ -515,6 +521,30 @@ fn App() -> Element {
                         theme,
                         reload,
                     }
+                    // iPhone: the menu and search, drawn as glass inside these
+                    // (under the task view's scrim and sheet, which dim and
+                    // cover them).
+                    if (glass.native)() {
+                        div { class: if nav.stack.read().0.is_empty() { "float-btns float-glass" } else { "float-btns float-glass dim" },
+                            button {
+                                r#type: "button",
+                                class: "float-btn float-menu",
+                                aria_label: "Open menu",
+                                onclick: move |_| drawer.set(true),
+                                Icon { svg: icons::menu() }
+                            }
+                            button {
+                                r#type: "button",
+                                class: "float-btn float-search",
+                                aria_label: if view() == View::Search { "Close search" } else { "Search" },
+                                onclick: move |_| {
+                                    let next = if *view.peek() == View::Search { last_view.peek().clone() } else { View::Search };
+                                    view.set(next);
+                                },
+                                Icon { svg: if view() == View::Search { icons::x() } else { icons::search() } }
+                            }
+                        }
+                    }
                     // The scrim and sheet stay mounted while views push and
                     // pop inside, so the entrance plays once per open.
                     if let Some(d) = open_task.clone() {
@@ -548,6 +578,20 @@ fn App() -> Element {
         }
     }
 }
+
+/// The page's menu and search placeholders, once both are laid out (a few
+/// frames at most after a render).
+const FLOAT_MEASURE_JS: &str = r#"
+for (let i = 0; i < 60; i++) {
+  const rects = [['menu', '.float-menu'], ['search', '.float-search']].map(([id, sel]) => {
+    const r = document.querySelector(sel)?.getBoundingClientRect();
+    return r && r.width > 0 && { id, x: r.x, y: r.y, w: r.width, h: r.height };
+  }).filter(Boolean);
+  if (rects.length === 2) { dioxus.send(rects); return; }
+  await new Promise((r) => requestAnimationFrame(r));
+}
+dioxus.send([]);
+"#;
 
 /// What a task row shows on the right: "Project" or "Project / Section".
 fn location_names(loaded: &Loaded) -> HashMap<Id, String> {

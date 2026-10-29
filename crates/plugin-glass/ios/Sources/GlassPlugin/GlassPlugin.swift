@@ -31,6 +31,7 @@ class ButtonsArgs: Decodable {
   let add: Bool
   let searching: Bool
   let drawer: [DrawerButton]
+  let floating: [DrawerButton]?
   let theme: String
 }
 
@@ -48,7 +49,12 @@ class GlassPlugin: Plugin {
   let model = CardModel()
   var hosting: UIViewController?
   weak var webview: WKWebView?
-  lazy var sheetGlass = SheetGlass(webview: webview)
+  lazy var sheetGlass = PageGlass(
+    webview: webview, name: "sheet", font: .system(size: 18, weight: .medium),
+    fallback: "document.querySelector('.tv-sheet')?.classList.remove('glass-head')")
+  lazy var floatGlass = PageGlass(
+    webview: webview, name: "float", font: .body.weight(.semibold),
+    fallback: "document.querySelector('.float-btns')?.classList.remove('float-glass')")
 
   public override func load(webview: WKWebView) {
     self.webview = webview
@@ -134,6 +140,9 @@ class GlassPlugin: Plugin {
       self.model.addVisible = args.add
       self.model.searching = args.searching
       withAnimation(.easeOut(duration: 0.18)) { self.model.drawerButtons = args.drawer }
+      if let floating = args.floating {
+        if floating.isEmpty { self.floatGlass.hide() } else { self.floatGlass.show(floating) }
+      }
     }
     invoke.resolve()
   }

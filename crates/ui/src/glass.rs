@@ -725,19 +725,24 @@ pub struct ButtonsState {
     /// Glass stand-ins for the drawer's theme and settings buttons, while
     /// the drawer is open.
     pub drawer: Vec<DrawerButton>,
+    /// The menu and search buttons, drawn as glass inside the page's own
+    /// placeholders (`.float-btns`), so the task view's scrim and sheet
+    /// cover them; empty until they're measured.
+    pub floating: Vec<DrawerButton>,
     /// Keel's theme ("system" / "light" / "dark"): the native views follow
     /// it rather than the phone's setting.
     pub theme: String,
 }
 
-/// The floating buttons for this screen. They step aside while the drawer
-/// or the task view is open (the view's header sits where they float).
+/// The floating + for this screen. It steps aside while the drawer or the
+/// task view is open (the view's sheet covers its spot).
 pub fn floating_buttons(searching: bool, drawer_open: bool, view_open: bool) -> ButtonsState {
     ButtonsState {
         visible: !drawer_open && !view_open,
         add: !searching,
         searching,
         drawer: Vec::new(),
+        floating: Vec::new(),
         theme: "system".to_string(),
     }
 }
@@ -778,6 +783,23 @@ pub fn drawer_buttons(rects: &[WebRect], theme: &str) -> Vec<DrawerButton> {
                 _ => "gearshape",
             };
             DrawerButton { id: r.id.clone(), symbol: symbol.to_string(), x: r.x, y: r.y, w: r.w, h: r.h }
+        })
+        .collect()
+}
+
+/// The menu (top left) and search (top right) as glass, at the page's
+/// placeholders; in Search the search button closes it.
+pub fn float_buttons(rects: &[WebRect], searching: bool) -> Vec<DrawerButton> {
+    rects
+        .iter()
+        .filter_map(|r| {
+            let symbol = match r.id.as_str() {
+                "menu" => "line.3.horizontal",
+                "search" if searching => "xmark",
+                "search" => "magnifyingglass",
+                _ => return None,
+            };
+            Some(DrawerButton { id: r.id.clone(), symbol: symbol.to_string(), x: r.x, y: r.y, w: r.w, h: r.h })
         })
         .collect()
 }
@@ -1339,11 +1361,35 @@ mod tests {
 
     #[test]
     fn search_swaps_the_search_button_for_close_and_drops_add() {
-        let state =
-            |visible, add, searching| ButtonsState { visible, add, searching, drawer: Vec::new(), theme: "system".into() };
+        let state = |visible, add, searching| ButtonsState {
+            visible,
+            add,
+            searching,
+            drawer: Vec::new(),
+            floating: Vec::new(),
+            theme: "system".into(),
+        };
         assert_eq!(floating_buttons(false, false, false), state(true, true, false));
         assert_eq!(floating_buttons(true, false, false), state(true, false, true));
         assert!(!floating_buttons(false, true, false).visible, "hidden while the drawer is open");
+    }
+
+    #[test]
+    fn menu_and_search_take_the_page_spots_and_search_turns_into_close() {
+        let rects = vec![
+            WebRect { id: "menu".into(), x: 14.0, y: 62.0, w: 44.0, h: 44.0 },
+            WebRect { id: "search".into(), x: 344.0, y: 62.0, w: 44.0, h: 44.0 },
+            WebRect { id: "other".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0 },
+        ];
+        let ids = |searching| {
+            float_buttons(&rects, searching).into_iter().map(|b| (b.id, b.symbol)).collect::<Vec<_>>()
+        };
+        assert_eq!(
+            ids(false),
+            vec![("menu".to_string(), "line.3.horizontal".to_string()), ("search".to_string(), "magnifyingglass".to_string())]
+        );
+        assert_eq!(ids(true)[1].1, "xmark", "in Search it closes it");
+        assert_eq!(float_buttons(&rects, false)[1].x, 344.0);
     }
 
     #[test]

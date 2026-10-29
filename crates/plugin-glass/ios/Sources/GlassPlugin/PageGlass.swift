@@ -2,36 +2,50 @@ import SwiftUI
 import UIKit
 import WebKit
 
-/// The task sheet's glass X and •••, drawn inside WebKit's own layers: the
-/// web buttons get compositing views of their own (`will-change`, in the
-/// page's CSS), and each glass button is added as a subview of its web
-/// button's view. Core Animation then moves it with the sheet in the same
-/// frame (its slide-up, a drag, a settle, the keyboard's pan), with no
-/// timing or messages of ours. The glass plays its own press effect, and the
+/// Glass buttons drawn inside WebKit's own layers (the task sheet's X and
+/// •••; the floating menu and search): the web buttons get compositing views
+/// of their own (`will-change`, in the page's CSS), and each glass button is
+/// added as a subview of its web button's view. Core Animation then moves it
+/// with the page in the same frame (the sheet's slide-up, a drag, a settle,
+/// the keyboard's pan), and whatever the page draws above it (the task
+/// view's scrim and sheet) covers it, with no timing or messages of ours. The glass plays its own press effect, and the
 /// tap itself reaches the page: the web button under it takes the click. (A
 /// native tap handler on the glass never fires; WebKit takes the touch.)
 ///
 /// WebKit can drop the views (a sub-task's view replaces the header) or not
 /// have made them yet (the sheet's first frames), so while shown, each frame
 /// checks the glass is still in place and finds the views again if not. If
-/// they never turn up, the web buttons show their own icons instead.
-final class SheetGlass: NSObject {
+/// they never turn up, `fallback` runs (the page shows its own icons).
+final class PageGlass: NSObject {
   private weak var webview: WKWebView?
+  private let name: String
+  private let font: Font
+  private let fallback: String
   private var wanted: [DrawerButton] = []
-  private var placed: [String: UIHostingController<SheetGlassButton>] = [:]
+  private var placed: [String: UIHostingController<PageGlassButton>] = [:]
   private var link: CADisplayLink?
   private var missing = 0
 
   /// About a second at 60 fps without finding the web buttons' views.
   private static let giveUpAfter = 60
 
-  init(webview: WKWebView?) {
+  /// `fallback`: JavaScript that brings back the page's own icons.
+  init(webview: WKWebView?, name: String, font: Font, fallback: String) {
     self.webview = webview
+    self.name = name
+    self.font = font
+    self.fallback = fallback
     super.init()
   }
 
   func show(_ buttons: [DrawerButton]) {
-    if buttons != wanted { removeAll() }
+    // The same buttons with a new symbol (search turning into close) change
+    // in place; anything else starts over.
+    if buttons.map(\.id) != wanted.map(\.id) {
+      removeAll()
+    } else {
+      for b in buttons { placed[b.id]?.rootView = PageGlassButton(symbol: b.symbol, size: max(b.w, b.h), font: font) }
+    }
     wanted = buttons
     missing = 0
     if link == nil {
@@ -75,7 +89,7 @@ final class SheetGlass: NSObject {
       glass.view.frame = host.bounds
       host.addSubview(glass.view)
       placed[b.id] = glass
-      Diag.log("SHEETGLASS \(b.id) in \(host.convert(host.bounds, to: nil))")
+      Diag.log("GLASS \(name) \(b.id) in \(host.convert(host.bounds, to: nil))")
     }
     if found {
       missing = 0
@@ -83,9 +97,9 @@ final class SheetGlass: NSObject {
     }
     missing += 1
     if missing == Self.giveUpAfter {
-      Diag.log("SHEETGLASS gave up")
+      Diag.log("GLASS \(name) gave up")
       hide()
-      webview.evaluateJavaScript("document.querySelector('.tv-sheet')?.classList.remove('glass-head')")
+      webview.evaluateJavaScript(fallback)
     }
   }
 
@@ -104,7 +118,8 @@ final class SheetGlass: NSObject {
     return out
   }
 
-  /// The view of `b`'s size nearest its measured x (the X is left, ••• right).
+  /// The view of `b`'s size nearest its measured x (one button is left, the
+  /// other right).
   private static func best(for b: DrawerButton, among views: [UIView], in webview: WKWebView) -> UIView? {
     views
       .filter { fits($0, b) }
@@ -114,8 +129,8 @@ final class SheetGlass: NSObject {
       .0
   }
 
-  private func makeGlass(_ b: DrawerButton) -> UIHostingController<SheetGlassButton> {
-    let hosting = UIHostingController(rootView: SheetGlassButton(symbol: b.symbol, size: max(b.w, b.h)))
+  private func makeGlass(_ b: DrawerButton) -> UIHostingController<PageGlassButton> {
+    let hosting = UIHostingController(rootView: PageGlassButton(symbol: b.symbol, size: max(b.w, b.h), font: font))
     let v = hosting.view!
     v.backgroundColor = .clear
     v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -123,13 +138,15 @@ final class SheetGlass: NSObject {
   }
 }
 
-struct SheetGlassButton: View {
+struct PageGlassButton: View {
   let symbol: String
   let size: CGFloat
+  let font: Font
 
   var body: some View {
     Image(systemName: symbol)
-      .font(.system(size: 18, weight: .medium))
+      .font(font)
+      .contentTransition(.symbolEffect(.replace))
       .foregroundStyle(Color.primary)
       .frame(width: size, height: size)
       .contentShape(.circle)

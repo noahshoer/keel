@@ -40,20 +40,14 @@ func placedLabel(_ id: String) -> String {
   }
 }
 
-/// The floating glass buttons over the task list: menu (top left), search
-/// (top right) and add (bottom right). Hidden while the card or the drawer
-/// is open.
+/// The floating + over the task list (bottom right). Hidden while the card,
+/// the drawer or the task view is open. (The menu and search are glass inside
+/// the page: `PageGlass`.)
 struct FloatingButtons: View {
   @ObservedObject var model: CardModel
 
   var body: some View {
     VStack {
-      HStack {
-        round("line.3.horizontal", key: "menu", label: "Open menu")
-        Spacer()
-        round(model.searching ? "xmark" : "magnifyingglass", key: "search", label: model.searching ? "Close search" : "Search")
-      }
-      .padding(.horizontal, 14)
       Spacer()
       // The + steps aside while the card is open (the card covers it).
       if model.addVisible && !model.isOpen {
@@ -76,20 +70,5 @@ struct FloatingButtons: View {
       .padding(.bottom, 12)
       }
     }
-  }
-
-  func round(_ icon: String, key: String, label: String) -> some View {
-    Button {
-      model.button(key)
-    } label: {
-      Image(systemName: icon)
-        .font(.body.weight(.semibold))
-        .foregroundStyle(Color.primary)
-        .frame(width: 44, height: 44)
-    }
-    .buttonStyle(.plain)
-    .glassEffect(.regular.interactive(), in: .circle)
-    .touchable(key, in: model)
-    .accessibilityLabel(label)
   }
 }
