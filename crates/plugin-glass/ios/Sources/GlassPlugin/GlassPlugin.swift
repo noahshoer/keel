@@ -31,7 +31,14 @@ class ButtonsArgs: Decodable {
   let add: Bool
   let searching: Bool
   let drawer: [DrawerButton]
+  let floating: [DrawerButton]?
   let theme: String
+}
+
+/// The task sheet's glass X and ••• (`plugin:glass|sheet`): the web buttons
+/// to draw as glass (`SheetGlass`; empty removes them). Absent = no change.
+class SheetArgs: Decodable {
+  let buttons: [DrawerButton]?
 }
 
 /// Draws Keel's Liquid Glass composer, editor, pickers and floating buttons
@@ -42,6 +49,15 @@ class GlassPlugin: Plugin {
   let model = CardModel()
   var hosting: UIViewController?
   weak var webview: WKWebView?
+  lazy var sheetGlass = PageGlass(
+    webview: webview, name: "sheet", font: .system(size: 18, weight: .medium),
+    fallback: "document.querySelector('.tv-sheet')?.classList.remove('glass-head')")
+  lazy var drawerGlass = PageGlass(
+    webview: webview, name: "drawer", font: .system(size: 18, weight: .medium),
+    fallback: "document.body.classList.add('drawer-glass-off')")
+  lazy var floatGlass = PageGlass(
+    webview: webview, name: "float", font: .body.weight(.semibold),
+    fallback: "document.querySelector('.float-btns')?.classList.remove('float-glass')")
 
   public override func load(webview: WKWebView) {
     self.webview = webview
@@ -126,7 +142,22 @@ class GlassPlugin: Plugin {
       self.model.buttonsVisible = args.visible
       self.model.addVisible = args.add
       self.model.searching = args.searching
-      withAnimation(.easeOut(duration: 0.18)) { self.model.drawerButtons = args.drawer }
+      // The drawer's theme and settings buttons ride its slide (the page
+      // sends none once it has slid away).
+      if args.drawer.isEmpty { self.drawerGlass.hide() } else { self.drawerGlass.show(args.drawer) }
+      if let floating = args.floating {
+        if floating.isEmpty { self.floatGlass.hide() } else { self.floatGlass.show(floating) }
+      }
+    }
+    invoke.resolve()
+  }
+
+  @objc public func sheet(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(SheetArgs.self)
+    DispatchQueue.main.async {
+      // Only the buttons matter: the glass rides the web buttons' own layers.
+      guard let buttons = args.buttons else { return }
+      if buttons.isEmpty { self.sheetGlass.hide() } else { self.sheetGlass.show(buttons) }
     }
     invoke.resolve()
   }

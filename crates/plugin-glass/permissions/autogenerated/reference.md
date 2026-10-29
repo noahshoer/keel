@@ -10,6 +10,7 @@ Everything the Keel web UI uses
 - `allow-hide`
 - `allow-buttons`
 - `allow-diag`
+- `allow-sheet`
 - `allow-actions`
 - `allow-prompt`
 - `allow-register-listener`
@@ -228,6 +229,32 @@ Enables the remove_listener command without any pre-configured scope.
 <td>
 
 Denies the remove_listener command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`glass:allow-sheet`
+
+</td>
+<td>
+
+Enables the sheet command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`glass:deny-sheet`
+
+</td>
+<td>
+
+Denies the sheet command without any pre-configured scope.
 
 </td>
 </tr>

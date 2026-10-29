@@ -81,6 +81,49 @@ impl Fixture {
         res.id_mapping["t"].clone()
     }
 
+    fn subtask(&mut self, content: &str, parent: &Id, due: Option<&str>) -> Id {
+        let u = self.uuid();
+        let due = due.map(|date| Due {
+            date: date.to_string(),
+            timezone: None,
+            string: date.to_string(),
+            lang: "en".into(),
+            is_recurring: false,
+            recurrence: None,
+        });
+        let inbox = self.inbox.clone();
+        let res = self
+            .svc
+            .dispatch_at(
+                Command {
+                    uuid: u,
+                    temp_id: Some("t".into()),
+                    action: Action::TaskAdd {
+                        content: content.into(),
+                        project_id: inbox,
+                        description: None,
+                        priority: None,
+                        due,
+                        labels: None,
+                        parent_id: Some(parent.clone()),
+                        section_id: None,
+                        recurrence: None,
+                        deadline: None,
+                    },
+                },
+                today(),
+            )
+            .unwrap();
+        res.id_mapping["t"].clone()
+    }
+
+    fn delete(&mut self, id: &Id) {
+        let u = self.uuid();
+        self.svc
+            .dispatch_at(Command { uuid: u, temp_id: None, action: Action::TaskDelete { id: id.clone() } }, today())
+            .unwrap();
+    }
+
     fn complete(&mut self, id: &Id) {
         let u = self.uuid();
         self.svc
@@ -140,4 +183,48 @@ fn upcoming_window_bounds() {
     f.task("day7", &inbox, Some("2026-10-25"), Priority::None);
     f.task("day8", &inbox, Some("2026-10-26"), Priority::None);
     assert_eq!(names(f.svc.upcoming_view_at(today(), 7).unwrap()), vec!["today", "day7"]);
+}
+
+#[test]
+fn all_tasks_includes_checked_and_excludes_deleted() {
+    let mut f = Fixture::new();
+    let inbox = f.inbox.clone();
+    f.task("open", &inbox, None, Priority::None);
+    let done = f.task("checked", &inbox, None, Priority::None);
+    let gone = f.task("deleted", &inbox, None, Priority::None);
+    f.complete(&done);
+    f.delete(&gone);
+    let mut got = names(f.svc.all_tasks_at(today()).unwrap());
+    got.sort();
+    assert_eq!(got, vec!["checked", "open"]);
+}
+
+#[test]
+fn today_view_still_lists_subtasks() {
+    let mut f = Fixture::new();
+    let inbox = f.inbox.clone();
+    let parent = f.task("Pack", &inbox, None, Priority::None);
+    f.subtask("Chargers", &parent, Some("2026-10-19"));
+    assert_eq!(names(f.svc.today_view_at(today()).unwrap()), vec!["Chargers"]);
+}
+
+#[test]
+fn search_still_finds_subtasks() {
+    let mut f = Fixture::new();
+    let inbox = f.inbox.clone();
+    let parent = f.task("Pack", &inbox, None, Priority::None);
+    f.subtask("Chargers", &parent, None);
+    assert_eq!(names(f.svc.search_at("Chargers", today()).unwrap().open), vec!["Chargers"]);
+}
+
+#[test]
+fn completed_today_lists_completed_subtasks() {
+    let mut f = Fixture::new();
+    let inbox = f.inbox.clone();
+    let parent = f.task("Pack", &inbox, None, Priority::None);
+    let sub = f.subtask("Chargers", &parent, None);
+    f.complete(&sub);
+    // Completion is stamped with the real clock, so ask for the real local day.
+    let day = chrono::Local::now().date_naive();
+    assert_eq!(names(f.svc.completed_today_at(day).unwrap()), vec!["Chargers"]);
 }

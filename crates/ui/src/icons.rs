@@ -35,6 +35,15 @@ pub fn calendar_small() -> String {
     svg(12, "2", r#"<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/>"#)
 }
 
+/// The calendar filled with the date's color (the task view's Date row).
+pub fn calendar_filled() -> String {
+    svg(
+        12,
+        "2",
+        r#"<rect x="4" y="5" width="16" height="15" rx="2" fill="currentColor"/><path d="M8 3v4M16 3v4"/><path d="M5 10h14" style="stroke: var(--bg)"/>"#,
+    )
+}
+
 pub fn clock_small() -> String {
     svg(12, "2", r#"<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>"#)
 }
@@ -55,8 +64,18 @@ pub fn check() -> String {
     svg(11, "3", r#"<path d="M5 12l5 5L20 7"/>"#)
 }
 
+/// The flag's banner, the shape of iOS's `flag` SF Symbol (the priority picker's).
+const FLAG_BANNER: &str = "M5 4.5C7.5 3 10 3 12 4.5S16.5 6 19 4.5v9c-2.5 1.5-5 1.5-7 0s-4.5-1.5-7 0z";
+
+/// The priority flag as an outline (the editor's Priority chip).
 pub fn flag_small() -> String {
-    svg(12, "2", r#"<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>"#)
+    svg(12, "2", &format!(r#"<path d="M5 21V3"/><path d="{FLAG_BANNER}"/>"#))
+}
+
+/// The priority flag filled with its color, like iOS's `flag.fill` in the
+/// priority picker: the picker's items, the task view and the list cards.
+pub fn flag_filled() -> String {
+    svg(12, "2", &format!(r#"<path d="M5 21V3"/><path d="{FLAG_BANNER}" fill="currentColor"/>"#))
 }
 
 /// Renders an SVG string from this module.
@@ -98,14 +117,19 @@ pub fn check_circle() -> String {
     svg(16, "1.6", r#"<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>"#)
 }
 
-/// Small down-chevron; rotated by CSS when collapsed.
-pub fn chevron() -> String {
-    svg(14, "2", r#"<path d="M6 9l6 6 6-6"/>"#)
-}
-
 /// "Add sub-task": a branch arrow.
 pub fn subtask() -> String {
     svg(18, "1.6", r#"<path d="M6 4v8a4 4 0 0 0 4 4h8"/><path d="M15 13l3 3-3 3"/>"#)
+}
+
+/// "More": three dots in a row.
+pub fn more() -> String {
+    svg(18, "2", r#"<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>"#)
+}
+
+/// A paragraph: the description's row.
+pub fn text_lines() -> String {
+    svg(16, "1.6", r#"<path d="M5 7h14M5 12h14M5 17h9"/>"#)
 }
 
 pub fn search() -> String {
@@ -164,6 +188,11 @@ pub fn sofa() -> String {
 
 pub fn arrow_right() -> String {
     svg(16, "1.8", r#"<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M8 12h8M13 9l3 3-3 3"/>"#)
+}
+
+/// The task view's close button.
+pub fn x() -> String {
+    svg(16, "2.2", r#"<path d="M7 7l10 10M17 7L7 17"/>"#)
 }
 
 /// The ✕ inside the search field's clear button.

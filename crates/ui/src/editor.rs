@@ -15,7 +15,7 @@ use keel_core::views;
 use crate::api::{self, NewTask, TaskPatch};
 use crate::glass::Pick;
 use crate::icons::{self, Icon};
-use crate::pickers::{DatePicker, DeadlinePicker, Menu, MenuItem, OpenPop, ReminderDraft, ReminderPicker};
+use crate::pickers::{DatePicker, DeadlinePicker, Face, Menu, MenuItem, OpenPop, ReminderDraft, ReminderPicker};
 
 /// Everything the editor edits, as form-friendly values.
 #[derive(Clone, PartialEq, Debug)]
@@ -91,7 +91,7 @@ impl EditorValues {
     }
 
     /// `project` or `project|section`, for the location select.
-    fn location(&self) -> String {
+    pub(crate) fn location(&self) -> String {
         match &self.section_id {
             Some(s) => format!("{}|{}", self.project_id, s),
             None => self.project_id.to_string(),
@@ -196,6 +196,48 @@ pub(crate) fn location_text(project_id: &Id, section_id: Option<&Id>, projects: 
         Some(s) => format!("{} / {}", p.name, s.name),
         None => p.name.clone(),
     }
+}
+
+/// The project / section menu: each project, then its sections indented.
+/// Values are `project` or `project|section` ([`location_pick`] reads them).
+pub(crate) fn location_items(projects: &[Project], sections: &[Section]) -> Vec<MenuItem> {
+    let mut items = Vec::new();
+    for p in projects.iter() {
+        let icon = if p.is_inbox { icons::inbox() } else { icons::hash_small() };
+        let class = if p.is_inbox { "loc-inbox" } else { "loc-project" };
+        items.push(MenuItem::new(p.id.to_string(), p.name.clone()).icon(icon, class));
+        for s in sections.iter().filter(|s| s.project_id == p.id) {
+            let value = format!("{}|{}", p.id, s.id);
+            items.push(MenuItem::new(value, s.name.clone()).icon(icons::section_small(), "loc-section").indented());
+        }
+    }
+    items
+}
+
+/// The location menu's choice as a pick.
+pub(crate) fn location_pick(value: &str) -> Pick {
+    match value.split_once('|') {
+        Some((p, s)) => Pick::Location { project_id: Id::from(p), section_id: Some(Id::from(s)) },
+        None => Pick::Location { project_id: Id::from(value), section_id: None },
+    }
+}
+
+/// A priority's flag color class ("4" is no priority).
+pub(crate) fn flag_class(priority: &str) -> &'static str {
+    match priority {
+        "1" => "pri-1",
+        "2" => "pri-2",
+        "3" => "pri-3",
+        _ => "pri-4",
+    }
+}
+
+/// The priority menu with colored flags.
+pub(crate) fn priority_items() -> Vec<MenuItem> {
+    ["1", "2", "3", "4"]
+        .iter()
+        .map(|p| MenuItem::new(*p, format!("Priority {p}")).icon(icons::flag_filled(), flag_class(p)))
+        .collect()
 }
 
 /// Field changes between `before` and `after`, plus a move when the
@@ -421,6 +463,17 @@ pub async fn save_edit(id: Id, before: EditorValues, after: EditorValues, existi
     Ok(())
 }
 
+/// The labels a pick added by a name no label has yet (any case), so they
+/// can be created: names already on the task aren't.
+pub fn labels_to_create(before: &[String], after: &[String], known: &[Label]) -> Vec<String> {
+    after
+        .iter()
+        .filter(|n| !before.iter().any(|b| b.eq_ignore_ascii_case(n)))
+        .filter(|n| !known.iter().any(|l| l.name.eq_ignore_ascii_case(n)))
+        .cloned()
+        .collect()
+}
+
 /// Saves reminder edits: removes the ones taken out, adds the new ones.
 pub async fn sync_reminders(task_id: Id, before: &[ReminderDraft], after: &[ReminderDraft]) {
     for old in before {
@@ -457,7 +510,6 @@ pub fn TaskEditor(
     on_cancel: EventHandler<()>,
     reload: Signal<u32>,
 ) -> Element {
-    let mut reload = reload;
     let start = initial.clone();
     let mut vals = use_signal(move || start);
     // The lists quick add resolves #project and /section against, kept
@@ -505,37 +557,15 @@ pub fn TaskEditor(
     let blank = initial.clone();
     let blank = use_signal(move || blank);
     let mut open: OpenPop = use_signal(|| None);
-    let mut new_label = use_signal(String::new);
     let v = vals();
     let can_submit = has_name(&v, quick_add, &projects, &sections, crate::today());
     let label_text = labels_text(&v.labels);
     let today = crate::today();
 
-    // Project / section menu: each project, then its sections indented.
     let location = v.location();
-    let mut location_items = Vec::new();
+    let location_items = location_items(&projects, &sections);
     let location_text = location_text(&v.project_id, v.section_id.as_ref(), &projects, &sections);
-    for p in projects.iter() {
-        let icon = if p.is_inbox { icons::inbox() } else { icons::hash_small() };
-        let class = if p.is_inbox { "loc-inbox" } else { "loc-project" };
-        location_items.push(MenuItem::new(p.id.to_string(), p.name.clone()).icon(icon, class));
-        for s in sections.iter().filter(|s| s.project_id == p.id) {
-            let value = format!("{}|{}", p.id, s.id);
-            location_items.push(MenuItem::new(value, s.name.clone()).icon(icons::section_small(), "loc-section").indented());
-        }
-    }
-
-    // Priority menu with colored flags.
-    let flag_class = |p: &str| match p {
-        "1" => "pri-1",
-        "2" => "pri-2",
-        "3" => "pri-3",
-        _ => "pri-4",
-    };
-    let priority_items: Vec<MenuItem> = ["1", "2", "3", "4"]
-        .iter()
-        .map(|p| MenuItem::new(*p, format!("Priority {p}")).icon(icons::flag_small(), flag_class(p)))
-        .collect();
+    let priority_items = priority_items();
     let priority_text = priority_text(&v.priority);
 
     let repeat_opts = repeat_options(&v.date, keep_label.as_deref(), today);
@@ -707,60 +737,15 @@ pub fn TaskEditor(
                     items: location_items,
                     selected: location.clone(),
                     open,
-                    on_select: move |val: String| pick(match val.split_once('|') {
-                        Some((p, s)) => Pick::Location { project_id: Id::from(p), section_id: Some(Id::from(s)) },
-                        None => Pick::Location { project_id: Id::from(val.as_str()), section_id: None },
-                    }),
+                    on_select: move |val: String| pick(location_pick(&val)),
                 }
-                div { class: "chip-wrap",
-                    button {
-                        r#type: "button",
-                        class: "chip chip-btn",
-                        class: if open() == Some("labels") { "chip-open" },
-                        title: "Labels",
-                        onclick: move |_| open.set(if open() == Some("labels") { None } else { Some("labels") }),
-                        span { class: "chip-icon", Icon { svg: icons::tag_small() } }
-                        "{label_text}"
-                    }
-                    if open() == Some("labels") {
-                        div { class: "popover menu label-pop",
-                            onmounted: move |_| crate::pickers::place_popover(),
-                            if labels.is_empty() {
-                                div { class: "label-empty", "No labels yet" }
-                            }
-                            for l in labels.iter() {
-                                LabelOption {
-                                    key: "{l.id}",
-                                    name: l.name.clone(),
-                                    checked: shown_labels.iter().any(|n| n.eq_ignore_ascii_case(&l.name)),
-                                    on_toggle: move |name: String| toggle(name),
-                                }
-                            }
-                            input {
-                                class: "label-new",
-                                placeholder: "New label, then Enter",
-                                value: "{new_label}",
-                                oninput: move |e| new_label.set(e.value()),
-                                onkeydown: move |e| {
-                                    if e.key() == Key::Enter {
-                                        e.prevent_default();
-                                        let name = new_label().trim().to_string();
-                                        if name.is_empty() {
-                                            return;
-                                        }
-                                        if !shown_labels.iter().any(|n| n.eq_ignore_ascii_case(&name)) {
-                                            toggle(name.clone());
-                                        }
-                                        new_label.set(String::new());
-                                        spawn(async move {
-                                            let _ = api::add_label(name).await;
-                                            reload += 1;
-                                        });
-                                    }
-                                },
-                            }
-                        }
-                    }
+                LabelPicker {
+                    labels: labels.clone(),
+                    selected: shown_labels.clone(),
+                    text: label_text,
+                    open,
+                    on_toggle: move |name: String| toggle(name),
+                    reload,
                 }
             }
             div { class: "editor-footer",
@@ -879,6 +864,85 @@ fn HighlightedTitle(
     }
 }
 
+/// The Labels chip and its menu: tick labels, or type a new one and press
+/// Enter (it's created and ticked).
+#[component]
+pub fn LabelPicker(
+    labels: Vec<Label>,
+    /// The ticked names.
+    selected: Vec<String>,
+    /// The chip's text.
+    text: String,
+    open: OpenPop,
+    on_toggle: EventHandler<String>,
+    reload: Signal<u32>,
+    #[props(default)]
+    face: Option<Face>,
+) -> Element {
+    let mut open = open;
+    let mut reload = reload;
+    let mut new_label = use_signal(String::new);
+    let is_open = open() == Some("labels");
+    let btn_class = match &face { Some(f) => f.class.clone(), None => "chip chip-btn".to_string() };
+    rsx! {
+        div { class: "chip-wrap",
+            button {
+                r#type: "button",
+                class: "{btn_class}",
+                class: if is_open { "chip-open" },
+                title: "Labels",
+                onclick: move |_| open.set(if is_open { None } else { Some("labels") }),
+                if face.as_ref().is_none_or(|f| f.icon) {
+                    span { class: "chip-icon", Icon { svg: icons::tag_small() } }
+                }
+                match &face {
+                    Some(f) => rsx! { "{f.text}" },
+                    None => rsx! { "{text}" },
+                }
+            }
+            if is_open {
+                div { class: "popover menu label-pop",
+                    onmounted: move |_| crate::pickers::place_popover(),
+                    if labels.is_empty() {
+                        div { class: "label-empty", "No labels yet" }
+                    }
+                    for l in labels.iter() {
+                        LabelOption {
+                            key: "{l.id}",
+                            name: l.name.clone(),
+                            checked: selected.iter().any(|n| n.eq_ignore_ascii_case(&l.name)),
+                            on_toggle: move |name: String| on_toggle.call(name),
+                        }
+                    }
+                    input {
+                        class: "label-new",
+                        placeholder: "New label, then Enter",
+                        value: "{new_label}",
+                        oninput: move |e| new_label.set(e.value()),
+                        onkeydown: move |e| {
+                            if e.key() == Key::Enter {
+                                e.prevent_default();
+                                let name = new_label().trim().to_string();
+                                if name.is_empty() {
+                                    return;
+                                }
+                                if !selected.iter().any(|n| n.eq_ignore_ascii_case(&name)) {
+                                    on_toggle.call(name.clone());
+                                }
+                                new_label.set(String::new());
+                                spawn(async move {
+                                    let _ = api::add_label(name).await;
+                                    reload += 1;
+                                });
+                            }
+                        },
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[component]
 fn LabelOption(name: String, checked: bool, on_toggle: EventHandler<String>) -> Element {
     rsx! {
@@ -956,6 +1020,20 @@ pub fn AddTask(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_label_picked_by_a_new_name_is_created_once() {
+        let known = vec![Label::new("home")];
+        let before: Vec<String> = vec!["home".into()];
+        let after: Vec<String> = vec!["home".into(), "Travel".into()];
+        assert_eq!(labels_to_create(&before, &after, &known), ["Travel"]);
+        // Known names (any case) and names already on the task aren't created.
+        let after: Vec<String> = vec!["HOME".into()];
+        assert!(labels_to_create(&before, &after, &known).is_empty());
+        let before: Vec<String> = vec!["Travel".into()];
+        let after: Vec<String> = vec!["travel".into()];
+        assert!(labels_to_create(&before, &after, &known).is_empty());
+    }
 
     #[test]
     fn edit_changes_leave_quick_add_text_alone() {

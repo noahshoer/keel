@@ -4,6 +4,7 @@ mod filters;
 mod gestures;
 mod glass;
 mod api;
+mod cards;
 mod completion;
 mod icons;
 mod pickers;
@@ -13,6 +14,7 @@ mod settings;
 mod sidebar;
 mod style;
 mod task_row;
+mod task_view;
 mod theme;
 
 use std::collections::HashMap;
@@ -28,7 +30,9 @@ use editor::{AddTask, EditorValues};
 use search::SearchPane;
 use icons::Icon;
 use sidebar::Sidebar;
-use task_row::{CompletedRow, TaskRow};
+use cards::CardList;
+use task_row::CompletedRow;
+use views::CardMode;
 
 const UPCOMING_DAYS: i64 = 14;
 
@@ -59,6 +63,15 @@ pub enum Motion {
     Fade,
     Push,
     Pop,
+}
+
+/// How a view groups its tasks into cards: project views show top-level
+/// tasks only; the others show every match under its top-level ancestor.
+pub fn view_mode(view: &View) -> CardMode {
+    match view {
+        View::Inbox | View::Project(..) => CardMode::TopLevel,
+        View::Today | View::Upcoming | View::Label(_) | View::Filter(..) | View::Search => CardMode::Grouped,
+    }
 }
 
 pub fn view_motion(from: &View, to: &View) -> Motion {
@@ -152,6 +165,8 @@ struct Loaded {
     inbox: Project,
     today_count: usize,
     tasks: Vec<Task>,
+    /// Every non-deleted task, open and checked (for card heads and counts).
+    all: Vec<Task>,
     /// Empty unless "Show completed" is on for the current view.
     completed: Vec<Task>,
     /// Result lists for a filter view (one per comma group).
@@ -221,6 +236,8 @@ fn App() -> Element {
     let show_completed = use_signal(|| false);
     // Task reminders, read by every task row (refreshed with each load).
     let mut reminders = use_context_provider(|| Signal::new(Vec::<Reminder>::new()));
+    // The task view's stack; rows open tasks into it.
+    let mut nav = task_view::nav::provide_nav();
     pickers::provide_touch();
     pickers::provide_week_start();
     // The mark a completed circle fills with (a per-device setting).
@@ -259,7 +276,9 @@ fn App() -> Element {
             let next = if *view.peek() == View::Search { last_view.peek().clone() } else { View::Search };
             view.set(next);
         }
-        glass::ButtonAction::AddTask | glass::ButtonAction::Theme | glass::ButtonAction::Settings => {}
+        glass::ButtonAction::AddTask
+        | glass::ButtonAction::Theme
+        | glass::ButtonAction::Settings => {}
     });
     // Measure the drawer's header buttons each time it opens.
     use_effect(move || {
@@ -267,15 +286,56 @@ fn App() -> Element {
             glass.measure_drawer();
         }
     });
-    // The floating buttons step aside while the drawer is open.
+    // iPhone: the task sheet's glass X and ••• appear with it as it opens
+    // (and ride its slide-up), and go when it closes.
+    let mut sheet_was_open = use_signal(|| false);
     use_effect(move || {
-        let mut state = glass::floating_buttons(view() == View::Search, drawer());
+        let open = !nav.stack.read().0.is_empty();
+        if open == *sheet_was_open.peek() || !(glass.native)() {
+            return;
+        }
+        sheet_was_open.set(open);
+        if open {
+            let _ = document::eval("window.keelSheetOpened?.();");
+        } else {
+            spawn(async move { api::glass_sheet_hide().await });
+        }
+    });
+    // A sub-task's view pushed or popped: the glass ‹ comes or goes.
+    let mut sheet_depth = use_signal(|| 0usize);
+    use_effect(move || {
+        let depth = nav.stack.read().0.len();
+        let was = *sheet_depth.peek();
+        sheet_depth.set(depth);
+        if (glass.native)() && depth > 0 && was > 0 && depth != was {
+            let _ = document::eval("window.keelSheetGlassUpdate?.();");
+        }
+    });
+    // The floating + steps aside while the drawer or the task view is open;
+    // the menu and search are glass inside the page's placeholders.
+    use_effect(move || {
+        let view_open = !nav.stack.read().0.is_empty();
+        let searching = view() == View::Search;
+        let mut state = glass::floating_buttons(searching, drawer(), view_open);
         state.theme = theme();
-        if drawer() && !(glass.settings_open)() {
+        if drawer() {
             state.drawer = glass::drawer_buttons(&(glass.drawer_rects)(), &theme());
         }
         if (glass.native)() {
-            spawn(async move { api::glass_buttons(state).await });
+            let drawer_open = drawer();
+            spawn(async move {
+                // Closing: the drawer's glass rides it out, so it goes only
+                // once the slide has finished (unless it opened again).
+                if !drawer_open {
+                    let _ = document::eval(DRAWER_SETTLED_JS).recv::<bool>().await;
+                    if *drawer.peek() {
+                        return;
+                    }
+                }
+                let rects = document::eval(FLOAT_MEASURE_JS).recv::<Vec<glass::WebRect>>().await.unwrap_or_default();
+                state.floating = glass::float_buttons(&rects, searching);
+                api::glass_buttons(state).await
+            });
         }
     });
     // Search slides in and out: a still copy of the page being left is
@@ -315,6 +375,19 @@ fn App() -> Element {
             }
         });
     });
+    // Touch: the task sheet follows the finger between its two heights and
+    // closes past a threshold.
+    use_hook(move || {
+        gestures::install_sheet_rules();
+        spawn(async move {
+            let mut drags = document::eval(gestures::SHEET_DRAG_JS);
+            while let Ok(m) = drags.recv::<gestures::SheetMsg>().await {
+                if m.close {
+                    nav.ask_close();
+                }
+            }
+        });
+    });
     // Picking a view closes the drawer once that view's data has loaded:
     // the page swaps under the drawer, then the drawer slides away to reveal
     // it (closing first showed the old page snap to the new one).
@@ -342,6 +415,14 @@ fn App() -> Element {
         let filters = api::list_filters().await?;
         let today_tasks = api::today_view().await?;
         let today_count = today_tasks.len();
+        let all = api::all_tasks().await?;
+        nav.all.set(all.clone());
+        // A deleted task's view closes, and every view above it.
+        let mut stack = nav.stack.peek().clone();
+        stack.prune(&all);
+        if stack != *nav.stack.peek() {
+            nav.stack.set(stack);
+        }
         let mut filter_groups = Vec::new();
         let mut filter_error = None;
         let tasks = match &v {
@@ -394,6 +475,7 @@ fn App() -> Element {
             inbox,
             today_count,
             tasks,
+            all,
             completed,
             filter_groups,
             filter_error,
@@ -427,10 +509,16 @@ fn App() -> Element {
 
     let today = today();
     let state = (*data.read()).clone();
+    // The task view on top of the stack, if one is open.
+    let open_task = nav
+        .stack
+        .read()
+        .top()
+        .and_then(|id| task_view::nav::detail(id, &nav.all.read(), (nav.show_completed)()));
 
     rsx! {
         style { dangerous_inner_html: style::css() }
-        div { class: if drawer() { "app drawer-open" } else { "app" },
+        div { class: format!("app{}{}", if drawer() { " drawer-open" } else { "" }, if open_task.is_some() { " view-open" } else { "" }),
             if drawer() {
                 div { class: "drawer-scrim", onclick: move |_| drawer.set(false) }
             }
@@ -452,12 +540,84 @@ fn App() -> Element {
                         theme,
                         reload,
                     }
+                    // iPhone: the menu and search, drawn as glass inside these
+                    // (under the task view's scrim and sheet, which dim and
+                    // cover them).
+                    if (glass.native)() {
+                        div { class: if nav.stack.read().0.is_empty() { "float-btns float-glass" } else { "float-btns float-glass dim" },
+                            button {
+                                r#type: "button",
+                                class: "float-btn float-menu",
+                                aria_label: "Open menu",
+                                onclick: move |_| drawer.set(true),
+                                Icon { svg: icons::menu() }
+                            }
+                            button {
+                                r#type: "button",
+                                class: "float-btn float-search",
+                                aria_label: if view() == View::Search { "Close search" } else { "Search" },
+                                onclick: move |_| {
+                                    let next = if *view.peek() == View::Search { last_view.peek().clone() } else { View::Search };
+                                    view.set(next);
+                                },
+                                Icon { svg: if view() == View::Search { icons::x() } else { icons::search() } }
+                            }
+                        }
+                    }
+                    // The scrim and sheet stay mounted while views push and
+                    // pop inside, so the entrance plays once per open.
+                    if let Some(d) = open_task.clone() {
+                        div {
+                            class: "tv-scrim",
+                            onclick: move |_| {
+                                spawn(async move {
+                                    if !gestures::slide_close().await {
+                                        nav.ask_close();
+                                    }
+                                });
+                            },
+                        }
+                        div { class: "tv-sheet",
+                            div { class: "tv-grabber", aria_hidden: "true" }
+                            task_view::view::TaskView {
+                                key: "{d.task.id}",
+                                detail: d,
+                                depth: nav.stack.read().0.len(),
+                                projects: loaded.projects.clone(),
+                                sections: loaded.sections.clone(),
+                                labels: loaded.labels.clone(),
+                                inbox_id: loaded.inbox.id.clone(),
+                                reload,
+                            }
+                        }
+                    }
                     MainPane { view: loaded.view.clone(), loaded, today, show_completed, drawer, search_query, reload, swap: swaps().1, motion: swaps().2 }
                 },
             }
         }
     }
 }
+
+/// Resolves once the drawer has finished sliding (at once if it isn't).
+const DRAWER_SETTLED_JS: &str = r#"
+const sb = document.querySelector('.sidebar');
+await Promise.all((sb ? sb.getAnimations() : []).map((a) => a.finished.catch(() => {})));
+dioxus.send(true);
+"#;
+
+/// The page's menu and search placeholders, once both are laid out (a few
+/// frames at most after a render).
+const FLOAT_MEASURE_JS: &str = r#"
+for (let i = 0; i < 60; i++) {
+  const rects = [['menu', '.float-menu'], ['search', '.float-search']].map(([id, sel]) => {
+    const r = document.querySelector(sel)?.getBoundingClientRect();
+    return r && r.width > 0 && { id, x: r.x, y: r.y, w: r.width, h: r.height };
+  }).filter(Boolean);
+  if (rects.length === 2) { dioxus.send(rects); return; }
+  await new Promise((r) => requestAnimationFrame(r));
+}
+dioxus.send([]);
+"#;
 
 /// What a task row shows on the right: "Project" or "Project / Section".
 fn location_names(loaded: &Loaded) -> HashMap<Id, String> {
@@ -555,6 +715,7 @@ fn MainPane(
         .collect();
     let date_view = matches!(view, View::Today | View::Upcoming);
     let groups = if date_view { date_groups(&view, loaded.tasks.clone(), today) } else { Vec::new() };
+    let mode = view_mode(&view);
 
     rsx! {
         main { class: if motion == Motion::Push { "main view-push" } else { "main" },
@@ -614,9 +775,8 @@ fn MainPane(
                                     span { class: "muted", "{group.tasks.len()}" }
                                 }
                             }
-                            TaskList {
-                                tasks: group.tasks.clone(),
-                                nested: false,
+                            CardList {
+                                cards: views::cards(group.tasks.clone(), &loaded.all, mode),
                                 today,
                                 names: names.clone(),
                                 show_project,
@@ -645,9 +805,8 @@ fn MainPane(
                                     span { class: "muted", "{group.muted}" }
                                 }
                             }
-                            TaskList {
-                                tasks: group.tasks.clone(),
-                                nested: false,
+                            CardList {
+                                cards: views::cards(group.tasks.clone(), &loaded.all, mode),
                                 today,
                                 names: names.clone(),
                                 show_project,
@@ -668,9 +827,8 @@ fn MainPane(
                         reload,
                     }
                 } else {
-                    TaskList {
-                        tasks: unsectioned,
-                        nested: true,
+                    CardList {
+                        cards: views::cards(unsectioned, &loaded.all, mode),
                         today,
                         names: names.clone(),
                         show_project,
@@ -693,6 +851,7 @@ fn MainPane(
                             key: "{section.id}",
                             section: section.clone(),
                             tasks: loaded.tasks.iter().filter(|t| in_section(t, section)).cloned().collect::<Vec<Task>>(),
+                            all: loaded.all.clone(),
                             today,
                             names: names.clone(),
                             projects: loaded.projects.clone(),
@@ -714,55 +873,16 @@ fn MainPane(
                         p { class: "view-sub", "No completed tasks here yet." }
                     }
                     for task in loaded.completed.clone() {
-                        CompletedRow {
-                            key: "done-{task.id}",
-                            project_name: if show_project { names.get(&task.id).cloned() } else { None },
-                            task: task.clone(),
-                            today,
-                            reload,
+                        div { key: "done-{task.id}", class: "task-card",
+                            CompletedRow {
+                                project_name: if show_project { names.get(&task.id).cloned() } else { None },
+                                task: task.clone(),
+                                today,
+                                reload,
+                            }
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-/// Task rows; with `nested`, sub-tasks indent under their parents and
-/// collapsed parents hide them.
-#[component]
-fn TaskList(
-    tasks: Vec<Task>,
-    nested: bool,
-    today: NaiveDate,
-    names: HashMap<Id, String>,
-    show_project: bool,
-    projects: Vec<Project>,
-    sections: Vec<Section>,
-    labels: Vec<Label>,
-    reload: Signal<u32>,
-) -> Element {
-    let rows: Vec<views::Nested> = if nested {
-        views::nest(tasks)
-    } else {
-        tasks
-            .into_iter()
-            .map(|task| views::Nested { task, depth: 0, has_children: false })
-            .collect()
-    };
-    rsx! {
-        for row in rows {
-            TaskRow {
-                key: "{row.task.id}",
-                project_name: if show_project { names.get(&row.task.id).cloned() } else { None },
-                depth: row.depth,
-                has_children: row.has_children,
-                task: row.task.clone(),
-                today,
-                projects: projects.clone(),
-                sections: sections.clone(),
-                labels: labels.clone(),
-                reload,
             }
         }
     }
@@ -775,12 +895,19 @@ enum HeadMode {
     ConfirmDelete,
 }
 
+/// A section's cards: top-level tasks only, one card each.
+fn section_cards(tasks: Vec<Task>, all: &[Task]) -> Vec<views::Card> {
+    views::cards(tasks, all, CardMode::TopLevel)
+}
+
 /// A project section: header (rename / delete on hover), its tasks, and its
 /// own "+ Add task".
 #[component]
 fn SectionBlock(
     section: Section,
     tasks: Vec<Task>,
+    /// Every task, for the cards' sub-task counts.
+    all: Vec<Task>,
     today: NaiveDate,
     names: HashMap<Id, String>,
     projects: Vec<Project>,
@@ -791,7 +918,9 @@ fn SectionBlock(
     let mut reload = reload;
     let mut mode = use_signal(|| HeadMode::Normal);
     let mut draft = use_signal(String::new);
-    let count = tasks.len();
+    let cards = section_cards(tasks, &all);
+    // What the section shows: its top-level tasks (sub-tasks go with them).
+    let count = cards.len();
     let name = section.name.clone();
     let id_rename = section.id.clone();
     let id_delete = section.id.clone();
@@ -874,9 +1003,8 @@ fn SectionBlock(
                     }
                 },
             }
-            TaskList {
-                tasks,
-                nested: true,
+            CardList {
+                cards,
                 today,
                 names,
                 show_project: false,
@@ -948,5 +1076,85 @@ mod motion_tests {
         assert_eq!(view_motion(&View::Search, &View::Inbox), Motion::Pop);
         assert_eq!(view_motion(&View::Today, &View::Inbox), Motion::Fade);
         assert_eq!(view_motion(&View::Search, &View::Search), Motion::Fade);
+    }
+}
+
+#[cfg(test)]
+mod card_mode_tests {
+    use super::*;
+    use keel_core::model::Due;
+    use views::CardMode;
+
+    fn d(y: i32, m: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, day).unwrap()
+    }
+
+    fn task(name: &str, parent: Option<&Task>, due: NaiveDate) -> Task {
+        let mut t = Task::new(name, Id::from("proj"));
+        t.id = Id::from(name);
+        t.parent_id = parent.map(|p| p.id.clone());
+        t.due = Some(Due {
+            date: due.format("%Y-%m-%d").to_string(),
+            timezone: None,
+            string: String::new(),
+            lang: "en".to_string(),
+            is_recurring: false,
+            recurrence: None,
+        });
+        t
+    }
+
+    #[test]
+    fn project_views_are_top_level() {
+        assert_eq!(view_mode(&View::Inbox), CardMode::TopLevel);
+        assert_eq!(view_mode(&View::Project(Id::from("p"), "P".into())), CardMode::TopLevel);
+    }
+
+    #[test]
+    fn dated_views_group() {
+        assert_eq!(view_mode(&View::Today), CardMode::Grouped);
+        assert_eq!(view_mode(&View::Upcoming), CardMode::Grouped);
+        assert_eq!(view_mode(&View::Label("home".into())), CardMode::Grouped);
+        assert_eq!(view_mode(&View::Filter(Id::from("f"), "F".into(), "today".into())), CardMode::Grouped);
+    }
+
+    #[test]
+    fn section_count_is_top_level_tasks() {
+        let day = d(2026, 10, 23);
+        let p = task("Pack", None, day);
+        let c = task("Chargers", Some(&p), day);
+        let g = task("Cable", Some(&c), day);
+        let other = task("Gym", None, day);
+        let in_section = vec![p.clone(), c.clone(), g.clone(), other.clone()];
+        let all = in_section.clone();
+        assert_eq!(section_cards(in_section, &all).len(), 2);
+    }
+
+    #[test]
+    fn upcoming_groups_cards_per_day() {
+        let (today, thu, fri) = (d(2026, 10, 19), d(2026, 10, 22), d(2026, 10, 23));
+        assert_eq!(thu.weekday(), chrono::Weekday::Thu);
+        let parent = task("Pack for Boston", None, fri);
+        let sub = task("Chargers", Some(&parent), thu);
+        let all = vec![parent.clone(), sub.clone()];
+        let groups = date_groups(&View::Upcoming, vec![sub.clone(), parent.clone()], today);
+        assert_eq!(groups.len(), 2);
+        let mode = view_mode(&View::Upcoming);
+
+        let thursday = views::cards(groups[0].tasks.clone(), &all, mode);
+        assert_eq!(groups[0].title.as_deref(), Some("22 Oct"));
+        assert_eq!(thursday.len(), 1);
+        assert_eq!(thursday[0].head.task.id, parent.id);
+        assert!(!thursday[0].head_matches, "the parent is a context-only head on Thursday");
+        let rows: Vec<_> = thursday[0].rows.iter().map(|r| r.task.id.clone()).collect();
+        assert_eq!(rows, vec![sub.id.clone()]);
+        assert_eq!(thursday[0].head.progress, Some(views::Progress { done: 0, total: 1 }));
+
+        let friday = views::cards(groups[1].tasks.clone(), &all, mode);
+        assert_eq!(groups[1].title.as_deref(), Some("23 Oct"));
+        assert_eq!(friday.len(), 1);
+        assert_eq!(friday[0].head.task.id, parent.id);
+        assert!(friday[0].head_matches, "on Friday the parent is its own completable card");
+        assert!(friday[0].rows.is_empty());
     }
 }

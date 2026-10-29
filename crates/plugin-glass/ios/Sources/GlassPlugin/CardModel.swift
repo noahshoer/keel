@@ -146,6 +146,10 @@ struct CardState: Codable, Equatable {
   let chips: [ChipState]
   let canSubmit: Bool
   let picker: PickerData
+  /// Picker-only (the task view): this chip's picker shows alone, without
+  /// the card or the keyboard. Each pick is saved; a single-choice picker
+  /// then closes, the others stay open until dismissed.
+  let onlyPicker: ChipId?
 }
 
 /// A value chosen in a picker (`ui::glass::Pick`).
@@ -230,7 +234,8 @@ struct ActionMenu: Codable, Equatable {
   let items: [Item]
 }
 
-/// One of the drawer's header buttons, at the spot the page drew it.
+/// A web button drawn as glass (the drawer's header buttons, the task
+/// sheet's X and •••), at the spot the page drew it.
 struct DrawerButton: Codable, Equatable {
   let id: String
   let symbol: String
@@ -266,7 +271,8 @@ final class CardModel: ObservableObject {
   /// Set by the plugin: reports the chosen action.
   var chooseAction: (String, String) -> Void = { _, _ in }
 
-  /// nil while the card is closed.
+  /// nil while the card is closed. With `onlyPicker` set, only that chip's
+  /// sheet shows; Rust saves each pick, and a single-choice pick closes it.
   @Published var state: CardState?
   /// Bumped by `show`: the fields take the state's text even if the user
   /// typed something else (a fresh card, or the reset after adding).
@@ -278,9 +284,6 @@ final class CardModel: ObservableObject {
   @Published var addVisible = true
   /// In Search, the search button closes it.
   @Published var searching = false
-  /// Glass stand-ins for the open drawer's header buttons.
-  @Published var drawerButtons: [DrawerButton] = []
-
   /// Window-space frames of the controls that take touches while the card is closed.
   var hitRects: [String: CGRect] = [:]
 
@@ -300,7 +303,11 @@ final class CardModel: ObservableObject {
     state = s
     description = s.description
     resetToken += 1
+    if let only = s.onlyPicker { picker = only }
   }
+
+  var pickerOnly: Bool { state?.onlyPicker != nil }
+
 
   func update(_ s: CardState) {
     guard state != nil else { return }

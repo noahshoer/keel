@@ -111,8 +111,6 @@ pub fn SearchPane(
                                 key: "{task.id}",
                                 project_name: names.get(&task.id).cloned(),
                                 task,
-                                depth: 0,
-                                has_children: false,
                                 today,
                                 projects: projects.clone(),
                                 sections: sections.clone(),

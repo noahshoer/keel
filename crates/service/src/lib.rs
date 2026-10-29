@@ -77,6 +77,16 @@ impl AppService {
         Ok(tasks)
     }
 
+    /// Every non-deleted task, open and checked, after streak recompute.
+    pub fn all_tasks(&self) -> Result<Vec<Task>, RepoError> {
+        self.all_tasks_at(today())
+    }
+
+    pub fn all_tasks_at(&self, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
+        let tasks = self.repo.list_all_tasks()?;
+        self.recompute_streaks(tasks, today)
+    }
+
     /// Open (unchecked) tasks across all projects, after streak recompute.
     fn open_tasks(&self, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
         let tasks = self.repo.list_all_tasks()?;

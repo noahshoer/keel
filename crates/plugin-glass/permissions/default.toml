@@ -7,6 +7,7 @@ permissions = [
   "allow-hide",
   "allow-buttons",
   "allow-diag",
+  "allow-sheet",
   "allow-actions",
   "allow-prompt",
   "allow-register-listener",

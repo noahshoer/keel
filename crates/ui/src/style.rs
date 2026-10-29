@@ -223,7 +223,6 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .section-title .muted { color: var(--muted); font-weight: 400; font-size: 13px; }
 
 /* Task rows: a soft list, rounded highlight on hover */
-.task-slot { display: contents; }
 .task { border-radius: var(--r-md); }
 .task-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 10px 9px; border-radius: var(--r-md); }
 @media (hover: hover) { .task:not(.completed) .task-row:hover { background: var(--row-hover); } }
@@ -251,7 +250,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .due.week { color: var(--due-week); }
 .due.later { color: var(--due-later); }
 .streak { color: var(--streak); font-weight: 500; }
-.task-project { font-size: 12px; color: var(--muted); white-space: nowrap; align-self: flex-end; padding-bottom: 2px; }
+.task-side { flex: none; align-self: stretch; display: flex; flex-direction: column; align-items: flex-end;
+  justify-content: space-between; gap: 4px; min-width: 0; }
+.task-badges { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+.task-project { font-size: 12px; color: var(--muted); white-space: nowrap; padding-bottom: 2px; }
 .task-actions { display: flex; gap: 2px; opacity: 0; transform: translateX(4px); }
 .task-actions { transition: opacity .16s var(--ease), transform .16s var(--ease); }
 /* Mouse: hover shows a task's actions. Touch: a long press does (gestures.rs);
@@ -405,9 +407,23 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* iPhone: native glass buttons float over the header (menu left, search
    right) and the list (+ bottom right); keep their spots clear. */
 .native-glass .menu-btn { display: none; }
-/* iPhone: glass stand-ins cover the drawer's theme and settings buttons
-   (glass::DRAWER_JS); the web ones stay in place, invisible, to be tapped. */
-.native-glass .brand .icon-btn { visibility: hidden; }
+/* iPhone: the menu and search float at the top. Each holds its glass in a
+   compositing layer of its own (SheetGlass.swift), so the task view's scrim
+   and sheet, above them, dim and cover them; the scrim takes their taps. */
+.float-btns { position: fixed; z-index: 30; top: env(safe-area-inset-top); left: 14px; right: 14px; height: 44px;
+  display: flex; justify-content: space-between; pointer-events: none; }
+.float-btn { pointer-events: auto; width: 44px; height: 44px; padding: 0; border: none; border-radius: 50%;
+  background: transparent; color: var(--text); display: inline-flex; align-items: center; justify-content: center;
+  will-change: opacity; transition: opacity .2s var(--ease); }
+.float-glass .float-btn > * { visibility: hidden; }
+.float-btns.dim .float-btn { opacity: .35; }
+/* iPhone: the theme and settings buttons hold their glass in layers of their
+   own (PageGlass), so it slides with the drawer; they draw nothing else.
+   38px: PageGlass tells its groups apart by size (menu / search 44, the
+   task sheet's X / ••• 40), and these stay laid out while the drawer is shut. */
+.native-glass .brand .icon-btn { will-change: opacity; width: 38px; height: 38px; padding: 0; background: transparent;
+  display: inline-flex; align-items: center; justify-content: center; }
+.native-glass:not(.drawer-glass-off) .brand .icon-btn > * { visibility: hidden; }
 .native-glass .brand .settings-btn { margin-left: 10px; }
 .native-glass .content { padding-top: calc(env(safe-area-inset-top) + 60px); padding-bottom: 120px; }
 /* Touch: Todoist-sized rows (a little shorter) with a bigger check circle,
@@ -420,6 +436,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .check { position: relative; width: 24px; height: 24px; min-width: 24px; margin-top: 0; border-width: 1.75px; }
   .check::after { content: ''; position: absolute; inset: -10px; }
   .task-project { font-size: 13px; }
+  .task-count { font-size: 14px; line-height: 23px; }
+  .task-badges { min-height: 23px; }
+  .task-badges .streak { font-size: 14px; }
+  .task-title .done-check { margin-top: 1.5px; }
+  .card-head { font-size: 14px; padding: 11px 8px 10px; }
   /* Sidebar: bigger rows, icons and logo to match the task rows. */
   .brand { font-size: 20px; gap: 12px; padding: 6px 8px 20px; }
   .brand-mark, .brand-mark svg { width: 40px; height: 40px; }
@@ -451,7 +472,6 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .check.done .icon { opacity: 1; transform: none; }
 .task.completed { animation: fade-up .2s var(--ease); }
 .task.completed .task-content { text-decoration: line-through; color: var(--muted); }
-.task.completed .task-body { cursor: default; }
 .done-when { color: var(--muted); }
 .nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-actions { display: none; gap: 0; }
@@ -465,13 +485,163 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .confirm-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .confirm-actions .btn { padding: 6px 11px; font-size: 12px; }
 
-/* Sub-tasks + sections */
+/* Cards: every top-level task is one; in dated views a matching sub-task sits
+   inside its parent's card, under a context-only header (cards.rs). */
 .task { position: relative; }
-.chevron { position: absolute; left: -22px; top: 10px; width: 20px; height: 20px; padding: 0;
-  border: none; background: none; color: var(--muted); cursor: pointer; border-radius: var(--r-sm);
-  display: flex; align-items: center; justify-content: center; transition: transform .18s var(--ease), background-color .16s; }
-@media (hover: hover) { .chevron:hover { background: var(--icon-hover); color: var(--text); } }
-.chevron.collapsed { transform: rotate(-90deg); }
+.task-card { background: var(--panel); border-radius: 12px; margin-bottom: 8px; overflow: hidden; }
+.task-card > * + * { border-top: 1px solid var(--border); }
+.task-card .task, .task-card .task-row { border-radius: 0; }
+@media (hover: hover) { .task-card .task:not(.completed) .task-row:hover { background: var(--hover); } }
+.task-card .task.pressed .task-row { background: var(--hover); }
+.task-title { display: flex; align-items: flex-start; gap: 6px; }
+.task-title .task-content { min-width: 0; overflow-wrap: anywhere; }
+.task-count { flex: none; font-size: 12px; line-height: 20px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.done-check { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; }
+.card-head { display: flex; align-items: center; gap: 8px; padding: 9px 10px 8px; font-size: 13px;
+  color: var(--muted); cursor: pointer; }
+@media (hover: hover) { .card-head:hover { background: var(--hover); } }
+.card-head:active { background: var(--hover); }
+.card-head .pname { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--text); font-weight: 600; }
+.card-head-side { display: inline-flex; align-items: center; gap: 6px; flex: none; white-space: nowrap; }
+.card-head .task-count { line-height: inherit; font-size: inherit; }
+.card-flag { display: inline-flex; flex: none; }
+.card-flag.p1 { color: var(--p1); }
+.card-flag.p2 { color: var(--p2); }
+.card-flag.p3 { color: var(--p3); }
+.card-chev { display: inline-flex; color: var(--muted); }
+/* Task view (task_view/view.rs): a sheet below 900px, a panel from 900px. */
+/* Phone: a sheet from the bottom, 67% of the screen, with the list showing
+   above it over a light scrim (a tap closes it). It follows a drag from
+   anywhere on it, up to its large height or down to close (gestures.rs
+   SHEET_DRAG_JS sets its transform inline). The sheet (main.rs) stays mounted while views push
+   inside it, so it slides up once per open. Its content scrolls inside. */
+.tv-scrim { position: fixed; inset: 0; z-index: 39; background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
+/* Two heights: medium (67%, where it opens) and large (.tv-large, near full
+   screen), both kept in the visible area above the keyboard (--vv-top,
+   --vv-h, --kb are set by gestures.rs from the visual viewport). */
+:root { --tv-gap: max(56px, calc(env(safe-area-inset-top) + 8px)); }
+.tv-sheet { position: fixed; z-index: 40; left: 0; right: 0; bottom: var(--kb, 0px); height: 67vh; height: 67dvh;
+  max-height: calc(var(--vv-h, 100dvh) - var(--tv-gap));
+  display: flex; flex-direction: column; background: var(--app-bg); border-radius: 26px 26px 0 0;
+  box-shadow: 0 -8px 30px rgba(0,0,0,.18); animation: sheet-up .34s cubic-bezier(.32,.72,0,1); }
+.tv-grabber { flex: none; display: flex; justify-content: center; padding: 7px 0 1px; }
+.tv-grabber::before { content: ''; width: 38px; height: 5px; border-radius: 3px; background: var(--border-strong); }
+.task-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+@media (max-width: 899px) { .tv-sheet.tv-large { height: auto; top: calc(var(--vv-top, 0px) + var(--tv-gap)); } }
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes panel-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* Wide: a 360px panel on the right; the list narrows beside it and stays usable. */
+@media (min-width: 900px) {
+  .tv-scrim, .tv-grabber { display: none; }
+  .tv-sheet { left: auto; top: 0; bottom: 0; height: auto; max-height: none; width: 360px; border-radius: 0; border-left: 1px solid var(--border); box-shadow: none;
+    animation: panel-in .2s var(--ease); }
+  .app.view-open .main { margin-right: calc(360px + 8px); }
+}
+@media (prefers-reduced-motion: reduce) { .tv-sheet, .tv-scrim { animation: none; } }
+.tv-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; }
+.tv-back { display: inline-flex; align-items: center; gap: 2px; width: auto; padding: 0 8px 0 4px; color: var(--accent); }
+.tv-crumb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
+.tv-head-actions { flex: none; }
+/* X (top left) and •••: round, like the iPhone's glass buttons, which are
+   drawn in their place there (the web ones stay hidden; gestures.rs). */
+.tv-round { flex: none; width: 36px; height: 36px; padding: 0; border: none; border-radius: 50%; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--text);
+  background: color-mix(in srgb, var(--text) 7%, transparent); }
+@media (hover: hover) { .tv-round:hover { background: color-mix(in srgb, var(--text) 12%, transparent); } }
+.native-glass .tv-round { width: 40px; height: 40px; }
+/* Under glass, each keeps a compositing layer of its own (WebKit's view for
+   it holds the glass, so the two move as one; SheetGlass.swift) and draws
+   nothing itself. A tap on the glass reaches the page (the glass is inside
+   the web view), so the web button under it takes the click. */
+.native-glass .tv-sheet.glass-head .tv-head .tv-round { will-change: opacity; background: transparent; }
+.native-glass .tv-sheet.glass-head .tv-head .tv-round > * { visibility: hidden; }
+.menu-item.danger { color: var(--p1); }
+.tv-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: 4px 12px calc(24px + env(safe-area-inset-bottom)); }
+.tv-titleline { display: flex; align-items: flex-start; gap: 10px; margin: 4px 2px 12px; }
+.tv-titleline .check { margin-top: 4px; }
+.tv-titleline.done .tv-title textarea { text-decoration: line-through; color: var(--muted); }
+.tv-grow { display: grid; flex: 1; min-width: 0; }
+.tv-grow > * { grid-area: 1 / 1; font: inherit; line-height: inherit; padding: 0; margin: 0; white-space: pre-wrap;
+  overflow-wrap: anywhere; }
+.tv-grow-mirror { visibility: hidden; }
+.tv-grow textarea { resize: none; overflow: hidden; border: none; outline: none; background: transparent; color: var(--text); }
+.tv-grow textarea::placeholder { color: var(--muted); }
+.tv-title { font-size: 20px; font-weight: 600; line-height: 26px; min-width: 0; overflow-wrap: anywhere; }
+.tv-desc { font-size: 14px; line-height: 20px; color: var(--subtle); }
+.tv-desc textarea { color: var(--subtle); }
+.tv-card { background: var(--bg); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+.tv-row { display: flex; align-items: center; gap: 4px; padding: 6px 8px; min-height: 40px; }
+.tv-row + .tv-row, .tv-row + .tv-pills { border-top: 1px solid var(--border); }
+.tv-row-icon { display: inline-flex; width: 28px; justify-content: center; color: var(--muted); flex: none; }
+.tv-row .chip-wrap { min-width: 0; }
+.tv-row .chip-wrap:first-child { flex: 0 1 auto; }
+.tv-field-btn { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; border: none; background: none;
+  cursor: pointer; font: inherit; font-size: 14px; color: var(--text); text-align: left; padding: 4px 6px; border-radius: var(--r);
+  overflow-wrap: anywhere; }
+.tv-field-btn .icon, .tv-field-btn .chip-icon { flex: none; color: var(--muted); }
+/* The flag and calendar are filled with the priority's and the date's color. */
+.tv-field-btn .pri-1, .tv-field-btn .pri-1 .icon { color: var(--p1); }
+.tv-field-btn .pri-2, .tv-field-btn .pri-2 .icon { color: var(--p2); }
+.tv-field-btn .pri-3, .tv-field-btn .pri-3 .icon { color: var(--p3); }
+.tv-field-btn.due-chip .icon, .tv-field-btn.due-chip .chip-icon { color: inherit; }
+@media (hover: hover) { .tv-field-btn:hover { background: var(--hover); } }
+.tv-field-btn.tv-repeat { color: var(--due-week); }
+.tv-pills { display: flex; gap: 6px; padding: 10px 12px; overflow-x: auto; scrollbar-width: none; }
+.tv-pills::-webkit-scrollbar { display: none; }
+@media (min-width: 900px) { .tv-pills { flex-wrap: wrap; } }
+.tv-pill-slot { flex: none; display: inline-flex; }
+.tv-pill { flex: none; font: inherit; font-size: 13px; padding: 4px 12px; border-radius: 16px; border: 1px dashed var(--border-strong);
+  background: none; color: var(--muted); cursor: pointer; white-space: nowrap; }
+@media (hover: hover) { .tv-pill:hover { color: var(--text); border-color: var(--muted); } }
+.tv-sub-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px;
+  padding: 10px 12px 6px; font-size: 13px; color: var(--muted); }
+.tv-sub-head b { color: var(--text); font-size: 14px; }
+.tv-sub-side { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; white-space: nowrap; }
+.tv-toggle { border: none; background: none; padding: 0; font: inherit; color: var(--muted); cursor: pointer; }
+@media (hover: hover) { .tv-toggle:hover { color: var(--text); } }
+.tv-sub-side .done-check { margin-left: 4px; }
+.tv-progress { height: 4px; border-radius: 2px; background: var(--border); margin: 0 12px 6px; overflow: hidden; }
+.tv-progress i { display: block; height: 100%; background: var(--accent); }
+.tv-sub { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--border); }
+.tv-sub-body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 14px; }
+.tv-sub-body .task-content { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tv-sub.done .task-content { text-decoration: line-through; color: var(--muted); }
+.tv-add-sub { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; border: none;
+  border-top: 1px solid var(--border); background: none; color: var(--accent); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
+.tv-sub-list > .tv-add-sub:first-child { border-top: none; }
+.tv-add-editor { border-top: 1px solid var(--border); padding: 8px; }
+.tv-card .streak-panel { margin: 10px 12px; }
+/* iPhone: iOS sizes (17pt text, 44pt rows, 16pt margins and gaps). The
+   header holds the glass X, ‹ (in a sub-task's view) and •••, with the
+   parent's or project's name small in the middle; the sub-tasks' heading
+   sits above their card. */
+.native-glass .tv-head { position: relative; padding: 8px 14px 4px; gap: 10px; }
+.native-glass .tv-crumb { position: absolute; left: 0; right: 0; padding: 0 112px; text-align: center; pointer-events: none; }
+.native-glass .tv-head-actions { margin-left: auto; }
+.native-glass .tv-sheet.glass-head .tv-head .tv-back { width: 40px; height: 40px; padding: 0; border-radius: 50%;
+  justify-content: center; will-change: opacity; background: transparent; }
+.native-glass .tv-sheet.glass-head .tv-head .tv-back > * { display: none; }
+.native-glass .tv-scroll { padding-left: 16px; padding-right: 16px; }
+.native-glass .tv-titleline { margin: 8px 0 16px; gap: 12px; }
+.native-glass .tv-title { font-size: 22px; line-height: 28px; font-weight: 700; }
+.native-glass .tv-desc { font-size: 15px; line-height: 21px; }
+.native-glass .tv-card { margin-bottom: 16px; }
+.native-glass .tv-row { min-height: 44px; padding: 0 8px; }
+.native-glass .tv-field-btn { font-size: 17px; }
+.native-glass .tv-pills { gap: 8px; padding: 10px 14px 12px; }
+.native-glass .tv-pill { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; font-size: 14px; }
+.native-glass .tv-subtasks { background: none; border-radius: 0; overflow: visible; }
+.native-glass .tv-sub-head { padding: 0 14px 6px; font-size: 13px; }
+.native-glass .tv-sub-head b { font-size: 13px; font-weight: 400; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
+.native-glass .tv-toggle { color: var(--accent); }
+.native-glass .tv-sub-list { background: var(--bg); border-radius: 12px; overflow: hidden; }
+.native-glass .tv-progress { height: 3px; margin: 12px 14px 4px; }
+.native-glass .tv-sub { min-height: 44px; padding: 0 14px; gap: 12px; }
+.native-glass .tv-sub-body { font-size: 17px; }
+.native-glass .tv-add-sub { min-height: 44px; padding: 0 14px; font-size: 17px; }
+/* Sections */
 .section-block { margin-top: 18px; }
 .section-row { position: relative; }
 .section-actions { display: none; margin-left: auto; gap: 2px; }
@@ -602,14 +772,13 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .view-title { font-size: 22px; }
   .view-toggle { padding: 6px 8px; }
   .section-title { padding-left: 8px; padding-right: 8px; }
-  /* Parent chevrons sit in the (now thin) gutter. */
-  .chevron { left: -16px; width: 16px; }
   /* Row actions float over the row instead of reserving width for the title. */
   .task-row { gap: 10px; padding: 10px 8px 9px; }
   .task-actions { position: absolute; top: 4px; right: 4px; padding: 2px; border-radius: var(--r);
     background: var(--row-hover); box-shadow: var(--shadow-sm); pointer-events: none; }
   .task.pressed .task-actions, .task-actions:focus-within { pointer-events: auto; }
-  .task-project { max-width: 38%; overflow: hidden; text-overflow: ellipsis; }
+  .task-side { max-width: 38%; }
+  .task-project { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .streak-panel { margin-left: 0; gap: 12px; }
   /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */
   .editor { padding: 10px 10px 0; }
@@ -631,7 +800,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Touch: tapped controls keep WebKit's sticky :hover, so hover styles are
    mouse-only (above); a brief press state gives touch its feedback. */
 @media (hover: none) {
-  .icon-btn:active, .view-toggle:active, .chevron:active { background: var(--icon-hover); }
+  .icon-btn:active, .view-toggle:active { background: var(--icon-hover); }
   .chip:active, .menu-item:active, .cal-day:active, .label-opt:active { background: var(--hover); }
 }
 /* Completing a task (completion.rs): the circle fills with the priority

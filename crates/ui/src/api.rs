@@ -72,6 +72,10 @@ pub async fn today_view() -> Result<Vec<Task>, String> {
     invoke("today_view", &NoArgs {}).await
 }
 
+pub async fn all_tasks() -> Result<Vec<Task>, String> {
+    invoke("all_tasks", &NoArgs {}).await
+}
+
 pub async fn upcoming_view(days: i64) -> Result<Vec<Task>, String> {
     invoke("upcoming_view", &DaysArg { days }).await
 }
@@ -261,6 +265,9 @@ pub async fn move_task(id: Id, project_id: Id, section_id: Option<Id>) -> Result
     dispatch(&command(Action::TaskMove { id, project_id, section_id }, false)).await
 }
 
+/// No UI since lists stopped nesting sub-tasks (the task view shows them);
+/// `is_collapsed` stays in the data model.
+#[allow(dead_code)]
 pub async fn set_collapsed(id: Id, collapsed: bool) -> Result<ApplyResult, String> {
     dispatch(&command(
         Action::TaskUpdate {
@@ -431,6 +438,12 @@ struct PromptArg<'a> {
 /// Shows a native text prompt (answered through the `prompt` event).
 pub async fn glass_prompt(prompt: &crate::glass::Prompt) {
     let _ = invoke::<_, ()>("plugin:glass|prompt", &PromptArg { prompt }).await;
+}
+
+/// Removes the task sheet's glass X and •••.
+pub async fn glass_sheet_hide() {
+    let args = serde_json::json!({ "buttons": [], "top": 0.0, "duration": 0.0 });
+    let _ = invoke::<_, ()>("plugin:glass|sheet", &args).await;
 }
 
 /// Shows or hides the floating glass buttons.

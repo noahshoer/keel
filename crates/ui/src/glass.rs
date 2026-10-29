@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::api;
 use crate::editor::{
     add_from_editor, apply_pick, labels_text, recurrence_for_at, unhighlight, with_title, location_text, parse_title_at, priority_text, repeat_chip_text, repeat_options,
-    repeat_text, save_edit, EditorValues,
+    repeat_text, labels_to_create, save_edit, EditorValues,
 };
 use crate::pickers::{date_chip, deadline_text, offset_text, quick_dates, reminders_text, ReminderDraft, REMINDER_PRESETS};
 
@@ -134,6 +134,10 @@ pub struct CardState {
     pub chips: Vec<ChipState>,
     pub can_submit: bool,
     pub picker: PickerData,
+    /// Shows only this chip's picker, no card. Each pick saves at once; a
+    /// single-choice picker then closes (`closes_on_pick`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub only_picker: Option<ChipId>,
 }
 
 /// What the user did in the card, as Swift reports it.
@@ -199,7 +203,19 @@ pub fn refresh_for(ev: &GlassEvent, before: &str, after: &str) -> Refresh {
 pub enum Outcome {
     Changed,
     Submit,
+    /// Picker-only: save the change now and keep the picker open.
+    Save,
     Cancel,
+}
+
+/// Picker-only: whether a pick ends the interaction (single-choice
+/// pickers), or the picker stays open for more (Labels and Reminders
+/// toggle several; Date takes a day and then a time) until dismissed.
+pub fn closes_on_pick(chip: ChipId) -> bool {
+    match chip {
+        ChipId::Priority | ChipId::Repeat | ChipId::Deadline | ChipId::Location => true,
+        ChipId::Labels | ChipId::Reminders | ChipId::Date => false,
+    }
 }
 
 /// The lists and date a card is shown against.
@@ -222,6 +238,9 @@ pub struct CardContext {
     /// with the number it last showed, so typing from before a reset is
     /// told apart.
     pub reset: u32,
+    /// Picker-only (the task view on iPhone): one chip's picker, and its
+    /// pick is saved straight away.
+    pub only_picker: Option<ChipId>,
 }
 
 /// A fresh reset number for a newly opened card (never one an earlier
@@ -412,6 +431,7 @@ pub fn card_state(v: &EditorValues, mode: CardMode, ctx: &CardContext) -> CardSt
             None => !v.content.trim().is_empty(),
         },
         picker,
+        only_picker: ctx.only_picker,
     }
 }
 
@@ -462,11 +482,26 @@ pub fn apply_event(v: &mut EditorValues, ev: &GlassEvent, mode: CardMode, ctx: &
         GlassEvent::Cancel => return Outcome::Cancel,
         GlassEvent::Pick { pick } => {
             apply_pick(v, pick, mode == CardMode::Add, &ctx.projects, &ctx.sections, ctx.today);
+            if let Some(chip) = ctx.only_picker {
+                return if closes_on_pick(chip) { Outcome::Submit } else { Outcome::Save };
+            }
         }
     }
     Outcome::Changed
 }
 
+
+/// A picker-only save that keeps the picker open: the picked values become
+/// the base for the next pick, and the save diffs from the returned one.
+pub fn begin_save(initial: &mut EditorValues, values: &EditorValues) -> EditorValues {
+    std::mem::replace(initial, values.clone())
+}
+
+/// After a failed picker-only save, the picker shows what was saved before.
+pub fn restore_failed_save(initial: &mut EditorValues, values: &mut EditorValues, before: EditorValues) {
+    *values = before.clone();
+    *initial = before;
+}
 
 /// What the values become after a submit: adding resets the card for the
 /// next task (it stays open); editing closes it.
@@ -690,13 +725,26 @@ pub struct ButtonsState {
     /// Glass stand-ins for the drawer's theme and settings buttons, while
     /// the drawer is open.
     pub drawer: Vec<DrawerButton>,
+    /// The menu and search buttons, drawn as glass inside the page's own
+    /// placeholders (`.float-btns`), so the task view's scrim and sheet
+    /// cover them; empty until they're measured.
+    pub floating: Vec<DrawerButton>,
     /// Keel's theme ("system" / "light" / "dark"): the native views follow
     /// it rather than the phone's setting.
     pub theme: String,
 }
 
-pub fn floating_buttons(searching: bool, drawer_open: bool) -> ButtonsState {
-    ButtonsState { visible: !drawer_open, add: !searching, searching, drawer: Vec::new(), theme: "system".to_string() }
+/// The floating + for this screen. It steps aside while the drawer or the
+/// task view is open (the view's sheet covers its spot).
+pub fn floating_buttons(searching: bool, drawer_open: bool, view_open: bool) -> ButtonsState {
+    ButtonsState {
+        visible: !drawer_open && !view_open,
+        add: !searching,
+        searching,
+        drawer: Vec::new(),
+        floating: Vec::new(),
+        theme: "system".to_string(),
+    }
 }
 
 /// Where the page drew one of the drawer's header buttons (CSS px, which
@@ -739,31 +787,78 @@ pub fn drawer_buttons(rects: &[WebRect], theme: &str) -> Vec<DrawerButton> {
         .collect()
 }
 
+/// The menu (top left) and search (top right) as glass, at the page's
+/// placeholders; in Search the search button closes it.
+pub fn float_buttons(rects: &[WebRect], searching: bool) -> Vec<DrawerButton> {
+    rects
+        .iter()
+        .filter_map(|r| {
+            let symbol = match r.id.as_str() {
+                "menu" => "line.3.horizontal",
+                "search" if searching => "xmark",
+                "search" => "magnifyingglass",
+                _ => return None,
+            };
+            Some(DrawerButton { id: r.id.clone(), symbol: symbol.to_string(), x: r.x, y: r.y, w: r.w, h: r.h })
+        })
+        .collect()
+}
+
+/// The task sheet's header buttons as glass: X (close), ‹ (back, in a
+/// sub-task's view) and ••• (actions).
+pub fn sheet_buttons(rects: &[WebRect]) -> Vec<DrawerButton> {
+    rects
+        .iter()
+        .filter_map(|r| {
+            let symbol = match r.id.as_str() {
+                "tv-close" => "xmark",
+                "tv-back" => "chevron.left",
+                "tv-more" => "ellipsis",
+                _ => return None,
+            };
+            Some(DrawerButton { id: r.id.clone(), symbol: symbol.to_string(), x: r.x, y: r.y, w: r.w, h: r.h })
+        })
+        .collect()
+}
+
+/// The task sheet's glass X and ••• (`plugin:glass|sheet`): each button's
+/// `y` is from the sheet's top, and `top` is where that top is on screen,
+/// so moving the sheet only needs a new `top`.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct SheetGlass {
+    pub buttons: Vec<DrawerButton>,
+    pub top: f64,
+}
+
+/// [`SheetGlass`] from the web buttons' rects and the sheet's top (layout
+/// px, as measured), less the visual viewport's pan (the keyboard can move
+/// the visible area over the page; the glass is drawn on screen).
+pub fn sheet_glass(rects: &[WebRect], sheet_top: f64, vv_left: f64, vv_top: f64) -> SheetGlass {
+    let buttons = sheet_buttons(rects)
+        .into_iter()
+        .map(|b| DrawerButton { x: b.x - vv_left, y: b.y - sheet_top, ..b })
+        .collect();
+    SheetGlass { buttons, top: sheet_top - vv_top }
+}
+
+
 /// Measures the drawer's theme and settings buttons: once when asked (`go`
-/// is sent after the drawer opens), and again whenever the drawer itself
-/// scrolls. (An earlier version watched every DOM change and fed back into
-/// rendering when the settings dialog opened, freezing the page.)
+/// is sent as the drawer opens), at their resting place: less the drawer's
+/// slide so far (the glass rides the drawer's own layer from there).
 const MEASURE_FN: &str = r#"
-const measure = () => [['theme', '.brand .theme-toggle'], ['settings', '.brand .settings-btn']].map(([id, sel]) => {
-  const r = document.querySelector(sel)?.getBoundingClientRect();
-  return r && { id, x: r.x, y: r.y, w: r.width, h: r.height };
-}).filter(Boolean);
+const measure = () => {
+  const sb = document.querySelector('.sidebar');
+  const dx = sb ? new DOMMatrix(getComputedStyle(sb).transform).m41 : 0;
+  return [['theme', '.brand .theme-toggle'], ['settings', '.brand .settings-btn']].map(([id, sel]) => {
+    const r = document.querySelector(sel)?.getBoundingClientRect();
+    return r && r.width > 0 && { id, x: r.x - dx, y: r.y, w: r.width, h: r.height };
+  }).filter(Boolean);
+};
 "#;
 
-/// Re-measures whenever the drawer itself scrolls.
-const DRAWER_SCROLL_JS: &str = r#"
-let timer = null;
-document.addEventListener('scroll', (ev) => {
-  if (!ev.target.classList?.contains('sidebar')) return;
-  clearTimeout(timer);
-  timer = setTimeout(() => dioxus.send(measure()), 16);
-}, true);
-await new Promise(() => {});
-"#;
-
-/// One reading, once the drawer has finished sliding in.
+/// One reading, as the drawer starts sliding in (once it's laid out).
 const DRAWER_ONCE_JS: &str = r#"
-await new Promise((r) => setTimeout(r, 320));
+await new Promise((r) => requestAnimationFrame(r));
 dioxus.send(measure());
 "#;
 
@@ -795,8 +890,6 @@ pub struct Glass {
     pub chosen: Signal<Option<ChosenAction>>,
     /// Where the drawer's header buttons sit (empty while it's closed).
     pub drawer_rects: Signal<Vec<WebRect>>,
-    /// The settings dialog is open (the drawer's glass buttons step aside).
-    pub settings_open: Signal<bool>,
     /// The latest prompt answer, for the caller whose id it carries.
     pub answer: Signal<Option<PromptAnswer>>,
 }
@@ -811,7 +904,6 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
         pressed: Signal::new(None),
         chosen: Signal::new(None),
         drawer_rects: Signal::new(Vec::new()),
-        settings_open: Signal::new(false),
         answer: Signal::new(None),
     });
     use_hook(move || {
@@ -834,13 +926,6 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
                     if let Some(a) = msg.answer.and_then(|j| serde_json::from_str::<PromptAnswer>(&j).ok()) {
                         answer.set(Some(a));
                     }
-                }
-            });
-            spawn(async move {
-                let mut rects = glass.drawer_rects;
-                let mut spots = document::eval(&format!("{MEASURE_FN}{DRAWER_SCROLL_JS}"));
-                while let Ok(r) = spots.recv::<Vec<WebRect>>().await {
-                    rects.set(r);
                 }
             });
             spawn(async move {
@@ -889,6 +974,7 @@ impl Glass {
             week_start: crate::pickers::week_start(),
             calendar: None,
             reset: next_reset(),
+            only_picker: None,
         };
         self.open(CardSession {
             mode: CardMode::Add,
@@ -901,14 +987,17 @@ impl Glass {
         });
     }
 
-    /// Opens the editor on `task`.
-    pub fn edit(
+    /// Opens `chip`'s picker alone on `task` (no card); a pick is saved
+    /// at once and closes it.
+    #[allow(clippy::too_many_arguments)]
+    pub fn pick_field(
         self,
         task: &Task,
         reminders: Vec<ReminderDraft>,
         projects: Vec<Project>,
         sections: Vec<Section>,
         labels: Vec<Label>,
+        chip: ChipId,
         reload: Signal<u32>,
     ) {
         let mut before = EditorValues::from_task(task);
@@ -925,6 +1014,7 @@ impl Glass {
             week_start: crate::pickers::week_start(),
             calendar: None,
             reset: next_reset(),
+            only_picker: Some(chip),
         };
         self.open(CardSession {
             mode: CardMode::Edit,
@@ -942,7 +1032,7 @@ impl Glass {
         spawn(async move { api::glass_prompt(&prompt).await });
     }
 
-    /// Measures the drawer's header buttons once it has slid in (iPhone).
+    /// Measures the drawer's header buttons as it opens (iPhone).
     pub fn measure_drawer(self) {
         if !*self.native.peek() {
             return;
@@ -984,6 +1074,33 @@ impl Glass {
             Outcome::Cancel => {
                 self.session.set(None);
                 api::glass_hide().await;
+            }
+            Outcome::Save => {
+                let Some(id) = s.task_id.clone() else { return };
+                let mut reload = s.reload;
+                // The sheet shows the pick before the save is awaited, so a
+                // quick second tap builds on it.
+                let before = begin_save(&mut s.initial, &s.values);
+                let after = s.values.clone();
+                let existing = s.existing.clone();
+                // A label typed in the Labels sheet is created first.
+                let new_labels = labels_to_create(&before.labels, &after.labels, &s.ctx.labels);
+                let state = card_state(&s.values, s.mode, &s.ctx);
+                self.session.set(Some(s));
+                api::glass_update(&state).await;
+                for name in new_labels {
+                    let _ = api::add_label(name).await;
+                }
+                if save_edit(id, before.clone(), after, existing).await.is_err() {
+                    let open = self.session.peek().clone();
+                    if let Some(mut s) = open {
+                        restore_failed_save(&mut s.initial, &mut s.values, before);
+                        let state = card_state(&s.values, s.mode, &s.ctx);
+                        self.session.set(Some(s));
+                        api::glass_update(&state).await;
+                    }
+                }
+                reload += 1;
             }
             Outcome::Submit => {
                 if !card_state(&s.values, s.mode, &s.ctx).can_submit {
@@ -1058,6 +1175,7 @@ mod tests {
             week_start: chrono::Weekday::Sun,
             calendar: None,
             reset: 0,
+            only_picker: None,
         }
     }
 
@@ -1227,11 +1345,41 @@ mod tests {
 
     #[test]
     fn search_swaps_the_search_button_for_close_and_drops_add() {
-        let state =
-            |visible, add, searching| ButtonsState { visible, add, searching, drawer: Vec::new(), theme: "system".into() };
-        assert_eq!(floating_buttons(false, false), state(true, true, false));
-        assert_eq!(floating_buttons(true, false), state(true, false, true));
-        assert!(!floating_buttons(false, true).visible, "hidden while the drawer is open");
+        let state = |visible, add, searching| ButtonsState {
+            visible,
+            add,
+            searching,
+            drawer: Vec::new(),
+            floating: Vec::new(),
+            theme: "system".into(),
+        };
+        assert_eq!(floating_buttons(false, false, false), state(true, true, false));
+        assert_eq!(floating_buttons(true, false, false), state(true, false, true));
+        assert!(!floating_buttons(false, true, false).visible, "hidden while the drawer is open");
+    }
+
+    #[test]
+    fn menu_and_search_take_the_page_spots_and_search_turns_into_close() {
+        let rects = vec![
+            WebRect { id: "menu".into(), x: 14.0, y: 62.0, w: 44.0, h: 44.0 },
+            WebRect { id: "search".into(), x: 344.0, y: 62.0, w: 44.0, h: 44.0 },
+            WebRect { id: "other".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0 },
+        ];
+        let ids = |searching| {
+            float_buttons(&rects, searching).into_iter().map(|b| (b.id, b.symbol)).collect::<Vec<_>>()
+        };
+        assert_eq!(
+            ids(false),
+            vec![("menu".to_string(), "line.3.horizontal".to_string()), ("search".to_string(), "magnifyingglass".to_string())]
+        );
+        assert_eq!(ids(true)[1].1, "xmark", "in Search it closes it");
+        assert_eq!(float_buttons(&rects, false)[1].x, 344.0);
+    }
+
+    #[test]
+    fn floating_buttons_hide_while_the_task_view_is_open() {
+        assert!(!floating_buttons(false, false, true).visible);
+        assert!(floating_buttons(false, false, false).visible, "back on close");
     }
 
     #[test]
@@ -1275,9 +1423,31 @@ mod tests {
     }
 
     #[test]
+    fn sheet_glass_places_x_and_more_relative_to_the_sheet_top() {
+        // Measured with the sheet's top at 300 (layout px) and the keyboard
+        // having panned the visual viewport 120px down.
+        let rects = vec![
+            WebRect { id: "tv-close".into(), x: 12.0, y: 318.0, w: 40.0, h: 40.0 },
+            WebRect { id: "tv-more".into(), x: 350.0, y: 318.0, w: 40.0, h: 40.0 },
+            WebRect { id: "tv-back".into(), x: 60.0, y: 318.0, w: 40.0, h: 40.0 },
+            WebRect { id: "other".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0 },
+        ];
+        let g = sheet_glass(&rects, 300.0, 0.0, 120.0);
+        let ids: Vec<_> = g.buttons.iter().map(|b| (b.id.as_str(), b.symbol.as_str())).collect();
+        assert_eq!(ids, vec![("tv-close", "xmark"), ("tv-more", "ellipsis"), ("tv-back", "chevron.left")]);
+        assert_eq!((g.buttons[0].x, g.buttons[0].y, g.buttons[0].w), (12.0, 18.0, 40.0), "y from the sheet's top");
+        assert_eq!(g.top, 180.0, "the sheet's top on screen");
+        // The glass doesn't send taps: the web buttons under it take them.
+        assert_eq!(button_action("tv-close"), None);
+        let json = serde_json::to_value(&g).unwrap();
+        assert_eq!(json["buttons"][1]["symbol"], "ellipsis");
+        assert_eq!(json["top"], 180.0);
+    }
+
+    #[test]
     fn buttons_carry_the_app_theme() {
-        assert_eq!(floating_buttons(false, false).theme, "system");
-        let mut s = floating_buttons(false, false);
+        assert_eq!(floating_buttons(false, false, false).theme, "system");
+        let mut s = floating_buttons(false, false, false);
         s.theme = "dark".into();
         assert_eq!(serde_json::to_value(&s).unwrap()["theme"], "dark");
     }
@@ -1462,5 +1632,74 @@ mod tests {
         assert_eq!(v.content, "buy milk");
         let ev: GlassEvent = serde_json::from_str(r#"{"type":"title","text":"hi","reset":4}"#).unwrap();
         assert_eq!(ev, GlassEvent::Title { text: "hi".into(), reset: 4 });
+    }
+
+    #[test]
+    fn only_picker_serializes_camel_case() {
+        let mut c = ctx();
+        c.only_picker = Some(ChipId::Deadline);
+        let json = serde_json::to_string(&card_state(&blank("x"), CardMode::Edit, &c)).unwrap();
+        assert!(json.contains(r#""onlyPicker":"deadline""#), "{json}");
+        let json = serde_json::to_string(&card_state(&blank("x"), CardMode::Edit, &ctx())).unwrap();
+        assert!(!json.contains("onlyPicker"), "{json}");
+    }
+
+    #[test]
+    fn pick_in_picker_mode_submits() {
+        let ev = GlassEvent::Pick { pick: Pick::Priority { value: "4".into() } };
+        let mut c = ctx();
+        c.only_picker = Some(ChipId::Priority);
+        let mut v = blank("x");
+        assert_eq!(apply_event(&mut v, &ev, CardMode::Edit, &c), Outcome::Submit);
+        assert_eq!(v.priority, "4", "the pick is applied before saving");
+        let mut v = blank("x");
+        assert_eq!(apply_event(&mut v, &ev, CardMode::Edit, &ctx()), Outcome::Changed);
+    }
+
+    #[test]
+    fn cancel_in_picker_mode_does_not_save() {
+        let mut c = ctx();
+        c.only_picker = Some(ChipId::Labels);
+        let mut v = blank("x");
+        assert_eq!(apply_event(&mut v, &GlassEvent::Cancel, CardMode::Edit, &c), Outcome::Cancel);
+    }
+
+    #[test]
+    fn single_choice_pickers_close_on_pick() {
+        for chip in [ChipId::Priority, ChipId::Repeat, ChipId::Deadline, ChipId::Location] {
+            assert!(closes_on_pick(chip), "{chip:?}");
+        }
+        for chip in [ChipId::Labels, ChipId::Reminders, ChipId::Date] {
+            assert!(!closes_on_pick(chip), "{chip:?}");
+        }
+    }
+
+    #[test]
+    fn pick_in_a_staying_picker_saves_and_keeps_it_open() {
+        let mut c = ctx();
+        c.only_picker = Some(ChipId::Labels);
+        let mut v = blank("x");
+        let ev = GlassEvent::Pick { pick: Pick::Labels { names: vec!["home".into()] } };
+        assert_eq!(apply_event(&mut v, &ev, CardMode::Edit, &c), Outcome::Save);
+        assert_eq!(v.labels, vec!["home".to_string()]);
+        c.only_picker = Some(ChipId::Date);
+        let ev = GlassEvent::Pick { pick: Pick::Date { date: "2026-10-20".into(), time: String::new() } };
+        assert_eq!(apply_event(&mut v, &ev, CardMode::Edit, &c), Outcome::Save);
+    }
+
+    #[test]
+    fn a_staying_pick_moves_the_base_before_its_save() {
+        // The sheet is updated from `values` before the save is awaited, so
+        // a quick second tap builds on the first; the save diffs from the
+        // base it took.
+        let mut initial = blank("x");
+        let mut values = blank("x");
+        values.labels = vec!["home".into()];
+        let before = begin_save(&mut initial, &values);
+        assert_eq!(before.labels, Vec::<String>::new());
+        assert_eq!(initial, values, "the next pick diffs from this one");
+        // The save failed: both go back to what was saved before it.
+        restore_failed_save(&mut initial, &mut values, before.clone());
+        assert_eq!((initial, values), (before.clone(), before));
     }
 }
