@@ -516,6 +516,13 @@ fn App() -> Element {
         .top()
         .and_then(|id| task_view::nav::detail(id, &nav.all.read(), (nav.show_completed)()));
 
+    // The view under it, when a sub-task is on top (the edge swipe slides it in).
+    let peek_task = {
+        let stack = nav.stack.read();
+        let n = stack.0.len();
+        (n > 1).then(|| stack.0[n - 2].clone()).and_then(|id| task_view::nav::detail(&id, &nav.all.read(), false))
+    };
+
     rsx! {
         style { dangerous_inner_html: style::css() }
         div { class: format!("app{}{}", if drawer() { " drawer-open" } else { "" }, if open_task.is_some() { " view-open" } else { "" }),
@@ -588,6 +595,7 @@ fn App() -> Element {
                                 labels: loaded.labels.clone(),
                                 inbox_id: loaded.inbox.id.clone(),
                                 reload,
+                                peek: peek_task.clone(),
                             }
                         }
                     }

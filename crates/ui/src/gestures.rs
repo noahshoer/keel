@@ -545,11 +545,21 @@ const end = (cancelled) => {
 // otherwise it springs back. Only where a Back exists.
 let e = null;
 const edgeEls = (sheet) => [sheet.querySelector('.tv-scroll')].filter(Boolean);
+// The parent's view (`.tv-peek`, kept hidden under the content) comes in
+// from a third of a width to the left, as in iOS, while the content leaves.
 const edgeMove = (d, x, secs) => {
+  const t = secs > 0 ? `transform ${secs}s ${EASE}` : 'none';
+  const peek = d.sheet.querySelector('.tv-peek');
+  const share = Math.min(1, x / innerWidth);
   for (const el of edgeEls(d.sheet)) {
-    el.style.transition = secs > 0 ? `transform ${secs}s ${EASE}, opacity ${secs}s ${EASE}` : 'none';
+    el.style.transition = t;
     el.style.transform = x ? `translateX(${x}px)` : '';
-    el.style.opacity = x ? String(1 - 0.6 * Math.min(1, x / innerWidth)) : '';
+    el.style.boxShadow = x ? '-6px 0 18px rgba(0,0,0,.12)' : '';
+  }
+  if (peek) {
+    peek.style.visibility = x ? 'visible' : '';
+    peek.style.transition = t;
+    peek.style.transform = x ? `translateX(${-innerWidth / 3 * (1 - share)}px)` : '';
   }
 };
 document.addEventListener('touchstart', (ev) => {
@@ -590,7 +600,7 @@ const edgeEnd = (cancelled) => {
     d.sheet.querySelector('.tv-back')?.click();
     // The parent's content takes the place; bring the element back unseen.
     requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
-      for (const el of edgeEls(d.sheet)) { el.style.transition = 'none'; el.style.transform = ''; el.style.opacity = ''; }
+      edgeMove(d, 0, 0);
     }, 60)));
   }, secs * 1000);
 };

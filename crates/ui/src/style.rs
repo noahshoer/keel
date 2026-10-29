@@ -557,6 +557,13 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .native-glass .tv-sheet.glass-head .tv-head .tv-round { will-change: opacity; background: transparent; }
 .native-glass .tv-sheet.glass-head .tv-head .tv-round > * { visibility: hidden; }
 .menu-item.danger { color: var(--p1); }
+.tv-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+/* The parent's view under a sub-task's, shown only during an edge swipe. */
+.tv-peek { position: absolute; inset: 0; visibility: hidden; pointer-events: none; overflow: hidden; }
+.tv-peek-in { padding: 4px 12px 24px; }
+.native-glass .tv-peek-in { padding-left: 16px; padding-right: 16px; }
+.tv-peek-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tv-body > .tv-scroll { background: var(--app-bg); position: relative; }
 .tv-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   padding: 4px 12px calc(24px + env(safe-area-inset-bottom)); }
 .tv-titleline { display: flex; align-items: flex-start; gap: 10px; margin: 4px 2px 12px; }

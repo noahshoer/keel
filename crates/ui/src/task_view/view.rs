@@ -99,6 +99,8 @@ pub fn TaskView(
     labels: Vec<Label>,
     inbox_id: Id,
     reload: Signal<u32>,
+    /// The view under this one (in a sub-task), kept out of sight for the edge swipe.
+    #[props(default)] peek: Option<TaskDetail>,
 ) -> Element {
     let mut reload = reload;
     let nav = use_nav();
@@ -545,6 +547,10 @@ pub fn TaskView(
                     }
                 }
             }
+            div { class: "tv-body",
+            if let Some(p) = peek.clone() {
+                super::peek::TaskPeek { detail: p, projects: projects.clone(), sections: sections.clone(), inbox_id: inbox_id.clone() }
+            }
             div { class: "tv-scroll",
                 div { class: if checked { "tv-titleline done" } else { "tv-titleline" },
                     button {
@@ -687,6 +693,7 @@ pub fn TaskView(
                         }
                     }
                 }
+            }
             }
         }
     }

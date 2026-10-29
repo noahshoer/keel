@@ -20,6 +20,14 @@ check(`in sub-task: ${title()} back=${!!document.querySelector('.tv-back')}`);
 await swipe(60);
 await sleep(800);
 check(`after short swipe: ${title()} back=${!!document.querySelector('.tv-back')}`);
+// Held half way: the parent shows under the sliding content.
+touch('touchstart', 6, 400);
+for (let i = 1; i <= 8; i++) { await sleep(16); touch('touchmove', 6 + (150 * i) / 8, 400); }
+const pk = document.querySelector('.tv-peek');
+check(`mid-drag: peek ${pk && getComputedStyle(pk).visibility} "${pk?.querySelector('.tv-peek-text')?.innerText}" at ${pk?.style.transform}`);
+await sleep(2500);
+touch('touchend', 156, 400);
+await sleep(1500);
 await swipe(250);
 await sleep(1200);
 check(`after long swipe: ${title()} back=${!!document.querySelector('.tv-back')}`);
