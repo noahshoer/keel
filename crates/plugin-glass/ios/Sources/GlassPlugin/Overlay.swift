@@ -46,12 +46,6 @@ struct OverlayView: View {
       if !model.isOpen {
         PlacedButtons(model: model, buttons: model.drawerButtons)
       }
-      // The task sheet's X and ••• stay up under a field's picker (it covers
-      // them); only the full card hides them.
-      if !model.isOpen || model.pickerOnly {
-        SheetButtons(model: model)
-          .allowsHitTesting(!model.isOpen)
-      }
     }
     // Picker-only: the chip's sheet alone. Picks are saved as they're made,
     // so closing it (Done, a swipe) just ends the session.

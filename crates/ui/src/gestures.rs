@@ -214,13 +214,13 @@ pub fn settle_offset(settle: Settle, medium: f64) -> f64 {
 /// - `settle(detent, y, medium, velocity)`: "large" / "medium" / "close"
 ///   ([`sheet_settle`]); `rest(settle, medium)`: [`settle_offset`].
 /// - `glass(rects, sheetTop, vvLeft, vvTop)`: the glass X and •••
-///   ([`crate::glass::sheet_glass`]); `screenTop(largeTop, y, vvTop)`.
+///   ([`crate::glass::sheet_glass`]).
 ///
 /// `detent` / `settle` are "medium" / "large" / "close". The touch handlers
 /// need the answers synchronously (to cancel the browser's scroll), so this
 /// can't wait for a message round trip.
 pub fn install_sheet_rules() {
-    use crate::glass::{sheet_glass, sheet_screen_top, WebRect};
+    use crate::glass::{sheet_glass, WebRect};
     use wasm_bindgen::prelude::*;
     fn detent(v: &JsValue) -> Detent {
         if v.as_string().as_deref() == Some("large") {
@@ -281,7 +281,6 @@ pub fn install_sheet_rules() {
         let s = serde_wasm_bindgen::Serializer::json_compatible();
         serde::Serialize::serialize(&sheet_glass(&rects, top, left, vv_top), &s).unwrap_or(JsValue::NULL)
     });
-    let screen_top = Closure::<dyn Fn(f64, f64, f64) -> f64>::new(sheet_screen_top);
     let rules = js_sys::Object::new();
     let set = |k: &str, f: &JsValue| {
         let _ = js_sys::Reflect::set(&rules, &k.into(), f);
@@ -293,7 +292,6 @@ pub fn install_sheet_rules() {
     set("settle", settle.as_ref());
     set("rest", rest.as_ref());
     set("glass", glass.as_ref());
-    set("screenTop", screen_top.as_ref());
     let _ = js_sys::Reflect::set(&js_sys::global(), &"keelSheet".into(), &rules);
     decide.forget();
     hold.forget();
@@ -302,7 +300,6 @@ pub fn install_sheet_rules() {
     settle.forget();
     rest.forget();
     glass.forget();
-    screen_top.forget();
 }
 
 /// What [`SHEET_DRAG_JS`] reports.
@@ -323,13 +320,9 @@ pub struct SheetMsg {
 /// close (it slides off, then `{close}` goes to Rust, which closes the view
 /// through its save-first path). Reduced motion snaps.
 ///
-/// iPhone: the glass X and ••• (`plugin:glass|sheet`) are told where the
-/// sheet's top is on screen: with the sheet's first frame as it opens (they
-/// ride its slide-up with the same curve); once when a drag takes over, with
-/// the finger's place, after which Swift moves them with the finger itself
-/// (no message per frame); the target and duration of each settle; and on
-/// every viewport change (the keyboard).
-/// So they never hide and the web buttons never show in their place.
+/// iPhone: the glass X and ••• (`plugin:glass|sheet`) are sent once, as the
+/// sheet opens. Swift puts them inside the web buttons' own layers, so they
+/// move with the sheet by themselves (slide, drag, settle, keyboard).
 ///
 /// The keyboard: `--vv-top`, `--vv-h` and `--kb` (on the root) keep the
 /// sheet inside the visible area, above the keyboard, header in view.
@@ -343,20 +336,11 @@ const sheetEl = () => document.querySelector('.tv-sheet');
 const scrim = () => document.querySelector('.tv-scrim');
 const vvTop = () => window.visualViewport?.offsetTop ?? 0;
 const native = () => document.body.classList.contains('native-glass');
-// Numbered per page load (`epoch`), so Swift drops a message overtaken by a
-// later one and starts over after a reload. If showing the glass fails, the
-// web X and ••• come back.
-const epoch = Date.now();
-let seqOut = 0;
+// If showing the glass fails, the web X and ••• come back.
 const send = (m) => {
   if (!native()) return;
-  window.__TAURI__?.core.invoke('plugin:glass|sheet', { ...m, epoch, seq: ++seqOut })
+  window.__TAURI__?.core.invoke('plugin:glass|sheet', m)
     .catch(() => { if (m.buttons) sheetEl()?.classList.remove('glass-head'); });
-};
-// A glide in step with the page's own animation: same start (wall clock),
-// duration and curve, so Swift draws the glass where the sheet is each frame.
-const glide = (top, s, extra = {}) => {
-  send({ top, duration: s, start: Date.now(), ...extra });
 };
 const shiftOf = (el) => new DOMMatrix(getComputedStyle(el).transform).m42 || 0;
 const measureGlass = (sheet) => {
@@ -378,13 +362,7 @@ window.keelSheetOpened = (tries = 0) => {
   }
   sheet.dataset.detent = 'medium';
   sheet.classList.add('glass-head');
-  // The slide-up (sheet-up): from one sheet height down to its resting place.
-  const anim = sheet.getAnimations()[0];
-  const rest = glass.top - shiftOf(sheet);
-  if (!anim || reduce()) { send({ buttons: glass.buttons, top: rest, duration: 0 }); return; }
-  const begun = anim.startTime === null ? 0 : document.timeline.currentTime - anim.startTime;
-  const secs = anim.effect.getComputedTiming().endTime / 1000;
-  glide(rest, secs, { buttons: glass.buttons, from: rest + sheet.offsetHeight, start: Date.now() - begun });
+  send({ buttons: glass.buttons });
 };
 // Both layouts' tops (no transform): `M` is how far medium sits below large.
 const heights = (sheet) => {
@@ -439,10 +417,6 @@ document.addEventListener('touchmove', (ev) => {
     Object.assign(g, heights(sheet), { dy0: dy });
     g.from = keelSheet.from(g.start[5], settling, g.M);
     sheet.classList.add('tv-large');
-    // Hand the glass to the finger: Swift moves it natively from here
-    // (same rule as below) until the release's glide.
-    const vt = vvTop();
-    send({ top: keelSheet.screenTop(g.largeTop, g.from, vt), finger: g.y + dy - vt, floor: g.largeTop - vt, duration: 0 });
   }
   ev.preventDefault();
   g.yNow = keelSheet.drag(g.from, dy - g.dy0);
@@ -461,7 +435,6 @@ const end = (cancelled) => {
   // Close slides it just past the bottom of the screen.
   const target = to === 'close' ? innerHeight - d.largeTop + 40 : keelSheet.rest(to, d.M);
   place(d, target, secs);
-  glide(keelSheet.screenTop(d.largeTop, target, vvTop()), secs);
   const mine = seq;
   if (to !== 'close') d.sheet.dataset.detent = to;
   setTimeout(() => {
@@ -476,13 +449,8 @@ const end = (cancelled) => {
 };
 document.addEventListener('touchend', () => end(false), { passive: true, capture: true });
 document.addEventListener('touchcancel', () => end(true), { passive: true, capture: true });
-// The keyboard: keep the sheet in the visible area above it, and tell the
-// glass where the sheet now is (it never hides).
+// The keyboard: keep the sheet in the visible area above it.
 // Only on iPhone at 1x: a desktop pinch-zoom mustn't lift the sheet.
-// (The iPhone app is portrait only, so the buttons never move sideways.)
-// Mid-glide (opening, settling) it waits for the glide to finish, so the
-// glass isn't parked halfway.
-let waiting = false;
 const viewport = () => {
   const v = window.visualViewport, root = document.documentElement;
   for (const k of ['--vv-top', '--vv-h', '--kb']) root.style.removeProperty(k);
@@ -491,17 +459,6 @@ const viewport = () => {
     root.style.setProperty('--vv-h', `${v.height}px`);
     root.style.setProperty('--kb', `${Math.max(0, root.clientHeight - v.offsetTop - v.height)}px`);
   }
-  const sheet = sheetEl();
-  if (!sheet || !sheet.classList.contains('glass-head') || (g && g.mode === 'drag')) return;
-  const moving = sheet.getAnimations();
-  if (moving.length) {
-    if (!waiting) {
-      waiting = true;
-      Promise.all(moving.map((a) => a.finished.catch(() => {}))).then(() => { waiting = false; viewport(); });
-    }
-    return;
-  }
-  send({ top: sheet.getBoundingClientRect().top - vvTop(), duration: 0 });
 };
 window.keelSheetViewport = viewport;
 window.visualViewport?.addEventListener('resize', viewport);

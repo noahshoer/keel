@@ -278,9 +278,7 @@ fn App() -> Element {
         }
         glass::ButtonAction::AddTask
         | glass::ButtonAction::Theme
-        | glass::ButtonAction::Settings
-        | glass::ButtonAction::CloseView
-        | glass::ButtonAction::ViewMenu => {}
+        | glass::ButtonAction::Settings => {}
     });
     // Measure the drawer's header buttons each time it opens.
     use_effect(move || {

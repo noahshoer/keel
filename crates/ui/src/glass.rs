@@ -558,9 +558,6 @@ pub enum ButtonAction {
     /// The drawer's theme switcher and settings (taps on the web buttons).
     Theme,
     Settings,
-    /// The task sheet's X and ••• (taps on the web buttons).
-    CloseView,
-    ViewMenu,
 }
 
 /// What a row's long-press menu can do (the desktop's hover actions).
@@ -820,11 +817,6 @@ pub fn sheet_glass(rects: &[WebRect], sheet_top: f64, vv_left: f64, vv_top: f64)
     SheetGlass { buttons, top: sheet_top - vv_top }
 }
 
-/// The sheet's top on screen when it sits `y` below its large height,
-/// whose top is `large_top` (layout px).
-pub fn sheet_screen_top(large_top: f64, y: f64, vv_top: f64) -> f64 {
-    large_top + y - vv_top
-}
 
 /// Measures the drawer's theme and settings buttons: once when asked (`go`
 /// is sent after the drawer opens), and again whenever the drawer itself
@@ -866,8 +858,6 @@ pub fn button_action(name: &str) -> Option<ButtonAction> {
         "search" => Some(ButtonAction::Search),
         "theme" => Some(ButtonAction::Theme),
         "settings" => Some(ButtonAction::Settings),
-        "tv-close" => Some(ButtonAction::CloseView),
-        "tv-more" => Some(ButtonAction::ViewMenu),
         _ => None,
     }
 }
@@ -944,12 +934,6 @@ pub fn provide(mut on_button: impl FnMut(ButtonAction) + 'static) -> Glass {
                         }
                         Some(ButtonAction::Settings) => {
                             let _ = document::eval(&click_js(".brand .settings-btn"));
-                        }
-                        Some(ButtonAction::CloseView) => {
-                            let _ = document::eval(&click_js(".tv-sheet .tv-head .tv-close"));
-                        }
-                        Some(ButtonAction::ViewMenu) => {
-                            let _ = document::eval(&click_js(".tv-sheet .tv-head .tv-more"));
                         }
                         Some(action) => on_button(action),
                         None => {}
@@ -1422,10 +1406,8 @@ mod tests {
         assert_eq!(ids, vec![("tv-close", "xmark"), ("tv-more", "ellipsis")]);
         assert_eq!((g.buttons[0].x, g.buttons[0].y, g.buttons[0].w), (12.0, 18.0, 40.0), "y from the sheet's top");
         assert_eq!(g.top, 180.0, "the sheet's top on screen");
-        // Moving the sheet later only needs a new top on screen.
-        assert_eq!(sheet_screen_top(300.0, 150.0, 120.0), 330.0);
-        assert_eq!(button_action("tv-close"), Some(ButtonAction::CloseView));
-        assert_eq!(button_action("tv-more"), Some(ButtonAction::ViewMenu));
+        // The glass doesn't send taps: the web buttons under it take them.
+        assert_eq!(button_action("tv-close"), None);
         let json = serde_json::to_value(&g).unwrap();
         assert_eq!(json["buttons"][1]["symbol"], "ellipsis");
         assert_eq!(json["top"], 180.0);

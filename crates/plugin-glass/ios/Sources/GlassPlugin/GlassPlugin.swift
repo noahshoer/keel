@@ -34,24 +34,10 @@ class ButtonsArgs: Decodable {
   let theme: String
 }
 
-/// The task sheet's glass X and ••• (`plugin:glass|sheet`): `buttons` (y from
-/// the sheet's top; absent keeps the current ones, empty removes them) and
-/// the sheet's top on screen, at once or gliding there over `duration` from
-/// `start` (wall-clock ms, when the page's own animation began) and `from`
-/// (where it began; absent = where the glass is now). `epoch` (the page
-/// load) and `seq` order the messages (`SheetOrder`). With `finger` (and
-/// `floor`), the finger takes over until the next message: the glass moves
-/// with it natively (`SheetFollow`).
+/// The task sheet's glass X and ••• (`plugin:glass|sheet`): the web buttons
+/// to draw as glass (`SheetGlass`; empty removes them). Absent = no change.
 class SheetArgs: Decodable {
   let buttons: [DrawerButton]?
-  let top: CGFloat
-  let from: CGFloat?
-  let start: Double?
-  let duration: Double
-  let epoch: Double?
-  let seq: Int?
-  let finger: CGFloat?
-  let floor: CGFloat?
 }
 
 /// Draws Keel's Liquid Glass composer, editor, pickers and floating buttons
@@ -87,9 +73,6 @@ class GlassPlugin: Plugin {
       self?.trigger("button", data: ["name": name])
     }
     DispatchQueue.main.async {
-      let tracker = FingerTracker(target: nil, action: nil)
-      tracker.onMove = { [weak self] y in self?.model.fingerMoved(y) }
-      webview.addGestureRecognizer(tracker)
       self.hosting = attachOverlay(model: self.model, to: webview)
       Diag.attach(webview, hosting: self.hosting?.view)
       Demo.run(webview: webview, model: self.model)

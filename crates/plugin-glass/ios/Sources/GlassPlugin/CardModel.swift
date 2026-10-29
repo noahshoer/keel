@@ -234,63 +234,6 @@ struct ActionMenu: Codable, Equatable {
   let items: [Item]
 }
 
-/// The sheet's top gliding from `from` to `to` on the page's settle curve,
-/// cubic-bezier(.32,.72,0,1), starting at `start`.
-struct SheetGlide: Equatable {
-  let from: CGFloat
-  let to: CGFloat
-  let start: Date
-  let duration: Double
-
-  var end: Date { start.addingTimeInterval(duration) }
-
-  func value(at date: Date) -> CGFloat {
-    let t = min(1, max(0, date.timeIntervalSince(start) / duration))
-    return from + (to - from) * CGFloat(UnitBezier.keel.solve(t))
-  }
-}
-
-/// CSS's cubic-bezier timing function (WebKit's UnitBezier).
-struct UnitBezier {
-  static let keel = UnitBezier(0.32, 0.72, 0, 1)
-  let ax, bx, cx, ay, by, cy: Double
-
-  init(_ p1x: Double, _ p1y: Double, _ p2x: Double, _ p2y: Double) {
-    cx = 3 * p1x
-    bx = 3 * (p2x - p1x) - cx
-    ax = 1 - cx - bx
-    cy = 3 * p1y
-    by = 3 * (p2y - p1y) - cy
-    ay = 1 - cy - by
-  }
-
-  func x(_ t: Double) -> Double { ((ax * t + bx) * t + cx) * t }
-  func y(_ t: Double) -> Double { ((ay * t + by) * t + cy) * t }
-  func dx(_ t: Double) -> Double { (3 * ax * t + 2 * bx) * t + cx }
-
-  /// The curve's progress at time fraction `x`.
-  func solve(_ x: Double) -> Double {
-    var t = x
-    for _ in 0..<8 {
-      let e = self.x(t) - x
-      if abs(e) < 1e-6 { return y(t) }
-      let d = dx(t)
-      if abs(d) < 1e-6 { break }
-      t -= e / d
-    }
-    var lo = 0.0, hi = 1.0
-    t = x
-    while lo < hi {
-      let v = self.x(t)
-      if abs(v - x) < 1e-6 { break }
-      if x > v { lo = t } else { hi = t }
-      t = (hi - lo) / 2 + lo
-      if hi - lo < 1e-7 { break }
-    }
-    return y(t)
-  }
-}
-
 /// A web button drawn as glass (the drawer's header buttons, the task
 /// sheet's X and •••), at the spot the page drew it.
 struct DrawerButton: Codable, Equatable {
@@ -343,23 +286,6 @@ final class CardModel: ObservableObject {
   @Published var searching = false
   /// Glass stand-ins for the open drawer's header buttons.
   @Published var drawerButtons: [DrawerButton] = []
-  /// The task sheet's glass X and ••• (y from the sheet's top) and where the
-  /// sheet's top is on screen; they move with it.
-  @Published var sheetButtons: [DrawerButton] = []
-  @Published var sheetTop: CGFloat = 0
-  /// While the sheet glides, its top follows the page's curve frame by frame.
-  @Published var sheetGlide: SheetGlide?
-  var sheetOrder = SheetOrder()
-  /// While the page drags the sheet, the glass follows the finger natively.
-  var sheetFollow: SheetFollow?
-  /// The finger's latest y on the web view (nil when no finger is down).
-  var finger: CGFloat?
-
-  func fingerMoved(_ y: CGFloat?) {
-    finger = y
-    if let y, let f = sheetFollow { sheetTop = f.top(finger: y) }
-  }
-
   /// Window-space frames of the controls that take touches while the card is closed.
   var hitRects: [String: CGRect] = [:]
 
@@ -384,39 +310,6 @@ final class CardModel: ObservableObject {
 
   var pickerOnly: Bool { state?.onlyPicker != nil }
 
-  /// Moves the sheet's buttons: at once, or gliding in step with the page's
-  /// own animation (same start, duration and curve).
-  func placeSheet(_ a: SheetArgs) {
-    guard sheetOrder.accepts(epoch: a.epoch, seq: a.seq) else { return }
-    if let buttons = a.buttons { sheetButtons = buttons }
-    if let f0 = a.finger {
-      // The drag took over: from here the finger moves the glass.
-      let follow = SheetFollow(top0: a.top, finger0: f0, floor: a.floor ?? -.greatestFiniteMagnitude)
-      sheetFollow = follow
-      sheetGlide = nil
-      sheetTop = follow.top(finger: finger ?? f0)
-      return
-    }
-    sheetFollow = nil
-    let now = Date()
-    if a.duration > 0 {
-      let from = a.from ?? sheetTopNow(now)
-      let start = a.start.map { Date(timeIntervalSince1970: $0 / 1000) } ?? now
-      let glide = SheetGlide(from: from, to: a.top, start: start, duration: a.duration)
-      sheetGlide = glide
-      DispatchQueue.main.asyncAfter(deadline: .now() + max(0, glide.end.timeIntervalSince(now)) + 0.05) {
-        if self.sheetGlide == glide { self.sheetGlide = nil }
-      }
-    } else {
-      sheetGlide = nil
-    }
-    sheetTop = a.top
-  }
-
-  /// The sheet's top on screen at `date` (mid-glide or at rest).
-  func sheetTopNow(_ date: Date) -> CGFloat {
-    sheetGlide?.value(at: date) ?? sheetTop
-  }
 
   func update(_ s: CardState) {
     guard state != nil else { return }
