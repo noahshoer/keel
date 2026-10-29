@@ -748,8 +748,18 @@ fn SubtaskRow(row: CardRow, on_open: EventHandler<Id>, reload: Signal<u32>) -> E
     }
 }
 
+/// The field's text with line breaks as spaces, and whether one was typed
+/// (an Enter: iOS sometimes inserts it rather than sending a keydown the
+/// field can catch). The space a line break leaves at the end goes.
+fn typed_text(raw: &str) -> (String, bool) {
+    let enter = raw.contains(['\n', '\r']);
+    let text = raw.replace("\r\n", " ").replace(['\n', '\r'], " ");
+    (if enter { text.trim_end().to_string() } else { text }, enter)
+}
+
 /// A text field that grows with its text (a textarea over a mirror). Enter
-/// and blur commit; line breaks are typed as spaces.
+/// commits and leaves the field (the keyboard goes); blur commits too. Line
+/// breaks are typed as spaces.
 #[component]
 fn GrowingText(
     class: &'static str,
@@ -759,6 +769,17 @@ fn GrowingText(
     on_input: EventHandler<String>,
     on_commit: EventHandler<()>,
 ) -> Element {
+    let mut field = use_signal(|| None::<std::rc::Rc<MountedData>>);
+    // Enter: the blur that follows commits.
+    let leave = move || {
+        if let Some(m) = field() {
+            spawn(async move {
+                let _ = m.set_focus(false).await;
+            });
+        } else {
+            on_commit.call(());
+        }
+    };
     rsx! {
         div { class: "tv-grow {class}",
             div { class: "tv-grow-mirror", aria_hidden: "true", "{value}\u{200b}" }
@@ -769,15 +790,24 @@ fn GrowingText(
                 // `autofocus` is only an attribute to Dioxus, which a browser
                 // ignores after load; focus the new field itself.
                 onmounted: move |e| async move {
+                    field.set(Some(e.data()));
                     if autofocus {
                         let _ = e.set_focus(true).await;
                     }
                 },
-                oninput: move |e| on_input.call(e.value().replace(['\n', '\r'], " ")),
+                oninput: move |e| {
+                    let (text, enter) = typed_text(&e.value());
+                    on_input.call(text);
+                    if enter {
+                        crate::diag::log(&format!("{class}: newline typed"));
+                        leave();
+                    }
+                },
                 onkeydown: move |e| {
                     if e.key() == Key::Enter {
+                        crate::diag::log(&format!("{class}: Enter keydown"));
                         e.prevent_default();
-                        on_commit.call(());
+                        leave();
                     }
                 },
                 onblur: move |_| on_commit.call(()),
@@ -808,5 +838,13 @@ mod tests {
         // Description is typed in place, not picked.
         assert_eq!(native_chip(Some(Field::Description), None), None);
         assert_eq!(native_chip(None, Some(Missing::Field(Field::Description))), None);
+    }
+
+    #[test]
+    fn a_newline_in_the_text_is_an_enter() {
+        // iOS can deliver Enter as an inserted newline the keydown missed.
+        assert_eq!(typed_text("Buy milk\n"), ("Buy milk".to_string(), true));
+        assert_eq!(typed_text("Buy\r\nmilk"), ("Buy milk".to_string(), true));
+        assert_eq!(typed_text("Buy milk "), ("Buy milk ".to_string(), false), "a space stays while typing");
     }
 }
