@@ -557,6 +557,14 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .native-glass .tv-sheet.glass-head .tv-head .tv-round { will-change: opacity; background: transparent; }
 .native-glass .tv-sheet.glass-head .tv-head .tv-round > * { visibility: hidden; }
 .menu-item.danger { color: var(--p1); }
+/* The views stacked in the sheet: the top one, and under it the one Back
+   returns to, hidden but for an edge swipe (gestures.rs). Its header is a
+   spacer of the real one's height (52px in both layouts). */
+.tv-stack { position: relative; flex: 1; min-height: 0; }
+.tv-stack > .task-view { position: absolute; inset: 0; }
+.tv-under { visibility: hidden; pointer-events: none; }
+.tv-head-space { flex: none; height: 52px; }
+.tv-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--app-bg); }
 .tv-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   padding: 4px 12px calc(24px + env(safe-area-inset-bottom)); }
 .tv-titleline { display: flex; align-items: flex-start; gap: 10px; margin: 4px 2px 12px; }

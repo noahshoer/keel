@@ -23,6 +23,12 @@ const FLICK_MIN: f64 = 16.0;
 const STRONG_FLICK: f64 = 1.5;
 /// A touch on the sheet is a tap until it moves this far either way.
 const DRAG_SLOP: f64 = 8.0;
+/// A swipe back starts this close to the sheet's left edge...
+const EDGE_WIDTH: f64 = 24.0;
+/// ...and goes back when released past this share of the width, or on a
+/// rightward flick this fast (px per ms) that travelled at least [`FLICK_MIN`] x 2.
+const BACK_SHARE: f64 = 0.4;
+const BACK_FLICK: f64 = 0.5;
 
 /// One finished touch, as reported by [`SWIPE_JS`].
 #[derive(Debug, Clone, Deserialize)]
@@ -205,6 +211,53 @@ pub fn settle_offset(settle: Settle, medium: f64) -> f64 {
     }
 }
 
+/// Whether a touch at `x` (from the viewport's left) began at the edge.
+pub fn at_edge(x: f64) -> bool {
+    x <= EDGE_WIDTH
+}
+
+/// What a touch that began at the left edge of the sheet turns into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EdgeBack {
+    /// Not far enough to say.
+    Pending,
+    /// The content follows the finger.
+    Drag,
+    /// Not a swipe back (vertical, leftward, or no Back to go to).
+    Ignore,
+}
+
+/// `can`: the touch began at the edge of a sheet that has a Back (inside a
+/// sub-task). Rightward and mostly sideways past the slop is a drag.
+pub fn edge_back_action(can: bool, _x: f64, dx: f64, dy: f64) -> EdgeBack {
+    if !can {
+        return EdgeBack::Ignore;
+    }
+    if dx.abs().max(dy.abs()) < DRAG_SLOP {
+        return EdgeBack::Pending;
+    }
+    if dx > 0.0 && dx > dy.abs() {
+        EdgeBack::Drag
+    } else {
+        EdgeBack::Ignore
+    }
+}
+
+/// How far the content has moved: with the finger, rightward, within the width.
+pub fn edge_offset(dx: f64, width: f64) -> f64 {
+    dx.clamp(0.0, width.max(0.0))
+}
+
+/// The release decision: past [`BACK_SHARE`] of the width, or a rightward
+/// flick (`velocity` px per ms, positive right) that went at least 2 x
+/// [`FLICK_MIN`]. A leftward fling cancels.
+pub fn edge_back_commits(dx: f64, velocity: f64, width: f64) -> bool {
+    if velocity <= -BACK_FLICK {
+        return false;
+    }
+    dx >= width * BACK_SHARE || (velocity >= BACK_FLICK && dx >= FLICK_MIN * 2.0)
+}
+
 /// Exposes the sheet's rules to [`SHEET_DRAG_JS`] as `window.keelSheet`:
 /// - `decide(start, dx, dy)`: "pending" / "drag" / "scroll" / "ignore"
 ///   ([`sheet_drag_action`]); `hold(start, dx, dy)`: bool ([`holds_scroll`]).
@@ -213,6 +266,9 @@ pub fn settle_offset(settle: Settle, medium: f64) -> f64 {
 ///   [`drag_from`] (`settling` is the current shift, or null at rest).
 /// - `settle(detent, y, medium, velocity)`: "large" / "medium" / "close"
 ///   ([`sheet_settle`]); `rest(settle, medium)`: [`settle_offset`].
+/// - `edge(can, x, dx, dy)`: "pending" / "drag" / "ignore" ([`edge_back_action`]);
+///   `atEdge(x)`: [`at_edge`]; `edgeOffset(dx, width)`: [`edge_offset`];
+///   `edgeCommits(dx, velocity, width)`: [`edge_back_commits`].
 /// - `glass(rects, sheetTop, vvLeft, vvTop)`: the glass X and •••
 ///   ([`crate::glass::sheet_glass`]).
 ///
@@ -276,6 +332,17 @@ pub fn install_sheet_rules() {
         };
         settle_offset(s, medium)
     });
+    let edge = Closure::<dyn Fn(bool, f64, f64, f64) -> String>::new(|can, x, dx, dy| {
+        match edge_back_action(can, x, dx, dy) {
+            EdgeBack::Pending => "pending",
+            EdgeBack::Drag => "drag",
+            EdgeBack::Ignore => "ignore",
+        }
+        .to_string()
+    });
+    let at = Closure::<dyn Fn(f64) -> bool>::new(at_edge);
+    let offset = Closure::<dyn Fn(f64, f64) -> f64>::new(edge_offset);
+    let commits = Closure::<dyn Fn(f64, f64, f64) -> bool>::new(edge_back_commits);
     let glass = Closure::<dyn Fn(JsValue, f64, f64, f64) -> JsValue>::new(|rects: JsValue, top, left, vv_top| {
         let rects: Vec<WebRect> = serde_wasm_bindgen::from_value(rects).unwrap_or_default();
         let s = serde_wasm_bindgen::Serializer::json_compatible();
@@ -291,6 +358,10 @@ pub fn install_sheet_rules() {
     set("from", from.as_ref());
     set("settle", settle.as_ref());
     set("rest", rest.as_ref());
+    set("edge", edge.as_ref());
+    set("atEdge", at.as_ref());
+    set("edgeOffset", offset.as_ref());
+    set("edgeCommits", commits.as_ref());
     set("glass", glass.as_ref());
     let _ = js_sys::Reflect::set(&js_sys::global(), &"keelSheet".into(), &rules);
     decide.forget();
@@ -299,6 +370,10 @@ pub fn install_sheet_rules() {
     from.forget();
     settle.forget();
     rest.forget();
+    edge.forget();
+    at.forget();
+    offset.forget();
+    commits.forget();
     glass.forget();
 }
 
@@ -464,6 +539,86 @@ const end = (cancelled) => {
     if (sc) { sc.style.transition = 'none'; sc.style.opacity = ''; }
   }, secs * 1000);
 };
+// Swipe in from the left edge inside a sub-task: the content follows the
+// finger; released past the threshold (or flicked) it slides off and the
+// Back button is clicked (so a pending edit saves, as for a tap on ‹),
+// otherwise it springs back. Only where a Back exists.
+let e = null;
+// The view under (`.tv-under`, mounted but hidden) comes in from a third of
+// a width to the left, as in iOS, while the top view's content leaves.
+const topBody = (sheet) => sheet.querySelector('.tv-stack > .task-view:not(.tv-under) > .tv-body');
+const under = (sheet) => sheet.querySelector('.tv-stack > .tv-under');
+const edgeMove = (d, x, secs) => {
+  const t = secs > 0 ? `transform ${secs}s ${EASE}` : 'none';
+  const share = Math.min(1, x / innerWidth);
+  const body = topBody(d.sheet), u = under(d.sheet), ub = u?.querySelector(':scope > .tv-body');
+  if (body) {
+    body.style.transition = t;
+    body.style.transform = x ? `translateX(${x}px)` : '';
+    body.style.boxShadow = x ? '-6px 0 18px rgba(0,0,0,.12)' : '';
+  }
+  if (u) u.style.visibility = x ? 'visible' : '';
+  if (ub) {
+    ub.style.transition = t;
+    ub.style.transform = x ? `translateX(${-innerWidth / 3 * (1 - share)}px)` : '';
+  }
+};
+document.addEventListener('touchstart', (ev) => {
+  e = null;
+  if (ev.touches.length !== 1 || !window.keelSheet) return;
+  const sheet = ev.target.closest?.('.tv-sheet');
+  const t = ev.touches[0];
+  if (!sheet || innerWidth >= 900) return;
+  const can = keelSheet.atEdge(t.clientX) && !!sheet.querySelector('.tv-back') && !ev.target.closest(BLOCK);
+  if (can) e = { sheet, x: t.clientX, y: t.clientY, mode: 'pending', samples: [] };
+}, { passive: true, capture: true });
+document.addEventListener('touchmove', (ev) => {
+  if (!e || e.mode === 'ignore') return;
+  const t = ev.touches[0], dx = t.clientX - e.x, dy = t.clientY - e.y;
+  if (e.mode === 'pending') {
+    e.mode = keelSheet.edge(true, e.x, dx, dy);
+    if (e.mode !== 'drag') { if (e.mode === 'ignore') e = null; return; }
+    // The vertical sheet drag must not also take this touch.
+    if (typeof g !== 'undefined') g = null;
+  }
+  ev.preventDefault();
+  ev.stopPropagation();
+  e.dx = keelSheet.edgeOffset(dx, innerWidth);
+  e.samples.push([ev.timeStamp, dx]);
+  if (e.samples.length > 6) e.samples.shift();
+  edgeMove(e, e.dx, 0);
+}, { passive: false, capture: true });
+const edgeEnd = (cancelled, at) => {
+  const d = e;
+  e = null;
+  if (!d || d.mode !== 'drag') return;
+  // The lift counts as a sample, so a pause before it isn't read as a flick.
+  d.samples.push([at, d.dx]);
+  const s = d.samples, a = s[0], b = s[s.length - 1];
+  const v = a && b && b[0] > a[0] ? (b[1] - a[1]) / (b[0] - a[0]) : 0;
+  const secs = reduce() ? 0 : SETTLE_S;
+  if (cancelled || !keelSheet.edgeCommits(d.dx, v, innerWidth)) { edgeMove(d, 0, secs); return; }
+  edgeMove(d, innerWidth, secs);
+  // Back keeps the view under mounted and makes it the top one. It stays
+  // shown until it has lost `.tv-under`, then the swipe's styles go (it's at
+  // rest by now, so nothing moves). The leaving view stays off to the right
+  // until it's removed.
+  const u = under(d.sheet), ub = u?.querySelector(':scope > .tv-body');
+  const settle = (frames) => {
+    if (u && u.isConnected && u.classList.contains('tv-under') && frames > 0) {
+      requestAnimationFrame(() => settle(frames - 1));
+      return;
+    }
+    if (u) u.style.visibility = '';
+    if (ub) { ub.style.transition = 'none'; ub.style.transform = ''; }
+  };
+  setTimeout(() => {
+    d.sheet.querySelector('.tv-back')?.click();
+    settle(120);
+  }, secs * 1000);
+};
+document.addEventListener('touchend', (ev) => edgeEnd(false, ev.timeStamp), { passive: true, capture: true });
+document.addEventListener('touchcancel', (ev) => edgeEnd(true, ev.timeStamp), { passive: true, capture: true });
 // The X and the scrim: the sheet slides down off the screen, then closes the
 // way a drag past the threshold does (`{close}`). False on the desktop panel
 // (at least 900px wide), which closes at once.
@@ -707,6 +862,42 @@ mod tests {
         assert_eq!(drag_offset(300.0, -120.0), 180.0);
         assert_eq!(drag_offset(300.0, -400.0), 0.0, "stops at the large height");
         assert_eq!(drag_offset(0.0, -30.0), 0.0);
+    }
+
+    #[test]
+    fn an_edge_swipe_right_starts_only_at_the_left_edge_with_a_back() {
+        assert_eq!(edge_back_action(true, 4.0, 14.0, 2.0), EdgeBack::Drag);
+        assert_eq!(edge_back_action(true, 4.0, 5.0, 2.0), EdgeBack::Pending, "inside the slop");
+        assert_eq!(edge_back_action(false, 4.0, 14.0, 2.0), EdgeBack::Ignore, "not from the edge, or no Back");
+    }
+
+    #[test]
+    fn an_edge_touch_that_goes_vertical_or_left_is_not_a_back() {
+        assert_eq!(edge_back_action(true, 4.0, 3.0, 14.0), EdgeBack::Ignore, "vertical: the sheet drag's");
+        assert_eq!(edge_back_action(true, 4.0, -14.0, 2.0), EdgeBack::Ignore, "leftward");
+        assert_eq!(edge_back_action(true, 4.0, 10.0, 10.0), EdgeBack::Ignore, "a diagonal tie");
+    }
+
+    #[test]
+    fn only_touches_that_begin_at_the_edge_count() {
+        assert!(at_edge(0.0) && at_edge(EDGE_WIDTH));
+        assert!(!at_edge(EDGE_WIDTH + 1.0));
+    }
+
+    #[test]
+    fn release_past_the_threshold_or_with_a_flick_goes_back() {
+        assert!(edge_back_commits(390.0 * 0.4, 0.0, 390.0));
+        assert!(!edge_back_commits(390.0 * 0.4 - 1.0, 0.0, 390.0));
+        assert!(edge_back_commits(40.0, 0.6, 390.0), "a flick");
+        assert!(!edge_back_commits(10.0, 0.9, 390.0), "too short even when fast");
+        assert!(!edge_back_commits(250.0, -0.6, 390.0), "flung back to the left");
+    }
+
+    #[test]
+    fn the_content_follows_the_finger_to_the_right_only() {
+        assert_eq!(edge_offset(90.0, 390.0), 90.0);
+        assert_eq!(edge_offset(-20.0, 390.0), 0.0);
+        assert_eq!(edge_offset(500.0, 390.0), 390.0);
     }
 
     #[test]

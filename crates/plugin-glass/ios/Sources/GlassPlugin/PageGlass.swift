@@ -15,7 +15,8 @@ import WebKit
 /// WebKit can drop the views (a sub-task's view replaces the header) or not
 /// have made them yet (the sheet's first frames), so while shown, each frame
 /// checks the glass is still in place and finds the views again if not. If
-/// they never turn up, `fallback` runs (the page shows its own icons).
+/// they never turn up while the app is active, `fallback` runs (the page
+/// shows its own icons).
 final class PageGlass: NSObject {
   private weak var webview: WKWebView?
   private let name: String
@@ -93,7 +94,9 @@ final class PageGlass: NSObject {
       placed[b.id] = glass
       Diag.log("GLASS \(name) \(b.id) in \(host.convert(host.bounds, to: nil))")
     }
-    if found {
+    // Leaving the app (home, app switcher, Control Center), WebKit drops its
+    // layers while frames still tick; they come back once it's active again.
+    if found || UIApplication.shared.applicationState != .active {
       missing = 0
       return
     }

@@ -99,9 +99,17 @@ pub fn TaskView(
     labels: Vec<Label>,
     inbox_id: Id,
     reload: Signal<u32>,
+    /// False for the view under a sub-task's, kept mounted and out of sight
+    /// for the edge swipe: no header (a spacer of its height), and it leaves
+    /// the shared flags (add sub-task, close, the native menu's choice) to
+    /// the top one. A Back makes it active in place.
+    #[props(default = true)] active: bool,
 ) -> Element {
     let mut reload = reload;
     let nav = use_nav();
+    // Effects read it: they're made once, so a captured prop would stay stale.
+    let mut is_active = use_signal(|| active);
+    use_effect(use_reactive!(|active| is_active.set(active)));
     let glass = crate::glass::use_glass();
     let native = (glass.native)();
     let today = crate::today();
@@ -149,7 +157,7 @@ pub fn TaskView(
     // A list row's "Add sub-task" opens the view with the editor showing.
     use_effect(move || {
         let mut flag = nav.add_sub;
-        if flag() {
+        if is_active() && flag() {
             flag.set(false);
             adding.set(true);
         }
@@ -199,7 +207,7 @@ pub fn TaskView(
     // A tap on the scrim or a drag that pulled the sheet down.
     use_effect(move || {
         let mut flag = nav.close_asked;
-        if flag() {
+        if is_active() && flag() {
             flag.set(false);
             navigate.call(NavTo::Close);
         }
@@ -260,7 +268,7 @@ pub fn TaskView(
         let target = menu_target.clone();
         use_effect(move || {
             let mut chosen = glass.chosen;
-            let Some(c) = chosen().filter(|c| c.target == target) else { return };
+            let Some(c) = chosen().filter(|c| is_active() && c.target == target) else { return };
             chosen.set(None);
             on_action.call(c.action);
         });
@@ -469,7 +477,7 @@ pub fn TaskView(
     let checked = task.checked;
 
     rsx! {
-        div { class: "task-view", "data-view-id": "{task.id}",
+        div { class: if active { "task-view" } else { "task-view tv-under" }, "data-view-id": "{task.id}", aria_hidden: if active { "false" } else { "true" },
             if open().is_some() || more_open() {
                 div {
                     class: "pop-backdrop",
@@ -479,6 +487,10 @@ pub fn TaskView(
                     },
                 }
             }
+            if !active {
+                div { class: "tv-head-space" }
+            }
+            if active {
             div { class: "tv-head",
                 button {
                     r#type: "button",
@@ -545,6 +557,8 @@ pub fn TaskView(
                     }
                 }
             }
+            }
+            div { class: "tv-body",
             div { class: "tv-scroll",
                 div { class: if checked { "tv-titleline done" } else { "tv-titleline" },
                     button {
@@ -687,6 +701,7 @@ pub fn TaskView(
                         }
                     }
                 }
+            }
             }
         }
     }

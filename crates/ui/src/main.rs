@@ -516,6 +516,14 @@ fn App() -> Element {
         .top()
         .and_then(|id| task_view::nav::detail(id, &nav.all.read(), (nav.show_completed)()));
 
+    // The view under it too, when a sub-task is on top: it stays mounted
+    // (hidden) so the edge swipe slides it in, and a Back keeps it as is.
+    let under_task = {
+        let stack = nav.stack.read();
+        let n = stack.0.len();
+        (n > 1).then(|| stack.0[n - 2].clone()).and_then(|id| task_view::nav::detail(&id, &nav.all.read(), (nav.show_completed)()))
+    };
+
     rsx! {
         style { dangerous_inner_html: style::css() }
         div { class: format!("app{}{}", if drawer() { " drawer-open" } else { "" }, if open_task.is_some() { " view-open" } else { "" }),
@@ -579,15 +587,22 @@ fn App() -> Element {
                         }
                         div { class: "tv-sheet",
                             div { class: "tv-grabber", aria_hidden: "true" }
-                            task_view::view::TaskView {
-                                key: "{d.task.id}",
-                                detail: d,
-                                depth: nav.stack.read().0.len(),
-                                projects: loaded.projects.clone(),
-                                sections: loaded.sections.clone(),
-                                labels: loaded.labels.clone(),
-                                inbox_id: loaded.inbox.id.clone(),
-                                reload,
+                            div { class: "tv-stack",
+                                // Keyed by task, in stack order: a push or a
+                                // Back keeps the views that stay mounted.
+                                for (level, active) in under_task.clone().map(|u| (u, false)).into_iter().chain([(d, true)]) {
+                                    task_view::view::TaskView {
+                                        key: "{level.task.id}",
+                                        detail: level,
+                                        depth: nav.stack.read().0.len() - usize::from(!active),
+                                        projects: loaded.projects.clone(),
+                                        sections: loaded.sections.clone(),
+                                        labels: loaded.labels.clone(),
+                                        inbox_id: loaded.inbox.id.clone(),
+                                        reload,
+                                        active,
+                                    }
+                                }
                             }
                         }
                     }
