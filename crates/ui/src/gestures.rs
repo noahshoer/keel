@@ -218,6 +218,19 @@ pub fn keyboard_expands(detent: Detent, width: f64, kb: f64) -> bool {
     detent == Detent::Medium && width < SHEET_MAX && kb > 0.0
 }
 
+/// How far up the keyboard keeps the sheet's bottom (`--kb`), from the
+/// layout height and the visual viewport. While a keyboard is still coming
+/// up (`held`, its height) the viewport hasn't resized yet, so the held
+/// height stands in; once it has, the viewport is right, also when WebKit
+/// has panned it to reveal a field (the held height knows nothing of that).
+pub fn keyboard_inset(client_h: f64, vv_top: f64, vv_h: f64, held: Option<f64>) -> f64 {
+    let resized = vv_h < client_h - 0.5;
+    match held {
+        Some(kb) if !resized => kb.max(0.0),
+        _ => (client_h - vv_top - vv_h).max(0.0),
+    }
+}
+
 /// Whether a touch at `x` (from the viewport's left) began at the edge.
 pub fn at_edge(x: f64) -> bool {
     x <= EDGE_WIDTH
@@ -276,7 +289,8 @@ pub fn edge_back_commits(dx: f64, velocity: f64, width: f64) -> bool {
 /// - `edge(can, x, dx, dy)`: "pending" / "drag" / "ignore" ([`edge_back_action`]);
 ///   `atEdge(x)`: [`at_edge`]; `edgeOffset(dx, width)`: [`edge_offset`];
 ///   `edgeCommits(dx, velocity, width)`: [`edge_back_commits`].
-/// - `kbExpand(detent, width, kb)`: [`keyboard_expands`].
+/// - `kbExpand(detent, width, kb)`: [`keyboard_expands`];
+///   `kbInset(clientH, vvTop, vvH, held)`: [`keyboard_inset`] (`held` or null).
 /// - `glass(rects, sheetTop, vvLeft, vvTop)`: the glass X and •••
 ///   ([`crate::glass::sheet_glass`]).
 ///
@@ -354,6 +368,9 @@ pub fn install_sheet_rules() {
     let kb_expand = Closure::<dyn Fn(JsValue, f64, f64) -> bool>::new(|d: JsValue, width, kb| {
         keyboard_expands(detent(&d), width, kb)
     });
+    let kb_inset = Closure::<dyn Fn(f64, f64, f64, JsValue) -> f64>::new(|h, top, vh, held: JsValue| {
+        keyboard_inset(h, top, vh, held.as_f64())
+    });
     let glass = Closure::<dyn Fn(JsValue, f64, f64, f64) -> JsValue>::new(|rects: JsValue, top, left, vv_top| {
         let rects: Vec<WebRect> = serde_wasm_bindgen::from_value(rects).unwrap_or_default();
         let s = serde_wasm_bindgen::Serializer::json_compatible();
@@ -374,6 +391,7 @@ pub fn install_sheet_rules() {
     set("edgeOffset", offset.as_ref());
     set("edgeCommits", commits.as_ref());
     set("kbExpand", kb_expand.as_ref());
+    set("kbInset", kb_inset.as_ref());
     set("glass", glass.as_ref());
     let _ = js_sys::Reflect::set(&js_sys::global(), &"keelSheet".into(), &rules);
     decide.forget();
@@ -387,6 +405,7 @@ pub fn install_sheet_rules() {
     offset.forget();
     commits.forget();
     kb_expand.forget();
+    kb_inset.forget();
     glass.forget();
 }
 
@@ -663,17 +682,17 @@ document.addEventListener('touchend', () => end(false), { passive: true, capture
 document.addEventListener('touchcancel', () => end(true), { passive: true, capture: true });
 // The keyboard: keep the sheet in the visible area above it.
 // Only on iPhone at 1x: a desktop pinch-zoom mustn't lift the sheet.
-// `kbHold`: the height of a keyboard still coming up, which the visual
-// viewport (resized only once it's up) mustn't undercut meanwhile.
+// `kbHold`: the height of a keyboard still coming up, standing in until the
+// visual viewport (resized only once it's up) has caught up (`kbInset`).
 let kbHold = null;
 const viewport = () => {
   const v = window.visualViewport, root = document.documentElement;
   for (const k of ['--vv-top', '--vv-h', '--kb']) root.style.removeProperty(k);
   if (v && native() && v.scale === 1) {
-    const held = kbHold && performance.now() < kbHold.until ? kbHold.kb : 0;
+    const held = kbHold && performance.now() < kbHold.until ? kbHold.kb : null;
     root.style.setProperty('--vv-top', `${v.offsetTop}px`);
     root.style.setProperty('--vv-h', `${v.height}px`);
-    root.style.setProperty('--kb', `${Math.max(held, root.clientHeight - v.offsetTop - v.height)}px`);
+    root.style.setProperty('--kb', `${keelSheet.kbInset(root.clientHeight, v.offsetTop, v.height, held)}px`);
   }
 };
 // Swift, as the keyboard starts to move (`kb` px of the web view it will
@@ -836,6 +855,22 @@ mod tests {
         assert!(!keyboard_expands(Detent::Large, 390.0, 328.0), "already large");
         assert!(!keyboard_expands(Detent::Medium, 1024.0, 328.0), "the desktop panel has no detents");
         assert!(!keyboard_expands(Detent::Medium, 390.0, 0.0), "a hardware keyboard covers nothing");
+    }
+
+    #[test]
+    fn a_keyboard_coming_up_holds_until_the_viewport_catches_up() {
+        // Not resized yet: the keyboard's height.
+        assert_eq!(keyboard_inset(874.0, 0.0, 874.0, Some(328.0)), 328.0);
+        // Resized: the viewport's answer, even with no hold.
+        assert_eq!(keyboard_inset(874.0, 0.0, 546.0, None), 328.0);
+        assert_eq!(keyboard_inset(874.0, 0.0, 874.0, None), 0.0);
+    }
+
+    #[test]
+    fn a_panned_viewport_wins_over_the_keyboards_height() {
+        // The description field: WebKit pans 192 px and the keyboard (with
+        // its form bar) covers 396; the sheet ends at the keyboard, 204 up.
+        assert_eq!(keyboard_inset(874.0, 192.0, 478.0, Some(396.0)), 204.0);
     }
 
     #[test]
