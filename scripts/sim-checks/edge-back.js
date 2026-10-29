@@ -24,7 +24,7 @@ check(`after short swipe: ${title()} back=${!!document.querySelector('.tv-back')
 touch('touchstart', 6, 400);
 for (let i = 1; i <= 8; i++) { await sleep(16); touch('touchmove', 6 + (150 * i) / 8, 400); }
 const pk = document.querySelector('.tv-peek');
-check(`mid-drag: peek ${pk && getComputedStyle(pk).visibility} "${pk?.querySelector('.tv-peek-text')?.innerText}" at ${pk?.style.transform}`);
+check(`mid-drag: peek ${pk && getComputedStyle(pk).visibility} "${pk?.querySelector('.tv-title textarea')?.value}" at ${pk?.style.transform}; top moved ${document.querySelector('.tv-sheet > .task-view > .tv-body > .tv-scroll')?.style.transform}`);
 await sleep(2500);
 touch('touchend', 156, 400);
 await sleep(1500);

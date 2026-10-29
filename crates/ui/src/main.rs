@@ -520,7 +520,7 @@ fn App() -> Element {
     let peek_task = {
         let stack = nav.stack.read();
         let n = stack.0.len();
-        (n > 1).then(|| stack.0[n - 2].clone()).and_then(|id| task_view::nav::detail(&id, &nav.all.read(), false))
+        (n > 1).then(|| stack.0[n - 2].clone()).and_then(|id| task_view::nav::detail(&id, &nav.all.read(), (nav.show_completed)()))
     };
 
     rsx! {

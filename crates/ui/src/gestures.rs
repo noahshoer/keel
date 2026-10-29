@@ -544,7 +544,8 @@ const end = (cancelled) => {
 // Back button is clicked (so a pending edit saves, as for a tap on ‹),
 // otherwise it springs back. Only where a Back exists.
 let e = null;
-const edgeEls = (sheet) => [sheet.querySelector('.tv-scroll')].filter(Boolean);
+// The top view's content, not the parent's (its view sits inside, in `.tv-peek`).
+const edgeEls = (sheet) => [sheet.querySelector(':scope > .task-view > .tv-body > .tv-scroll')].filter(Boolean);
 // The parent's view (`.tv-peek`, kept hidden under the content) comes in
 // from a third of a width to the left, as in iOS, while the content leaves.
 const edgeMove = (d, x, secs) => {

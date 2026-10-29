@@ -101,6 +101,9 @@ pub fn TaskView(
     reload: Signal<u32>,
     /// The view under this one (in a sub-task), kept out of sight for the edge swipe.
     #[props(default)] peek: Option<TaskDetail>,
+    /// False for that view underneath: it has no header and leaves the
+    /// shared flags (add sub-task, close, the native menu's choice) to the top one.
+    #[props(default = true)] active: bool,
 ) -> Element {
     let mut reload = reload;
     let nav = use_nav();
@@ -151,7 +154,7 @@ pub fn TaskView(
     // A list row's "Add sub-task" opens the view with the editor showing.
     use_effect(move || {
         let mut flag = nav.add_sub;
-        if flag() {
+        if active && flag() {
             flag.set(false);
             adding.set(true);
         }
@@ -201,7 +204,7 @@ pub fn TaskView(
     // A tap on the scrim or a drag that pulled the sheet down.
     use_effect(move || {
         let mut flag = nav.close_asked;
-        if flag() {
+        if active && flag() {
             flag.set(false);
             navigate.call(NavTo::Close);
         }
@@ -262,7 +265,7 @@ pub fn TaskView(
         let target = menu_target.clone();
         use_effect(move || {
             let mut chosen = glass.chosen;
-            let Some(c) = chosen().filter(|c| c.target == target) else { return };
+            let Some(c) = chosen().filter(|c| active && c.target == target) else { return };
             chosen.set(None);
             on_action.call(c.action);
         });
@@ -481,6 +484,7 @@ pub fn TaskView(
                     },
                 }
             }
+            if active {
             div { class: "tv-head",
                 button {
                     r#type: "button",
@@ -547,9 +551,22 @@ pub fn TaskView(
                     }
                 }
             }
+            }
             div { class: "tv-body",
             if let Some(p) = peek.clone() {
-                super::peek::TaskPeek { detail: p, projects: projects.clone(), sections: sections.clone(), inbox_id: inbox_id.clone() }
+                div { class: "tv-peek", aria_hidden: "true",
+                    TaskView {
+                        key: "{p.task.id}",
+                        detail: p,
+                        depth: depth - 1,
+                        projects: projects.clone(),
+                        sections: sections.clone(),
+                        labels: labels.clone(),
+                        inbox_id: inbox_id.clone(),
+                        reload,
+                        active: false,
+                    }
+                }
             }
             div { class: "tv-scroll",
                 div { class: if checked { "tv-titleline done" } else { "tv-titleline" },
