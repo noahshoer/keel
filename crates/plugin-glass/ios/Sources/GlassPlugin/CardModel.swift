@@ -317,12 +317,12 @@ final class CardModel: ObservableObject {
 
   /// Slides the card down off screen together with the keyboard: the
   /// keyboard is dismissed first (it otherwise waits for the card to be
-  /// gone), and the card leaves over the keyboard's own ~0.25 s.
+  /// gone), and the card leaves at the keyboard's pace (`KeyboardPace`).
   func hide() {
     Diag.log("CARD hide")
     guard state != nil else { return }
     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-    withAnimation(.easeOut(duration: 0.25)) {
+    withAnimation(.easeOut(duration: KeyboardPace.seconds)) {
       state = nil
     }
     picker = nil

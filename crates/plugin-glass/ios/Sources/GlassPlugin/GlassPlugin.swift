@@ -84,6 +84,7 @@ class GlassPlugin: Plugin {
     DispatchQueue.main.async {
       self.hosting = attachOverlay(model: self.model, to: webview)
       Diag.attach(webview, hosting: self.hosting?.view)
+      KeyboardPace.attach(webview)
       Demo.run(webview: webview, model: self.model)
     }
   }
