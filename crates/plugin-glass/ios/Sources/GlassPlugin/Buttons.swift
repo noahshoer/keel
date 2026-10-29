@@ -74,8 +74,11 @@ struct SheetButtons: View {
         .touchable("sheet-\(b.id)", in: model)
         .position(x: b.x + b.w / 2, y: top + b.y + b.h / 2)
         .accessibilityLabel(placedLabel(b.id))
+        // Present from the sheet's first frame: no materialize / fade of its own.
+        .transition(.identity)
       }
     }
+    .transaction { $0.animation = nil }
   }
 }
 

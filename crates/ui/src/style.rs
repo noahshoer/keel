@@ -531,7 +531,12 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   background: color-mix(in srgb, var(--text) 7%, transparent); }
 @media (hover: hover) { .tv-round:hover { background: color-mix(in srgb, var(--text) 12%, transparent); } }
 .native-glass .tv-round { width: 40px; height: 40px; }
-.native-glass .tv-sheet.glass-head .tv-head .tv-round { visibility: hidden; }
+/* Under glass, each keeps a compositing layer of its own (WebKit's view for
+   it holds the glass, so the two move as one; SheetGlass.swift) and draws
+   nothing itself. A tap on the glass reaches the page (the glass is inside
+   the web view), so the web button under it takes the click. */
+.native-glass .tv-sheet.glass-head .tv-head .tv-round { will-change: opacity; background: transparent; }
+.native-glass .tv-sheet.glass-head .tv-head .tv-round > * { visibility: hidden; }
 .menu-item.danger { color: var(--p1); }
 .tv-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   padding: 4px 12px calc(24px + env(safe-area-inset-bottom)); }

@@ -62,6 +62,7 @@ class GlassPlugin: Plugin {
   let model = CardModel()
   var hosting: UIViewController?
   weak var webview: WKWebView?
+  lazy var sheetGlass = SheetGlass(webview: webview)
 
   public override func load(webview: WKWebView) {
     self.webview = webview
@@ -157,7 +158,9 @@ class GlassPlugin: Plugin {
   @objc public func sheet(_ invoke: Invoke) throws {
     let args = try invoke.parseArgs(SheetArgs.self)
     DispatchQueue.main.async {
-      self.model.placeSheet(args)
+      // Only the buttons matter: the glass rides the web buttons' own layers.
+      guard let buttons = args.buttons else { return }
+      if buttons.isEmpty { self.sheetGlass.hide() } else { self.sheetGlass.show(buttons) }
     }
     invoke.resolve()
   }
