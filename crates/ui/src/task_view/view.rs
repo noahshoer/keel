@@ -602,6 +602,7 @@ pub fn TaskView(
                                     class: "tv-desc",
                                     value: desc(),
                                     placeholder: "Description",
+                                    multiline: true,
                                     autofocus: desc_open() && base.peek().description.trim().is_empty(),
                                     on_input: move |s: String| desc.set(s),
                                     on_commit: move |_| {
@@ -748,17 +749,45 @@ fn SubtaskRow(row: CardRow, on_open: EventHandler<Id>, reload: Signal<u32>) -> E
     }
 }
 
-/// A text field that grows with its text (a textarea over a mirror). Enter
-/// and blur commit; line breaks are typed as spaces.
+/// The field's text and whether an Enter was typed. A `multiline` field
+/// keeps its line breaks (as `\n`) and never commits on them. Otherwise
+/// line breaks become spaces and one counts as Enter (iOS sometimes inserts
+/// it rather than sending a keydown the field can catch); the space it
+/// leaves at the end goes.
+fn typed_text(raw: &str, multiline: bool) -> (String, bool) {
+    if multiline {
+        return (raw.replace("\r\n", "\n").replace('\r', "\n"), false);
+    }
+    let enter = raw.contains(['\n', '\r']);
+    let text = raw.replace("\r\n", " ").replace(['\n', '\r'], " ");
+    (if enter { text.trim_end().to_string() } else { text }, enter)
+}
+
+/// A text field that grows with its text (a textarea over a mirror). Blur
+/// commits. Single-line: Enter commits and leaves the field (the keyboard
+/// goes), and line breaks are typed as spaces. `multiline`: Enter is a new
+/// line.
 #[component]
 fn GrowingText(
     class: &'static str,
     value: String,
     placeholder: &'static str,
     #[props(default)] autofocus: bool,
+    #[props(default)] multiline: bool,
     on_input: EventHandler<String>,
     on_commit: EventHandler<()>,
 ) -> Element {
+    let mut field = use_signal(|| None::<std::rc::Rc<MountedData>>);
+    // Enter: the blur that follows commits.
+    let leave = move || {
+        if let Some(m) = field() {
+            spawn(async move {
+                let _ = m.set_focus(false).await;
+            });
+        } else {
+            on_commit.call(());
+        }
+    };
     rsx! {
         div { class: "tv-grow {class}",
             div { class: "tv-grow-mirror", aria_hidden: "true", "{value}\u{200b}" }
@@ -769,15 +798,24 @@ fn GrowingText(
                 // `autofocus` is only an attribute to Dioxus, which a browser
                 // ignores after load; focus the new field itself.
                 onmounted: move |e| async move {
+                    field.set(Some(e.data()));
                     if autofocus {
                         let _ = e.set_focus(true).await;
                     }
                 },
-                oninput: move |e| on_input.call(e.value().replace(['\n', '\r'], " ")),
+                oninput: move |e| {
+                    let (text, enter) = typed_text(&e.value(), multiline);
+                    on_input.call(text);
+                    if enter {
+                        crate::diag::log(&format!("{class}: newline typed"));
+                        leave();
+                    }
+                },
                 onkeydown: move |e| {
-                    if e.key() == Key::Enter {
+                    if e.key() == Key::Enter && !multiline {
+                        crate::diag::log(&format!("{class}: Enter keydown"));
                         e.prevent_default();
-                        on_commit.call(());
+                        leave();
                     }
                 },
                 onblur: move |_| on_commit.call(()),
@@ -808,5 +846,20 @@ mod tests {
         // Description is typed in place, not picked.
         assert_eq!(native_chip(Some(Field::Description), None), None);
         assert_eq!(native_chip(None, Some(Missing::Field(Field::Description))), None);
+    }
+
+    #[test]
+    fn a_newline_in_the_text_is_an_enter() {
+        // iOS can deliver Enter as an inserted newline the keydown missed.
+        assert_eq!(typed_text("Buy milk\n", false), ("Buy milk".to_string(), true));
+        assert_eq!(typed_text("Buy\r\nmilk", false), ("Buy milk".to_string(), true));
+        assert_eq!(typed_text("Buy milk ", false), ("Buy milk ".to_string(), false), "a space stays while typing");
+    }
+
+    #[test]
+    fn a_multiline_field_keeps_its_line_breaks() {
+        // The description: Enter is a new line, not a commit.
+        assert_eq!(typed_text("Eggs\nMilk\n", true), ("Eggs\nMilk\n".to_string(), false));
+        assert_eq!(typed_text("Eggs\r\nMilk", true), ("Eggs\nMilk".to_string(), false));
     }
 }
