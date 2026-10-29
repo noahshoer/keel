@@ -250,7 +250,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .due.week { color: var(--due-week); }
 .due.later { color: var(--due-later); }
 .streak { color: var(--streak); font-weight: 500; }
-.task-project { font-size: 12px; color: var(--muted); white-space: nowrap; align-self: flex-end; padding-bottom: 2px; }
+.task-side { flex: none; align-self: stretch; display: flex; flex-direction: column; align-items: flex-end;
+  justify-content: space-between; gap: 4px; min-width: 0; }
+.task-badges { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+.task-project { font-size: 12px; color: var(--muted); white-space: nowrap; padding-bottom: 2px; }
 .task-actions { display: flex; gap: 2px; opacity: 0; transform: translateX(4px); }
 .task-actions { transition: opacity .16s var(--ease), transform .16s var(--ease); }
 /* Mouse: hover shows a task's actions. Touch: a long press does (gestures.rs);
@@ -430,6 +433,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .check::after { content: ''; position: absolute; inset: -10px; }
   .task-project { font-size: 13px; }
   .task-count { font-size: 14px; line-height: 23px; }
+  .task-badges { min-height: 23px; }
+  .task-badges .streak { font-size: 14px; }
   .task-title .done-check { margin-top: 1.5px; }
   .card-head { font-size: 14px; padding: 11px 8px 10px; }
   /* Sidebar: bigger rows, icons and logo to match the task rows. */
@@ -740,7 +745,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .task-actions { position: absolute; top: 4px; right: 4px; padding: 2px; border-radius: var(--r);
     background: var(--row-hover); box-shadow: var(--shadow-sm); pointer-events: none; }
   .task.pressed .task-actions, .task-actions:focus-within { pointer-events: auto; }
-  .task-project { max-width: 38%; overflow: hidden; text-overflow: ellipsis; }
+  .task-side { max-width: 38%; }
+  .task-project { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .streak-panel { margin-left: 0; gap: 12px; }
   /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */
   .editor { padding: 10px 10px 0; }

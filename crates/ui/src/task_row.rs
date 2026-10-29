@@ -129,7 +129,7 @@ pub fn TaskRow(
     let due = due_text(&task, today);
     let recurring = task.due.as_ref().is_some_and(|d| d.is_recurring);
     let streak_on = task.streak_enabled;
-    let show_meta = due.is_some() || streak_on || !task.labels.is_empty() || deadline.is_some() || has_reminders;
+    let show_meta = due.is_some() || !task.labels.is_empty() || deadline.is_some() || has_reminders;
 
     let id_complete = task.id.clone();
     let id_delete = task.id.clone();
@@ -189,9 +189,6 @@ pub fn TaskRow(
                     onclick: move |_| nav.open_chain(id_open.clone(), &nav.all.read()),
                     div { class: "task-title",
                         div { class: "task-content", "{task.content}" }
-                        if let Some(p) = progress {
-                            SubtaskCount { progress: p }
-                        }
                     }
                     if !task.description.is_empty() {
                         div { class: "task-desc", "{task.description}" }
@@ -223,9 +220,6 @@ pub fn TaskRow(
                                     Icon { svg: icons::tag_small() }
                                     "{name}"
                                 }
-                            }
-                            if streak_on {
-                                span { class: "streak", title: "Current streak", "🔥 {task.streak_current}" }
                             }
                         }
                     }
@@ -261,8 +255,22 @@ pub fn TaskRow(
                         Icon { svg: icons::trash() }
                     }
                 }
-                if let Some(name) = project_name.clone() {
-                    span { class: "task-project", "{name}" }
+                // Right side: sub-task count and streak on the title's line,
+                // the project at the bottom.
+                if progress.is_some() || streak_on || project_name.is_some() {
+                    div { class: "task-side",
+                        div { class: "task-badges",
+                            if let Some(p) = progress {
+                                SubtaskCount { progress: p }
+                            }
+                            if streak_on {
+                                span { class: "streak", title: "Current streak", "🔥 {task.streak_current}" }
+                            }
+                        }
+                        if let Some(name) = project_name.clone() {
+                            span { class: "task-project", "{name}" }
+                        }
+                    }
                 }
             }
             if panel() && recurring {
