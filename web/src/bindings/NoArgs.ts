@@ -2,5 +2,7 @@
 
 /**
  * For commands that take nothing; the frontend sends `{ args: {} }`.
+ * Commands bind it as `_args`: Tauri snake_cases parameter names (heck
+ * drops the leading underscore), so the IPC key is still `args`.
  */
 export type NoArgs = Record<string, never>;
