@@ -271,3 +271,65 @@ describe("DeadlinePicker", () => {
     expect(document.querySelector(".sched-time")).toBeNull();
   });
 });
+
+// The task view's faces: a field row's and a dotted pill's.
+export function FacedDateHost({ onChange }: { onChange: (d: string, t: string) => void }) {
+  const [open, setOpen] = usePop();
+  return (
+    <DatePicker
+      date="2026-10-30"
+      time=""
+      text="Today"
+      bucket="Today"
+      rule="Daily"
+      today={TODAY}
+      open={open}
+      setOpen={setOpen}
+      onChange={onChange}
+      face={{ className: "tv-field-btn due-chip today", text: "Today", icon: true }}
+      icon={<span className="filled" />}
+    />
+  );
+}
+
+export function PillHost() {
+  const [open, setOpen] = usePop();
+  return (
+    <Menu
+      id="priority"
+      title="Priority"
+      icon={<span className="flag" />}
+      text="Priority"
+      items={[{ value: "1", label: "Priority 1" }]}
+      selected="4"
+      open={open}
+      setOpen={setOpen}
+      onSelect={vi.fn()}
+      face={{ className: "tv-pill", text: "+ Priority", icon: false }}
+    />
+  );
+}
+
+describe("Face", () => {
+  it("a DatePicker with a face shows its class, icon and text, no ⟳, and still opens", () => {
+    const onChange = vi.fn();
+    render(<FacedDateHost onChange={onChange} />);
+    const btn = screen.getByTitle("Date");
+    expect(btn.className).toBe("tv-field-btn due-chip today");
+    expect(btn.textContent).toBe("Today");
+    expect(btn.querySelector(".filled")).not.toBeNull();
+    // One icon (the face's), no repeat mark.
+    expect(btn.querySelectorAll("svg")).toHaveLength(0);
+    fireEvent.click(btn);
+    expect(btn.className).toBe("tv-field-btn due-chip today chip-open");
+    fireEvent.click(screen.getByText("Tomorrow"));
+    expect(onChange).toHaveBeenLastCalledWith("2026-10-31", "");
+  });
+
+  it("a pill face has no icon and no caret", () => {
+    render(<PillHost />);
+    const btn = screen.getByTitle("Priority");
+    expect(btn.className).toBe("tv-pill");
+    expect(btn.innerHTML).toBe("+ Priority");
+  });
+});

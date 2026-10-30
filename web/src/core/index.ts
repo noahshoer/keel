@@ -245,6 +245,29 @@ export function locationPick(value: string): EditorPick {
   return core.locationPick(value);
 }
 
+/** "Project" or "Project / Section"; "Inbox" for an unknown project. */
+export function locationText(
+  projectId: Id,
+  sectionId: Id | null,
+  projects: Project[],
+  sections: Section[],
+): string {
+  ready();
+  return core.locationText(projectId, sectionId, projects, sections);
+}
+
+/** A repeat rule as text: "Every Mon, Wed". */
+export function repeatText(rule: Recurrence): string {
+  ready();
+  return core.repeatText(rule);
+}
+
+/** A stored reminder as the editor edits it. */
+export function reminderDraftOf(r: Reminder): ReminderDraft {
+  ready();
+  return core.reminderDraftOf(r);
+}
+
 /** What adding the editor's task sends: new labels, the task, then its reminders. */
 export function addPlan(
   v: EditorValues,

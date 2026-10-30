@@ -354,6 +354,39 @@ pub fn location_pick(value: &str) -> Result<JsValue, JsError> {
     output(&editor::location_pick(value))
 }
 
+/// `editor::location_text`: "Project" or "Project / Section" ("Inbox" for an unknown project).
+#[wasm_bindgen(js_name = locationText)]
+pub fn location_text(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id")] project_id: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id | null")] section_id: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
+) -> Result<String, JsError> {
+    let project_id: Id = input("projectId", project_id)?;
+    let section_id: Option<Id> = input("sectionId", section_id)?;
+    let projects: Vec<Project> = input("projects", projects)?;
+    let sections: Vec<Section> = input("sections", sections)?;
+    Ok(editor::location_text(&project_id, section_id.as_ref(), &projects, &sections))
+}
+
+/// `editor::repeat_text`: a rule as text ("Every Mon, Wed").
+#[wasm_bindgen(js_name = repeatText)]
+pub fn repeat_text(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence")] rule: JsValue,
+) -> Result<String, JsError> {
+    let rule: Recurrence = input("rule", rule)?;
+    Ok(editor::repeat_text(&rule))
+}
+
+/// `ReminderDraft::from_reminder`: a stored reminder as the editor edits it.
+#[wasm_bindgen(js_name = reminderDraftOf, unchecked_return_type = "import('../../bindings').ReminderDraft")]
+pub fn reminder_draft_of(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Reminder")] reminder: JsValue,
+) -> Result<JsValue, JsError> {
+    let reminder: Reminder = input("reminder", reminder)?;
+    output(&ReminderDraft::from_reminder(&reminder))
+}
+
 /// `editor::add_plan`: what adding the editor's task sends.
 #[wasm_bindgen(js_name = addPlan, unchecked_return_type = "import('../../bindings').AddPlan")]
 pub fn add_plan(

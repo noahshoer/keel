@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import type { ReminderDraft } from "../bindings";
 import { customReminderAt, reminderPresets } from "../core";
 import { BellSmallIcon, PlusIcon } from "../shell/icons";
-import { cx, type PopProps } from "./pop";
+import { cx, type Face, type PopProps } from "./pop";
 import { usePlacedPopover } from "./popover";
 
 function ReminderMenu({
@@ -103,6 +103,7 @@ export function ReminderPicker({
   open,
   setOpen,
   onChange,
+  face,
 }: PopProps & {
   reminders: ReminderDraft[];
   /** Each reminder's text (`EditorView.reminder_labels`). */
@@ -113,18 +114,23 @@ export function ReminderPicker({
   hasDue: boolean;
   today: string;
   onChange: (drafts: ReminderDraft[]) => void;
+  /** The task view's look for the button. */
+  face?: Face;
 }) {
   const isOpen = open === "reminders";
   return (
     <div className="chip-wrap">
       <button
         type="button"
-        className={cx("chip chip-btn", reminders.length > 0 && "reminder-chip", isOpen && "chip-open")}
+        className={cx(
+          face?.className ?? cx("chip chip-btn", reminders.length > 0 && "reminder-chip"),
+          isOpen && "chip-open",
+        )}
         title="Reminders"
         onClick={() => setOpen(isOpen ? null : "reminders")}
       >
-        <BellSmallIcon />
-        {text}
+        {face === undefined || face.icon ? <BellSmallIcon /> : null}
+        {face?.text ?? text}
       </button>
       {isOpen ? (
         <ReminderMenu

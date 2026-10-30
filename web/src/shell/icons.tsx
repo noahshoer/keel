@@ -141,6 +141,35 @@ export function CalendarSmallIcon() {
   );
 }
 
+export function CalendarFilledIcon() {
+  return (
+    <Line size={12} stroke="2">
+      <rect x="4" y="5" width="16" height="15" rx="2" fill="currentColor" />
+      <path d="M8 3v4M16 3v4" />
+      <path d="M5 10h14" style={{ stroke: "var(--bg)" }} />
+    </Line>
+  );
+}
+
+export function MoreIcon() {
+  return (
+    <Line size={18} stroke="2">
+      <circle cx="5" cy="12" r="1" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+    </Line>
+  );
+}
+
+/** A paragraph: the description's row. */
+export function TextLinesIcon() {
+  return (
+    <Line size={16} stroke="1.6">
+      <path d="M5 7h14M5 12h14M5 17h9" />
+    </Line>
+  );
+}
+
 export function RepeatSmallIcon() {
   return (
     <Line size={12} stroke="2">
