@@ -33,7 +33,7 @@ import {
 } from "./icons";
 import { ManagedRow } from "./ManagedRow";
 import { currentPlatform, searchTooltip } from "./platform";
-import { applyTheme, nextTheme, type Theme, themeLabel } from "./theme";
+import { nextTheme, type Theme, themeLabel } from "./theme";
 
 const navClass = (active: boolean) => (active ? "nav-item active" : "nav-item");
 
@@ -91,7 +91,8 @@ export function Sidebar({
   setView: (v: View) => void;
   loaded: Loaded;
   theme: Theme;
-  setTheme: (t: Theme) => void;
+  /** Takes the next theme from the current one (App applies it). */
+  setTheme: (next: (t: Theme) => Theme) => void;
   onChanged: () => void;
 }) {
   const [adding, setAdding] = useState<"project" | "label" | "filter" | null>(null);
@@ -131,11 +132,7 @@ export function Sidebar({
           type="button"
           className="icon-btn theme-toggle"
           title={themeLabel(theme)}
-          onClick={() => {
-            const next = nextTheme(theme);
-            applyTheme(next);
-            setTheme(next);
-          }}
+          onClick={() => setTheme(nextTheme)}
         >
           {themeIcon}
         </button>

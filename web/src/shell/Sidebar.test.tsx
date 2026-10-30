@@ -182,6 +182,16 @@ it("the theme button cycles and sets data-theme", async () => {
   expect(document.documentElement.dataset["theme"]).toBeUndefined();
 });
 
+it("quick theme clicks each step from the latest theme", async () => {
+  await start();
+  const button = sidebar().querySelector(".theme-toggle") as HTMLButtonElement;
+  act(() => {
+    button.click();
+    button.click();
+  });
+  expect(document.documentElement.dataset["theme"]).toBe("dark");
+});
+
 it("picking a view in the drawer closes it once the view has loaded", async () => {
   const { container } = await start();
   fireEvent.click(screen.getByTitle("Open menu"));

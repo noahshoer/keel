@@ -11,7 +11,7 @@ import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
 import { SearchPane } from "../screens/SearchPane";
 import { Sidebar } from "../shell/Sidebar";
-import { savedTheme, type Theme } from "../shell/theme";
+import { applyTheme, savedTheme, type Theme } from "../shell/theme";
 import { useLoaded } from "./load";
 import { isSearchShortcut, isTyping } from "./shortcuts";
 import { type Motion, sameView, type View, viewKey, viewMotion } from "./view";
@@ -23,6 +23,8 @@ export function App() {
   const [drawer, setDrawer] = useState(false);
   const [icon] = useState(savedIcon);
   const [theme, setTheme] = useState<Theme>(savedTheme);
+  // Applied and remembered on every change (main.tsx applies the saved one before the first paint).
+  useEffect(() => applyTheme(theme), [theme]);
   const { loaded, error } = useLoaded(view, showCompleted, reloadKey);
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   // Kept across visits to the Search view.
