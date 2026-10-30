@@ -176,9 +176,9 @@ The pure parts of `gestures.rs`, with all its Rust tests ported as Vitest (same 
 **Files:**
 - Modify: `CLAUDE.md` (React section: task view and gestures work; Plan 6 next), `docs/superpowers/plans/2026-10-29-react-foundation.md` (roadmap item 5 done), `docs/superpowers/plans/2026-10-30-react-plan-2-backlog.md` (tick "the drawer's swipes and the other gestures"), this plan's "As built"
 
-- [ ] **Step 1: Simulator, React build** (iPhone 17 with test data): `scripts/sim-check.sh <udid> scripts/sim-checks/subtask-view.js end@12` and `edge-back.js end@14` → the same `[check]` lines as the Dioxus build gives (header buttons differ only by the glass ones; record the lines in "As built"). Diag log: no JS errors.
+- [x] **Step 1: Simulator, React build** (iPhone 17 with test data): `scripts/sim-check.sh <udid> scripts/sim-checks/subtask-view.js end@12` and `edge-back.js end@14` → the same `[check]` lines as the Dioxus build gives (header buttons differ only by the glass ones; record the lines in "As built"). Diag log: no JS errors.
 - [ ] **Step 2: Phone check for Noah:** open a task (sheet at medium), drag up to large and down to close, tap the scrim; push a sub-task and edge-swipe back; edit the title and description (the keyboard keeps the sheet's header in view); swipe the drawer open and closed. Recorded in "As built" when done.
-- [ ] **Step 3: Write the docs.**
+- [x] **Step 3: Write the docs.**
 - [ ] **Step 4: Run** `cargo test`, UI `cargo test` + wasm check, `pnpm check`, `scripts/check-bindings.sh` → green.
 - [ ] **Step 5: Commit** `docs: React task view as built`, merge `react-task-view` `--no-ff` to `main`, push.
 
@@ -189,4 +189,20 @@ The pure parts of `gestures.rs`, with all its Rust tests ported as Vitest (same 
 
 ## As built
 
-(Filled in at Task 8.)
+Deviations from this plan:
+
+- `useTaskNav`, the `TaskNav` type, the context and `CIRCLE_SETTLE_MS` are in `web/src/taskview/nav-context.ts`, and `nav.tsx` keeps only the provider: Biome's `useComponentExportOnlyModules` wants component files to export only components.
+- `core-wasm` exports three more helpers the view needed: `locationText`, `repeatText` and `reminderDraftOf`.
+- Extra files: `SubtaskCard.tsx` (the sub-task card), `MoreMenu.tsx` (the ••• menu), `view-rules.ts` (the view's small screen rules, with tests) and `editor/items.tsx` (menu items shared by the editor's chips and the view's fields).
+- `FieldControl` takes a `MissingPill`, so a pill's label comes from core.
+- `window.keelSheetViewport` isn't ported: nothing calls it.
+- `edgeBackAction` drops the unused `x` parameter.
+- No `pnpm dev` browser walk for Task 7 (no Chrome on this Mac). The simulator checks below cover the sheet.
+
+Checked in the simulator (React build, iPhone 17, test data, 2026-10-30), the same `[check]` lines as the Dioxus build gave on 2026-10-28 except for the header buttons:
+
+- `subtask-view.js`: `header: Back / Pack for Boston /`, `header buttons: tv-close 36, tv-back 56, tv-more 36`, `after Back: tv-close 36, tv-more 36`. The Dioxus build had glass there (`Pack for Boston /`, all three 40 wide, no "Back" text); 36px round buttons and a "Back" label are its no-glass styles.
+- `edge-back.js`: `in sub-task: ? back=true`, `after short swipe: ? back=true`, `mid-drag: under visible "Pack for Boston" at translateX(-94px); top moved translateX(120px)`, `before: under 01M5NWXPPQ0J8CHFERGBQWSH4J views 2`, `parent kept, not remounted: true …; views 1; styles left ""`, `after long swipe: ? back=false`. (`?` is the script's title selector matching the `.tv-title` wrapper, as in Dioxus.)
+- Screenshots: the sheet at medium over Today with the date and project rows, the "+ Description / + Repeat / + Deadline / + Priority" pills and "0 of 3 · Show completed"; the sub-task's view with "‹ Back  Pack for Boston"; mid-drag, the parent sliding in under the sub-task. The diag logs have no JS errors.
+
+Phone check (Task 8 step 2): pending, for Noah. Open a task (sheet at medium), drag up to large and down to close, tap the scrim; push a sub-task and edge-swipe back; edit the title and description (the keyboard keeps the sheet's header in view); swipe the drawer open and closed.
