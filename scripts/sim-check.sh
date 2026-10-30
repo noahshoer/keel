@@ -15,7 +15,7 @@ name=$(basename "$js" .js)
 out="diag-logs/$(date +%Y%m%d-%H%M%S)-$name"
 mkdir -p "$out"
 if grep -q '|' "$js"; then echo "$js: no '|' allowed (Demo.swift splits on it)" >&2; exit 1; fi
-prelude="const check = (m) => window.__TAURI__.core.invoke('diag_log', { source: 'check', msg: String(m) }); const sleep = (ms) => new Promise((r) => setTimeout(r, ms));"
+prelude="const check = (m) => window.__TAURI__.core.invoke('diag_log', { args: { source: 'check', msg: String(m) } }); const sleep = (ms) => new Promise((r) => setTimeout(r, ms));"
 code="(async () => { $prelude
 $(cat "$js")
 })().catch((e) => check('FAILED ' + e));"

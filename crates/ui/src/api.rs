@@ -33,12 +33,25 @@ async fn invoke<A: Serialize, R: for<'de> serde::Deserialize<'de>>(
     cmd: &str,
     args: &A,
 ) -> Result<R, String> {
-    let args = serde_wasm_bindgen::to_value(args).map_err(|e| e.to_string())?;
+    // App commands take one `args` struct (`crates/src-tauri/src/args.rs`);
+    // plugin commands (`plugin:…|…`) take their fields at the top level.
+    let args = if cmd.starts_with("plugin:") {
+        serde_wasm_bindgen::to_value(args)
+    } else {
+        serde_wasm_bindgen::to_value(&Wrapped { args })
+    }
+    .map_err(|e| e.to_string())?;
     // Backend errors arrive as plain strings; show them as-is.
     let out = __invoke(cmd, args)
         .await
         .map_err(|e| e.as_string().unwrap_or_else(|| format!("{e:?}")))?;
     serde_wasm_bindgen::from_value(out).map_err(|e| e.to_string())
+}
+
+/// What an app command receives: `{ args: <args> }`.
+#[derive(Serialize)]
+struct Wrapped<'a, A> {
+    args: &'a A,
 }
 
 #[derive(Serialize)]
