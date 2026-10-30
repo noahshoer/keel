@@ -135,6 +135,27 @@ impl Progress {
     }
 }
 
+/// `id` and its live ancestors, top-level first, so Back walks up to the
+/// parent. The walk follows `parent_id` through live tasks in `all` and stops
+/// at a missing or deleted parent, or at a cycle.
+pub fn chain(id: &Id, all: &[Task]) -> Vec<Id> {
+    let mut chain = vec![id.clone()];
+    loop {
+        let cur = chain.last().expect("chain starts non-empty");
+        let parent = all
+            .iter()
+            .find(|t| &t.id == cur)
+            .and_then(|t| t.parent_id.as_ref())
+            .and_then(|p| all.iter().find(|t| !t.is_deleted && &t.id == p));
+        match parent {
+            Some(p) if !chain.contains(&p.id) => chain.push(p.id.clone()),
+            _ => break,
+        }
+    }
+    chain.reverse();
+    chain
+}
+
 /// Counts a task's direct, non-deleted sub-tasks. Repeating sub-tasks are
 /// left out (they never stay complete). `None` when nothing is counted.
 pub fn progress(parent: &Id, all: &[Task]) -> Option<Progress> {
@@ -949,5 +970,53 @@ mod subtitle_tests {
     fn the_today_subtitle_names_the_weekday_and_date() {
         assert_eq!(day_subtitle(NaiveDate::from_ymd_opt(2026, 10, 30).unwrap()), "Friday 30 Oct");
         assert_eq!(day_subtitle(NaiveDate::from_ymd_opt(2026, 11, 1).unwrap()), "Sunday 1 Nov");
+    }
+}
+
+#[cfg(test)]
+mod chain_tests {
+    use super::chain;
+    use crate::ids::Id;
+    use crate::model::Task;
+
+    fn id(s: &str) -> Id {
+        Id::from(s)
+    }
+
+    fn task(s: &str, parent: Option<&str>) -> Task {
+        let mut t = Task::new(s, id("proj"));
+        t.id = id(s);
+        t.parent_id = parent.map(id);
+        t
+    }
+
+    #[test]
+    fn chain_builds_ancestors() {
+        let all = vec![task("P", None), task("C", Some("P")), task("G", Some("C"))];
+        assert_eq!(chain(&id("G"), &all), vec![id("P"), id("C"), id("G")]);
+    }
+
+    #[test]
+    fn chain_top_level_is_single() {
+        let all = vec![task("P", None), task("C", Some("P"))];
+        assert_eq!(chain(&id("P"), &all), vec![id("P")]);
+    }
+
+    #[test]
+    fn chain_stops_at_missing_parent() {
+        // B is gone (or deleted); C's chain starts at C.
+        let mut b = task("B", Some("A"));
+        b.is_deleted = true;
+        let all = vec![task("A", None), b, task("C", Some("B")), task("D", Some("Z"))];
+        assert_eq!(chain(&id("C"), &all), vec![id("C")]);
+        assert_eq!(chain(&id("D"), &all), vec![id("D")]);
+    }
+
+    #[test]
+    fn chain_cycle_terminates() {
+        let all = vec![task("A", Some("B")), task("B", Some("A"))];
+        let c = chain(&id("A"), &all);
+        assert_eq!(c.last(), Some(&id("A")));
+        assert!(c.len() <= 2);
     }
 }

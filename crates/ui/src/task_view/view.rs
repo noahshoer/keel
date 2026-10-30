@@ -9,7 +9,7 @@ use keel_core::model::{Label, Project, Reminder, Section};
 use keel_core::recurrence::Recurrence;
 use keel_core::views::CardRow;
 
-use super::fields::{layout, pending_save_before_nav, subtask_header, takes_stored_text, Field, Missing};
+use super::fields::{field_layout, FieldLayout, pending_save_before_nav, subtask_header, takes_stored_text, Field, Missing};
 use super::nav::{use_nav, TaskDetail, TaskViewNav};
 use crate::api;
 use crate::editor::{
@@ -279,7 +279,8 @@ pub fn TaskView(
         v.description = desc();
         v
     };
-    let (mut fields, mut missing) = layout(&v, &inbox_id);
+    let FieldLayout { mut fields, missing } = field_layout(&v, &inbox_id);
+    let mut missing: Vec<Missing> = missing.into_iter().map(|p| p.missing).collect();
     // "+ Description" opens an empty description row to type into.
     if desc_open() && !fields.contains(&Field::Description) {
         fields.insert(0, Field::Description);

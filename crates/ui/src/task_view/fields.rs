@@ -1,80 +1,11 @@
 //! What the task view's fields card shows: set fields as rows in a fixed
 //! order, missing ones as dotted "+ …" pills in the same order.
 
-use keel_core::ids::Id;
 use keel_core::views::Progress;
 
 use crate::editor::EditorValues;
 
-/// The fields card's rows, in their fixed order. Repeat lives in Date's row.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Field {
-    Description,
-    Date,
-    Deadline,
-    Priority,
-    Labels,
-    Reminders,
-    Location,
-}
-
-const ORDER: [Field; 7] =
-    [Field::Description, Field::Date, Field::Deadline, Field::Priority, Field::Labels, Field::Reminders, Field::Location];
-
-/// A dotted pill for something without a value.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Missing {
-    Field(Field),
-    /// Only while the task doesn't repeat; a rule shows in Date's row.
-    Repeat,
-}
-
-impl Missing {
-    pub fn label(&self) -> &'static str {
-        match self {
-            Missing::Field(Field::Description) => "+ Description",
-            Missing::Field(Field::Date) => "+ Date",
-            Missing::Field(Field::Deadline) => "+ Deadline",
-            Missing::Field(Field::Priority) => "+ Priority",
-            Missing::Field(Field::Labels) => "+ Labels",
-            Missing::Field(Field::Reminders) => "+ Reminders",
-            Missing::Field(Field::Location) => "+ Location",
-            Missing::Repeat => "+ Repeat",
-        }
-    }
-}
-
-fn is_set(f: Field, v: &EditorValues, inbox_id: &Id) -> bool {
-    match f {
-        Field::Description => !v.description.trim().is_empty(),
-        // A repeat with no date yet still belongs to the date row.
-        Field::Date => !v.date.is_empty() || !v.time.is_empty() || v.repeat != "none",
-        Field::Deadline => !v.deadline.is_empty(),
-        Field::Priority => v.priority != "4",
-        Field::Labels => !v.labels.is_empty(),
-        Field::Reminders => !v.reminders.is_empty(),
-        // An Inbox task with no section has nowhere to show; anywhere else does.
-        Field::Location => &v.project_id != inbox_id || v.section_id.is_some(),
-    }
-}
-
-/// The set fields in order, then the missing ones in the same order, with
-/// Repeat right after Date.
-pub fn layout(v: &EditorValues, inbox_id: &Id) -> (Vec<Field>, Vec<Missing>) {
-    let mut fields = Vec::new();
-    let mut missing = Vec::new();
-    for f in ORDER {
-        if is_set(f, v, inbox_id) {
-            fields.push(f);
-        } else {
-            missing.push(Missing::Field(f));
-        }
-        if f == Field::Date && v.repeat == "none" {
-            missing.push(Missing::Repeat);
-        }
-    }
-    (fields, missing)
-}
+pub use keel_core::task_view::{field_layout, Field, FieldLayout, Missing};
 
 /// The sub-task card's header: ("2 of 5", the toggle's text, all done).
 pub fn subtask_header(progress: Progress, show_completed: bool) -> (String, &'static str, bool) {
@@ -98,84 +29,14 @@ pub fn takes_stored_text(stored: &str, seen: &str, saved: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use keel_core::ids::Id;
 
-    fn inbox() -> Id {
-        Id::from("P-IN")
-    }
-
-    /// Description, date, priority and labels set; an Inbox task with no section.
+    /// Title and description set; an Inbox task.
     fn fixture() -> EditorValues {
-        let mut v = EditorValues::blank(inbox(), None, "2026-10-24".into(), vec!["travel".into()]);
+        let mut v = EditorValues::blank(Id::from("P-IN"), None, "2026-10-24".into(), vec!["travel".into()]);
         v.content = "Pack for Boston".into();
         v.description = "Leave Friday after work".into();
-        v.priority = "2".into();
         v
-    }
-
-    #[test]
-    fn layout_fixed_order() {
-        let (fields, missing) = layout(&fixture(), &inbox());
-        assert_eq!(fields, vec![Field::Description, Field::Date, Field::Priority, Field::Labels]);
-        assert_eq!(
-            missing,
-            vec![
-                Missing::Repeat,
-                Missing::Field(Field::Deadline),
-                Missing::Field(Field::Reminders),
-                Missing::Field(Field::Location),
-            ]
-        );
-    }
-
-    #[test]
-    fn layout_location_row_outside_inbox() {
-        let mut v = fixture();
-        v.project_id = Id::from("X");
-        let (fields, missing) = layout(&v, &inbox());
-        assert_eq!(fields.last(), Some(&Field::Location));
-        assert!(!missing.contains(&Missing::Field(Field::Location)));
-        // A section in the Inbox counts too.
-        let mut s = fixture();
-        s.section_id = Some(Id::from("S"));
-        assert!(layout(&s, &inbox()).0.contains(&Field::Location));
-    }
-
-    #[test]
-    fn layout_repeat_inside_date() {
-        let mut v = fixture();
-        v.repeat = "weekly".into();
-        let (fields, missing) = layout(&v, &inbox());
-        assert!(fields.contains(&Field::Date));
-        assert!(!missing.contains(&Missing::Repeat));
-    }
-
-    #[test]
-    fn layout_repeat_counts_as_date() {
-        let mut v = fixture();
-        v.date = String::new();
-        v.repeat = "weekly".into();
-        let (fields, missing) = layout(&v, &inbox());
-        assert!(fields.contains(&Field::Date));
-        assert!(!missing.contains(&Missing::Field(Field::Date)));
-        assert!(!missing.contains(&Missing::Repeat));
-    }
-
-    #[test]
-    fn newly_set_field_lands_in_order() {
-        let mut v = fixture();
-        v.deadline = "2026-10-30".into();
-        let (fields, missing) = layout(&v, &inbox());
-        assert_eq!(fields, vec![Field::Description, Field::Date, Field::Deadline, Field::Priority, Field::Labels]);
-        assert!(!missing.contains(&Missing::Field(Field::Deadline)));
-    }
-
-    #[test]
-    fn empty_description_whitespace_is_missing() {
-        let mut v = fixture();
-        v.description = "  ".into();
-        let (fields, missing) = layout(&v, &inbox());
-        assert!(!fields.contains(&Field::Description));
-        assert_eq!(missing.first(), Some(&Missing::Field(Field::Description)));
     }
 
     #[test]
@@ -212,23 +73,5 @@ mod tests {
         assert!(takes_stored_text("Moved", "Old", "Pack"));
         // Nothing changed.
         assert!(!takes_stored_text("Old", "Old", "Old"));
-    }
-
-    #[test]
-    fn pill_labels() {
-        let all = [
-            (Missing::Field(Field::Description), "+ Description"),
-            (Missing::Field(Field::Date), "+ Date"),
-            (Missing::Field(Field::Deadline), "+ Deadline"),
-            (Missing::Field(Field::Priority), "+ Priority"),
-            (Missing::Field(Field::Labels), "+ Labels"),
-            (Missing::Field(Field::Reminders), "+ Reminders"),
-            (Missing::Repeat, "+ Repeat"),
-            (Missing::Field(Field::Location), "+ Location"),
-        ];
-        for (m, text) in all {
-            assert!(m.label().starts_with("+ "));
-            assert_eq!(m.label(), text);
-        }
     }
 }
