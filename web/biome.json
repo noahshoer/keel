@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": { "includes": ["**", "!**/node_modules", "!**/dist", "!pnpm-lock.yaml"] },
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 110 },
+  "linter": {
+    "enabled": true,
+    "domains": { "react": "recommended" },
+    "rules": {
+      "suspicious": { "noExplicitAny": "error" },
+      "style": { "noNonNullAssertion": "error", "useComponentExportOnlyModules": "error" },
+      "complexity": { "useLiteralKeys": "off" },
+      "correctness": { "noNestedComponentDefinitions": "error" },
+      "nursery": { "noFloatingPromises": "error" }
+    }
+  }
+}

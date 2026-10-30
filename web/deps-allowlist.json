@@ -1,1 +1,15 @@
-{}
+{
+  "react": { "reason": "UI library for the app" },
+  "react-dom": { "reason": "React renderer for the browser/webview" },
+  "typescript": { "reason": "Type checker; strict TypeScript is required for app source" },
+  "vite": { "reason": "Dev server and production bundler" },
+  "@vitejs/plugin-react": { "reason": "React JSX transform and fast refresh for Vite" },
+  "vitest": { "reason": "Test runner that shares the Vite config" },
+  "@testing-library/react": { "reason": "Render and query React components in tests" },
+  "@testing-library/dom": { "reason": "Peer dependency of @testing-library/react" },
+  "jsdom": { "reason": "DOM implementation for component tests" },
+  "@biomejs/biome": { "reason": "Linter and formatter in one tool" },
+  "@types/react": { "reason": "Type definitions for react" },
+  "@types/react-dom": { "reason": "Type definitions for react-dom" },
+  "@types/node": { "reason": "Type definitions for Node APIs used by scripts and vite config" }
+}
