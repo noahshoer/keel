@@ -2,14 +2,26 @@
 // that imports ./pkg (Biome noRestrictedImports): everything else calls these
 // wrappers, which refuse to run until initCore() has loaded the wasm.
 import type {
+  Action,
+  AddPlan,
   Card,
   CardMode,
   DateGroup,
   DateGroupMode,
   DueBucket,
+  EditorPick,
+  EditorValues,
+  EditorView,
+  EditPlan,
   Id,
+  Label,
+  MonthView,
   Progress,
+  Project,
+  Recurrence,
   Reminder,
+  ReminderDraft,
+  Section,
   Task,
 } from "../bindings";
 import init, * as core from "./pkg/keel_core_wasm.js";
@@ -119,4 +131,185 @@ export function daySubtitle(today: string): string {
 export function progressShort(p: Progress): string {
   ready();
   return core.progressShort(p);
+}
+
+// The task editor (keel_core::editor). Every function takes and returns
+// whole values; the editor keeps them in state and re-renders from editorView.
+
+/** Fresh editor values for adding into a project (and section) with defaults. */
+export function blankValues(
+  projectId: Id,
+  sectionId: Id | null,
+  date: string,
+  labels: string[],
+): EditorValues {
+  ready();
+  return core.blankValues(projectId, sectionId, date, labels);
+}
+
+/** The editor values for an existing task. */
+export function valuesFromTask(t: Task): EditorValues {
+  ready();
+  return core.valuesFromTask(t);
+}
+
+/** Everything the editor draws for its values, from one parse of the title. */
+export function editorView(
+  v: EditorValues,
+  quickAdd: boolean,
+  keepLabel: string | null,
+  existing: Recurrence | null,
+  projects: Project[],
+  sections: Section[],
+  today: string,
+): EditorView {
+  ready();
+  return core.editorView(v, quickAdd, keepLabel, existing, projects, sections, today);
+}
+
+/** The values after the title is retyped (kept-plain phrases follow the text). */
+export function withTitle(v: EditorValues, text: string): EditorValues {
+  ready();
+  return core.withTitle(v, text);
+}
+
+/** Applies a picker's value; with quick add, the typed phrase it replaces leaves the title. */
+export function applyPick(
+  v: EditorValues,
+  pick: EditorPick,
+  quickAdd: boolean,
+  projects: Project[],
+  sections: Section[],
+  today: string,
+): EditorValues {
+  ready();
+  return core.applyPick(v, pick, quickAdd, projects, sections, today);
+}
+
+/** Ticks or unticks one label (typed @labels count as ticked). */
+export function toggleLabel(
+  v: EditorValues,
+  name: string,
+  quickAdd: boolean,
+  projects: Project[],
+  sections: Section[],
+  today: string,
+): EditorValues {
+  ready();
+  return core.toggleLabel(v, name, quickAdd, projects, sections, today);
+}
+
+/** Turns the highlight ending at `caret` (UTF-16) into plain text; `null` when none ends there. */
+export function unhighlightAt(
+  v: EditorValues,
+  projects: Project[],
+  sections: Section[],
+  today: string,
+  caret: number,
+): EditorValues | null {
+  ready();
+  return core.unhighlightAt(v, projects, sections, today, caret);
+}
+
+/** The location menu's value (`project` or `project|section`) as a pick. */
+export function locationPick(value: string): EditorPick {
+  ready();
+  return core.locationPick(value);
+}
+
+/** What adding the editor's task sends: new labels, the task, then its reminders. */
+export function addPlan(
+  v: EditorValues,
+  projects: Project[],
+  sections: Section[],
+  labels: Label[],
+  today: string,
+): AddPlan {
+  ready();
+  return core.addPlan(v, projects, sections, labels, today);
+}
+
+/** What saving an edit sends: the move, reminder changes, then the field changes. */
+export function editPlan(
+  id: Id,
+  before: EditorValues,
+  after: EditorValues,
+  existing: Recurrence | null,
+  today: string,
+): EditPlan {
+  ready();
+  return core.editPlan(id, before, after, existing, today);
+}
+
+/** The reminder changes as actions (removals, then additions). */
+export function reminderActions(taskId: Id, before: ReminderDraft[], after: ReminderDraft[]): Action[] {
+  ready();
+  return core.reminderActions(taskId, before, after);
+}
+
+/** A reminder draft's text: "30 min before", "Tuesday 9 AM". */
+export function reminderDraftLabel(d: ReminderDraft, today: string): string {
+  ready();
+  return core.reminderDraftLabel(d, today);
+}
+
+/** The relative reminder choices: [minutes before, text]. */
+export function reminderPresets(): Array<[number, string]> {
+  ready();
+  return core.reminderPresets();
+}
+
+/** A custom reminder in plain words as `YYYY-MM-DDTHH:MM`; `null` without a date and a time. */
+export function customReminderAt(text: string, today: string): string | null {
+  ready();
+  return core.customReminderAt(text, today);
+}
+
+/** The date picker's shortcuts: [label, hint, `YYYY-MM-DD`]. */
+export function quickDates(today: string): Array<[string, string, string]> {
+  ready();
+  return core.quickDates(today);
+}
+
+/** A month as the date picker draws it; `weekStart` is 1 (Monday) … 7 (Sunday). */
+export function monthView(
+  year: number,
+  month: number,
+  weekStart: number,
+  today: string,
+  selected: string | null,
+  rule: Recurrence | null,
+): MonthView {
+  ready();
+  return core.monthView(year, month, weekStart, today, selected, rule);
+}
+
+/** The month `delta` months away: [year, month]. */
+export function shiftMonth(year: number, month: number, delta: number): [number, number] {
+  ready();
+  return core.shiftMonth(year, month, delta);
+}
+
+/** The years the month / year wheel offers. */
+export function yearChoices(today: string, shown: number): number[] {
+  ready();
+  return core.yearChoices(today, shown);
+}
+
+/** "January" … "December". */
+export function monthNames(): string[] {
+  ready();
+  return core.monthNames();
+}
+
+/** A typed time ("5pm", "17:30") as `HH:MM`; `null` when it isn't one. */
+export function typedTime(text: string): string | null {
+  ready();
+  return core.typedTime(text);
+}
+
+/** An `<input type="time">` value as `HH:MM`; `null` when cleared, `undefined` when unreadable. */
+export function nativeTime(value: string): string | null | undefined {
+  ready();
+  return core.nativeTime(value);
 }
