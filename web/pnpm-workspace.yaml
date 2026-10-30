@@ -4,6 +4,5 @@ trustPolicy: no-downgrade
 blockExoticSubdeps: true
 saveExact: true
 engineStrict: true
-ignoredBuiltDependencies:
-  - esbuild
-onlyBuiltDependencies: []
+allowBuilds:
+  esbuild: false
