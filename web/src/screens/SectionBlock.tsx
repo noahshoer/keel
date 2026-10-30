@@ -4,8 +4,10 @@
 // iOS raises the keyboard.
 import { type FormEvent, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import type { Loaded } from "../app/load";
 import type { Id, Reminder, Section, Task } from "../bindings";
-import { cards } from "../core";
+import { blankValues, cards } from "../core";
+import { AddTask } from "../editor/AddTask";
 import { addSection, deleteSection, renameSection } from "../ipc/actions";
 import { CardList } from "../lists/CardList";
 import { PencilIcon, TrashSmallIcon } from "../shell/icons";
@@ -16,6 +18,7 @@ export function SectionBlock({
   section,
   tasks,
   all,
+  loaded,
   today,
   reminders,
   onChanged,
@@ -24,6 +27,8 @@ export function SectionBlock({
   tasks: Task[];
   /** Every task, for the cards' sub-task counts. */
   all: Task[];
+  /** The lists the section's "+ Add task" editor picks from. */
+  loaded: Pick<Loaded, "projects" | "sections" | "labels">;
   today: string;
   reminders: Reminder[];
   onChanged: () => void;
@@ -102,6 +107,13 @@ export function SectionBlock({
         </div>
       )}
       <CardList cards={list} today={today} locations={null} reminders={reminders} onChanged={onChanged} />
+      <AddTask
+        defaults={blankValues(section.project_id, section.id, "", [])}
+        projects={loaded.projects}
+        sections={loaded.sections}
+        labels={loaded.labels}
+        onChanged={onChanged}
+      />
     </div>
   );
 }
