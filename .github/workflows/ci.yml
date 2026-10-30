@@ -1,11 +1,15 @@
 name: CI
 
-# Checks that Keel builds for Windows (desktop + web UI) and iOS. Nothing is
+# Checks that Keel builds for Windows (desktop + Dioxus UI) and iOS, and that
+# the React app in web/ passes its gates. Nothing is
 # signed or deployed. Plan: docs/superpowers/plans/2026-10-20-ci.md
 on:
   push:
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -25,16 +29,16 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: |
             . -> target
             crates/ui -> target
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2
         with:
           tool: dioxus-cli@${{ env.DX_VERSION }},tauri-cli@${{ env.TAURI_CLI_VERSION }}
 
@@ -68,16 +72,16 @@ jobs:
       # (glassEffect, …) is "unavailable". Matches minimumSystemVersion.
       IPHONEOS_DEPLOYMENT_TARGET: "26.0"
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: wasm32-unknown-unknown, aarch64-apple-ios, aarch64-apple-ios-sim
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: |
             . -> target
             crates/ui -> target
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2
         with:
           tool: dioxus-cli@${{ env.DX_VERSION }},tauri-cli@${{ env.TAURI_CLI_VERSION }}
 
@@ -96,3 +100,80 @@ jobs:
 
       - name: Build for the simulator (Rust only)
         run: cargo build --lib -p keel --target aarch64-apple-ios-sim
+
+  web:
+    name: Web (types, lint, tests, bindings, supply chain)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Tauri's Linux build deps: scripts/check-bindings.sh compiles the keel
+      # crate (cargo test -p keel), which links webkit2gtk and GTK.
+      - name: Install Tauri's Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev
+
+      # Corepack provides the pnpm pinned by packageManager in web/package.json.
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: . -> target
+
+      # Project-local wasm-bindgen CLI (web/scripts/build-wasm.ts looks for
+      # .tools/bin/wasm-bindgen). The version must equal crates/core-wasm's
+      # `wasm-bindgen = "=X"` pin; the cache key follows that file.
+      - name: Read the pinned wasm-bindgen version
+        id: wbg
+        run: echo "version=$(sed -n 's/^wasm-bindgen = "=\(.*\)"/\1/p' crates/core-wasm/Cargo.toml)" >> "$GITHUB_OUTPUT"
+      - name: Cache the wasm-bindgen CLI
+        id: wbg-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .tools
+          key: wasm-bindgen-cli-${{ runner.os }}-${{ steps.wbg.outputs.version }}
+      - name: Install the wasm-bindgen CLI
+        if: steps.wbg-cache.outputs.cache-hit != 'true'
+        run: cargo install wasm-bindgen-cli --version "${{ steps.wbg.outputs.version }}" --locked --root .tools
+
+      # pnpm 11 aborts a non-interactive install that would purge node_modules;
+      # Actions sets CI=true, which --frozen-lockfile expects anyway.
+      - name: Install web dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      # build:wasm, tsc -b, biome ci, vitest, check:deps
+      - name: Check (types, lint, tests, dependency rules)
+        working-directory: web
+        run: pnpm check
+      - name: Build
+        working-directory: web
+        run: pnpm build
+
+      # tauri::generate_context! needs frontendDist (crates/ui/dist) to exist;
+      # this job doesn't build the Dioxus UI, so a placeholder will do.
+      - name: Placeholder for the Tauri frontend dist
+        run: |
+          mkdir -p crates/ui/dist
+          touch crates/ui/dist/index.html
+      - name: Bindings are up to date
+        run: scripts/check-bindings.sh
+
+      - name: Audit npm dependencies
+        working-directory: web
+        run: pnpm audit --audit-level moderate
+      # The scanner is a Docker action; it exits non-zero when it finds a
+      # vulnerability in the lockfile.
+      - name: OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        with:
+          scan-args: --lockfile=web/pnpm-lock.yaml
