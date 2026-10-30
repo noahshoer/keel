@@ -24,6 +24,7 @@ pub struct FilterContext {
 
 /// One comma-separated part of a filter and the open tasks it matched.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct FilterGroup {
     /// The group's own query text (e.g. "overdue | @home").
     pub query: String,

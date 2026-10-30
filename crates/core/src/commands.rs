@@ -11,6 +11,7 @@ use crate::streak;
 
 /// The result of applying a command: any temp-id → real-id mappings created.
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct ApplyResult {
     pub id_mapping: HashMap<String, Id>,
 }
@@ -18,6 +19,7 @@ pub struct ApplyResult {
 /// A single mutation. Carries a client `uuid` (idempotency) and, for creates,
 /// a `temp_id` that later commands/UI can resolve via `ApplyResult`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export, optional_fields = nullable))]
 pub struct Command {
     pub uuid: String,
     #[serde(default)]
@@ -29,6 +31,7 @@ pub struct Command {
 /// `recurrence`, the first occurrence on/after today is used; both `None`
 /// clears the due.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export, optional_fields = nullable))]
 pub struct DueEdit {
     #[serde(default)]
     pub date: Option<String>,
@@ -39,6 +42,7 @@ pub struct DueEdit {
 /// The operations supported so far. (update/move/uncomplete land with their
 /// features.)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export, optional_fields = nullable))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Action {
     TaskAdd {
@@ -121,6 +125,7 @@ pub enum Action {
         id: Id,
         enabled: bool,
         #[serde(default)]
+        #[cfg_attr(feature = "ts", ts(optional = nullable, type = "number | null"))]
         goal: Option<i64>,
     },
     /// Create a label. Names are unique case-insensitively; re-adding an
@@ -170,6 +175,7 @@ pub enum Action {
     ReminderAdd {
         task_id: Id,
         #[serde(default)]
+        #[cfg_attr(feature = "ts", ts(optional = nullable, type = "number | null"))]
         minute_offset: Option<i64>,
         #[serde(default)]
         at: Option<String>,

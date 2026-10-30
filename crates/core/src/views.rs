@@ -9,6 +9,7 @@ use crate::model::Task;
 
 /// Which colored due chip a date gets, relative to today.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub enum DueBucket {
     Overdue,
     Today,
@@ -111,6 +112,7 @@ pub fn nest(tasks: Vec<Task>) -> Vec<Nested> {
 
 /// Sub-task completion counts for one parent.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Progress {
     pub done: usize,
     pub total: usize,
@@ -159,6 +161,7 @@ pub fn children<'a>(parent: &Id, all: &'a [Task]) -> Vec<&'a Task> {
 
 /// One task in a card, with its sub-task counts.
 #[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct CardRow {
     pub task: Task,
     pub progress: Option<Progress>,
@@ -167,6 +170,7 @@ pub struct CardRow {
 /// A head task and the matched rows grouped under it. `head_matches == false`
 /// means the head is context only (no circle; tapping it opens the head task).
 #[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Card {
     pub head: CardRow,
     pub head_matches: bool,

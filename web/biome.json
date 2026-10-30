@@ -13,5 +13,11 @@
       "correctness": { "noNestedComponentDefinitions": "error" },
       "nursery": { "noFloatingPromises": "error" }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/bindings/**"],
+      "formatter": { "enabled": false }
+    }
+  ]
 }

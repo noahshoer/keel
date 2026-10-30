@@ -12,6 +12,7 @@ use crate::recurrence::Recurrence;
 
 /// What was understood from a quick-add title.
 #[derive(Clone, Debug, PartialEq, Default)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct QuickAdd {
     /// The title with recognized phrases removed.
     pub content: String,
@@ -31,6 +32,7 @@ pub struct QuickAdd {
 
 /// A recognized phrase in the input (`input[start..end]`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Span {
     pub start: usize,
     pub end: usize,
@@ -38,6 +40,7 @@ pub struct Span {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub enum SpanKind {
     Date,
     Time,

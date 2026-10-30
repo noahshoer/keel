@@ -7,6 +7,7 @@ use crate::model::Task;
 
 /// Search results for the Search view.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct SearchResults {
     /// Open tasks: title matches first, then by due date (undated last), then priority.
     pub open: Vec<Task>,

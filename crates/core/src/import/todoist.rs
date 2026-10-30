@@ -85,6 +85,7 @@ pub struct ImportPlan {
 
 /// What an import created (shown to the user).
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct ImportSummary {
     pub project_id: crate::ids::Id,
     pub project_name: String,

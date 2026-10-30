@@ -5,6 +5,7 @@ use ulid::Ulid;
 
 /// A client-generated, time-sortable string identifier (ULID).
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Id(String);
 
 impl Id {
