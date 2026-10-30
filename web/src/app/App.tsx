@@ -8,6 +8,7 @@ import { CompletionIconContext, savedIcon } from "../lists/completion";
 import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
 import { Sidebar } from "../shell/Sidebar";
+import { savedTheme, type Theme } from "../shell/theme";
 import { useLoaded } from "./load";
 import { type Motion, sameView, type View, viewKey, viewMotion } from "./view";
 
@@ -17,6 +18,7 @@ export function App() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [icon] = useState(savedIcon);
+  const [theme, setTheme] = useState<Theme>(savedTheme);
   const { loaded, error } = useLoaded(view, showCompleted, reloadKey);
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
@@ -78,7 +80,14 @@ export function App() {
   } else {
     body = (
       <>
-        <Sidebar view={view} setView={setView} loaded={loaded} />
+        <Sidebar
+          view={view}
+          setView={setView}
+          loaded={loaded}
+          theme={theme}
+          setTheme={setTheme}
+          onChanged={reload}
+        />
         <MainPane
           loaded={loaded}
           showCompleted={showCompleted}
