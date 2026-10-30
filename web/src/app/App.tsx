@@ -4,12 +4,15 @@
 // is parked, so there are no glass buttons; the header's menu button opens
 // the drawer.
 import { useCallback, useEffect, useRef, useState } from "react";
+import { localToday } from "../clock";
 import { CompletionIconContext, savedIcon } from "../lists/completion";
 import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
+import { SearchPane } from "../screens/SearchPane";
 import { Sidebar } from "../shell/Sidebar";
 import { savedTheme, type Theme } from "../shell/theme";
 import { useLoaded } from "./load";
+import { isSearchShortcut, isTyping } from "./shortcuts";
 import { type Motion, sameView, type View, viewKey, viewMotion } from "./view";
 
 export function App() {
@@ -21,6 +24,20 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(savedTheme);
   const { loaded, error } = useLoaded(view, showCompleted, reloadKey);
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+  // Kept across visits to the Search view.
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // "/" (when not typing) or Ctrl/Cmd+K opens Search and focuses the box.
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (!isSearchShortcut(ev, isTyping(document.activeElement))) return;
+      ev.preventDefault();
+      setView({ kind: "search" });
+      setTimeout(() => document.querySelector<HTMLInputElement>(".search-input")?.focus(), 60);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   // Search slides in and out: a still copy of the page being left is taken
   // as soon as the view changes (before the new one loads).
@@ -96,7 +113,19 @@ export function App() {
           motion={swap.motion}
           swap={swap.n}
           onChanged={reload}
-        />
+        >
+          {loaded.view.kind === "search" ? (
+            <SearchPane
+              query={searchQuery}
+              setQuery={setSearchQuery}
+              today={localToday()}
+              showCompleted={showCompleted}
+              loaded={loaded}
+              reloadKey={reloadKey}
+              onChanged={reload}
+            />
+          ) : null}
+        </MainPane>
       </>
     );
   }

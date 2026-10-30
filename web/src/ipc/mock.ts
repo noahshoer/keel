@@ -260,10 +260,13 @@ const handlers: Handlers = {
     if (id !== null && cmd.temp_id != null) id_mapping[cmd.temp_id] = id;
     return { id_mapping };
   },
-  search: async () => ({
-    open: openById(fx.viewIds.searchOpen),
-    completed: byId(fx.viewIds.searchCompleted).filter(live),
-  }),
+  search: async ({ query }) => {
+    const ids = fx.searchResults[query.trim()] ?? {
+      open: fx.viewIds.searchOpen,
+      completed: fx.viewIds.searchCompleted,
+    };
+    return { open: openById(ids.open), completed: byId(ids.completed).filter(live) };
+  },
   list_reminders: async () => alive(state.reminders),
   import_todoist_csv: async ({ project_name }) => ({
     project_id: "p-import",

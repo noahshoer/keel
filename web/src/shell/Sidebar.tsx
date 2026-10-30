@@ -32,6 +32,7 @@ import {
   UpcomingIcon,
 } from "./icons";
 import { ManagedRow } from "./ManagedRow";
+import { currentPlatform, searchTooltip } from "./platform";
 import { applyTheme, nextTheme, type Theme, themeLabel } from "./theme";
 
 const navClass = (active: boolean) => (active ? "nav-item active" : "nav-item");
@@ -108,7 +109,11 @@ export function Sidebar({
   const fixed = (kind: "search" | "inbox" | "today" | "upcoming", icon: React.ReactNode, label: string) => (
     // biome-ignore lint/a11y/useKeyWithClickEvents: same markup as the Dioxus sidebar (div rows); "/" and Cmd+K open Search.
     // biome-ignore lint/a11y/noStaticElementInteractions: see above.
-    <div className={navClass(view.kind === kind)} onClick={() => setView({ kind })}>
+    <div
+      className={navClass(view.kind === kind)}
+      title={kind === "search" ? searchTooltip(currentPlatform()) : undefined}
+      onClick={() => setView({ kind })}
+    >
       <span className={`nav-icon ${kind}`}>{icon}</span>
       {label}
       {kind === "today" ? <span className="count">{count}</span> : null}

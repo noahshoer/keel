@@ -140,6 +140,12 @@ export const viewIds = {
   searchCompleted: ["t-done"],
 };
 
+/** Search queries with their own results (anything else gets searchOpen / searchCompleted). */
+export const searchResults: Record<string, { open: string[]; completed: string[] }> = {
+  bins: { open: [], completed: ["t-done"] },
+  nothing: { open: [], completed: [] },
+};
+
 /** Queries the mock's filter check rejects, with the backend's message. */
 export const badQueries: Record<string, string> = { "p1 &": "expected a term after '&'" };
 
