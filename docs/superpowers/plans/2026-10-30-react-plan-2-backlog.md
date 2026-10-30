@@ -22,3 +22,11 @@ Carried over from the React foundation (plan `2026-10-29-react-foundation.md`, m
 - `rebuild-loop.ts`: `run()` clears a pending debounce (one wasted rebuild; `whenIdle` can resolve early); an in-flight build-wasm child isn't tracked.
 - Shell and Today both call `list_projects` / `today_view`.
 - CI: weekly scan failures only show in the Actions tab; apt packages uncached; WebKitGTK package list unproven on a real runner.
+
+## From the Plan 2 final review (deferred minors)
+
+- `GlassLog.watch` / `GlassKeyboard` observe even while logging is off; `Diag`'s doc says nothing is observed then (parked code).
+- `commands_list.rs` lists each command's return type by hand; nothing ties it to the fn's real signature.
+- Sidebar has one `adding` state (opening one add form closes another; Dioxus had three); `AddSection` keeps its form open after a failed add (Dioxus closes and reloads).
+- No CI job builds the React-config Tauri app, and the simulator `cargo build` no longer compiles glass.
+- No error boundary: a malformed stored deadline would throw in render (Dioxus skips it).
