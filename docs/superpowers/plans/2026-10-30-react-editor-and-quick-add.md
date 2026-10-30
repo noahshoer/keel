@@ -203,4 +203,4 @@ Deviations from this plan:
 
 Checked in the simulator (React build, iPhone 17, test data): the add row focuses the title; "tomorrow 5pm p1" gets date and priority marks and the chips "Tomorrow 5 PM" and "P1"; all seven popovers sit inside the 402×874 screen; Enter adds the task and clears the title; the new row shows "Tomorrow 5 PM" in Upcoming.
 
-Phone check for Noah (not done yet): the add row raises the keyboard, the time field uses the iOS wheel, the popovers fit, and the chip row wraps the Labels chip fully into view (in the simulator screenshot the second chip row is clipped above the footer; this is the same CSS as Dioxus).
+Phone check (Task 8 step 2): checked by Noah on the device on 2026-10-30. "+ Add task" works, the time field uses the iOS wheel, and the popovers fit. The clipped second chip row seen in the simulator screenshot wasn't reported on the phone.
