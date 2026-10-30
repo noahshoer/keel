@@ -2,11 +2,10 @@
 //! Requires `app.withGlobalTauri = true` in tauri.conf.json.
 
 use serde::Serialize;
-use keel_core::commands::{Action, ApplyResult, Command, DueEdit};
+use keel_core::commands::{Action, ApplyResult, Command};
 use keel_core::ids::Id;
 use keel_core::filter::FilterGroup;
-use keel_core::model::{Due, Filter, Label, Priority, Project, Reminder, Section, Task};
-use keel_core::recurrence::Recurrence;
+use keel_core::model::{Filter, Label, Project, Reminder, Section, Task};
 use keel_core::reminders::{PlannedReminder, ReminderSettings};
 use keel_core::import::todoist::ImportSummary;
 use keel_core::search::SearchResults;
@@ -117,49 +116,10 @@ fn command(action: Action, temp: bool) -> Command {
     }
 }
 
-/// Fields from the add-task editor.
-pub struct NewTask {
-    pub content: String,
-    pub description: String,
-    pub project_id: Id,
-    /// `YYYY-MM-DD`, or empty for no date.
-    pub date: String,
-    pub priority: Priority,
-    pub recurrence: Option<Recurrence>,
-    pub labels: Vec<String>,
-    pub section_id: Option<Id>,
-    /// Set when adding a sub-task.
-    pub parent_id: Option<Id>,
-    /// `YYYY-MM-DD`, or empty for no deadline.
-    pub deadline: String,
-}
+pub use keel_core::editor::{NewTask, TaskPatch};
 
 pub async fn add_task(t: NewTask) -> Result<ApplyResult, String> {
-    let due = (!t.date.is_empty()).then(|| Due {
-        date: t.date.clone(),
-        timezone: None,
-        string: t.date.clone(),
-        lang: "en".to_string(),
-        is_recurring: false,
-        recurrence: None,
-    });
-    let description = (!t.description.trim().is_empty()).then(|| t.description.trim().to_string());
-    dispatch(&command(
-        Action::TaskAdd {
-            content: t.content,
-            project_id: t.project_id,
-            description,
-            priority: Some(t.priority),
-            due,
-            labels: (!t.labels.is_empty()).then_some(t.labels),
-            parent_id: t.parent_id,
-            section_id: t.section_id,
-            recurrence: t.recurrence,
-            deadline: (!t.deadline.is_empty()).then_some(t.deadline),
-        },
-        true,
-    ))
-    .await
+    dispatch(&command(t.into_action(), true)).await
 }
 
 pub async fn add_project(name: String) -> Result<ApplyResult, String> {
@@ -182,47 +142,8 @@ pub async fn add_label(name: String) -> Result<ApplyResult, String> {
     dispatch(&command(Action::LabelAdd { name }, true)).await
 }
 
-/// Only the fields that changed; `None` leaves a field as it is.
-#[derive(Default)]
-pub struct TaskPatch {
-    pub content: Option<String>,
-    pub description: Option<String>,
-    pub priority: Option<Priority>,
-    pub project_id: Option<Id>,
-    pub labels: Option<Vec<String>>,
-    pub due: Option<DueEdit>,
-    /// `Some("")` clears the deadline.
-    pub deadline: Option<String>,
-}
-
-impl TaskPatch {
-    pub fn is_empty(&self) -> bool {
-        self.content.is_none()
-            && self.description.is_none()
-            && self.priority.is_none()
-            && self.project_id.is_none()
-            && self.labels.is_none()
-            && self.due.is_none()
-            && self.deadline.is_none()
-    }
-}
-
 pub async fn update_task(id: Id, p: TaskPatch) -> Result<ApplyResult, String> {
-    dispatch(&command(
-        Action::TaskUpdate {
-            id,
-            content: p.content,
-            description: p.description,
-            priority: p.priority,
-            project_id: p.project_id,
-            labels: p.labels,
-            is_collapsed: None,
-            due: p.due,
-            deadline: p.deadline,
-        },
-        false,
-    ))
-    .await
+    dispatch(&command(p.into_action(id), false)).await
 }
 
 pub async fn completed_today() -> Result<Vec<Task>, String> {

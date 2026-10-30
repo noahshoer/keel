@@ -1,5 +1,6 @@
 pub mod calendar;
 pub mod commands;
+pub mod editor;
 pub mod filter;
 pub mod import;
 pub mod ids;

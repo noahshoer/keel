@@ -3,7 +3,7 @@
 //! One popover is open at a time per editor (`open` holds its id); the editor
 //! draws a transparent backdrop that closes it.
 
-use chrono::{Datelike, Duration, NaiveDate, NaiveTime};
+use chrono::{Datelike, NaiveDate, NaiveTime};
 use dioxus::prelude::*;
 use keel_core::{calendar, quickadd, views};
 
@@ -23,12 +23,6 @@ pub struct Face {
     /// Shows the picker's icon before the text.
     pub icon: bool,
 }
-
-const MONTHS: [&str; 12] = [
-    "January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
-    "November", "December",
-];
-const DOW: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /// Places the open popover next to its chip, inside the viewport: below the
 /// chip, flipped above when there's no room, shifted left at the right edge.
@@ -111,7 +105,11 @@ pub fn provide_touch() {
 
 /// The due chip's color class for a date (matches task rows).
 pub fn due_class(d: NaiveDate, today: NaiveDate) -> &'static str {
-    match views::due_bucket(d, today) {
+    bucket_class(views::due_bucket(d, today))
+}
+
+fn bucket_class(b: views::DueBucket) -> &'static str {
+    match b {
         views::DueBucket::Overdue => "overdue",
         views::DueBucket::Today => "today",
         views::DueBucket::Tomorrow => "tomorrow",
@@ -120,31 +118,13 @@ pub fn due_class(d: NaiveDate, today: NaiveDate) -> &'static str {
     }
 }
 
-/// The scheduler chip + popover. `date` is `YYYY-MM-DD` or empty; `time` is
-/// `HH:MM` or empty.
 /// The Date chip's text and due class ("" when no date is set).
 pub fn date_chip(date: Option<NaiveDate>, time: Option<NaiveTime>, today: NaiveDate) -> (String, &'static str) {
-    match (date, time) {
-        (Some(d), Some(t)) => (format!("{} {}", views::due_label(d, today), views::time_label(t)), due_class(d, today)),
-        (Some(d), None) => (views::due_label(d, today), due_class(d, today)),
-        (None, Some(t)) => (format!("Today {}", views::time_label(t)), "today"),
-        (None, None) => ("Date".to_string(), ""),
-    }
+    let (text, bucket) = keel_core::editor::date_chip(date, time, today);
+    (text, bucket.map(bucket_class).unwrap_or(""))
 }
 
-/// The Deadline chip's text.
-pub fn deadline_text(deadline: Option<NaiveDate>, today: NaiveDate) -> String {
-    deadline.map(|d| views::due_label(d, today)).unwrap_or_else(|| "Deadline".to_string())
-}
-
-/// The Reminders chip's text.
-pub fn reminders_text(reminders: &[ReminderDraft], today: NaiveDate) -> String {
-    match reminders.len() {
-        0 => "Reminders".to_string(),
-        1 => reminders[0].label(today),
-        n => format!("{n} reminders"),
-    }
-}
+pub use keel_core::editor::{deadline_text, quick_dates, reminders_text, ReminderDraft, REMINDER_PRESETS};
 
 #[component]
 pub fn DatePicker(
@@ -197,19 +177,6 @@ pub fn DatePicker(
             }
         }
     }
-}
-
-/// The date picker's shortcuts: (label, hint, date).
-pub fn quick_dates(today: NaiveDate) -> Vec<(&'static str, String, NaiveDate)> {
-    let saturday = today + Duration::days(((5 - today.weekday().num_days_from_monday() as i64) + 7) % 7);
-    let next_monday = today + Duration::days(7 - today.weekday().num_days_from_monday() as i64);
-    let tomorrow = today + Duration::days(1);
-    vec![
-        ("Today", DOW[today.weekday().num_days_from_monday() as usize].to_string(), today),
-        ("Tomorrow", DOW[tomorrow.weekday().num_days_from_monday() as usize].to_string(), tomorrow),
-        ("This weekend", DOW[5].to_string(), saturday),
-        ("Next week", format!("Mon {} {}", next_monday.day(), &MONTHS[next_monday.month0() as usize][..3]), next_monday),
-    ]
 }
 
 /// Drives the month / year wheels and reports the row that settles in the
@@ -311,9 +278,6 @@ const WHEEL_JS: &str = r#"
 });
 await new Promise(() => {});
 "#;
-
-/// Relative reminder choices, in minutes before the due time.
-pub const REMINDER_PRESETS: [i64; 5] = [0, 10, 30, 60, 1440];
 
 #[component]
 fn Scheduler(
@@ -679,39 +643,6 @@ pub fn DeadlinePicker(
     }
 }
 
-/// A reminder being edited: saved ones have an `id`; new ones don't yet.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReminderDraft {
-    pub id: Option<keel_core::ids::Id>,
-    /// Minutes before the due time (relative).
-    pub minute_offset: Option<i64>,
-    /// `YYYY-MM-DDTHH:MM` (absolute).
-    pub at: Option<String>,
-}
-
-impl ReminderDraft {
-    pub fn from_reminder(r: &keel_core::model::Reminder) -> Self {
-        let relative = r.kind == keel_core::model::ReminderType::Relative;
-        ReminderDraft {
-            id: Some(r.id.clone()),
-            minute_offset: if relative { r.minute_offset } else { None },
-            at: if relative { None } else { r.at().map(|a| a.format("%Y-%m-%dT%H:%M").to_string()) },
-        }
-    }
-
-    /// "At time of task", "30 min before", "Tuesday 9 AM".
-    pub fn label(&self, today: NaiveDate) -> String {
-        if let Some(m) = self.minute_offset {
-            return offset_text(m);
-        }
-        match self.at.as_deref().and_then(|a| chrono::NaiveDateTime::parse_from_str(a, "%Y-%m-%dT%H:%M").ok()) {
-            Some(at) => format!("{} {}", views::due_label(at.date(), today), views::time_label(at.time())),
-            None => "Reminder".to_string(),
-        }
-    }
-}
-
 /// "At time of task", "10 min before", "1 hour before", "1 day before".
 pub use keel_core::reminders::offset_text;
 
@@ -743,17 +674,13 @@ pub fn ReminderPicker(
     };
     let add_for_custom = add.clone();
     let mut add_custom = move || {
-        // Parsed as if after a title ("x …"): quick add applies nothing to a
-        // phrase that would leave the title empty.
-        let q = keel_core::quickadd::parse(&format!("x {}", custom()), crate::today(), &[], &[]);
-        match (q.date, q.time) {
-            (Some(d), Some(t)) => {
-                let at = d.and_time(t).format("%Y-%m-%dT%H:%M").to_string();
+        match keel_core::editor::custom_reminder_at(&custom(), crate::today()) {
+            Some(at) => {
                 add_for_custom(ReminderDraft { id: None, minute_offset: None, at: Some(at) });
                 custom.set(String::new());
                 custom_bad.set(false);
             }
-            _ => custom_bad.set(true),
+            None => custom_bad.set(true),
         }
     };
     let presets = REMINDER_PRESETS;

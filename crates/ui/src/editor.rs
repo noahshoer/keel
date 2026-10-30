@@ -1,225 +1,40 @@
 //! The Todoist-style task editor card, shared by "+ Add task", "Add sub-task"
 //! and in-place editing, plus the collapsed "+ Add task" row. When adding, the
 //! title is parsed as natural language (dates, times, repeats, p1, #project,
-//! /section, @labels) with a live preview.
+//! /section, @labels) with a live preview. The data rules are
+//! `keel_core::editor`'s (shared with the React editor).
 
-use chrono::{Datelike, NaiveDate};
 use dioxus::prelude::*;
-use keel_core::commands::DueEdit;
-use keel_core::ids::Id;
-use keel_core::model::{Label, Priority, Project, Section, Task};
-use keel_core::quickadd::{self, QuickAdd, Span, SpanKind};
+use keel_core::editor::{self as core_editor, LocationKind, Pick};
+use keel_core::model::{Label, Project, Section};
+use keel_core::quickadd::{Span, SpanKind};
 use keel_core::recurrence::Recurrence;
 use keel_core::views;
 
-use crate::api::{self, NewTask, TaskPatch};
-use crate::glass::Pick;
+pub use keel_core::editor::{
+    apply_pick, has_name, labels_text, labels_to_create, location_pick, location_text, parse_title as parse_title_at,
+    priority_text, recurrence_for as recurrence_for_at, repeat_chip_text, repeat_options, repeat_text, toggle_label,
+    unhighlight, with_title, EditorValues,
+};
+
+use crate::api;
 use crate::icons::{self, Icon};
+use keel_core::ids::Id;
 use crate::pickers::{DatePicker, DeadlinePicker, Face, Menu, MenuItem, OpenPop, ReminderDraft, ReminderPicker};
-
-/// Everything the editor edits, as form-friendly values.
-#[derive(Clone, PartialEq, Debug)]
-pub struct EditorValues {
-    pub content: String,
-    pub description: String,
-    /// `YYYY-MM-DD` or empty.
-    pub date: String,
-    /// `HH:MM` or empty.
-    pub time: String,
-    /// "1".."4".
-    pub priority: String,
-    /// none | daily | weekdays | weekly | monthly | keep (an existing custom rule).
-    pub repeat: String,
-    pub project_id: Id,
-    pub section_id: Option<Id>,
-    pub labels: Vec<String>,
-    /// Only used when adding a sub-task.
-    pub parent_id: Option<Id>,
-    /// `YYYY-MM-DD` or empty.
-    pub deadline: String,
-    pub reminders: Vec<ReminderDraft>,
-    /// Byte ranges of `content` turned back into plain text (backspace
-    /// right after a highlight); quick add leaves them alone.
-    pub plain: Vec<(usize, usize)>,
-}
-
-impl EditorValues {
-    pub fn blank(project_id: Id, section_id: Option<Id>, date: String, labels: Vec<String>) -> Self {
-        EditorValues {
-            content: String::new(),
-            description: String::new(),
-            date,
-            time: String::new(),
-            priority: "4".to_string(),
-            repeat: "none".to_string(),
-            project_id,
-            section_id,
-            labels,
-            parent_id: None,
-            deadline: String::new(),
-            reminders: Vec::new(),
-            plain: Vec::new(),
-        }
-    }
-
-    pub fn from_task(t: &Task) -> Self {
-        let rule = t.due.as_ref().and_then(|d| d.recurrence.clone());
-        EditorValues {
-            content: t.content.clone(),
-            description: t.description.clone(),
-            date: t.due.as_ref().and_then(|d| d.date.get(..10)).unwrap_or("").to_string(),
-            time: t.due.as_ref().and_then(|d| d.date.get(11..16)).unwrap_or("").to_string(),
-            priority: (5 - t.priority.to_api()).to_string(),
-            repeat: repeat_choice(&rule).to_string(),
-            project_id: t.project_id.clone(),
-            section_id: t.section_id.clone(),
-            labels: t.labels.clone(),
-            parent_id: t.parent_id.clone(),
-            deadline: t.deadline.clone().unwrap_or_default(),
-            reminders: Vec::new(),
-            plain: Vec::new(),
-        }
-    }
-
-    fn priority(&self) -> Priority {
-        match self.priority.as_str() {
-            "1" => Priority::P1,
-            "2" => Priority::P2,
-            "3" => Priority::P3,
-            _ => Priority::None,
-        }
-    }
-
-    /// `project` or `project|section`, for the location select.
-    pub(crate) fn location(&self) -> String {
-        match &self.section_id {
-            Some(s) => format!("{}|{}", self.project_id, s),
-            None => self.project_id.to_string(),
-        }
-    }
-
-    /// The `Due.date` string for the chosen date/time ("" = no due). A time
-    /// without a date means today.
-    fn due_string(&self) -> String {
-        match (self.date.is_empty(), self.time.is_empty()) {
-            (true, true) => String::new(),
-            (false, true) => self.date.clone(),
-            (true, false) => format!("{}T{}:00", crate::today().format("%Y-%m-%d"), self.time),
-            (false, false) => format!("{}T{}:00", self.date, self.time),
-        }
-    }
-}
-
-/// Which repeat option represents an existing rule.
-fn repeat_choice(rule: &Option<Recurrence>) -> &'static str {
-    match rule {
-        None => "none",
-        Some(Recurrence::Daily) => "daily",
-        Some(Recurrence::Weekly(days)) if days == &vec![0, 1, 2, 3, 4] => "weekdays",
-        Some(Recurrence::Weekly(days)) if days.len() == 1 => "weekly",
-        Some(Recurrence::MonthlyDay(_)) => "monthly",
-        Some(_) => "keep",
-    }
-}
-
-/// The rule for a repeat choice; "Every week/month" anchor on `date` (or today).
-fn recurrence_for(choice: &str, date: &str, existing: Option<Recurrence>) -> Option<Recurrence> {
-    recurrence_for_at(choice, date, existing, crate::today())
-}
-
-/// [`recurrence_for`] relative to `today` (testable off the browser).
-pub(crate) fn recurrence_for_at(choice: &str, date: &str, existing: Option<Recurrence>, today: NaiveDate) -> Option<Recurrence> {
-    let anchor = NaiveDate::parse_from_str(date.get(..10).unwrap_or(date), "%Y-%m-%d").unwrap_or(today);
-    match choice {
-        "daily" => Some(Recurrence::Daily),
-        "weekdays" => Some(Recurrence::Weekly(vec![0, 1, 2, 3, 4])),
-        "weekly" => Some(Recurrence::Weekly(vec![anchor.weekday().num_days_from_monday() as u8])),
-        "monthly" => Some(Recurrence::MonthlyDay(anchor.day() as u8)),
-        "keep" => existing,
-        _ => None,
-    }
-}
-
-fn ordinal(n: u8) -> String {
-    keel_core::recurrence::ordinal(n as u32)
-}
-
-/// Human text for a repeat rule ("Every other week on Wed").
-pub fn repeat_text(rule: &Recurrence) -> String {
-    let text = rule.describe();
-    let mut chars = text.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => text,
-    }
-}
-
-/// The Labels chip's text.
-pub(crate) fn labels_text(labels: &[String]) -> String {
-    if labels.is_empty() { "Labels".to_string() } else { labels.join(", ") }
-}
-
-/// The Priority chip's text ("4" is no priority).
-pub(crate) fn priority_text(priority: &str) -> String {
-    if priority == "4" { "Priority".to_string() } else { format!("P{priority}") }
-}
-
-/// The repeat choices as (value, label); week/month options name the day
-/// they repeat on, and "keep" appears when the task has a custom rule.
-pub(crate) fn repeat_options(date: &str, keep_label: Option<&str>, today: NaiveDate) -> Vec<(&'static str, String)> {
-    let anchor = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap_or(today);
-    let mut opts = vec![
-        ("none", "No repeat".to_string()),
-        ("daily", "Every day".to_string()),
-        ("weekdays", "Every weekday (Mon – Fri)".to_string()),
-        ("weekly", format!("Every week on {}", anchor.format("%A"))),
-        ("monthly", format!("Every month on the {}", ordinal(anchor.day() as u8))),
-    ];
-    if let Some(text) = keep_label {
-        opts.push(("keep", text.to_string()));
-    }
-    opts
-}
-
-/// The Repeat chip's text for the chosen option.
-pub(crate) fn repeat_chip_text(repeat: &str, opts: &[(&'static str, String)]) -> String {
-    opts.iter()
-        .find(|(value, _)| *value == repeat && *value != "none")
-        .map(|(_, label)| label.clone())
-        .unwrap_or_else(|| "Repeat".to_string())
-}
-
-/// "Project" or "Project / Section" for the location chip.
-pub(crate) fn location_text(project_id: &Id, section_id: Option<&Id>, projects: &[Project], sections: &[Section]) -> String {
-    let Some(p) = projects.iter().find(|p| &p.id == project_id) else { return "Inbox".to_string() };
-    match section_id.and_then(|s| sections.iter().find(|x| &x.id == s && x.project_id == p.id)) {
-        Some(s) => format!("{} / {}", p.name, s.name),
-        None => p.name.clone(),
-    }
-}
 
 /// The project / section menu: each project, then its sections indented.
 /// Values are `project` or `project|section` ([`location_pick`] reads them).
 pub(crate) fn location_items(projects: &[Project], sections: &[Section]) -> Vec<MenuItem> {
-    let mut items = Vec::new();
-    for p in projects.iter() {
-        let icon = if p.is_inbox { icons::inbox() } else { icons::hash_small() };
-        let class = if p.is_inbox { "loc-inbox" } else { "loc-project" };
-        items.push(MenuItem::new(p.id.to_string(), p.name.clone()).icon(icon, class));
-        for s in sections.iter().filter(|s| s.project_id == p.id) {
-            let value = format!("{}|{}", p.id, s.id);
-            items.push(MenuItem::new(value, s.name.clone()).icon(icons::section_small(), "loc-section").indented());
-        }
-    }
-    items
-}
-
-/// The location menu's choice as a pick.
-pub(crate) fn location_pick(value: &str) -> Pick {
-    match value.split_once('|') {
-        Some((p, s)) => Pick::Location { project_id: Id::from(p), section_id: Some(Id::from(s)) },
-        None => Pick::Location { project_id: Id::from(value), section_id: None },
-    }
+    core_editor::location_choices(projects, sections)
+        .into_iter()
+        .map(|c| match c.kind {
+            LocationKind::Inbox => MenuItem::new(c.value, c.label).icon(icons::inbox(), "loc-inbox"),
+            LocationKind::Project => MenuItem::new(c.value, c.label).icon(icons::hash_small(), "loc-project"),
+            LocationKind::Section => {
+                MenuItem::new(c.value, c.label).icon(icons::section_small(), "loc-section").indented()
+            }
+        })
+        .collect()
 }
 
 /// A priority's flag color class ("4" is no priority).
@@ -240,190 +55,9 @@ pub(crate) fn priority_items() -> Vec<MenuItem> {
         .collect()
 }
 
-/// Field changes between `before` and `after`, plus a move when the
-/// project/section changed (moves are a separate command that also carries
-/// the sub-tree).
-pub fn changes(
-    before: &EditorValues,
-    after: &EditorValues,
-    existing: Option<Recurrence>,
-) -> (TaskPatch, Option<(Id, Option<Id>)>) {
-    let due_changed = before.date != after.date || before.time != after.time || before.repeat != after.repeat;
-    let due = after.due_string();
-    let patch = TaskPatch {
-        content: (after.content.trim() != before.content).then(|| after.content.trim().to_string()),
-        description: (after.description != before.description).then(|| after.description.clone()),
-        priority: (after.priority != before.priority).then(|| after.priority()),
-        project_id: None,
-        labels: (after.labels != before.labels).then(|| after.labels.clone()),
-        deadline: (after.deadline != before.deadline).then(|| after.deadline.clone()),
-        due: due_changed.then(|| DueEdit {
-            date: (!due.is_empty()).then(|| due.clone()),
-            recurrence: recurrence_for(&after.repeat, &due, existing),
-        }),
-    };
-    let moved = (after.project_id != before.project_id || after.section_id != before.section_id)
-        .then(|| (after.project_id.clone(), after.section_id.clone()));
-    (patch, moved)
-}
-
 /// Parses the editor's title as quick add.
-fn parse_title(v: &EditorValues, projects: &[Project], sections: &[Section]) -> QuickAdd {
+fn parse_title(v: &EditorValues, projects: &[Project], sections: &[Section]) -> keel_core::quickadd::QuickAdd {
     parse_title_at(v, projects, sections, crate::today())
-}
-
-/// Whether the title has a name to save: with quick add, something besides
-/// the recognized phrases ("This weekend" alone highlights but can't be
-/// added yet).
-pub(crate) fn has_name(v: &EditorValues, quick_add: bool, projects: &[Project], sections: &[Section], today: NaiveDate) -> bool {
-    if quick_add {
-        !parse_title_at(v, projects, sections, today).content.trim().is_empty()
-    } else {
-        !v.content.trim().is_empty()
-    }
-}
-
-/// The typed phrases a pick replaces.
-fn kinds_for(pick: &Pick) -> &'static [SpanKind] {
-    match pick {
-        Pick::Date { .. } => &[SpanKind::Date, SpanKind::Time],
-        Pick::Priority { .. } => &[SpanKind::Priority],
-        Pick::Labels { .. } => &[SpanKind::Label],
-        Pick::Reminders { .. } => &[],
-        Pick::Deadline { .. } => &[SpanKind::Deadline],
-        Pick::Repeat { .. } => &[SpanKind::Repeat],
-        Pick::Location { .. } => &[SpanKind::Project, SpanKind::Section],
-    }
-}
-
-/// Applies a chip pick. With quick add, the typed phrase the pick replaces
-/// comes out of the title (Todoist-style), so the web editor and the iPhone
-/// card save the same input the same way. A different day also replaces a
-/// typed repeat (it set the date); a time for the same day keeps it.
-pub(crate) fn apply_pick(
-    v: &mut EditorValues,
-    pick: &Pick,
-    quick_add: bool,
-    projects: &[Project],
-    sections: &[Section],
-    today: NaiveDate,
-) {
-    if quick_add {
-        let qa = parse_title_at(v, projects, sections, today);
-        let mut kinds = kinds_for(pick).to_vec();
-        if let Pick::Date { date, .. } = pick {
-            let shown = qa.date.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| v.date.clone());
-            if *date != shown {
-                kinds.push(SpanKind::Repeat);
-            }
-        }
-        // Through `with_title`, so un-highlighted ranges move with the text.
-        *v = with_title(v, quickadd::strip_spans(&v.content, &qa.spans, &kinds));
-    }
-    match pick {
-        Pick::Date { date, time } => (v.date, v.time) = (date.clone(), time.clone()),
-        Pick::Priority { value } => v.priority = value.clone(),
-        Pick::Labels { names } => v.labels = names.clone(),
-        Pick::Reminders { drafts } => v.reminders = drafts.clone(),
-        Pick::Deadline { date } => v.deadline = date.clone(),
-        Pick::Repeat { value } => v.repeat = value.clone(),
-        Pick::Location { project_id, section_id } => (v.project_id, v.section_id) = (project_id.clone(), section_id.clone()),
-    }
-}
-
-/// Toggles one label from the labels menu: the typed @labels count as picked
-/// (so taking them out of the title doesn't drop them), then it's applied
-/// like the card's labels pick.
-pub(crate) fn toggle_label(
-    v: &mut EditorValues,
-    name: &str,
-    quick_add: bool,
-    projects: &[Project],
-    sections: &[Section],
-    today: NaiveDate,
-) {
-    let mut names = v.labels.clone();
-    if quick_add {
-        for l in parse_title_at(v, projects, sections, today).labels {
-            if !names.iter().any(|n| n.eq_ignore_ascii_case(&l)) {
-                names.push(l);
-            }
-        }
-    }
-    match names.iter().position(|n| n.eq_ignore_ascii_case(name)) {
-        Some(i) => {
-            names.remove(i);
-        }
-        None => names.push(name.to_string()),
-    }
-    apply_pick(v, &Pick::Labels { names }, quick_add, projects, sections, today);
-}
-
-/// The values after the title is retyped: kept-plain phrases follow the
-/// text, or are dropped when the edit touches them.
-pub(crate) fn with_title(v: &EditorValues, text: String) -> EditorValues {
-    EditorValues { plain: quickadd::shift_plain(&v.content, &text, &v.plain), content: text, ..v.clone() }
-}
-
-/// Turns the highlighted phrase ending at byte `end` back into plain text
-/// (Todoist's backspace). False when no highlight ends there.
-pub(crate) fn unhighlight(v: &mut EditorValues, projects: &[Project], sections: &[Section], today: NaiveDate, end: usize) -> bool {
-    let qa = parse_title_at(v, projects, sections, today);
-    match qa.spans.iter().find(|s| s.end == end) {
-        Some(s) => {
-            v.plain.push((s.start, s.end));
-            true
-        }
-        None => false,
-    }
-}
-
-/// [`parse_title`] relative to `today` (testable off the browser).
-pub(crate) fn parse_title_at(v: &EditorValues, projects: &[Project], sections: &[Section], today: NaiveDate) -> QuickAdd {
-    let mut qa = quickadd::parse_keeping(&v.content, today, projects, sections, &v.plain);
-    // A bare /Section resolves within the Inbox; carry its project along.
-    if qa.project_id.is_none() {
-        if let Some(s) = qa.section_id.as_ref().and_then(|id| sections.iter().find(|s| &s.id == id)) {
-            qa.project_id = Some(s.project_id.clone());
-        }
-    }
-    qa
-}
-
-/// The new task described by the editor values with the quick-add parse
-/// applied on top (text wins over chips for the fields it mentions).
-fn new_task_from(v: &EditorValues, qa: &QuickAdd, today: NaiveDate) -> NewTask {
-    // A typed date wins; a picked time goes with it unless a time was typed.
-    let date = match (qa.date, qa.time) {
-        (Some(d), None) => match chrono::NaiveTime::parse_from_str(&v.time, "%H:%M") {
-            Ok(t) => format!("{}T{}", d.format("%Y-%m-%d"), t.format("%H:%M:00")),
-            Err(_) => d.format("%Y-%m-%d").to_string(),
-        },
-        _ => qa.due_string().unwrap_or_else(|| v.due_string()),
-    };
-    let recurrence = qa.recurrence.clone().or_else(|| recurrence_for_at(&v.repeat, &date, None, today));
-    let mut labels = v.labels.clone();
-    for l in &qa.labels {
-        if !labels.iter().any(|x| x.eq_ignore_ascii_case(l)) {
-            labels.push(l.clone());
-        }
-    }
-    let (project_id, section_id) = match (&qa.project_id, &qa.section_id) {
-        (Some(p), s) => (p.clone(), s.clone()),
-        (None, _) => (v.project_id.clone(), v.section_id.clone()),
-    };
-    NewTask {
-        content: qa.content.trim().to_string(),
-        description: v.description.clone(),
-        project_id,
-        recurrence,
-        date,
-        priority: qa.priority.unwrap_or_else(|| v.priority()),
-        labels,
-        section_id,
-        parent_id: v.parent_id.clone(),
-        deadline: qa.deadline.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| v.deadline.clone()),
-    }
 }
 
 /// Adds the task the editor describes (quick add applied), creating any
@@ -435,7 +69,7 @@ pub async fn add_from_editor(
     labels: Vec<Label>,
 ) -> Result<(), String> {
     let qa = parse_title(&v, &projects, &sections);
-    let task = new_task_from(&v, &qa, crate::today());
+    let task = core_editor::new_task_from(&v, &qa, crate::today());
     for name in &qa.labels {
         if !labels.iter().any(|l| l.name.eq_ignore_ascii_case(name)) {
             let _ = api::add_label(name.clone()).await;
@@ -452,7 +86,7 @@ pub async fn add_from_editor(
 /// then the field changes. Fails when the move or the field changes weren't
 /// saved.
 pub async fn save_edit(id: Id, before: EditorValues, after: EditorValues, existing: Option<Recurrence>) -> Result<(), String> {
-    let (patch, moved) = changes(&before, &after, existing);
+    let (patch, moved) = core_editor::changes(&before, &after, existing, crate::today());
     if let Some((project, section)) = moved {
         api::move_task(id.clone(), project, section).await?;
     }
@@ -461,17 +95,6 @@ pub async fn save_edit(id: Id, before: EditorValues, after: EditorValues, existi
         api::update_task(id, patch).await?;
     }
     Ok(())
-}
-
-/// The labels a pick added by a name no label has yet (any case), so they
-/// can be created: names already on the task aren't.
-pub fn labels_to_create(before: &[String], after: &[String], known: &[Label]) -> Vec<String> {
-    after
-        .iter()
-        .filter(|n| !before.iter().any(|b| b.eq_ignore_ascii_case(n)))
-        .filter(|n| !known.iter().any(|l| l.name.eq_ignore_ascii_case(n)))
-        .cloned()
-        .collect()
 }
 
 /// Saves reminder edits: removes the ones taken out, adds the new ones.
@@ -1014,83 +637,5 @@ pub fn AddTask(
             on_cancel: move |_| open.set(false),
             reload,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_label_picked_by_a_new_name_is_created_once() {
-        let known = vec![Label::new("home")];
-        let before: Vec<String> = vec!["home".into()];
-        let after: Vec<String> = vec!["home".into(), "Travel".into()];
-        assert_eq!(labels_to_create(&before, &after, &known), ["Travel"]);
-        // Known names (any case) and names already on the task aren't created.
-        let after: Vec<String> = vec!["HOME".into()];
-        assert!(labels_to_create(&before, &after, &known).is_empty());
-        let before: Vec<String> = vec!["Travel".into()];
-        let after: Vec<String> = vec!["travel".into()];
-        assert!(labels_to_create(&before, &after, &known).is_empty());
-    }
-
-    #[test]
-    fn edit_changes_leave_quick_add_text_alone() {
-        let mut task = Task::new("Buy p1 batteries #2", Id::from("P-IN"));
-        task.id = Id::from("T-1");
-        let before = EditorValues::from_task(&task);
-        let mut after = before.clone();
-        after.priority = "1".to_string();
-        let (patch, moved) = changes(&before, &after, None);
-        assert_eq!(patch.content, None);
-        assert_eq!(patch.priority, Some(Priority::P1));
-        assert_eq!(moved, None);
-    }
-
-    fn day19() -> NaiveDate {
-        NaiveDate::from_ymd_opt(2026, 10, 19).unwrap()
-    }
-
-    fn typed(content: &str) -> EditorValues {
-        let mut v = EditorValues::blank(Id::from("P-IN"), None, String::new(), Vec::new());
-        v.content = content.into();
-        v
-    }
-
-    #[test]
-    fn a_web_pick_replaces_the_typed_phrase_like_the_card() {
-        let mut v = typed("call mom tomorrow");
-        let pick = crate::glass::Pick::Date { date: "2026-10-23".into(), time: String::new() };
-        apply_pick(&mut v, &pick, true, &[], &[], day19());
-        assert_eq!(v.content, "call mom");
-        let task = new_task_from(&v, &parse_title_at(&v, &[], &[], day19()), day19());
-        assert_eq!(task.date, "2026-10-23", "the pick is what's saved");
-        // Editing doesn't parse the title, so nothing is stripped.
-        let mut e = typed("call mom tomorrow");
-        apply_pick(&mut e, &pick, false, &[], &[], day19());
-        assert_eq!(e.content, "call mom tomorrow");
-    }
-
-    #[test]
-    fn toggling_a_label_keeps_the_typed_ones() {
-        let mut v = typed("x @home");
-        toggle_label(&mut v, "work", true, &[], &[], day19());
-        assert_eq!(v.content, "x");
-        assert_eq!(v.labels, vec!["home".to_string(), "work".to_string()]);
-        toggle_label(&mut v, "HOME", true, &[], &[], day19());
-        assert_eq!(v.labels, vec!["work".to_string()]);
-    }
-
-    #[test]
-    fn a_picked_time_is_saved_with_a_typed_date() {
-        let today = NaiveDate::from_ymd_opt(2026, 10, 19).unwrap();
-        let mut v = EditorValues::blank(Id::from("P-IN"), None, String::new(), Vec::new());
-        v.content = "water plants every monday".into();
-        v.date = "2026-10-19".into();
-        v.time = "17:00".into();
-        let task = new_task_from(&v, &parse_title_at(&v, &[], &[], today), today);
-        assert_eq!(task.date, "2026-10-19T17:00:00");
-        assert!(task.recurrence.is_some(), "the repeat is kept");
     }
 }
