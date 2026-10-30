@@ -9,9 +9,12 @@ export function command(action: Action, temp: boolean): Command {
   return { uuid: crypto.randomUUID(), temp_id: temp ? `tmp-${crypto.randomUUID()}` : null, action };
 }
 
-function send(action: Action, temp = false): Promise<ApplyResult> {
+/** Sends one action; `temp` gives a create its temp id. */
+export function dispatchAction(action: Action, temp = false): Promise<ApplyResult> {
   return invoke("dispatch", { cmd: command(action, temp) });
 }
+
+const send = dispatchAction;
 
 export const completeTask = (id: Id) => send({ type: "task_complete", id });
 export const uncompleteTask = (id: Id) => send({ type: "task_uncomplete", id });

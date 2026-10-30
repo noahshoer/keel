@@ -167,18 +167,7 @@ pub enum GlassEvent {
     Cancel,
 }
 
-/// A value chosen in a picker, in [`EditorValues`]' formats.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
-pub enum Pick {
-    Date { date: String, time: String },
-    Priority { value: String },
-    Labels { names: Vec<String> },
-    Reminders { drafts: Vec<ReminderDraft> },
-    Deadline { date: String },
-    Repeat { value: String },
-    Location { project_id: Id, section_id: Option<Id> },
-}
+pub use keel_core::editor::Pick;
 
 /// How the card is refreshed after an action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -278,17 +267,7 @@ fn utf16_at(s: &str, byte: usize) -> usize {
     s[..byte].encode_utf16().count()
 }
 
-/// The byte offset of UTF-16 offset `at` in `s` (clamped to the end).
-pub(crate) fn byte_at_utf16(s: &str, at: usize) -> usize {
-    let mut units = 0;
-    for (i, c) in s.char_indices() {
-        if units >= at {
-            return i;
-        }
-        units += c.len_utf16();
-    }
-    s.len()
-}
+pub(crate) use keel_core::editor::byte_at_utf16;
 
 /// The values with what the title says applied on top, the same way
 /// `editor::new_task_from` merges them when the task is saved.

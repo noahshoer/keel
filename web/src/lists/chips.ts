@@ -17,12 +17,13 @@ export const FLAG_CLASS: Record<Priority, string | null> = {
   None: null,
 };
 
-const DUE_CLASS: Record<DueBucket, string> = {
-  Overdue: "due overdue",
-  Today: "due today",
-  Tomorrow: "due tomorrow",
-  ThisWeek: "due week",
-  Later: "due later",
+/** A due bucket's colour class (rows, the editor's Date chip, the calendar's selected day). */
+export const BUCKET_CLASS: Record<DueBucket, string> = {
+  Overdue: "overdue",
+  Today: "today",
+  Tomorrow: "tomorrow",
+  ThisWeek: "week",
+  Later: "later",
 };
 
 /** A task's due chip: its colour class and "Friday 5 PM"; `null` without a due. */
@@ -31,5 +32,8 @@ export function dueChip(task: Task, today: string): { cls: string; label: string
   if (date === null) return null;
   const time = dueTime(task);
   const day = dueLabel(date, today);
-  return { cls: DUE_CLASS[dueBucket(date, today)], label: time === null ? day : `${day} ${timeLabel(time)}` };
+  return {
+    cls: `due ${BUCKET_CLASS[dueBucket(date, today)]}`,
+    label: time === null ? day : `${day} ${timeLabel(time)}`,
+  };
 }

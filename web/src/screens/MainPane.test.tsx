@@ -3,6 +3,7 @@ import { useState } from "react";
 import { beforeAll, expect, it, vi } from "vitest";
 import { useLoaded } from "../app/load";
 import type { View } from "../app/view";
+import { localToday } from "../clock";
 import { invoke } from "../ipc/invoke";
 import { loadCoreForTests } from "../test/wasm";
 import { MainPane } from "./MainPane";
@@ -161,4 +162,78 @@ it("completing a row removes it once the view reloads", async () => {
   } finally {
     vi.useRealTimers();
   }
+});
+
+const allTasks = () => invoke("all_tasks", {});
+const titleField = () =>
+  screen.getByPlaceholderText(
+    "Task name — try “Call mom tomorrow 5pm p1 #Home @phone”",
+  ) as HTMLTextAreaElement;
+
+it("+ Add task opens the editor focused; Enter adds a task due today and stays open", async () => {
+  const { container } = await show({ kind: "today" });
+  const row = container.querySelector(".add-task-row.view-add") as HTMLElement;
+  fireEvent.click(row);
+  const title = titleField();
+  expect(document.activeElement).toBe(title);
+  fireEvent.change(title, { target: { value: "Water plants" } });
+  await act(async () => {
+    fireEvent.keyDown(title, { key: "Enter" });
+  });
+  await waitFor(async () => expect((await allTasks()).some((t) => t.content === "Water plants")).toBe(true));
+  const added = (await allTasks()).find((t) => t.content === "Water plants");
+  expect(added?.due?.date).toBe(localToday());
+  expect(titleField().value).toBe("");
+});
+
+it("a project's add row puts the task in it and lists it", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  // The project's own row comes before its sections; each section has one too.
+  const rows = container.querySelectorAll(".add-task-row");
+  expect(rows).toHaveLength(2);
+  expect(rows[0]?.classList.contains("view-add")).toBe(true);
+  fireEvent.click(rows[0] as HTMLElement);
+  fireEvent.change(titleField(), { target: { value: "Fix the gate" } });
+  await act(async () => {
+    fireEvent.keyDown(titleField(), { key: "Enter" });
+  });
+  await waitFor(() => expect(contents(container)).toContain("Fix the gate"));
+  expect((await allTasks()).find((t) => t.content === "Fix the gate")?.project_id).toBe("p-home");
+});
+
+it("a section's add row adds into the section", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const block = container.querySelector(".section-block") as HTMLElement;
+  fireEvent.click(within(block).getByText("Add task"));
+  fireEvent.change(titleField(), { target: { value: "Iron shirts" } });
+  await act(async () => {
+    fireEvent.keyDown(titleField(), { key: "Enter" });
+  });
+  await waitFor(async () => {
+    const t = (await allTasks()).find((x) => x.content === "Iron shirts");
+    expect(t?.section_id).toBe("s-chores");
+  });
+});
+
+it("a label view's add carries the label", async () => {
+  const { container } = await show({ kind: "label", name: "errand" });
+  fireEvent.click(container.querySelector(".add-task-row") as HTMLElement);
+  fireEvent.change(titleField(), { target: { value: "Post the letter" } });
+  await act(async () => {
+    fireEvent.keyDown(titleField(), { key: "Enter" });
+  });
+  await waitFor(async () =>
+    expect((await allTasks()).find((t) => t.content === "Post the letter")?.labels).toEqual(["errand"]),
+  );
+});
+
+it("Cancel collapses the editor; Search has no add row", async () => {
+  const { container, unmount } = await show({ kind: "inbox" });
+  fireEvent.click(container.querySelector(".add-task-row") as HTMLElement);
+  fireEvent.click(screen.getByText("Cancel"));
+  expect(container.querySelector(".editor")).toBeNull();
+  expect(container.querySelector(".add-task-row")).not.toBeNull();
+  unmount();
+  const search = await show({ kind: "search" });
+  expect(search.container.querySelector(".add-task-row")).toBeNull();
 });

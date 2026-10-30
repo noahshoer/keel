@@ -1,7 +1,7 @@
 // The main pane for every view: the markup and branches of the Dioxus
 // `MainPane` (crates/ui/src/main.rs). Dated views split into keel-core's
 // date groups, filters into their comma groups, projects into sections.
-// The "+ Add task" rows come with the editor (Plan 3).
+// Each list ends with its "+ Add task" row, as in Dioxus.
 
 import type { Loaded } from "../app/load";
 import {
@@ -9,13 +9,15 @@ import {
   emptyText,
   type Motion,
   showsProject,
+  viewKey,
   viewMode,
   viewSubtitle,
   viewTitle,
 } from "../app/view";
 import type { Id, Section, Task } from "../bindings";
 import { localToday } from "../clock";
-import { cards, dateGroups } from "../core";
+import { blankValues, cards, dateGroups } from "../core";
+import { AddTask } from "../editor/AddTask";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
 import { CheckCircleIcon, MenuIcon } from "../shell/icons";
@@ -75,6 +77,25 @@ export function MainPane({
   const unsectioned = loaded.tasks.filter((t) => !projectSections.some((s) => inSection(t, s)));
   const empty = loaded.tasks.length === 0;
   const [big, small] = emptyText(view);
+  // What "+ Add task" starts with: the view's project (else the Inbox), today
+  // in dated views, the label in a label view. Keyed by the view, so a new
+  // view starts with a closed row.
+  const addRow = (
+    <AddTask
+      key={`add-${viewKey(view)}`}
+      main
+      defaults={blankValues(
+        projectId ?? loaded.inbox.id,
+        null,
+        view.kind === "today" || view.kind === "upcoming" ? today : "",
+        view.kind === "label" ? [view.name] : [],
+      )}
+      projects={loaded.projects}
+      sections={loaded.sections}
+      labels={loaded.labels}
+      onChanged={onChanged}
+    />
+  );
   const list = (tasks: Task[]) => (
     <CardList
       cards={cards(tasks, loaded.all, mode)}
@@ -90,7 +111,7 @@ export function MainPane({
     body = children;
   } else if (view.kind === "filter") {
     const multi = loaded.filterGroups.length > 1;
-    body = loaded.filterGroups.map((group, i) => (
+    const groups = loaded.filterGroups.map((group, i) => (
       // biome-ignore lint/suspicious/noArrayIndexKey: comma groups have no id; their order is the query's.
       <div key={`fg-${i}`}>
         {multi ? (
@@ -102,30 +123,45 @@ export function MainPane({
         {list(group.tasks)}
       </div>
     ));
+    body = (
+      <>
+        {groups}
+        {addRow}
+      </>
+    );
   } else if (view.kind === "today" || view.kind === "upcoming") {
-    const groups = dateGroups(view.kind === "today" ? "Today" : "Upcoming", loaded.tasks, today);
-    body = groups.map((group, i) => (
-      // biome-ignore lint/suspicious/noArrayIndexKey: date groups are positional (Overdue, then days).
-      <div key={i}>
-        {group.title !== null ? (
-          <div className="section-title">
-            {group.title}
-            <span className="muted">{group.muted}</span>
-          </div>
-        ) : null}
-        {list(group.tasks)}
-      </div>
-    ));
+    const groups = dateGroups(view.kind === "today" ? "Today" : "Upcoming", loaded.tasks, today).map(
+      (group, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: date groups are positional (Overdue, then days).
+        <div key={i}>
+          {group.title !== null ? (
+            <div className="section-title">
+              {group.title}
+              <span className="muted">{group.muted}</span>
+            </div>
+          ) : null}
+          {list(group.tasks)}
+        </div>
+      ),
+    );
+    body = (
+      <>
+        {groups}
+        {addRow}
+      </>
+    );
   } else {
     body = (
       <>
         {list(unsectioned)}
+        {addRow}
         {projectSections.map((section) => (
           <SectionBlock
             key={section.id}
             section={section}
             tasks={loaded.tasks.filter((t) => inSection(t, section))}
             all={loaded.all}
+            loaded={loaded}
             today={today}
             reminders={loaded.reminders}
             onChanged={onChanged}

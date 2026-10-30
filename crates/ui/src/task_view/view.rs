@@ -290,7 +290,7 @@ pub fn TaskView(
         None => location_text(&task.project_id, None, &projects, &sections),
     };
     let repeat_opts = repeat_options(&v.date, keep_label.as_deref(), today);
-    let repeat_items: Vec<MenuItem> = repeat_opts.iter().map(|(val, label)| MenuItem::new(*val, label.clone())).collect();
+    let repeat_items: Vec<MenuItem> = repeat_opts.iter().map(|(val, label)| MenuItem::new(val.clone(), label.clone())).collect();
     let repeat_label = repeat_chip_text(&v.repeat, &repeat_opts);
     let repeat_rule = editor::recurrence_for_at(&v.repeat, &v.date, rule.clone(), today);
     let has_due = !v.date.is_empty() || !v.time.is_empty();

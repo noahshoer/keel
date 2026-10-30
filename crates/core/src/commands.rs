@@ -41,7 +41,7 @@ pub struct DueEdit {
 
 /// The operations supported so far. (update/move/uncomplete land with their
 /// features.)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export, optional_fields = nullable))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Action {
