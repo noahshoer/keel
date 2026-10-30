@@ -280,4 +280,4 @@ Checked in the simulator, React build (`scripts/sim-check.sh` scenarios):
 
 No JS errors in `diag.log`. The React build links only `keel_ios` and `notification`, and its log has no glass lines. The Dioxus build still shows the glass card and buttons, and their lines land in the same log.
 
-Not done here (needs Noah's phone): Task 11 step 2 on the device. That covers taps, keyboard rise for the inline forms, `keelKeyboard` lines and long press, all by hand.
+Phone pass (Task 11 step 2): checked by Noah on the device on 2026-10-30. Taps complete a task, a tapped form raises the keyboard, long press shows a row's actions, and the menu button opens the drawer.
