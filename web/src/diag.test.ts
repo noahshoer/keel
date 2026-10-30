@@ -76,3 +76,24 @@ test("switching off stops sending; switching on again does not install twice", a
   diag.setActive(true);
   expect(console.error).toBe(wrapped);
 });
+
+test("describe never throws: circular references, BigInt, errors", async () => {
+  const { describe } = await load();
+  const circular: { name: string; self?: unknown } = { name: "loop" };
+  circular.self = circular;
+  expect(describe(circular)).toContain("[Circular]");
+  expect(describe(circular)).toContain("loop");
+  expect(describe(10n)).toBe("10n");
+  expect(describe({ n: 10n })).toContain("10n");
+  expect(describe(new Error("boom"))).toContain("boom");
+});
+
+test("console.error of a circular value still logs one line", async () => {
+  const diag = await load();
+  console.error = vi.fn();
+  diag.setActive(true);
+  const circular: { self?: unknown } = {};
+  circular.self = circular;
+  console.error("cyclic", circular);
+  expect(logged()).toContainEqual({ source: "console.error", msg: 'cyclic {"self":"[Circular]"}' });
+});
