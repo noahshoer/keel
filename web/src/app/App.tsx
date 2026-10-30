@@ -5,6 +5,7 @@
 // the drawer.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { localToday } from "../clock";
+import { installLongPress } from "../gestures/long-press";
 import { CompletionIconContext, savedIcon } from "../lists/completion";
 import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
@@ -26,6 +27,9 @@ export function App() {
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   // Kept across visits to the Search view.
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Touch: a long press shows a row's actions.
+  useEffect(() => installLongPress(document), []);
 
   // "/" (when not typing) or Ctrl/Cmd+K opens Search and focuses the box.
   useEffect(() => {
