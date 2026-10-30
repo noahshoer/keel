@@ -1,11 +1,11 @@
 // A completed task in the "Completed" section: the filled check reopens it
-// (crates/ui/src/task_row.rs `CompletedRow`). Opening it waits for the task
-// view (Plan 5).
+// (crates/ui/src/task_row.rs `CompletedRow`); the body opens the task view.
 import type { Task } from "../bindings";
 import { localDateOf } from "../clock";
 import { dueLabel } from "../core";
 import { deleteTask, uncompleteTask } from "../ipc/actions";
 import { CheckIcon, TrashIcon } from "../shell/icons";
+import { useTaskNav } from "../taskview/nav-context";
 
 export function CompletedRow({
   task,
@@ -18,6 +18,7 @@ export function CompletedRow({
   location: string | null;
   onChanged: () => void;
 }) {
+  const nav = useTaskNav();
   const day = task.completed_at === null ? null : localDateOf(task.completed_at);
   const when = day === null ? "" : dueLabel(day, today);
   return (
@@ -33,7 +34,9 @@ export function CompletedRow({
         >
           <CheckIcon />
         </button>
-        <div className="task-body" title="Open task">
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: same markup as the Dioxus UI. */}
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI. */}
+        <div className="task-body" title="Open task" onClick={() => nav.open(task.id)}>
           <div className="task-content">{task.content}</div>
           <div className="task-meta">
             <span className="done-when">{`Completed · ${when}`}</span>
