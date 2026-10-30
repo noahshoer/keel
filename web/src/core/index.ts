@@ -13,6 +13,7 @@ import type {
   EditorValues,
   EditorView,
   EditPlan,
+  FieldLayout,
   Id,
   Label,
   MonthView,
@@ -23,6 +24,7 @@ import type {
   ReminderDraft,
   Section,
   Task,
+  TaskDetail,
 } from "../bindings";
 import init, * as core from "./pkg/keel_core_wasm.js";
 
@@ -131,6 +133,32 @@ export function daySubtitle(today: string): string {
 export function progressShort(p: Progress): string {
   ready();
   return core.progressShort(p);
+}
+
+/** A parent's sub-task count as "2 of 5". */
+export function progressLong(p: Progress): string {
+  ready();
+  return core.progressLong(p);
+}
+
+// The task view (keel_core::task_view).
+
+/** The fields card: set fields as rows, missing ones as pills. */
+export function fieldLayout(v: EditorValues, inboxId: Id): FieldLayout {
+  ready();
+  return core.fieldLayout(v, inboxId);
+}
+
+/** What one level of the task view renders; null for an unknown id. */
+export function taskDetail(id: Id, all: Task[], showCompleted: boolean): TaskDetail | null {
+  ready();
+  return core.taskDetail(id, all, showCompleted);
+}
+
+/** A task's ancestors from the top, then the task itself. */
+export function chain(id: Id, all: Task[]): Id[] {
+  ready();
+  return core.chain(id, all);
 }
 
 // The task editor (keel_core::editor). Every function takes and returns

@@ -18,6 +18,7 @@ use keel_core::model::{Label, Project, Reminder, Section, Task};
 use keel_core::quickadd;
 use keel_core::recurrence::Recurrence;
 use keel_core::reminders;
+use keel_core::task_view;
 use keel_core::views::{self, CardMode, DateGroupMode, Progress};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -179,6 +180,46 @@ pub fn progress_short(
 ) -> Result<String, JsError> {
     let progress: Progress = input("progress", progress)?;
     Ok(progress.short())
+}
+
+/// `Progress::long`: "2 of 5".
+#[wasm_bindgen(js_name = progressLong)]
+pub fn progress_long(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Progress")] progress: JsValue,
+) -> Result<String, JsError> {
+    let progress: Progress = input("progress", progress)?;
+    Ok(progress.long())
+}
+
+/// `task_view::field_layout`: the fields card's rows and pills.
+#[wasm_bindgen(js_name = fieldLayout, unchecked_return_type = "import('../../bindings').FieldLayout")]
+pub fn field_layout(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] values: JsValue,
+    inbox_id: String,
+) -> Result<JsValue, JsError> {
+    let v: EditorValues = input("values", values)?;
+    output(&task_view::field_layout(&v, &Id::from(inbox_id)))
+}
+
+/// `task_view::detail`: what one level of the task view renders; `null` for an unknown id.
+#[wasm_bindgen(js_name = taskDetail, unchecked_return_type = "import('../../bindings').TaskDetail | null")]
+pub fn task_detail(
+    id: String,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] all: JsValue,
+    show_completed: bool,
+) -> Result<JsValue, JsError> {
+    let all: Vec<Task> = input("all", all)?;
+    output(&task_view::detail(&Id::from(id), &all, show_completed))
+}
+
+/// `views::chain`: a task's ancestors from the top, then the task itself.
+#[wasm_bindgen(js_name = chain, unchecked_return_type = "string[]")]
+pub fn chain(
+    id: String,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] all: JsValue,
+) -> Result<JsValue, JsError> {
+    let all: Vec<Task> = input("all", all)?;
+    output(&views::chain(&Id::from(id), &all))
 }
 
 /// A browser `<input type="time">` value: `""` (cleared) is `None`,
