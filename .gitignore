@@ -1,5 +1,7 @@
 # Rust
 /target
+# Project-local cargo tools (wasm-bindgen CLI; see web/scripts/build-wasm.ts)
+.tools/
 **/target
 Cargo.lock.bak
 
@@ -23,3 +25,8 @@ crates/src-tauri/gen/schemas/
 
 # Pulled diagnostics logs (scripts/diag.sh)
 diag-logs/
+
+# Web frontend (web/)
+web/node_modules
+web/dist
+web/src/core/pkg

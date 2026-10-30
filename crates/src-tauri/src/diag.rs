@@ -17,6 +17,8 @@ use keel_service::diag::DiagLog;
 use std::sync::Mutex;
 use keel_service::AppService;
 
+use crate::args::{DiagLogArgs, NoArgs, SetDiagEnabledArgs};
+
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static SINK: OnceLock<Sink> = OnceLock::new();
 
@@ -98,13 +100,14 @@ pub fn log(source: &str, msg: &str) {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub fn diag_enabled() -> bool {
+pub fn diag_enabled(_args: NoArgs) -> bool {
     enabled()
 }
 
 /// Async: on iOS this calls into the Swift plugin (see CLAUDE.md).
 #[tauri::command(rename_all = "snake_case")]
-pub async fn set_diag_enabled(state: tauri::State<'_, AppService>, on: bool) -> Result<(), String> {
+pub async fn set_diag_enabled(args: SetDiagEnabledArgs, state: tauri::State<'_, AppService>) -> Result<(), String> {
+    let on = args.on;
     state.set_diag_enabled(on).map_err(|e| e.to_string())?;
     if on && !enabled() {
         start_fresh();
@@ -115,6 +118,6 @@ pub async fn set_diag_enabled(state: tauri::State<'_, AppService>, on: bool) -> 
 
 /// A line from the page.
 #[tauri::command(rename_all = "snake_case")]
-pub async fn diag_log(source: String, msg: String) {
-    log(&source, &msg);
+pub async fn diag_log(args: DiagLogArgs) {
+    log(&args.source, &args.msg);
 }

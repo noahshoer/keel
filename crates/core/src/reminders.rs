@@ -13,10 +13,12 @@ use crate::views;
 
 /// Device-local notification preferences.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
 pub struct ReminderSettings {
     pub enabled: bool,
     /// Minutes before a timed due (0 = at the due time).
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub offset_minutes: i64,
     /// When to remind about date-only tasks (`None` = don't).
     pub all_day_time: Option<NaiveTime>,
@@ -37,6 +39,7 @@ impl Default for ReminderSettings {
 
 /// One notification to deliver at local time `at`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct PlannedReminder {
     /// Stable for the same task (or summary day) and fire time.
     pub id: i32,

@@ -14,6 +14,7 @@ pub const MONTHS: [&str; 12] = [
 
 /// One day in the grid.
 #[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct DayCell {
     pub date: NaiveDate,
@@ -30,6 +31,7 @@ pub struct DayCell {
 
 /// A month as the picker draws it.
 #[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct MonthView {
     pub year: i32,

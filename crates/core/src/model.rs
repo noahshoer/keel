@@ -6,6 +6,7 @@ use crate::recurrence::Recurrence;
 
 /// Task priority. Stored API-style (4 = highest / UI "P1" … 1 = none).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub enum Priority {
     None,
     P3,
@@ -43,6 +44,7 @@ impl Default for Priority {
 
 /// How a project renders its tasks.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub enum ViewStyle {
     List,
     Board,
@@ -52,6 +54,7 @@ pub enum ViewStyle {
 /// A scheduled due date/time. `date` holds a Todoist-style date or datetime
 /// string; `timezone` is `None` for a floating due.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Due {
     pub date: String,
     pub timezone: Option<String>,
@@ -61,23 +64,28 @@ pub struct Due {
     /// Structured recurrence rule (NL parsing lands in a later plan).
     /// Invariant: `is_recurring == recurrence.is_some()`.
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub recurrence: Option<Recurrence>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub enum DurationUnit {
     Minute,
     Day,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Duration {
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub amount: i64,
     pub unit: DurationUnit,
 }
 
 /// A task (item).
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Task {
     pub id: Id,
     pub project_id: Id,
@@ -90,8 +98,10 @@ pub struct Task {
     pub deadline: Option<String>,
     pub duration: Option<Duration>,
     pub labels: Vec<String>,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub child_order: i64,
     pub order_key: Option<String>,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub day_order: i64,
     pub is_collapsed: bool,
     pub checked: bool,
@@ -101,8 +111,11 @@ pub struct Task {
     pub updated_at: DateTime<Utc>,
     // Streak fields (see design §7). Dormant unless streak_enabled.
     pub streak_enabled: bool,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub streak_current: i64,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub streak_best: i64,
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub streak_goal: Option<i64>,
     pub streak_last_period: Option<String>,
 }
@@ -143,12 +156,14 @@ impl Task {
 
 /// A project (list of tasks).
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Project {
     pub id: Id,
     pub name: String,
     pub color: String,
     pub icon: Option<String>,
     pub parent_id: Option<Id>,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub child_order: i64,
     pub order_key: Option<String>,
     pub view_style: ViewStyle,
@@ -193,11 +208,13 @@ impl Project {
 
 /// A section within a project.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Section {
     pub id: Id,
     pub project_id: Id,
     pub name: String,
     pub description: Option<String>,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub section_order: i64,
     pub order_key: Option<String>,
     pub is_collapsed: bool,
@@ -209,10 +226,12 @@ pub struct Section {
 
 /// A label.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Label {
     pub id: Id,
     pub name: String,
     pub color: String,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub item_order: i64,
     pub is_favorite: bool,
     pub is_deleted: bool,
@@ -266,17 +285,20 @@ impl Label {
 
 /// A saved filter (query over tasks).
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Filter {
     pub id: Id,
     pub name: String,
     pub query: String,
     pub color: String,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub item_order: i64,
     pub is_favorite: bool,
     pub is_deleted: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub enum ReminderType {
     Relative,
     Absolute,
@@ -284,11 +306,13 @@ pub enum ReminderType {
 
 /// A time-based reminder attached to a task. (Location reminders deferred.)
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Reminder {
     pub id: Id,
     pub task_id: Id,
     pub kind: ReminderType,
     pub due: Option<Due>,
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub minute_offset: Option<i64>,
     pub is_deleted: bool,
 }

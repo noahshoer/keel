@@ -13,5 +13,9 @@ keel-storage = { path = "../storage" }
 chrono = "0.4"
 serde_json = "1"
 
+[features]
+# TypeScript bindings for the IPC types; the types themselves live in keel-core.
+ts = ["keel-core/ts"]
+
 [dev-dependencies]
 tempfile = "3"

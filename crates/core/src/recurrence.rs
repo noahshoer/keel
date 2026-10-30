@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 /// Variants are only ever added, so rules stored in older `Due` JSON still
 /// deserialize.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub enum Recurrence {
     Daily,
     Weekly(Vec<u8>),

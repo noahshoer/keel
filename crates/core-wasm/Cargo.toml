@@ -1,0 +1,19 @@
+[package]
+name = "keel-core-wasm"
+version = "0.1.0"
+edition = "2021"
+description = "keel-core compiled to wasm for the web UI (web/src/core); built by web/scripts/build-wasm.ts."
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+keel-core = { path = "../core" }
+chrono = "0.4"
+serde = "1"
+# Must equal the wasm-bindgen CLI that build-wasm.ts runs (.tools/bin/wasm-bindgen).
+wasm-bindgen = "=0.2.129"
+serde-wasm-bindgen = "0.6"
+# ulid (via keel-core) pulls getrandom; on wasm it needs the wasm_js backend.
+getrandom = { version = "0.3", features = ["wasm_js"] }

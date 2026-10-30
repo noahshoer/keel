@@ -31,13 +31,15 @@ Task view (2026-10-23, spec `docs/superpowers/specs/2026-10-23-task-view-design.
 | `crates/storage` | `keel-storage` | `SqliteRepo` (rusqlite, bundled) implementing `Repository`. Schema in `migrations.rs`; `local_setting` table holds device-local prefs (never synced). |
 | `crates/service` | `keel-service` | `AppService`: views, dispatch, search, reminder settings and plan. |
 | `crates/src-tauri` | `keel` (lib `keel_lib`) | Tauri IPC wrappers + `notifications.rs` (iOS: schedule with the OS; desktop: 20s ticker thread). App id `com.nshoe.keel`, store `keel.db`. |
+| `crates/core-wasm` | `keel-core-wasm` | wasm-bindgen exports of `keel-core` for the web UI (typed bindings; built by `web/scripts/build-wasm.ts`). |
+| `web/` | (pnpm) | React + TypeScript frontend, in progress; see below. |
 | `crates/ui` | `keel-ui` | Dioxus web/wasm UI. **Excluded from the workspace**, so build it with `dx`. Talks to Rust via `window.__TAURI__.core.invoke` (`api.rs`). |
 
 Design spec: `docs/superpowers/specs/2026-10-19-todoist-tauri-port-design.md`. Each phase has a plan in `docs/superpowers/plans/` with its decisions and notes.
 
 ## Build, test, run
 
-CI (`.github/workflows/ci.yml`, runs on every push): **Windows** runs the tests, the UI tests and wasm check, the web UI build, and `cargo tauri build --no-bundle`. **iOS** (`macos-26`) runs `cargo tauri ios build --target aarch64 --debug --no-sign --ci` (iPhone target; the simulator target fails on the runner's Xcode) plus a simulator Rust build. The web UI is built first in both jobs (the Tauri crate won't compile without `crates/ui/dist`). Verification only: nothing is signed or deployed. Keep `DX_VERSION` / `TAURI_CLI_VERSION` in the workflow in step with the local tools.
+CI (`.github/workflows/ci.yml`, runs on every push): **Windows** runs the tests, the UI tests and wasm check, the web UI build, and `cargo tauri build --no-bundle`. **iOS** (`macos-26`) runs `cargo tauri ios build --target aarch64 --debug --no-sign --ci` (iPhone target; the simulator target fails on the runner's Xcode) plus a simulator Rust build. An Ubuntu **`web`** job runs `pnpm check`, the web build, `scripts/check-bindings.sh`, `pnpm audit` and an OSV scan; the weekly `web-supply-chain.yml` repeats the audit on `main`. The web UI is built first in both jobs (the Tauri crate won't compile without `crates/ui/dist`). Verification only: nothing is signed or deployed. Keep `DX_VERSION` / `TAURI_CLI_VERSION` in the workflow in step with the local tools.
 
 ```bash
 cargo test                                   # core + storage + service (UI excluded)
@@ -50,10 +52,33 @@ cd crates/src-tauri && cargo tauri dev       # desktop app (serves crates/ui/dis
 - App icons come from `crates/src-tauri/icons/keel.svg`: `cd crates/src-tauri && cargo tauri icon icons/keel.svg`. The sidebar logo is `icons::logo()` in `crates/ui/src/icons.rs`; keep the two in sync.
 - Stop a running `cargo tauri dev` before big builds. Its watcher rebuilds on file changes and fights over `target/debug/keel.exe`.
 
+## React frontend (in progress)
+
+`web/` is the React + TypeScript app that will replace `crates/ui` (strict TS, Vite, Vitest, Biome, pnpm; Node 24). So far it has the shell and a read-only Today. The Dioxus UI keeps shipping until the cutover: `tauri.conf.json` still points at `crates/ui/dist`, and the React app runs through the overlay config `crates/src-tauri/tauri.react.conf.json` (`devUrl` `http://localhost:5173`, `beforeDevCommand` `pnpm dev` and `beforeBuildCommand` `pnpm build`, both with cwd `web/`, `frontendDist` `web/dist`).
+
+Fresh machine: Node 24 (Homebrew `node@24`, on PATH via `~/.zshrc`), `corepack enable` once, `cd web && pnpm install`, and the project-local wasm-bindgen from the repo root: `cargo install wasm-bindgen-cli --version 0.2.129 --locked --root .tools` (`.tools/` is git-ignored).
+
+```bash
+cd web && pnpm check                     # wasm build, tsc, Biome, Vitest, dependency vetting
+cd web && pnpm dev                       # browser at http://localhost:5173 with the mock backend
+cd crates/src-tauri && cargo tauri dev --config tauri.react.conf.json       # desktop, HMR
+cd crates/src-tauri && cargo tauri ios dev --config tauri.react.conf.json   # phone over Wi-Fi, HMR
+cd crates/src-tauri && cargo tauri build --no-bundle --debug --config tauri.react.conf.json
+```
+- `pnpm dev` builds keel-core's wasm (`scripts/build-wasm.ts`), then `scripts/dev.ts` runs Vite and `scripts/watch-wasm.ts`. The watcher rebuilds the wasm when `crates/core/src` or `crates/core-wasm/src` changes and logs one line per rebuild (`watch-wasm: rebuilt in 1.5s (…)`). A failed build prints cargo's error and it keeps watching. Vite reloads the page when the new `src/core/pkg` lands. The watcher stops when the dev server does. Edits to `web/src` hot-reload without restarting Rust.
+- With `cargo tauri ios dev`, Tauri swaps the `localhost` in `devUrl` for the Mac's address and sets `TAURI_DEV_HOST`, and `vite.config.ts` binds to it, with HMR on port 1421.
+- Styles are `web/src/styles/app.css`, moved verbatim from `crates/ui/src/style.rs` (Biome skips that file). Until the cutover, a CSS change goes in both. Inter loads as files from `web/src/assets/fonts`.
+- Diagnostics: `web/src/diag.ts` ports `crates/ui/src/diag.rs` exactly (the same `diag_log` sources and hooks, installed only while logging is on). The React app has no Settings screen yet, so turn logging on from the Dioxus build's Settings (the setting is device-local in `keel.db` and stays on), or use `KEEL_DIAG=1` on the desktop.
+- Shell and Today reuse the Dioxus markup and class names, so `app.css` applies unchanged and `Demo.swift` and `scripts/sim-checks/*.js` find what they query (`.sidebar`, `.brand .theme-toggle`, `.task-row`, `.task-body`, `.task-content`, `.task-badges`, `.task-count`, `.task-project`).
+
 ## Conventions
 
 - Workflow per phase: write a short plan in `docs/superpowers/plans/` → feature branch → **TDD** (failing test first) → commit per task → merge `--no-ff` to `main` → push. Noah prefers you build without asking for routine decisions; ask about genuinely personal choices (names, visual direction), ideally with visual options.
-- Tauri commands use `#[tauri::command(rename_all = "snake_case")]`, and the frontend sends snake_case args.
+- **Where logic lives.** The test is whether it's about the data or about the screen, not which platform uses it.
+  - Data rules go in `keel-core`, with Rust tests: what's true about tasks, dates, recurrence, quick-add parsing, filters, views and grouping, streaks, what an edit changes. The frontend calls them through IPC or the wasm build (`crates/core-wasm`) and never re-implements them in TypeScript, not even a small copy.
+  - Screen rules stay in the frontend, typed and tested with Vitest: components (shared by the desktop and phone layouts or not), layout, gestures and sheet detents, keyboard timing, navigation, focus. Interaction logic lives in plain `.ts` modules with tests, and components connect it through hooks.
+  - If a frontend function starts deciding something about a task (its next date, whether it's overdue, how it groups), move it to `keel-core`.
+- Tauri commands use `#[tauri::command(rename_all = "snake_case")]`. Each takes one `…Args` struct from `crates/src-tauri/src/args.rs` (`NoArgs` when there are no parameters; the parameter is named `_args`, which Tauri still binds as `args`), and callers send `{ args: {...} }` with snake_case fields. Adding a command means: the fn in `lib.rs`/`diag.rs`, its Args struct, an entry in `command_args!` in `crates/src-tauri/tests/commands_list.rs`, an entry in `web/src/ipc/commands.ts` (plus a mock handler), and regenerating bindings with `scripts/check-bindings.sh`. Return types in `commands.ts` are hand-written for now.
 - A command that calls into a mobile plugin (anything touching `app.notification()`, including `notifications::resync`) **must be `async`**. A sync command runs on the main thread and blocks it waiting for Swift, which deadlocks against any other plugin call that needs the main thread. That froze the app when Settings opened next to a glass-plugin call.
 - Commands are idempotent (uuid) with temp-id → id mapping. Add new `Action` variants (never change existing serialized shapes); new fields are `#[serde(default)]`. Adding a field to `TaskAdd`/`TaskUpdate` means updating struct literals in tests too.
 - `Recurrence` variants are append-only (stored as JSON in `Due`). Consumers only use `contains` / `next_after` / `prev_before`.
@@ -63,7 +88,7 @@ cd crates/src-tauri && cargo tauri dev       # desktop app (serves crates/ui/dis
 
 ## Verifying UI changes
 
-- **Browser preview with a mock backend:** serve a copy of `dist/` whose `index.html` defines a fake `window.__TAURI__.core.invoke` returning sample data (one handler per IPC command). Good for layout, dark mode and 375px checks.
+- **Browser preview with a mock backend:** serve a copy of `dist/` whose `index.html` defines a fake `window.__TAURI__.core.invoke` returning sample data (one handler per IPC command; it receives `{ args }`). `web/`'s `pnpm dev` already has a built-in mock backend. Good for layout, dark mode and 375px checks.
 - **The real app over the WebView debug port (Windows):** run `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9223 cargo tauri dev`, then drive the page with CDP `Runtime.evaluate` from a small Node script (`fetch('http://127.0.0.1:9223/json')`, then a WebSocket to the page). This is how deadlines, reminders and notifications were verified end to end. Desktop reminders log `reminders: showed …` to the dev console.
 - Don't screen-capture the desktop or steal window focus to check the app.
 

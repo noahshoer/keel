@@ -1,0 +1,46 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": { "includes": ["**", "!**/node_modules", "!**/dist", "!pnpm-lock.yaml"] },
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 110 },
+  "linter": {
+    "enabled": true,
+    "domains": { "react": "recommended" },
+    "rules": {
+      "suspicious": { "noExplicitAny": "error" },
+      "style": {
+        "noNonNullAssertion": "error",
+        "useComponentExportOnlyModules": "error",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["**/core/pkg", "**/core/pkg/**", "./pkg", "./pkg/**"],
+                "message": "Only src/core/index.ts imports the wasm pkg; use the wrappers from src/core."
+              }
+            ]
+          }
+        }
+      },
+      "complexity": { "useLiteralKeys": "off" },
+      "correctness": { "noNestedComponentDefinitions": "error" },
+      "nursery": { "noFloatingPromises": "error" }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["src/bindings/**"],
+      "formatter": { "enabled": false }
+    },
+    {
+      "includes": ["src/styles/app.css"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false }
+    },
+    {
+      "includes": ["src/core/index.ts"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    }
+  ]
+}

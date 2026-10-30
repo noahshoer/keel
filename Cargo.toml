@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/storage", "crates/service", "crates/src-tauri", "crates/plugin-glass"]
+members = ["crates/core", "crates/storage", "crates/service", "crates/src-tauri", "crates/plugin-glass", "crates/core-wasm"]
 # The Dioxus UI is wasm-only (built with `dx`); excluded so host `cargo test` stays green and fast.
 exclude = ["crates/ui"]
 

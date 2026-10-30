@@ -12,7 +12,7 @@ use wasm_bindgen::prelude::*;
 let installed = false;
 const send = (src, msg) => {
   if (!window.__keelDiag) return;
-  try { window.__TAURI__?.core.invoke('diag_log', { source: src, msg: String(msg) }).catch(() => {}); } catch (_) {}
+  try { window.__TAURI__?.core.invoke('diag_log', { args: { source: src, msg: String(msg) } }).catch(() => {}); } catch (_) {}
 };
 export function __diag_log(src, msg) { send(src, msg); }
 export function __diag_set(on) {
