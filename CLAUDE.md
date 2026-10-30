@@ -56,7 +56,7 @@ cd crates/src-tauri && cargo tauri dev       # desktop app (serves crates/ui/dis
 
 ## React frontend (in progress)
 
-`web/` is the React + TypeScript app that will replace `crates/ui` (strict TS, Vite, Vitest, Biome, pnpm; Node 24). So far it has the shell and a read-only Today. The Dioxus UI keeps shipping until the cutover: `tauri.conf.json` still points at `crates/ui/dist`, and the React app runs through the overlay config `crates/src-tauri/tauri.react.conf.json` (`devUrl` `http://localhost:5173`, `beforeDevCommand` `pnpm dev` and `beforeBuildCommand` `pnpm build`, both with cwd `web/`, `frontendDist` `web/dist`).
+`web/` is the React + TypeScript app that will replace `crates/ui` (strict TS, Vite, Vitest, Biome, pnpm; Node 24). It has every list screen (Plan 2, `docs/superpowers/plans/2026-10-30-react-lists-and-rows.md`): all views, sections, completing and reopening, streaks, the sidebar's add / rename / delete forms, filters with live checks, search with `/` and Cmd+K, the theme, the drawer and long-press row actions. Not yet: the editor and quick add (Plan 3), the task view and gestures (Plan 5), Settings (Plan 6). The Dioxus UI keeps shipping until the cutover: `tauri.conf.json` still points at `crates/ui/dist`, and the React app runs through the overlay config `crates/src-tauri/tauri.react.conf.json` (`devUrl` `http://localhost:5173`, `beforeDevCommand` `pnpm dev` and `beforeBuildCommand` `pnpm build`, both with cwd `web/`, `frontendDist` `web/dist`).
 
 Fresh machine: Node 24 (Homebrew `node@24`, on PATH via `~/.zshrc`), `corepack enable` once, `cd web && pnpm install`, and the project-local wasm-bindgen from the repo root: `cargo install wasm-bindgen-cli --version 0.2.129 --locked --root .tools` (`.tools/` is git-ignored).
 
@@ -71,7 +71,10 @@ cd crates/src-tauri && cargo tauri build --no-bundle --debug --config tauri.reac
 - With `cargo tauri ios dev`, Tauri swaps the `localhost` in `devUrl` for the Mac's address and sets `TAURI_DEV_HOST`, and `vite.config.ts` binds to it, with HMR on port 1421.
 - Styles are `web/src/styles/app.css`, moved verbatim from `crates/ui/src/style.rs` (Biome skips that file). Until the cutover, a CSS change goes in both. Inter loads as files from `web/src/assets/fonts`.
 - Diagnostics: `web/src/diag.ts` ports `crates/ui/src/diag.rs` exactly (the same `diag_log` sources and hooks, installed only while logging is on). The React app has no Settings screen yet, so turn logging on from the Dioxus build's Settings (the setting is device-local in `keel.db` and stays on), or use `KEEL_DIAG=1` on the desktop.
-- Shell and Today reuse the Dioxus markup and class names, so `app.css` applies unchanged and `Demo.swift` and `scripts/sim-checks/*.js` find what they query (`.sidebar`, `.brand .theme-toggle`, `.task-row`, `.task-body`, `.task-content`, `.task-badges`, `.task-count`, `.task-project`).
+- **Liquid Glass is parked** (Noah, 2026-10-30). The React app never calls `plugin:glass|*` and always takes the Dioxus no-glass paths (header menu button, inline forms, hover or long-press row actions). Its build doesn't load the glass plugin at all (`glass` feature off in `tauri.react.conf.json`), so no overlay is attached. The glass code stays for later. Parity on iPhone means parity with the Dioxus app's no-glass behavior.
+- Data rules come from `keel-core` through `web/src/core` (`dateGroups`, `upcomingTasks`, `dueBucket`, `deadlineUrgent`, `reminderLabel`, `allDone`, `cards`, …); TypeScript never compares a task's date to today. Command return types are generated (`web/src/bindings/Commands.ts`, from `crates/src-tauri/tests/commands_list.rs`).
+- Forms opened by a tap focus their field inside the tap (`web/src/shell/focus.ts`), so iOS raises the keyboard.
+- The screens reuse the Dioxus markup and class names, so `app.css` applies unchanged and `Demo.swift` and `scripts/sim-checks/*.js` find what they query (`.sidebar`, `.brand .theme-toggle`, `.task-row`, `.task-body`, `.task-content`, `.task-badges`, `.task-count`, `.task-project`).
 
 ## Conventions
 

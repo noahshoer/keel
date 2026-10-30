@@ -192,10 +192,10 @@ Each item gets its own plan in `docs/superpowers/plans/` when it starts. Every p
 
 2. **Lists and rows:** `task_row`, `cards`, `completion`, `sidebar`, `search`, `filters`, the other views, theme / dark mode, icons. Completing tasks works.
 3. **Editor and quick add:** `editor`, `pickers`, live highlighting. `repeat_text`, `recurrence_for`, `changes`, `labels_to_create` and `new_task_from` move into `keel-core` and are exported through `core-wasm`.
-4. **iPhone glass:** `glass`, `platform`; the floating buttons, the native card and the menus, with the `plugin:glass|*` payloads typed in TS.
+4. **iPhone glass: deferred** (2026-10-30, Liquid Glass parked; see the spec). Comes back after parity and Noah's web UI updates. `platform` was ported in Plan 2.
 5. **Task view and gestures:** `task_view/*`, `gestures` (the 17 embedded scripts become TS modules with Vitest tests, including today's keyboard pace and sheet rules).
 6. **Settings, import, reminders and diagnostics UI.**
-7. **Cutover:** `frontendDist` → `web/dist`; check `scripts/sim-checks/*.js` still find what they query; the Windows and iOS CI jobs build `web/`; delete `crates/ui`; update CLAUDE.md and the `/deploy-keel` steps. Full pass on the phone, including the open phone checks listed in CLAUDE.md.
+7. **Cutover:** `frontendDist` → `web/dist`; check `scripts/sim-checks/*.js` still find what they query (`Demo.swift`'s `@fab` / `@menu` / `@search` targets are glass-only; page scripts run through `KEEL_SCRIPT`); drop the `glass` feature from `tauri.conf.json`; the Windows and iOS CI jobs build `web/`; delete `crates/ui`; update CLAUDE.md and the `/deploy-keel` steps. Full pass on the phone, including the open phone checks listed in CLAUDE.md.
 
 ## As built (2026-10-30)
 

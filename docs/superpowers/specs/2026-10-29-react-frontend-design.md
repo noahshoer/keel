@@ -25,6 +25,19 @@ loop, not correctness.
 - **Strict npm supply-chain checks** (see below) are part of the foundation,
   before any UI work.
 
+## Decisions (Noah, 2026-10-30)
+
+- **Behavior parity** with the Dioxus app is the bar for the port; a
+  difference is a bug unless a plan lists it.
+- **Liquid Glass is parked.** The React app never calls `plugin:glass|*` and
+  takes the Dioxus no-glass paths everywhere, so iPhone parity means parity
+  with the no-glass behavior. Its build doesn't load the glass plugin: the
+  diagnostics log, keyboard pace and the sim-check script runner moved to a
+  scoped plugin (`crates/plugin-ios`), and `tauri-plugin-glass` sits behind
+  the `keel` crate's `glass` feature, which only the Dioxus config turns on.
+  Glass comes back after parity and Noah's own web UI updates, once he is
+  comfortable with the iOS app on the web UI.
+
 ## Shape
 
 - `web/`: the Vite app. `src/bindings/` (ts-rs output, committed),

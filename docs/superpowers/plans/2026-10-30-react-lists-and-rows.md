@@ -256,6 +256,28 @@
 - Settings button and dialog, the completion-icon picker: Plan 6.
 - Backlog minors not touched here (`check-deps.ts`, Biome scoping, vetting table, `commands_list.rs` parsing, `rebuild-loop.ts`, CI caching) stay in the backlog.
 
-## As built
+## As built (2026-10-30)
 
-(Filled in at Task 11.)
+Deviations from this plan:
+
+- `command_args!` uses `cmd => Args => Ret`: Rust forbids `->` after a type fragment.
+- `check-bindings.sh` runs keel-core's bindings first: `Commands.ts` checks that its imports exist.
+- `ReminderDraft::label` (Dioxus pickers) keeps its own time branch: it labels unsaved drafts; `offset_text` comes from core.
+- The mock's `all_tasks` keeps checked tasks, as the backend does, and `project_view` lists the project's open tasks. Fixtures gained an overdue task, a broken filter and per-query search results.
+- `.content.today` (a Plan 1 class Dioxus never had) is gone; nothing queried it.
+- `MainPane` reads the clock itself and takes the Search pane as its children.
+- Glass's card follows the keyboard through its own `GlassKeyboard` (same 0.9 speed), not a cross-package dependency.
+- `sim-check.sh` dropped the "no `|`" rule. It needs one screenshot argument, because the log is copied after the last one.
+- The add-project and add-label forms close with + (no Escape), as in Dioxus.
+- The theme toggle passes an updater: two quick clicks computed both steps from one render (found in the simulator).
+- Chrome isn't installed, so the browser walk ran in the iOS simulator against the test database. The Dioxus build matched side by side. Desktop was built with both configs but not driven, because on the Mac that would take the screen.
+
+Checked in the simulator, React build (`scripts/sim-check.sh` scenarios):
+- completing a task, then reopening it from Completed;
+- long press showing row actions;
+- adding a project (its field focused), then deleting it;
+- search, the drawer and the theme cycle.
+
+No JS errors in `diag.log`. The React build links only `keel_ios` and `notification`, and its log has no glass lines. The Dioxus build still shows the glass card and buttons, and their lines land in the same log.
+
+Not done here (needs Noah's phone): Task 11 step 2 on the device. That covers taps, keyboard rise for the inline forms, `keelKeyboard` lines and long press, all by hand.
