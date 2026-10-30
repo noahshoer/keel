@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Hand-written source is `.ts` / `.tsx` only; no `.js`, `.jsx`, `.mjs`, `.cjs` in git anywhere (generated, git-ignored output exempt).
+- App source (`web/src/`) is `.ts` / `.tsx` only (`allowJs: false`). JavaScript elsewhere is fine where it's the natural fit (the existing `scripts/sim-checks/*.js`, generated glue).
 - `tsconfig`: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noPropertyAccessFromIndexSignature`, `noFallthroughCasesInSwitch`, `verbatimModuleSyntax`, `allowJs: false`. No `any` (Biome `noExplicitAny: error`), no non-null `!` (`noNonNullAssertion: error`), no `@ts-ignore` / `@ts-expect-error` without a reason comment.
 - Scripts in `web/scripts/` are `.ts`, run with plain `node` (Node 24 type stripping; `erasableSyntaxOnly: true`). No `tsx`, `ts-node`, `npx`, `pnpm dlx`.
 - pnpm settings exactly as in the spec: `minimumReleaseAge: 10080`, `strictDepBuilds: true`, `trustPolicy: no-downgrade`, `blockExoticSubdeps: true`, `saveExact: true`, `engineStrict: true`.
@@ -34,11 +34,11 @@
 ### Task 1: Toolchain and npm supply-chain guardrails
 
 **Files:**
-- Create: `.nvmrc` (`24`), `web/package.json`, `web/pnpm-workspace.yaml`, `web/deps-allowlist.json`, `web/DEPENDENCIES.md`, `web/scripts/check-deps.ts`, `web/scripts/check-no-js.ts`, `web/scripts/check-deps.test.ts`, `web/.gitignore`
+- Create: `.nvmrc` (`24`), `web/package.json`, `web/pnpm-workspace.yaml`, `web/deps-allowlist.json`, `web/DEPENDENCIES.md`, `web/scripts/check-deps.ts`, `web/scripts/check-deps.test.ts`, `web/.gitignore`
 - Modify: `.gitignore` (add `web/node_modules`, `web/dist`, `web/src/core/pkg`)
 
 **Interfaces:**
-- Produces: `pnpm run check:deps` and `pnpm run check:no-js` (exit 1 on violation). `checkDeps(pkg: PackageJson, allow: Allowlist): string[]` and `findJsFiles(paths: string[]): string[]` (error lists; empty = pass) exported from the scripts for tests.
+- Produces: `pnpm run check:deps` (exit 1 on violation). `checkDeps(pkg: PackageJson, allow: Allowlist): string[]` (error list; empty = pass), exported for tests.
 
 - [ ] **Step 1: Install Node 24 and pnpm on the Mac.** `brew install node@24`, then `corepack enable`. In `web/package.json` set `"packageManager": "pnpm@<newest 10.x ≥7 days old>+sha512.<hash>"` (Corepack verifies the hash), `"engines": { "node": ">=24 <25" }`, `"private": true`, `"type": "module"`.
 - [ ] **Step 2: Write `web/pnpm-workspace.yaml`** with the six settings from Global Constraints, `ignoredBuiltDependencies: [esbuild]` (esbuild works from its platform package; its postinstall is only an optimisation) and an empty `onlyBuiltDependencies`.
@@ -46,10 +46,9 @@
   - `flags a dependency missing from the allowlist`: pkg `{dependencies:{react:"19.2.0", leftpad:"1.0.0"}}`, allowlist `{react:{reason:"UI"}}` → errors include `"leftpad is not in deps-allowlist.json"`.
   - `flags a range version`: `react: "^19.2.0"` → `"react must be pinned exactly (got ^19.2.0)"`.
   - `flags an unused allowlist entry`: allowlist has `vite`, pkg doesn't → `"vite is in deps-allowlist.json but not used"`.
-  - `finds hand-written JS`: `findJsFiles(["web/src/a.ts","scripts/x.js","web/b.mjs","web/src/core/pkg/glue.js"])` → `["scripts/x.js","web/b.mjs"]` (generated `web/src/core/pkg/` and `web/dist/` excluded).
-- [ ] **Step 4: Run** `node --test web/scripts/check-deps.test.ts` → FAIL (functions not defined).
-- [ ] **Step 5: Implement** `checkDeps` and `findJsFiles`; each script's `main` reads its inputs (`package.json` + allowlist; `git ls-files` from the repo root) and exits 1 printing the errors. Allowlist shape: `{ [name: string]: { reason: string } }`, covering `dependencies` and `devDependencies`.
-- [ ] **Step 6: Run** the tests → PASS. Run `node web/scripts/check-no-js.ts` → it lists the six `scripts/sim-checks/*.js` files and exits 1. Add them to a temporary `KNOWN_JS` list in the script with a comment pointing at Plan 7, so the check passes now and the list shrinks to zero there.
+- [ ] **Step 4: Run** `node --test web/scripts/check-deps.test.ts` → FAIL (function not defined).
+- [ ] **Step 5: Implement** `checkDeps`; the script's `main` reads `package.json` and the allowlist and exits 1 printing the errors. Allowlist shape: `{ [name: string]: { reason: string } }`, covering `dependencies` and `devDependencies`.
+- [ ] **Step 6: Run** the tests → PASS.
 - [ ] **Step 7: Write `web/DEPENDENCIES.md`**: the policy from the spec plus the checklist to add a dependency: real need (no 20-line helpers), maintainers and download history, npm provenance present, no install scripts, transitive count (`pnpm why`, `pnpm list --depth Infinity | wc -l` before/after), licence (MIT/Apache/BSD/ISC), then an allowlist entry with the reason.
 - [ ] **Step 8: Prove the guardrails bite** (`rejects-young-package`): in a scratch copy of `web/`, `pnpm add <any package published in the last 24 h>` → install refuses on `minimumReleaseAge`; `pnpm add` of a package with a postinstall (e.g. `core-js`) → refuses under `strictDepBuilds`. Paste both outputs into the commit message body. Discard the scratch copy.
 - [ ] **Step 9: Commit** `chore(web): Node/pnpm pins and npm supply-chain guardrails`.
@@ -61,10 +60,10 @@
 - Modify: `web/package.json`, `web/deps-allowlist.json`
 
 **Interfaces:**
-- Produces: scripts `dev`, `build` (`tsc -b && vite build`), `typecheck` (`tsc -b --noEmit`), `lint` (`biome ci .`), `test` (`vitest run`), `check` (typecheck + lint + test + check:deps + check:no-js). `App` component as the root (`web/src/App.tsx`).
+- Produces: scripts `dev`, `build` (`tsc -b && vite build`), `typecheck` (`tsc -b --noEmit`), `lint` (`biome ci .`), `test` (`vitest run`), `check` (typecheck + lint + test + check:deps). `App` component as the root (`web/src/App.tsx`).
 
 - [ ] **Step 1: Add the dependencies** (newest ≥7 days old, exact; each with an allowlist reason): `react`, `react-dom`; dev: `typescript`, `vite`, `@vitejs/plugin-react`, `vitest`, `@testing-library/react`, `@testing-library/dom`, `jsdom`, `@biomejs/biome`, `@types/react`, `@types/react-dom`, `@types/node`. `pnpm install` must succeed under the Task 1 settings; any newly blocked build script gets an explicit `ignoredBuiltDependencies` entry with a comment, never `onlyBuiltDependencies`, unless the package cannot work without it (then stop and ask).
-- [ ] **Step 2: Write the configs.** `tsconfig.json` with the Global Constraints flags plus `jsx: react-jsx`, `moduleResolution: bundler`, `target: ES2022`, `lib: [ES2023, DOM, DOM.Iterable]`, `types: ["vite/client"]`. `biome.json`: recommended rules plus `noExplicitAny`, `noNonNullAssertion`, `useExhaustiveDependencies`, `noFloatingPromises` as errors; formatter 2-space, line width 110. `vite.config.ts`: React plugin; `server.port 5173`, `strictPort: true`; `server.host = process.env.TAURI_DEV_HOST || false`, with HMR on that host at port 1421 when set (Tauri's iOS dev pattern); `build.target: safari18`; Vitest `environment: jsdom`, `setupFiles: ["src/test/setup.ts"]`.
+- [ ] **Step 2: Write the configs.** `tsconfig.json` with the Global Constraints flags plus `jsx: react-jsx`, `moduleResolution: bundler`, `target: ES2022`, `lib: [ES2023, DOM, DOM.Iterable]`, `types: ["vite/client"]`. `biome.json`: recommended rules plus `noExplicitAny`, `noNonNullAssertion`, `noFloatingPromises` as errors; `linter.domains.react: "recommended"` (hooks rules `useExhaustiveDependencies` / `useHookAtTopLevel` included) plus `useComponentExportOnlyModules` (keeps hot reload clean) and `noNestedComponentDefinitions` as errors; formatter 2-space, line width 110. `vite.config.ts`: React plugin; `server.port 5173`, `strictPort: true`; `server.host = process.env.TAURI_DEV_HOST || false`, with HMR on that host at port 1421 when set (Tauri's iOS dev pattern); `build.target: safari18`; Vitest `environment: jsdom`, `setupFiles: ["src/test/setup.ts"]`.
 - [ ] **Step 3: Write the failing test** `App.test.tsx` → `renders the app root`: `render(<App />)`, expect `screen.getByText("Keel")`.
 - [ ] **Step 4: Run** `pnpm test` → FAIL (no App).
 - [ ] **Step 5: Implement** `App` rendering `<div className="app"><h1>Keel</h1></div>` and `main.tsx` mounting it into `#root` (throw a clear error if `#root` is missing; no `!`).
@@ -182,7 +181,7 @@
 - [ ] **Step 1: Pin every action by SHA** (existing ones too) with the version tag in a trailing comment.
 - [ ] **Step 2: Add a `web` job (Ubuntu)**: `actions/setup-node` with `node-version-file: .nvmrc`, `corepack enable`, Rust stable with the `wasm32-unknown-unknown` target, `cargo install wasm-bindgen-cli --version 0.2.129 --locked` (cached), `pnpm install --frozen-lockfile`, `pnpm check`, `pnpm build`, `scripts/check-bindings.sh`, `pnpm audit --audit-level moderate`, and OSV-Scanner (`google/osv-scanner-action`, SHA-pinned) on `web/pnpm-lock.yaml`.
 - [ ] **Step 3: Leave the Windows and iOS jobs** building the Dioxus UI as today (they move to `web/` in Plan 7).
-- [ ] **Step 4: Prove the gates on a throwaway branch**, three commits each expected red: change a field in `model.rs` without regenerating bindings; add `"leftpad": "^1.0.0"` to `package.json`; add `web/src/x.js`. Push, confirm the `web` job fails each time for the right reason, then delete the branch.
+- [ ] **Step 4: Prove the gates on a throwaway branch**, three commits each expected red: change a field in `model.rs` without regenerating bindings; add `"leftpad": "^1.0.0"` to `package.json`; add `const x: number = "a"` to a `web/src/` file. Push, confirm the `web` job fails each time for the right reason, then delete the branch.
 - [ ] **Step 5: Commit** `ci: web job with type, lint, test, bindings and supply-chain gates`.
 
 ---
@@ -196,4 +195,4 @@ Each item gets its own plan in `docs/superpowers/plans/` when it starts. Every p
 4. **iPhone glass:** `glass`, `platform`; the floating buttons, the native card and the menus, with the `plugin:glass|*` payloads typed in TS.
 5. **Task view and gestures:** `task_view/*`, `gestures` (the 17 embedded scripts become TS modules with Vitest tests, including today's keyboard pace and sheet rules).
 6. **Settings, import, reminders and diagnostics UI.**
-7. **Cutover:** `frontendDist` → `web/dist`; port `scripts/sim-checks/*.js` to `.ts` (empty `KNOWN_JS`); the Windows and iOS CI jobs build `web/`; delete `crates/ui`; update CLAUDE.md and the `/deploy-keel` steps. Full pass on the phone, including the open phone checks listed in CLAUDE.md.
+7. **Cutover:** `frontendDist` → `web/dist`; check `scripts/sim-checks/*.js` still find what they query; the Windows and iOS CI jobs build `web/`; delete `crates/ui`; update CLAUDE.md and the `/deploy-keel` steps. Full pass on the phone, including the open phone checks listed in CLAUDE.md.

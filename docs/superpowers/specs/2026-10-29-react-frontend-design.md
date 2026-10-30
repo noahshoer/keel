@@ -13,9 +13,12 @@ loop, not correctness.
 - **Stack:** React 19 + TypeScript (strict) + Vite, in a new top-level `web/`.
   The Tauri shell, `keel-core`, `keel-storage`, `keel-service`, the IPC
   commands and the Swift glass plugin are unchanged.
-- **Only `.ts` / `.tsx` is written by hand.** No hand-written `.js`, `.jsx`,
-  `.mjs` or `.cjs` anywhere in the repo (config files and scripts included).
-  Generated output (wasm-bindgen glue, `dist/`) is git-ignored and exempt.
+- **App source is `.ts` / `.tsx`, strictly typed** (`web/src/`, `allowJs:
+  false`). JavaScript is fine elsewhere where it's the natural fit (the
+  simulator check scripts, generated glue); no blanket ban.
+- **Linting and formatting: Biome**, with its React domain on.
+- **Where logic lives:** data rules in `keel-core`; the frontend holds
+  presentation and interaction (see CLAUDE.md, Conventions).
 - **IPC types come from Rust through `ts-rs`.** Every type that crosses IPC
   derives `TS`; the generated files are committed and CI fails when they are
   stale.

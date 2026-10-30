@@ -53,6 +53,10 @@ cd crates/src-tauri && cargo tauri dev       # desktop app (serves crates/ui/dis
 ## Conventions
 
 - Workflow per phase: write a short plan in `docs/superpowers/plans/` → feature branch → **TDD** (failing test first) → commit per task → merge `--no-ff` to `main` → push. Noah prefers you build without asking for routine decisions; ask about genuinely personal choices (names, visual direction), ideally with visual options.
+- **Where logic lives.** The test is whether it's about the data or about the screen, not which platform uses it.
+  - Data rules go in `keel-core`, with Rust tests: what's true about tasks, dates, recurrence, quick-add parsing, filters, views and grouping, streaks, what an edit changes. The frontend calls them through IPC or the wasm build (`crates/core-wasm`) and never re-implements them in TypeScript, not even a small copy.
+  - Screen rules stay in the frontend, typed and tested with Vitest: components (shared by the desktop and phone layouts or not), layout, gestures and sheet detents, keyboard timing, navigation, focus. Interaction logic lives in plain `.ts` modules with tests, and components connect it through hooks.
+  - If a frontend function starts deciding something about a task (its next date, whether it's overdue, how it groups), move it to `keel-core`.
 - Tauri commands use `#[tauri::command(rename_all = "snake_case")]`, and the frontend sends snake_case args.
 - A command that calls into a mobile plugin (anything touching `app.notification()`, including `notifications::resync`) **must be `async`**. A sync command runs on the main thread and blocks it waiting for Swift, which deadlocks against any other plugin call that needs the main thread. That froze the app when Settings opened next to a glass-plugin call.
 - Commands are idempotent (uuid) with temp-id → id mapping. Add new `Action` variants (never change existing serialized shapes); new fields are `#[serde(default)]`. Adding a field to `TaskAdd`/`TaskUpdate` means updating struct literals in tests too.
