@@ -1,0 +1,63 @@
+import { afterEach, expect, test, vi } from "vitest";
+import commandNames from "../bindings/commands.json";
+import { COMMAND_TYPES } from "./commands";
+import { todayTaskIds } from "./fixtures";
+import { invoke } from "./invoke";
+
+afterEach(() => {
+  delete window.__TAURI__;
+});
+
+function stubTauri(impl: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>) {
+  const spy = vi.fn(impl);
+  window.__TAURI__ = { core: { invoke: spy } };
+  return spy;
+}
+
+test("every command has a client entry", () => {
+  expect(Object.keys(COMMAND_TYPES).sort()).toEqual(commandNames);
+});
+
+test("sends args wrapped and snake_case", async () => {
+  const spy = stubTauri(async () => []);
+  await invoke("list_tasks", { project_id: "p1" });
+  expect(spy).toHaveBeenCalledWith("list_tasks", { args: { project_id: "p1" } });
+});
+
+test("uses the mock without Tauri", async () => {
+  const tasks = await invoke("today_view", {});
+  expect(tasks.map((t) => t.id)).toEqual(todayTaskIds);
+  expect(tasks.length).toBeGreaterThan(0);
+});
+
+test("the mock applies a TaskAdd and a TaskComplete", async () => {
+  const before = await invoke("list_tasks", { project_id: "p-home" });
+  const res = await invoke("dispatch", {
+    cmd: {
+      uuid: "u1",
+      temp_id: "tmp1",
+      action: { type: "task_add", content: "Water plants", project_id: "p-home" },
+    },
+  });
+  const realId = res.id_mapping["tmp1"];
+  expect(realId).toBeTruthy();
+  const added = await invoke("list_tasks", { project_id: "p-home" });
+  expect(added.length).toBe(before.length + 1);
+  await invoke("dispatch", { cmd: { uuid: "u2", action: { type: "task_complete", id: realId ?? "" } } });
+  const after = await invoke("list_tasks", { project_id: "p-home" });
+  expect(after.length).toBe(before.length);
+});
+
+test("rejects with the backend message", async () => {
+  stubTauri(() => Promise.reject("no such task"));
+  await expect(invoke("list_tasks", { project_id: "x" })).rejects.toBe("no such task");
+});
+
+test("a production build without Tauri throws", async () => {
+  vi.stubEnv("DEV", false);
+  try {
+    await expect(invoke("today_view", {})).rejects.toThrow("Keel must run inside its app");
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
