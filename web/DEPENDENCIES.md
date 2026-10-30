@@ -10,8 +10,9 @@ The guardrails below keep that risk small and visible.
 - `pnpm-workspace.yaml`:
   - `minimumReleaseAge: 10080`: a package must be at least 7 days old.
   - `strictDepBuilds: true`: no dependency lifecycle scripts run; every
-    package with one is listed explicitly in `allowBuilds` (`false` = ignored,
-    `true` = allowed). Only `esbuild: false` is listed.
+    package with one must be listed explicitly in `allowBuilds` (`false` =
+    ignored, `true` = allowed). None is listed: Vite 8 uses rolldown, and
+    esbuild appears in the lockfile only as an optional peer, never installed.
   - `trustPolicy: no-downgrade`: no provenance downgrades.
   - `blockExoticSubdeps: true`: no git or tarball sub-dependencies.
   - `saveExact: true`: exact versions, no ranges.
@@ -77,8 +78,8 @@ Checked on 2026-10-29 with pnpm 10.34.7 (Task 1 settings):
 - `pnpm add core-js` was refused: `ERR_PNPM_IGNORED_BUILDS` (`strictDepBuilds`).
 
 Checked on 2026-10-30 with pnpm 11.28.9 (upgraded from 10.34.7; pnpm 11 removed
-`ignoredBuiltDependencies` and `onlyBuiltDependencies`, so `esbuild` moved to
-`allowBuilds: { esbuild: false }` with the same meaning):
+`ignoredBuiltDependencies` and `onlyBuiltDependencies` in favor of `allowBuilds`;
+the old `esbuild` entry was dropped because esbuild is not installed):
 - `pnpm add typescript@7.1.0-dev.20261029.1` was refused: `ERR_PNPM_NO_MATURE_MATCHING_VERSION` (`minimumReleaseAge`).
 - `pnpm add core-js` was refused: `ERR_PNPM_IGNORED_BUILDS` (`strictDepBuilds`).
 

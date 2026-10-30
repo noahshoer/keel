@@ -196,3 +196,19 @@ Each item gets its own plan in `docs/superpowers/plans/` when it starts. Every p
 5. **Task view and gestures:** `task_view/*`, `gestures` (the 17 embedded scripts become TS modules with Vitest tests, including today's keyboard pace and sheet rules).
 6. **Settings, import, reminders and diagnostics UI.**
 7. **Cutover:** `frontendDist` → `web/dist`; check `scripts/sim-checks/*.js` still find what they query; the Windows and iOS CI jobs build `web/`; delete `crates/ui`; update CLAUDE.md and the `/deploy-keel` steps. Full pass on the phone, including the open phone checks listed in CLAUDE.md.
+
+## As built (2026-10-30)
+
+Deviations from this plan:
+
+- pnpm 11.28.9 instead of 10: owner's choice; pnpm 11 replaced `ignoredBuiltDependencies`/`onlyBuiltDependencies` with `allowBuilds` (the esbuild entry was later dropped, as esbuild isn't installed).
+- 29 IPC commands instead of 57: that is how many the app registers (`commands_list.rs`).
+- `typecheck` is `tsc -b`: `--noEmit` fails with TS6310 on project references.
+- TS 7, Vite 8 and Vitest 5: the newest versions at least 7 days old (`minimumReleaseAge`).
+- The wasm-bindgen CLI is project-local in `.tools/`: owner's choice, no global install.
+- `dueLabel` takes YYYY-MM-DD, with `dueDateOf`/`dueTime` wrappers for the due value: keeps the core rule in one place.
+- Today uses Grouped mode like the Dioxus UI: matches existing behavior.
+- `pnpm dev` runs `scripts/dev.ts` (Vite plus `watch-wasm.ts`): one command gives HMR and wasm rebuilds.
+- Task 8 was verified locally with no push: CI wasn't run on it.
+- The no-JS check was dropped: the owner relaxed that rule.
+- Command return types are hand-written in `commands.ts`: generate them in Plan 2.

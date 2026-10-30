@@ -4,5 +4,3 @@ trustPolicy: no-downgrade
 blockExoticSubdeps: true
 saveExact: true
 engineStrict: true
-allowBuilds:
-  esbuild: false
