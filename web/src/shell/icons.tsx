@@ -163,6 +163,85 @@ export function FlagFilledIcon() {
   );
 }
 
+export function ClockSmallIcon() {
+  return (
+    <Line size={12} stroke="2">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </Line>
+  );
+}
+
+export function FlagSmallIcon() {
+  return (
+    <Line size={12} stroke="2">
+      <path d="M5 21V3" />
+      <path d={FLAG_BANNER} />
+    </Line>
+  );
+}
+
+export function HashSmallIcon() {
+  return (
+    <Line size={14} stroke="2">
+      <path d="M5 9h14M5 15h14M10 4l-2 16M16 4l-2 16" />
+    </Line>
+  );
+}
+
+/** A section: a short bar with lines under it. */
+export function SectionSmallIcon() {
+  return (
+    <Line size={14} stroke="2">
+      <path d="M4 6h16M8 12h12M8 18h12" />
+    </Line>
+  );
+}
+
+export function ChevronLeftIcon() {
+  return (
+    <Line size={16} stroke="2">
+      <path d="M15 6l-6 6 6 6" />
+    </Line>
+  );
+}
+
+export function ChevronDownSmallIcon() {
+  return (
+    <Line size={12} stroke="2">
+      <path d="M6 9l6 6 6-6" />
+    </Line>
+  );
+}
+
+export function SofaIcon() {
+  return (
+    <Line size={16} stroke="1.8">
+      <path d="M5 11V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3" />
+      <path d="M3 13a2 2 0 0 1 4 0v1h10v-1a2 2 0 0 1 4 0v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />
+      <path d="M6 18v2M18 18v2" />
+    </Line>
+  );
+}
+
+export function ArrowRightIcon() {
+  return (
+    <Line size={16} stroke="1.8">
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <path d="M8 12h8M13 9l3 3-3 3" />
+    </Line>
+  );
+}
+
+export function NoDateIcon() {
+  return (
+    <Line size={16} stroke="1.8">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M6 6l12 12" />
+    </Line>
+  );
+}
+
 export function ChevronRightIcon() {
   return (
     <Line size={16} stroke="2">
