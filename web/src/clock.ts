@@ -9,6 +9,12 @@ export function localToday(now: Date = new Date()): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
+/** The local calendar date (`YYYY-MM-DD`) of an ISO timestamp; `null` when it doesn't parse. */
+export function localDateOf(iso: string): string | null {
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? null : localToday(at);
+}
+
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 

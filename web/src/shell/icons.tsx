@@ -1,4 +1,4 @@
-// The line icons the shell and Today use, as JSX ports of
+// The line icons the app uses, as JSX ports of
 // crates/ui/src/icons.rs (same paths, sizes and strokes). Each renders inside
 // a `span.icon`, like the Dioxus `Icon` component.
 import type { ReactNode } from "react";
@@ -171,8 +171,48 @@ export function ChevronRightIcon() {
   );
 }
 
-/** The completion circle's mark (the default "Waterline", `CompletionIcon::Wave`). */
-export function DoneMark() {
+/** The mark a completing circle fills with (`CompletionIcon::svg`, crates/ui/src/completion.rs). */
+export function DoneMark({ icon = "wave" }: { icon?: "wave" | "pine" | "reflection" }) {
+  if (icon === "pine") {
+    return (
+      <span className="icon">
+        <svg className="done-mark" viewBox="20 12 24 22" aria-hidden="true">
+          <path d={PINE} fill="currentColor" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+          <rect x="31" y="30" width="2" height="3" rx=".5" fill="currentColor" />
+        </svg>
+      </span>
+    );
+  }
+  if (icon === "reflection") {
+    const pine = "translate(32 15.3) scale(.82) translate(-32 -15)";
+    return (
+      <span className="icon">
+        <svg className="done-mark" viewBox="16 10 32 44" aria-hidden="true">
+          <g transform={pine}>
+            <path
+              d={PINE}
+              fill="currentColor"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+          </g>
+          <g transform="translate(0 64) scale(1 -1)" opacity=".45">
+            <g transform={pine}>
+              <path d={PINE} fill="currentColor" />
+            </g>
+          </g>
+          <path
+            d="M17 32 Q22 30.6 27 32 T37 32 T47 32"
+            stroke="currentColor"
+            strokeWidth="3"
+            fill="none"
+            strokeLinecap="round"
+          />
+        </svg>
+      </span>
+    );
+  }
   return (
     <span className="icon">
       <svg className="done-mark" viewBox="0 0 24 24" aria-hidden="true">
@@ -185,6 +225,119 @@ export function DoneMark() {
         />
       </svg>
     </span>
+  );
+}
+
+export function CheckIcon() {
+  return (
+    <Line size={11} stroke="3">
+      <path d="M5 12l5 5L20 7" />
+    </Line>
+  );
+}
+
+export function CheckSmallIcon() {
+  return (
+    <Line size={14} stroke="2.4">
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </Line>
+  );
+}
+
+export function CheckCircleIcon() {
+  return (
+    <Line size={16} stroke="1.6">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12.5l2.5 2.5L16 9.5" />
+    </Line>
+  );
+}
+
+export function TargetSmallIcon() {
+  return (
+    <Line size={12} stroke="2">
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" />
+    </Line>
+  );
+}
+
+export function BellSmallIcon() {
+  return (
+    <Line size={12} stroke="2">
+      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
+      <path d="M10 20.5a2 2 0 0 0 4 0" />
+    </Line>
+  );
+}
+
+export function SubtaskIcon() {
+  return (
+    <Line size={18} stroke="1.6">
+      <path d="M6 4v8a4 4 0 0 0 4 4h8" />
+      <path d="M15 13l3 3-3 3" />
+    </Line>
+  );
+}
+
+const TRASH = "M5 7h14M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3";
+
+export function TrashIcon() {
+  return (
+    <Line size={18} stroke="1.6">
+      <path d={TRASH} />
+    </Line>
+  );
+}
+
+export function TrashSmallIcon() {
+  return (
+    <Line size={16} stroke="1.6">
+      <path d={TRASH} />
+    </Line>
+  );
+}
+
+export function PencilIcon() {
+  return (
+    <Line size={16} stroke="1.6">
+      <path d="M4 20h4L19 9l-4-4L4 16v4z" />
+      <path d="M13.5 6.5l4 4" />
+    </Line>
+  );
+}
+
+export function SunIcon() {
+  return (
+    <Line size={18} stroke="1.6">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </Line>
+  );
+}
+
+export function MoonIcon() {
+  return (
+    <Line size={18} stroke="1.6">
+      <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
+    </Line>
+  );
+}
+
+export function XIcon() {
+  return (
+    <Line size={16} stroke="2.2">
+      <path d="M7 7l10 10M17 7L7 17" />
+    </Line>
+  );
+}
+
+export function XSmallIcon() {
+  return (
+    <Line size={12} stroke="2.4">
+      <path d="M7 7l10 10M17 7L7 17" />
+    </Line>
   );
 }
 
