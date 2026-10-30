@@ -175,56 +175,6 @@ struct Loaded {
     filter_error: Option<String>,
 }
 
-/// A titled run of tasks in the date-based views.
-#[derive(Clone, PartialEq)]
-struct Group {
-    title: Option<String>,
-    muted: String,
-    tasks: Vec<Task>,
-}
-
-/// Splits Today / Upcoming into Todoist-style date groups.
-fn date_groups(view: &View, tasks: Vec<Task>, today: NaiveDate) -> Vec<Group> {
-    let (overdue, rest): (Vec<Task>, Vec<Task>) = tasks
-        .into_iter()
-        .partition(|t| views::due_date_of(t).is_some_and(|d| d < today));
-    let mut out = Vec::new();
-    let split = !overdue.is_empty();
-    if split {
-        out.push(Group { title: Some("Overdue".into()), muted: String::new(), tasks: overdue });
-    }
-    match view {
-        View::Today => {
-            if !rest.is_empty() {
-                out.push(Group {
-                    title: split.then(|| "Today".to_string()),
-                    muted: if split { format!("{} · {}", short_date(today), weekday(today)) } else { String::new() },
-                    tasks: rest,
-                });
-            }
-        }
-        _ => {
-            let mut days: Vec<(NaiveDate, Vec<Task>)> = Vec::new();
-            for t in rest {
-                let Some(d) = views::due_date_of(&t) else { continue };
-                match days.last_mut() {
-                    Some((last, group)) if *last == d => group.push(t),
-                    _ => days.push((d, vec![t])),
-                }
-            }
-            out.extend(days.into_iter().map(|(d, tasks)| {
-                let rel = match (d - today).num_days() {
-                    0 => "Today · ",
-                    1 => "Tomorrow · ",
-                    _ => "",
-                };
-                Group { title: Some(short_date(d)), muted: format!("{rel}{}", weekday(d)), tasks }
-            }));
-        }
-    }
-    out
-}
-
 #[component]
 fn App() -> Element {
     let mut view = use_signal(|| View::Today);
@@ -439,13 +389,7 @@ fn App() -> Element {
             },
             View::Upcoming => {
                 // Overdue (from the Today query) on top, then the window.
-                let now = today();
-                let mut tasks: Vec<Task> = today_tasks
-                    .into_iter()
-                    .filter(|t| views::due_date_of(t).is_some_and(|d| d < now))
-                    .collect();
-                tasks.extend(api::upcoming_view(UPCOMING_DAYS).await?);
-                tasks
+                views::upcoming_tasks(today_tasks, api::upcoming_view(UPCOMING_DAYS).await?, today())
             }
             View::Today => today_tasks,
             View::Inbox => api::project_view(inbox.id.as_str()).await?,
@@ -729,7 +673,8 @@ fn MainPane(
         .cloned()
         .collect();
     let date_view = matches!(view, View::Today | View::Upcoming);
-    let groups = if date_view { date_groups(&view, loaded.tasks.clone(), today) } else { Vec::new() };
+    let group_mode = if view == View::Today { views::DateGroupMode::Today } else { views::DateGroupMode::Upcoming };
+    let groups = if date_view { views::date_groups(group_mode, loaded.tasks.clone(), today) } else { Vec::new() };
     let mode = view_mode(&view);
 
     rsx! {
@@ -1143,33 +1088,5 @@ mod card_mode_tests {
         let in_section = vec![p.clone(), c.clone(), g.clone(), other.clone()];
         let all = in_section.clone();
         assert_eq!(section_cards(in_section, &all).len(), 2);
-    }
-
-    #[test]
-    fn upcoming_groups_cards_per_day() {
-        let (today, thu, fri) = (d(2026, 10, 19), d(2026, 10, 22), d(2026, 10, 23));
-        assert_eq!(thu.weekday(), chrono::Weekday::Thu);
-        let parent = task("Pack for Boston", None, fri);
-        let sub = task("Chargers", Some(&parent), thu);
-        let all = vec![parent.clone(), sub.clone()];
-        let groups = date_groups(&View::Upcoming, vec![sub.clone(), parent.clone()], today);
-        assert_eq!(groups.len(), 2);
-        let mode = view_mode(&View::Upcoming);
-
-        let thursday = views::cards(groups[0].tasks.clone(), &all, mode);
-        assert_eq!(groups[0].title.as_deref(), Some("22 Oct"));
-        assert_eq!(thursday.len(), 1);
-        assert_eq!(thursday[0].head.task.id, parent.id);
-        assert!(!thursday[0].head_matches, "the parent is a context-only head on Thursday");
-        let rows: Vec<_> = thursday[0].rows.iter().map(|r| r.task.id.clone()).collect();
-        assert_eq!(rows, vec![sub.id.clone()]);
-        assert_eq!(thursday[0].head.progress, Some(views::Progress { done: 0, total: 1 }));
-
-        let friday = views::cards(groups[1].tasks.clone(), &all, mode);
-        assert_eq!(groups[1].title.as_deref(), Some("23 Oct"));
-        assert_eq!(friday.len(), 1);
-        assert_eq!(friday[0].head.task.id, parent.id);
-        assert!(friday[0].head_matches, "on Friday the parent is its own completable card");
-        assert!(friday[0].rows.is_empty());
     }
 }

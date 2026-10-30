@@ -207,6 +207,67 @@ fn stable_id(key: &str) -> i32 {
     ((h & 0x7fff_ffff) as i32).max(1)
 }
 
+/// A relative reminder's text: "At time of task", "10 min before",
+/// "1 hour before", "2 days before" (the largest whole unit).
+pub fn offset_text(minutes: i64) -> String {
+    match minutes {
+        0 => "At time of task".to_string(),
+        m if m % 1440 == 0 => {
+            let d = m / 1440;
+            format!("{d} day{} before", if d == 1 { "" } else { "s" })
+        }
+        m if m % 60 == 0 => {
+            let h = m / 60;
+            format!("{h} hour{} before", if h == 1 { "" } else { "s" })
+        }
+        m => format!("{m} min before"),
+    }
+}
+
+/// A reminder's text: its offset ("30 min before") or its time ("Tuesday
+/// 9 AM"); "Reminder" when an absolute one has no readable time.
+pub fn reminder_label(r: &Reminder, today: NaiveDate) -> String {
+    if r.kind == ReminderType::Relative {
+        if let Some(m) = r.minute_offset {
+            return offset_text(m);
+        }
+    }
+    match r.at() {
+        Some(at) => format!("{} {}", views::due_label(at.date(), today), views::time_label(at.time())),
+        None => "Reminder".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod label_tests {
+    use super::{offset_text, reminder_label};
+    use crate::ids::Id;
+    use crate::model::Reminder;
+    use chrono::NaiveDate;
+
+    #[test]
+    fn offsets_read_in_the_largest_whole_unit() {
+        assert_eq!(offset_text(0), "At time of task");
+        assert_eq!(offset_text(10), "10 min before");
+        assert_eq!(offset_text(60), "1 hour before");
+        assert_eq!(offset_text(120), "2 hours before");
+        assert_eq!(offset_text(1440), "1 day before");
+        assert_eq!(offset_text(2880), "2 days before");
+        assert_eq!(offset_text(90), "90 min before");
+    }
+
+    #[test]
+    fn reminders_label_by_offset_or_time() {
+        let today = NaiveDate::from_ymd_opt(2026, 10, 30).unwrap();
+        assert_eq!(reminder_label(&Reminder::relative(Id::from("t"), 30), today), "30 min before");
+        let tue = NaiveDate::from_ymd_opt(2026, 11, 3).unwrap().and_hms_opt(9, 0, 0).unwrap();
+        assert_eq!(reminder_label(&Reminder::absolute(Id::from("t"), tue), today), "Tuesday 9 AM");
+        let mut broken = Reminder::absolute(Id::from("t"), tue);
+        broken.due = None;
+        assert_eq!(reminder_label(&broken, today), "Reminder");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{plan, PlannedReminder, ReminderSettings, MAX_REMINDERS};

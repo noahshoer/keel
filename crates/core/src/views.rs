@@ -283,6 +283,93 @@ pub fn due_date_of(task: &Task) -> Option<NaiveDate> {
         .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
 }
 
+/// A titled run of tasks in the dated views (Today, Upcoming).
+#[derive(Clone, PartialEq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct DateGroup {
+    /// "Overdue", "Today" or a short date; `None` for Today's single group.
+    pub title: Option<String>,
+    /// The grey text after the title ("30 Oct · Friday", "Tomorrow · Saturday").
+    pub muted: String,
+    pub tasks: Vec<Task>,
+}
+
+/// Which dated view [`date_groups`] splits for.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub enum DateGroupMode {
+    /// Overdue, then today (titled only when there is something overdue).
+    Today,
+    /// Overdue, then one group per day.
+    Upcoming,
+}
+
+/// "30 Oct".
+fn short_date(d: NaiveDate) -> String {
+    format!("{} {}", d.day(), MONTHS[d.month0() as usize])
+}
+
+fn weekday_long(d: NaiveDate) -> &'static str {
+    WEEKDAYS_LONG[d.weekday().num_days_from_monday() as usize]
+}
+
+/// Splits Today / Upcoming into Todoist-style date groups, keeping the
+/// tasks' order within each. Tasks without a date are left out of
+/// Upcoming's day groups.
+pub fn date_groups(mode: DateGroupMode, tasks: Vec<Task>, today: NaiveDate) -> Vec<DateGroup> {
+    let (overdue, rest): (Vec<Task>, Vec<Task>) =
+        tasks.into_iter().partition(|t| due_date_of(t).is_some_and(|d| d < today));
+    let mut out = Vec::new();
+    let split = !overdue.is_empty();
+    if split {
+        out.push(DateGroup { title: Some("Overdue".into()), muted: String::new(), tasks: overdue });
+    }
+    match mode {
+        DateGroupMode::Today => {
+            if !rest.is_empty() {
+                out.push(DateGroup {
+                    title: split.then(|| "Today".to_string()),
+                    muted: if split { format!("{} · {}", short_date(today), weekday_long(today)) } else { String::new() },
+                    tasks: rest,
+                });
+            }
+        }
+        DateGroupMode::Upcoming => {
+            let mut days: Vec<(NaiveDate, Vec<Task>)> = Vec::new();
+            for t in rest {
+                let Some(d) = due_date_of(&t) else { continue };
+                match days.last_mut() {
+                    Some((last, group)) if *last == d => group.push(t),
+                    _ => days.push((d, vec![t])),
+                }
+            }
+            out.extend(days.into_iter().map(|(d, tasks)| {
+                let rel = match (d - today).num_days() {
+                    0 => "Today · ",
+                    1 => "Tomorrow · ",
+                    _ => "",
+                };
+                DateGroup { title: Some(short_date(d)), muted: format!("{rel}{}", weekday_long(d)), tasks }
+            }));
+        }
+    }
+    out
+}
+
+/// The Upcoming view's tasks: what's overdue (from the Today query, which
+/// has it) on top, then the upcoming window.
+pub fn upcoming_tasks(today_tasks: Vec<Task>, window: Vec<Task>, today: NaiveDate) -> Vec<Task> {
+    let mut out: Vec<Task> =
+        today_tasks.into_iter().filter(|t| due_date_of(t).is_some_and(|d| d < today)).collect();
+    out.extend(window);
+    out
+}
+
+/// A deadline chip turns urgent on the day itself and after.
+pub fn deadline_urgent(deadline: NaiveDate, today: NaiveDate) -> bool {
+    deadline <= today
+}
+
 #[cfg(test)]
 mod tests {
     use super::{due_bucket, due_date_of, due_label, DueBucket};
@@ -735,5 +822,115 @@ mod card_tests {
         let cs = cards(vec![f.pack.clone()], &all(&f), CardMode::Grouped);
         assert!(cs[0].head.progress.unwrap().all_done());
         assert!(cs[0].rows.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod date_group_tests {
+    use super::{cards, date_groups, deadline_urgent, upcoming_tasks, CardMode, DateGroupMode, Progress};
+    use crate::ids::Id;
+    use crate::model::{Due, Task};
+    use chrono::{Datelike, NaiveDate};
+
+    fn d(y: i32, m: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, day).unwrap()
+    }
+
+    fn task(name: &str, parent: Option<&Task>, due: NaiveDate) -> Task {
+        let mut t = Task::new(name, Id::from("proj"));
+        t.id = Id::from(name);
+        t.parent_id = parent.map(|p| p.id.clone());
+        t.due = Some(Due {
+            date: due.format("%Y-%m-%d").to_string(),
+            timezone: None,
+            string: String::new(),
+            lang: "en".to_string(),
+            is_recurring: false,
+            recurrence: None,
+        });
+        t
+    }
+
+    fn titles(groups: &[super::DateGroup]) -> Vec<(Option<String>, String)> {
+        groups.iter().map(|g| (g.title.clone(), g.muted.clone())).collect()
+    }
+
+    #[test]
+    fn today_splits_overdue_only_when_there_is_some() {
+        let today = d(2026, 10, 30);
+        let due_today = task("Laundry", None, today);
+        let groups = date_groups(DateGroupMode::Today, vec![due_today.clone()], today);
+        assert_eq!(titles(&groups), [(None, String::new())]);
+
+        let late = task("Taxes", None, d(2026, 10, 28));
+        let groups = date_groups(DateGroupMode::Today, vec![due_today, late], today);
+        assert_eq!(
+            titles(&groups),
+            [(Some("Overdue".to_string()), String::new()), (Some("Today".to_string()), "30 Oct · Friday".to_string())]
+        );
+        assert_eq!(groups[0].tasks[0].content, "Taxes");
+        assert_eq!(groups[1].tasks[0].content, "Laundry");
+    }
+
+    #[test]
+    fn upcoming_labels_today_and_tomorrow() {
+        let today = d(2026, 10, 30);
+        let tasks = vec![task("A", None, today), task("B", None, d(2026, 10, 31)), task("C", None, d(2026, 11, 1))];
+        let groups = date_groups(DateGroupMode::Upcoming, tasks, today);
+        assert_eq!(
+            titles(&groups),
+            [
+                (Some("30 Oct".to_string()), "Today · Friday".to_string()),
+                (Some("31 Oct".to_string()), "Tomorrow · Saturday".to_string()),
+                (Some("1 Nov".to_string()), "Sunday".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn upcoming_groups_cards_per_day() {
+        let (today, thu, fri) = (d(2026, 10, 19), d(2026, 10, 22), d(2026, 10, 23));
+        assert_eq!(thu.weekday(), chrono::Weekday::Thu);
+        let parent = task("Pack for Boston", None, fri);
+        let sub = task("Chargers", Some(&parent), thu);
+        let all = vec![parent.clone(), sub.clone()];
+        let groups = date_groups(DateGroupMode::Upcoming, vec![sub.clone(), parent.clone()], today);
+        assert_eq!(groups.len(), 2);
+
+        let thursday = cards(groups[0].tasks.clone(), &all, CardMode::Grouped);
+        assert_eq!(groups[0].title.as_deref(), Some("22 Oct"));
+        assert_eq!(thursday.len(), 1);
+        assert_eq!(thursday[0].head.task.id, parent.id);
+        assert!(!thursday[0].head_matches, "the parent is a context-only head on Thursday");
+        let rows: Vec<_> = thursday[0].rows.iter().map(|r| r.task.id.clone()).collect();
+        assert_eq!(rows, vec![sub.id.clone()]);
+        assert_eq!(thursday[0].head.progress, Some(Progress { done: 0, total: 1 }));
+
+        let friday = cards(groups[1].tasks.clone(), &all, CardMode::Grouped);
+        assert_eq!(groups[1].title.as_deref(), Some("23 Oct"));
+        assert_eq!(friday.len(), 1);
+        assert_eq!(friday[0].head.task.id, parent.id);
+        assert!(friday[0].head_matches, "on Friday the parent is its own completable card");
+        assert!(friday[0].rows.is_empty());
+    }
+
+    #[test]
+    fn upcoming_tasks_puts_overdue_first_and_drops_today() {
+        let today = d(2026, 10, 30);
+        let late = task("Late", None, d(2026, 10, 29));
+        let due_today = task("Now", None, today);
+        let soon = task("Soon", None, d(2026, 11, 2));
+        let window = vec![due_today.clone(), soon.clone()];
+        let out = upcoming_tasks(vec![due_today, late], window, today);
+        let names: Vec<_> = out.iter().map(|t| t.content.as_str()).collect();
+        assert_eq!(names, ["Late", "Now", "Soon"]);
+    }
+
+    #[test]
+    fn deadline_today_is_urgent() {
+        let today = d(2026, 10, 30);
+        assert!(deadline_urgent(d(2026, 10, 29), today));
+        assert!(deadline_urgent(today, today));
+        assert!(!deadline_urgent(d(2026, 10, 31), today));
     }
 }

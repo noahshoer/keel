@@ -9,6 +9,8 @@ export type * from "./Command";
 export type * from "./Commands";
 export type * from "./CompletedInProjectArgs";
 export type * from "./CompletedWithLabelArgs";
+export type * from "./DateGroup";
+export type * from "./DateGroupMode";
 export type * from "./DayCell";
 export type * from "./DiagLogArgs";
 export type * from "./DispatchArgs";

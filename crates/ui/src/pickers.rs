@@ -713,20 +713,7 @@ impl ReminderDraft {
 }
 
 /// "At time of task", "10 min before", "1 hour before", "1 day before".
-pub fn offset_text(m: i64) -> String {
-    match m {
-        0 => "At time of task".to_string(),
-        m if m % 1440 == 0 => {
-            let d = m / 1440;
-            format!("{d} day{} before", if d == 1 { "" } else { "s" })
-        }
-        m if m % 60 == 0 => {
-            let h = m / 60;
-            format!("{h} hour{} before", if h == 1 { "" } else { "s" })
-        }
-        m => format!("{m} min before"),
-    }
-}
+pub use keel_core::reminders::offset_text;
 
 /// The reminders chip + popover: current reminders (removable), presets
 /// relative to the due time, and a custom time typed in plain words.
