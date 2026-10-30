@@ -189,3 +189,18 @@ A move, not a rewrite: the Dioxus bodies and tests go to core unchanged except t
 - The glass card's quick add: parked with Liquid Glass.
 
 ## As built
+
+Deviations from this plan:
+
+- `Pick` is `EditorPick` in TypeScript: TS has a built-in `Pick<T, K>`.
+- `Action` derives `PartialEq` and `SpanKind` derives `Serialize`; serialized shapes are unchanged.
+- The Dioxus `api` helpers `add_task`, `update_task`, `move_task`, `add_reminder` and `delete_reminder` are gone: Dioxus dispatches the core plans too. `pickers::native_time` stays in the Dioxus crate until the cutover; the web's copy is in `core-wasm`.
+- The bindings index sorts case-insensitively, as Biome orders exports (`EditPlan` / `EditorPick`).
+- Without locale week info the calendar starts on Sunday, as the Dioxus app does (the plan said Monday).
+- Backspace un-highlighting runs in the title's own key handler, so there's no global listener and no `data-editor` id. Submitting is guarded with refs, so two Enters before a re-render still add once.
+- The core editor tests are in `web/src/core/editor.test.ts`. The Today add test checks the mock's state, because the mock's Today view is a fixed list.
+- No browser walk (no Chrome on this Mac). The simulator scenario `scripts/sim-checks/quick-add.js` covers it on the React build. The Dioxus build opens the glass card from "+ Add task" on iOS, so the same scenario doesn't compare.
+
+Checked in the simulator (React build, iPhone 17, test data): the add row focuses the title; "tomorrow 5pm p1" gets date and priority marks and the chips "Tomorrow 5 PM" and "P1"; all seven popovers sit inside the 402×874 screen; Enter adds the task and clears the title; the new row shows "Tomorrow 5 PM" in Upcoming.
+
+Phone check for Noah (not done yet): the add row raises the keyboard, the time field uses the iOS wheel, the popovers fit, and the chip row wraps the Labels chip fully into view (in the simulator screenshot the second chip row is clipped above the footer; this is the same CSS as Dioxus).

@@ -191,7 +191,7 @@
 Each item gets its own plan in `docs/superpowers/plans/` when it starts. Every port moves its Rust UI tests to Vitest, or into `keel-core` when the logic is domain logic, and keeps the contracts listed in the spec.
 
 2. **Lists and rows:** `task_row`, `cards`, `completion`, `sidebar`, `search`, `filters`, the other views, theme / dark mode, icons. Completing tasks works.
-3. **Editor and quick add:** `editor`, `pickers`, live highlighting. `repeat_text`, `recurrence_for`, `changes`, `labels_to_create` and `new_task_from` move into `keel-core` and are exported through `core-wasm`.
+3. **Editor and quick add** (done 2026-10-30, `2026-10-30-react-editor-and-quick-add.md`): `editor`, `pickers`, live highlighting. `repeat_text`, `recurrence_for`, `changes`, `labels_to_create` and `new_task_from` move into `keel-core` and are exported through `core-wasm`.
 4. **iPhone glass: deferred** (2026-10-30, Liquid Glass parked; see the spec). Comes back after parity and Noah's web UI updates. `platform` was ported in Plan 2.
 5. **Task view and gestures:** `task_view/*`, `gestures` (the 17 embedded scripts become TS modules with Vitest tests, including today's keyboard pace and sheet rules).
 6. **Settings, import, reminders and diagnostics UI.**
