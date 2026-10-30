@@ -34,7 +34,7 @@ test("sends args wrapped and snake_case", async () => {
 
 test("uses the mock without Tauri", async () => {
   const tasks = await invoke("today_view", {});
-  expect(tasks.map((t) => t.id)).toEqual(["t-laundry", "t-sheets"]);
+  expect(tasks.map((t) => t.id)).toEqual(["t-taxes", "t-laundry", "t-sheets"]);
 });
 
 test("the mock applies a TaskAdd and a TaskComplete", async () => {
@@ -75,5 +75,5 @@ test("mock views are static lists; only a task's own flags change them", async (
   expect(b).toEqual(a);
   await invoke("dispatch", { cmd: { uuid: "u3", action: { type: "task_complete", id: "t-sheets" } } });
   const today = await invoke("today_view", {});
-  expect(today.map((t) => t.id)).toEqual(["t-laundry"]);
+  expect(today.map((t) => t.id)).toEqual(["t-taxes", "t-laundry"]);
 });

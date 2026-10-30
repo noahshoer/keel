@@ -9,8 +9,8 @@ beforeAll(() => {
 
 test("shows today's cards from the backend", async () => {
   const { container } = render(<Today />);
-  // The mock backend's Today: "Do laundry" (P1, due today) and its sub-task
-  // "Wash the sheets" (also due today).
+  // The mock backend's Today: "File the taxes" (overdue), "Do laundry" (P1,
+  // due today) and its sub-task "Wash the sheets" (also due today).
   const parent = await screen.findByText("Do laundry");
 
   const root = container.firstElementChild;
@@ -19,13 +19,13 @@ test("shows today's cards from the backend", async () => {
   // Grouped (as the Dioxus Today): the matched sub-task is not a card of its
   // own; it sits in its parent's card, and the parent counts it as 0/1.
   const cards = container.querySelectorAll(".task-card");
-  expect(cards).toHaveLength(1);
-  const card = cards[0];
+  expect(cards).toHaveLength(2);
+  const card = parent.closest(".task-card");
   expect(card?.contains(parent)).toBe(true);
   expect(card?.contains(screen.getByText("Wash the sheets"))).toBe(true);
 
   const rows = container.querySelectorAll(".task-row");
-  expect(rows).toHaveLength(2);
+  expect(rows).toHaveLength(3);
   const parentRow = parent.closest(".task-row");
   expect(parentRow?.querySelector(".task-count")?.textContent).toBe("0/1");
 
