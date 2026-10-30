@@ -113,6 +113,10 @@ it("a slow earlier search never replaces newer results", async () => {
     await waitFor(() => expect(container.querySelector(".content > .view-sub")?.textContent).toBe("2 tasks"));
     await act(async () => pending["bins"]?.());
     expect(container.querySelector(".content > .view-sub")?.textContent).toBe("2 tasks");
+    // While a newer query loads, the last results stay up (no "Searching…" flash).
+    fireEvent.change(input, { target: { value: "laundryx" } });
+    expect(container.querySelector("main.main .content > .view-sub")?.textContent).toBe("2 tasks");
+    expect(container.querySelectorAll("main.main .task-row")).toHaveLength(2);
   } finally {
     delete window.__TAURI__;
   }

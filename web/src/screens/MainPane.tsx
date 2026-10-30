@@ -65,7 +65,7 @@ export function MainPane({
   const today = localToday();
   const mode = viewMode(view);
   const toggle = canShowCompleted(view);
-  const subtitle = viewSubtitle(view);
+  const subtitle = viewSubtitle(view, today);
   const locations = showsProject(view) ? locationNames(loaded) : null;
   const search = view.kind === "search";
   const projectId = view.kind === "project" ? view.id : view.kind === "inbox" ? loaded.inbox.id : null;

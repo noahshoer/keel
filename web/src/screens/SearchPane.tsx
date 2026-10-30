@@ -54,7 +54,9 @@ export function SearchPane({
   }, [query, reloadKey]);
 
   const where = (t: Task) => locationOf(t, loaded.projects, loaded.sections);
-  const current = found.query === query ? found : null;
+  // The last results stay up while a newer query loads (as Dioxus'
+  // use_resource keeps its value); "Searching…" only before the first one.
+  const current = found.results === null && found.error === null ? null : found;
   let results: React.ReactNode;
   if (!query.trim()) {
     results = (

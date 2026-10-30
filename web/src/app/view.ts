@@ -3,7 +3,7 @@
 // (crates/ui/src/main.rs `View`, `view_mode`, `view_motion`, `MainPane`).
 // Picking a mode decides nothing about a task; the grouping is keel-core's.
 import type { CardMode, Id } from "../bindings";
-import { daySubtitle } from "../clock";
+import { daySubtitle } from "../core";
 
 export type View =
   | { kind: "inbox" }
@@ -66,10 +66,11 @@ export function viewTitle(v: View): string {
   }
 }
 
-export function viewSubtitle(v: View, now: Date = new Date()): string {
+/** `today` is `YYYY-MM-DD` (the Today subtitle's text is keel-core's). */
+export function viewSubtitle(v: View, today: string): string {
   switch (v.kind) {
     case "today":
-      return daySubtitle(now);
+      return daySubtitle(today);
     case "upcoming":
       return `Next ${UPCOMING_DAYS} days`;
     case "filter":

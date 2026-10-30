@@ -53,6 +53,8 @@ export function App() {
   const closingFor = useRef<View | null>(null);
   useEffect(() => {
     const before = requested.current;
+    // Nothing was picked at startup, so the first load closes nothing.
+    if (before === view) return;
     requested.current = view;
     closingFor.current = view;
     const motion = viewMotion(before, view);

@@ -213,3 +213,28 @@ it("a card whose head doesn't match shows it as context, with its sub-task rows"
   ]);
   expect(container.querySelector(".task-project")).toBeNull();
 });
+
+it("the streak goal saves once, when the field is left", async () => {
+  const task = { ...fixture("t-laundry"), streak_enabled: true };
+  if (task.due) task.due = { ...task.due, is_recurring: true };
+  const { container } = renderRow(task);
+  fireEvent.click(screen.getByTitle("Streak"));
+  const goal = container.querySelector<HTMLInputElement>(".streak-panel input") as HTMLInputElement;
+  fireEvent.change(goal, { target: { value: "1" } });
+  fireEvent.change(goal, { target: { value: "12" } });
+  await tick(0);
+  expect((await invoke("all_tasks", {})).find((t) => t.id === "t-laundry")?.streak_goal).toBeNull();
+  fireEvent.blur(goal);
+  await tick(0);
+  expect((await invoke("all_tasks", {})).find((t) => t.id === "t-laundry")?.streak_goal).toBe(12);
+});
+
+it("a completion stops when its row goes away", async () => {
+  const { container, unmount, onChanged } = renderRow(fixture("t-laundry"));
+  fireEvent.click(circle(container));
+  await tick(100);
+  unmount();
+  await tick(1000);
+  expect(await completed()).not.toContain("t-laundry");
+  expect(onChanged).not.toHaveBeenCalled();
+});

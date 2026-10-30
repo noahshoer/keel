@@ -9,6 +9,13 @@ export function StreakPanel({ task, onChanged }: { task: Task; onChanged: () => 
   const save = (enabled: boolean, g: number | null) => {
     setStreak(task.id, enabled, g).then(onChanged, onChanged);
   };
+  const saveGoal = (text: string) => {
+    const t = text.trim();
+    // Whole numbers only (Rust's `parse::<i64>`); anything else clears the goal.
+    const n = /^\d+$/.test(t) ? Number(t) : 0;
+    const next = n > 0 ? n : null;
+    if (next !== goal) save(true, next);
+  };
   return (
     <div className="streak-panel">
       {on ? (
@@ -25,9 +32,11 @@ export function StreakPanel({ task, onChanged }: { task: Task; onChanged: () => 
               type="number"
               min="1"
               defaultValue={goal === null ? "" : String(goal)}
-              onChange={(e) => {
-                const n = Number.parseInt(e.target.value.trim(), 10);
-                save(true, Number.isFinite(n) && n > 0 ? n : null);
+              // Saved when the field is left or on Enter (the DOM change
+              // event, as in Dioxus), not on every keystroke.
+              onBlur={(e) => saveGoal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveGoal(e.currentTarget.value);
               }}
             />
           </label>

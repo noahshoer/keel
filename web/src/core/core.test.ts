@@ -6,12 +6,14 @@ import {
   allDone,
   cards,
   dateGroups,
+  daySubtitle,
   deadlineUrgent,
   dueBucket,
   dueDateOf,
   dueLabel,
   dueTime,
   progress,
+  progressShort,
   reminderLabel,
   timeLabel,
   upcomingTasks,
@@ -162,5 +164,11 @@ describe("keel-core over wasm", () => {
     expect(reminderLabel({ ...base, kind: "Absolute", due, minute_offset: null }, "2026-10-30")).toBe(
       "Tuesday 9 AM",
     );
+  });
+
+  it("the day subtitle and the sub-task count come from Rust", () => {
+    expect(daySubtitle("2026-10-30")).toBe("Friday 30 Oct");
+    expect(daySubtitle("2026-11-01")).toBe("Sunday 1 Nov");
+    expect(progressShort({ done: 2, total: 5 })).toBe("2/5");
   });
 });

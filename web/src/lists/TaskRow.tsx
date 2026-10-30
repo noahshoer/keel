@@ -5,7 +5,7 @@
 // exists (Plan 5).
 import { useContext, useEffect, useRef, useState } from "react";
 import type { CardRow, Progress, Reminder } from "../bindings";
-import { allDone, deadlineUrgent, dueLabel, reminderLabel } from "../core";
+import { allDone, deadlineUrgent, dueLabel, progressShort, reminderLabel } from "../core";
 import { completeTask, deleteTask } from "../ipc/actions";
 import {
   BellSmallIcon,
@@ -26,7 +26,7 @@ import { StreakPanel } from "./StreakPanel";
 export function SubtaskCount({ progress }: { progress: Progress }) {
   return (
     <>
-      <span className="task-count">{`${progress.done}/${progress.total}`}</span>
+      <span className="task-count">{progressShort(progress)}</span>
       {allDone(progress) ? (
         <span className="done-check" title="All sub-tasks done">
           <CheckSmallIcon />
@@ -64,6 +64,13 @@ export function TaskRow({
   // A tap while filled cancels: each start bumps `gen`, and pending steps
   // stop when it has moved on.
   const gen = useRef(0);
+  // Leaving the screen cancels a completion still filling or switching off.
+  useEffect(
+    () => () => {
+      gen.current += 1;
+    },
+    [],
+  );
   // After completing, the row stays switched off until the reload drops it.
   // A repeating task stays in project views with a new due date; that new
   // date brings it back.

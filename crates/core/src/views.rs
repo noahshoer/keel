@@ -313,6 +313,11 @@ fn weekday_long(d: NaiveDate) -> &'static str {
     WEEKDAYS_LONG[d.weekday().num_days_from_monday() as usize]
 }
 
+/// The Today view's subtitle: "Friday 30 Oct".
+pub fn day_subtitle(today: NaiveDate) -> String {
+    format!("{} {}", weekday_long(today), short_date(today))
+}
+
 /// Splits Today / Upcoming into Todoist-style date groups, keeping the
 /// tasks' order within each. Tasks without a date are left out of
 /// Upcoming's day groups.
@@ -932,5 +937,17 @@ mod date_group_tests {
         assert!(deadline_urgent(d(2026, 10, 29), today));
         assert!(deadline_urgent(today, today));
         assert!(!deadline_urgent(d(2026, 10, 31), today));
+    }
+}
+
+#[cfg(test)]
+mod subtitle_tests {
+    use super::day_subtitle;
+    use chrono::NaiveDate;
+
+    #[test]
+    fn the_today_subtitle_names_the_weekday_and_date() {
+        assert_eq!(day_subtitle(NaiveDate::from_ymd_opt(2026, 10, 30).unwrap()), "Friday 30 Oct");
+        assert_eq!(day_subtitle(NaiveDate::from_ymd_opt(2026, 11, 1).unwrap()), "Sunday 1 Nov");
     }
 }

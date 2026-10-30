@@ -162,6 +162,21 @@ pub fn reminder_label(
     Ok(reminders::reminder_label(&reminder, today))
 }
 
+/// `views::day_subtitle` for a `YYYY-MM-DD` date: "Friday 30 Oct".
+#[wasm_bindgen(js_name = daySubtitle)]
+pub fn day_subtitle(today: &str) -> Result<String, JsError> {
+    Ok(views::day_subtitle(parse_date(today).map_err(|e| JsError::new(&e))?))
+}
+
+/// `Progress::short`: "2/5".
+#[wasm_bindgen(js_name = progressShort)]
+pub fn progress_short(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Progress")] progress: JsValue,
+) -> Result<String, JsError> {
+    let progress: Progress = input("progress", progress)?;
+    Ok(progress.short())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{parse_date, parse_time};

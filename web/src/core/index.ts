@@ -108,3 +108,15 @@ export function reminderLabel(r: Reminder, today: string): string {
   ready();
   return core.reminderLabel(r, today);
 }
+
+/** The Today view's subtitle for a `YYYY-MM-DD` date: "Friday 30 Oct". */
+export function daySubtitle(today: string): string {
+  ready();
+  return core.daySubtitle(today);
+}
+
+/** A parent's sub-task count as "2/5". */
+export function progressShort(p: Progress): string {
+  ready();
+  return core.progressShort(p);
+}

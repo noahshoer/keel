@@ -36,13 +36,6 @@ use views::CardMode;
 
 const UPCOMING_DAYS: i64 = 14;
 
-const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-const WEEKDAYS: [&str; 7] = [
-    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
-];
-
 /// Which list the main pane shows.
 #[derive(Clone, PartialEq, Debug)]
 pub enum View {
@@ -137,14 +130,6 @@ pub fn today() -> NaiveDate {
     let d = js_sys::Date::new_0();
     NaiveDate::from_ymd_opt(d.get_full_year() as i32, d.get_month() + 1, d.get_date())
         .expect("JS date is valid")
-}
-
-fn short_date(d: NaiveDate) -> String {
-    format!("{} {}", d.day(), MONTHS[d.month0() as usize])
-}
-
-fn weekday(d: NaiveDate) -> &'static str {
-    WEEKDAYS[d.weekday().num_days_from_monday() as usize]
 }
 
 fn main() {
@@ -623,7 +608,7 @@ fn MainPane(
         View::Search => "Search".to_string(),
     };
     let subtitle = match &view {
-        View::Today => format!("{} {}", weekday(today), short_date(today)),
+        View::Today => views::day_subtitle(today),
         View::Upcoming => format!("Next {UPCOMING_DAYS} days"),
         View::Filter(_, _, query) => query.clone(),
         _ => String::new(),

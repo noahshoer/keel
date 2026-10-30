@@ -1,4 +1,5 @@
-import { expect, it } from "vitest";
+import { beforeAll, expect, it } from "vitest";
+import { loadCoreForTests } from "../test/wasm";
 import {
   canShowCompleted,
   emptyText,
@@ -10,6 +11,10 @@ import {
   viewSubtitle,
   viewTitle,
 } from "./view";
+
+beforeAll(() => {
+  loadCoreForTests();
+});
 
 const today: View = { kind: "today" };
 const inbox: View = { kind: "inbox" };
@@ -42,7 +47,7 @@ it("titles, subtitles and what each view shows", () => {
     "Important",
     "Search",
   ]);
-  const fri = new Date(2026, 9, 30);
+  const fri = "2026-10-30";
   expect(viewSubtitle(today, fri)).toBe("Friday 30 Oct");
   expect(viewSubtitle(upcoming, fri)).toBe("Next 14 days");
   expect(viewSubtitle(filter, fri)).toBe("p1");
