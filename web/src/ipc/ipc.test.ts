@@ -1,4 +1,6 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, expectTypeOf, test, vi } from "vitest";
+import type { ApplyResult, Task } from "../bindings";
+import type { Commands } from "../bindings/Commands";
 import commandNames from "../bindings/commands.json";
 import { COMMAND_TYPES } from "./commands";
 import { invoke } from "./invoke";
@@ -15,6 +17,13 @@ function stubTauri(impl: (cmd: string, args?: Record<string, unknown>) => Promis
 
 test("every command has a client entry", () => {
   expect(Object.keys(COMMAND_TYPES).sort()).toEqual(commandNames);
+});
+
+test("return types are generated from Rust", () => {
+  expectTypeOf<Commands["today_view"]["ret"]>().toEqualTypeOf<Task[]>();
+  expectTypeOf<Commands["dispatch"]["ret"]>().toEqualTypeOf<ApplyResult>();
+  expectTypeOf<Commands["check_filter"]["ret"]>().toEqualTypeOf<null>();
+  expectTypeOf<Commands["reminders_when_closed"]["ret"]>().toEqualTypeOf<boolean>();
 });
 
 test("sends args wrapped and snake_case", async () => {

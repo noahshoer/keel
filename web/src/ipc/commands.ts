@@ -1,71 +1,9 @@
-import type {
-  ApplyResult,
-  CheckFilterArgs,
-  CompletedInProjectArgs,
-  CompletedWithLabelArgs,
-  DiagLogArgs,
-  DispatchArgs,
-  Filter,
-  FilterGroup,
-  FilterViewArgs,
-  ImportSummary,
-  ImportTodoistCsvArgs,
-  Label,
-  LabelViewArgs,
-  ListSectionsArgs,
-  ListTasksArgs,
-  NoArgs,
-  PlannedReminder,
-  Project,
-  ProjectViewArgs,
-  Reminder,
-  ReminderSettings,
-  SearchArgs,
-  SearchResults,
-  Section,
-  SetDiagEnabledArgs,
-  SetReminderSettingsArgs,
-  Task,
-  UpcomingViewArgs,
-} from "../bindings";
+import type { Commands } from "../bindings/Commands";
 
-/**
- * Every Tauri command: its `args` type and what it resolves to. Checked
- * against `crates/src-tauri/src/lib.rs` and `diag.rs` (`Result<T, String>`
- * resolves to `T`; `()` is serialized as `null`). The `…Args` types come
- * from `crates/src-tauri/src/args.rs`.
- */
-export interface Commands {
-  all_tasks: { args: NoArgs; ret: Task[] };
-  check_filter: { args: CheckFilterArgs; ret: null };
-  completed_in_project: { args: CompletedInProjectArgs; ret: Task[] };
-  completed_today: { args: NoArgs; ret: Task[] };
-  completed_with_label: { args: CompletedWithLabelArgs; ret: Task[] };
-  diag_enabled: { args: NoArgs; ret: boolean };
-  diag_log: { args: DiagLogArgs; ret: null };
-  dispatch: { args: DispatchArgs; ret: ApplyResult };
-  filter_view: { args: FilterViewArgs; ret: FilterGroup[] };
-  get_reminder_settings: { args: NoArgs; ret: ReminderSettings };
-  import_todoist_csv: { args: ImportTodoistCsvArgs; ret: ImportSummary };
-  label_view: { args: LabelViewArgs; ret: Task[] };
-  list_filters: { args: NoArgs; ret: Filter[] };
-  list_labels: { args: NoArgs; ret: Label[] };
-  list_projects: { args: NoArgs; ret: Project[] };
-  list_reminders: { args: NoArgs; ret: Reminder[] };
-  list_sections: { args: ListSectionsArgs; ret: Section[] };
-  list_tasks: { args: ListTasksArgs; ret: Task[] };
-  notification_permission: { args: NoArgs; ret: string };
-  project_view: { args: ProjectViewArgs; ret: Task[] };
-  reminders_when_closed: { args: NoArgs; ret: boolean };
-  request_notification_permission: { args: NoArgs; ret: string };
-  search: { args: SearchArgs; ret: SearchResults };
-  set_diag_enabled: { args: SetDiagEnabledArgs; ret: null };
-  set_reminder_settings: { args: SetReminderSettingsArgs; ret: null };
-  test_notification: { args: NoArgs; ret: null };
-  today_view: { args: NoArgs; ret: Task[] };
-  upcoming_reminders: { args: NoArgs; ret: PlannedReminder[] };
-  upcoming_view: { args: UpcomingViewArgs; ret: Task[] };
-}
+// Every Tauri command's args and return type come from Rust
+// (crates/src-tauri/tests/commands_list.rs writes bindings/Commands.ts), so
+// a changed return shape fails tsc.
+export type { Commands };
 
 export type CommandName = keyof Commands;
 

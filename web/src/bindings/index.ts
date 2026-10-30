@@ -6,6 +6,7 @@ export type * from "./CardMode";
 export type * from "./CardRow";
 export type * from "./CheckFilterArgs";
 export type * from "./Command";
+export type * from "./Commands";
 export type * from "./CompletedInProjectArgs";
 export type * from "./CompletedWithLabelArgs";
 export type * from "./DayCell";
