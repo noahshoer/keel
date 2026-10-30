@@ -1,4 +1,6 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, expectTypeOf, test, vi } from "vitest";
+import type { ApplyResult, Task } from "../bindings";
+import type { Commands } from "../bindings/Commands";
 import commandNames from "../bindings/commands.json";
 import { COMMAND_TYPES } from "./commands";
 import { invoke } from "./invoke";
@@ -17,6 +19,13 @@ test("every command has a client entry", () => {
   expect(Object.keys(COMMAND_TYPES).sort()).toEqual(commandNames);
 });
 
+test("return types are generated from Rust", () => {
+  expectTypeOf<Commands["today_view"]["ret"]>().toEqualTypeOf<Task[]>();
+  expectTypeOf<Commands["dispatch"]["ret"]>().toEqualTypeOf<ApplyResult>();
+  expectTypeOf<Commands["check_filter"]["ret"]>().toEqualTypeOf<null>();
+  expectTypeOf<Commands["reminders_when_closed"]["ret"]>().toEqualTypeOf<boolean>();
+});
+
 test("sends args wrapped and snake_case", async () => {
   const spy = stubTauri(async () => []);
   await invoke("list_tasks", { project_id: "p1" });
@@ -25,7 +34,7 @@ test("sends args wrapped and snake_case", async () => {
 
 test("uses the mock without Tauri", async () => {
   const tasks = await invoke("today_view", {});
-  expect(tasks.map((t) => t.id)).toEqual(["t-laundry", "t-sheets"]);
+  expect(tasks.map((t) => t.id)).toEqual(["t-taxes", "t-laundry", "t-sheets"]);
 });
 
 test("the mock applies a TaskAdd and a TaskComplete", async () => {
@@ -66,5 +75,5 @@ test("mock views are static lists; only a task's own flags change them", async (
   expect(b).toEqual(a);
   await invoke("dispatch", { cmd: { uuid: "u3", action: { type: "task_complete", id: "t-sheets" } } });
   const today = await invoke("today_view", {});
-  expect(today.map((t) => t.id)).toEqual(["t-laundry"]);
+  expect(today.map((t) => t.id)).toEqual(["t-taxes", "t-laundry"]);
 });

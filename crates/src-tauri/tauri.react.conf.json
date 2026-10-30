@@ -4,6 +4,7 @@
     "devUrl": "http://localhost:5173",
     "beforeDevCommand": { "script": "pnpm dev", "cwd": "../../web" },
     "frontendDist": "../../web/dist",
-    "beforeBuildCommand": { "script": "pnpm build", "cwd": "../../web" }
+    "beforeBuildCommand": { "script": "pnpm build", "cwd": "../../web" },
+    "features": []
   }
 }

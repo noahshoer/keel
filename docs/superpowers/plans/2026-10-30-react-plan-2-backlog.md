@@ -4,10 +4,11 @@ Carried over from the React foundation (plan `2026-10-29-react-foundation.md`, m
 
 ## Important
 
-- **Generated return types.** `web/src/ipc/commands.ts` hand-writes each command's return type. Generate them from Rust (ts-rs or a `commands.json` extension) so a changed return shape fails `tsc`.
-- **`describe()` can throw.** `web/src/diag.ts` and `crates/ui/src/diag.rs` throw on circular objects and BigInt, so logging such a value loses the log line. Fix both.
-- **Today's missing pieces.** Due-chip colours, the Overdue split, and the all-done state need `dueBucket` / `allDone` from `keel-core` (exported through `crates/core-wasm`) plus core grouping. No date logic in TypeScript.
-- **Remaining screens.** Task view, editor and quick add, projects, filters, search, Settings, the drawer and gestures, then the cutover (`tauri.conf.json` → `web/dist`, remove `crates/ui`).
+- **Done in Plan 2:** generated return types, `describe()`, Today's missing pieces, and these minors: `check-bindings.sh` trap and HEAD diff; the mock's copies, reset per test, unknown ids, task_add/task_update fields, dead `todayTaskIds`, completed views; `initCore` memoised; Shell and Today loading twice. Plan 2 also ported lists, sidebar, search and long press.
+- ~~**Generated return types.**~~ `web/src/ipc/commands.ts` hand-writes each command's return type. Generate them from Rust (ts-rs or a `commands.json` extension) so a changed return shape fails `tsc`.
+- ~~**`describe()` can throw.**~~ `web/src/diag.ts` and `crates/ui/src/diag.rs` throw on circular objects and BigInt, so logging such a value loses the log line. Fix both.
+- ~~**Today's missing pieces.**~~ Due-chip colours, the Overdue split, and the all-done state need `dueBucket` / `allDone` from `keel-core` (exported through `crates/core-wasm`) plus core grouping. No date logic in TypeScript.
+- **Remaining screens.** Task view, editor and quick add, Settings, the drawer's swipes and the other gestures, then the cutover (`tauri.conf.json` → `web/dist`, remove `crates/ui`).
 
 ## Minor (from the task reviews)
 
@@ -21,3 +22,11 @@ Carried over from the React foundation (plan `2026-10-29-react-foundation.md`, m
 - `rebuild-loop.ts`: `run()` clears a pending debounce (one wasted rebuild; `whenIdle` can resolve early); an in-flight build-wasm child isn't tracked.
 - Shell and Today both call `list_projects` / `today_view`.
 - CI: weekly scan failures only show in the Actions tab; apt packages uncached; WebKitGTK package list unproven on a real runner.
+
+## From the Plan 2 final review (deferred minors)
+
+- `GlassLog.watch` / `GlassKeyboard` observe even while logging is off; `Diag`'s doc says nothing is observed then (parked code).
+- `commands_list.rs` lists each command's return type by hand; nothing ties it to the fn's real signature.
+- Sidebar has one `adding` state (opening one add form closes another; Dioxus had three); `AddSection` keeps its form open after a failed add (Dioxus closes and reloads).
+- No CI job builds the React-config Tauri app, and the simulator `cargo build` no longer compiles glass.
+- No error boundary: a malformed stored deadline would throw in render (Dioxus skips it).

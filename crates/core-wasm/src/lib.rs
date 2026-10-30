@@ -12,8 +12,9 @@
 
 use chrono::{NaiveDate, NaiveTime};
 use keel_core::ids::Id;
-use keel_core::model::Task;
-use keel_core::views::{self, CardMode};
+use keel_core::model::{Reminder, Task};
+use keel_core::reminders;
+use keel_core::views::{self, CardMode, DateGroupMode, Progress};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -97,6 +98,83 @@ pub fn cards(
     let all: Vec<Task> = input("all", all)?;
     let mode: CardMode = input("mode", mode)?;
     output(&views::cards(matched, &all, mode))
+}
+
+/// `views::due_bucket`: which coloured chip a `YYYY-MM-DD` due gets.
+#[wasm_bindgen(js_name = dueBucket, unchecked_return_type = "import('../../bindings').DueBucket")]
+pub fn due_bucket(due: &str, today: &str) -> Result<JsValue, JsError> {
+    let due = parse_date(due).map_err(|e| JsError::new(&e))?;
+    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    output(&views::due_bucket(due, today))
+}
+
+/// `Progress::all_done`: at least one counted sub-task, and all checked.
+#[wasm_bindgen(js_name = allDone)]
+pub fn all_done(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Progress")] progress: JsValue,
+) -> Result<bool, JsError> {
+    let progress: Progress = input("progress", progress)?;
+    Ok(progress.all_done())
+}
+
+/// `views::date_groups`: Today / Upcoming split into titled date groups.
+#[wasm_bindgen(js_name = dateGroups, unchecked_return_type = "import('../../bindings').DateGroup[]")]
+pub fn date_groups(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').DateGroupMode")] mode: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] tasks: JsValue,
+    today: &str,
+) -> Result<JsValue, JsError> {
+    let mode: DateGroupMode = input("mode", mode)?;
+    let tasks: Vec<Task> = input("tasks", tasks)?;
+    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    output(&views::date_groups(mode, tasks, today))
+}
+
+/// `views::upcoming_tasks`: the overdue ones from Today's tasks, then the window.
+#[wasm_bindgen(js_name = upcomingTasks, unchecked_return_type = "import('../../bindings').Task[]")]
+pub fn upcoming_tasks(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] today_tasks: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] window: JsValue,
+    today: &str,
+) -> Result<JsValue, JsError> {
+    let today_tasks: Vec<Task> = input("todayTasks", today_tasks)?;
+    let window: Vec<Task> = input("window", window)?;
+    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    output(&views::upcoming_tasks(today_tasks, window, today))
+}
+
+/// `views::deadline_urgent` for two `YYYY-MM-DD` dates.
+#[wasm_bindgen(js_name = deadlineUrgent)]
+pub fn deadline_urgent(deadline: &str, today: &str) -> Result<bool, JsError> {
+    let deadline = parse_date(deadline).map_err(|e| JsError::new(&e))?;
+    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    Ok(views::deadline_urgent(deadline, today))
+}
+
+/// `reminders::reminder_label`: "30 min before", "Tuesday 9 AM".
+#[wasm_bindgen(js_name = reminderLabel)]
+pub fn reminder_label(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Reminder")] reminder: JsValue,
+    today: &str,
+) -> Result<String, JsError> {
+    let reminder: Reminder = input("reminder", reminder)?;
+    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    Ok(reminders::reminder_label(&reminder, today))
+}
+
+/// `views::day_subtitle` for a `YYYY-MM-DD` date: "Friday 30 Oct".
+#[wasm_bindgen(js_name = daySubtitle)]
+pub fn day_subtitle(today: &str) -> Result<String, JsError> {
+    Ok(views::day_subtitle(parse_date(today).map_err(|e| JsError::new(&e))?))
+}
+
+/// `Progress::short`: "2/5".
+#[wasm_bindgen(js_name = progressShort)]
+pub fn progress_short(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Progress")] progress: JsValue,
+) -> Result<String, JsError> {
+    let progress: Progress = input("progress", progress)?;
+    Ok(progress.short())
 }
 
 #[cfg(test)]

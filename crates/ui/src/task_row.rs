@@ -123,7 +123,7 @@ pub fn TaskRow(
         .deadline
         .as_deref()
         .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
-        .map(|d| (if d <= today { "urgent" } else { "set" }, views::due_label(d, today)));
+        .map(|d| (if views::deadline_urgent(d, today) { "urgent" } else { "set" }, views::due_label(d, today)));
     let has_reminders = !my_reminders.is_empty();
     let reminder_title = my_reminders.iter().map(|r| r.label(today)).collect::<Vec<_>>().join(", ");
     let due = due_text(&task, today);

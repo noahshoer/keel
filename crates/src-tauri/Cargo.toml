@@ -17,7 +17,8 @@ serde_json = "1"
 keel-core = { path = "../core" }
 keel-service = { path = "../service" }
 tauri-plugin-notification = "2"
-tauri-plugin-glass = { path = "../plugin-glass" }
+tauri-plugin-glass = { path = "../plugin-glass", optional = true }
+tauri-plugin-keel-ios = { path = "../plugin-ios" }
 chrono = "0.4"
 time = "0.3"
 ts-rs = { version = "=11.1.0", optional = true }
@@ -25,3 +26,6 @@ ts-rs = { version = "=11.1.0", optional = true }
 [features]
 # TypeScript bindings for the IPC types (web/src/bindings); off by default.
 ts = ["dep:ts-rs", "keel-core/ts", "keel-service/ts"]
+# The parked Liquid Glass controls (iOS). Only the Dioxus config
+# (tauri.conf.json) turns this on; the React build never loads the plugin.
+glass = ["dep:tauri-plugin-glass"]

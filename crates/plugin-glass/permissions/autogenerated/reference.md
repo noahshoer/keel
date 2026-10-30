@@ -9,7 +9,6 @@ Everything the Keel web UI uses
 - `allow-update`
 - `allow-hide`
 - `allow-buttons`
-- `allow-diag`
 - `allow-sheet`
 - `allow-actions`
 - `allow-prompt`
@@ -73,32 +72,6 @@ Enables the buttons command without any pre-configured scope.
 <td>
 
 Denies the buttons command without any pre-configured scope.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
-`glass:allow-diag`
-
-</td>
-<td>
-
-Enables the diag command without any pre-configured scope.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
-`glass:deny-diag`
-
-</td>
-<td>
-
-Denies the diag command without any pre-configured scope.
 
 </td>
 </tr>

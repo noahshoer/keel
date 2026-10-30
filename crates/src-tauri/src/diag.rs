@@ -63,7 +63,7 @@ pub fn set_enabled(on: bool) {
     ENABLED.store(on, Ordering::Relaxed);
     #[cfg(target_os = "ios")]
     if let Some(sink) = SINK.get() {
-        tauri_plugin_glass::diag(&sink.app, Some(on), "rust", None);
+        tauri_plugin_keel_ios::diag(&sink.app, Some(on), "rust", None);
     }
     if on {
         log("rust", "---- diagnostics on");
@@ -75,7 +75,7 @@ pub fn set_enabled(on: bool) {
 fn start_fresh() {
     #[cfg(target_os = "ios")]
     if let Some(sink) = SINK.get() {
-        tauri_plugin_glass::diag_fresh(&sink.app);
+        tauri_plugin_keel_ios::diag_fresh(&sink.app);
     }
     #[cfg(not(target_os = "ios"))]
     if let Some(sink) = SINK.get() {
@@ -92,7 +92,7 @@ pub fn log(source: &str, msg: &str) {
     }
     let Some(sink) = SINK.get() else { return };
     #[cfg(target_os = "ios")]
-    tauri_plugin_glass::diag(&sink.app, None, source, Some(msg));
+    tauri_plugin_keel_ios::diag(&sink.app, None, source, Some(msg));
     #[cfg(not(target_os = "ios"))]
     if let Ok(file) = sink.file.lock() {
         let _ = file.append(source, msg);

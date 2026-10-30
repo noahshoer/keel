@@ -203,9 +203,13 @@ fn migrate_legacy_store(dir: &std::path::Path, db_path: &std::path::Path) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_glass::init())
+        .plugin(tauri_plugin_keel_ios::init());
+    // Liquid Glass is parked: only the Dioxus build (feature `glass`) loads it.
+    #[cfg(feature = "glass")]
+    let builder = builder.plugin(tauri_plugin_glass::init());
+    builder
         .setup(|app| {
             use tauri::Manager;
             let dir = app

@@ -27,8 +27,23 @@ export function __diag_set(on) {
     const r = e.reason;
     send('js-rejection', r?.stack || r?.message || String(r));
   });
+  // Never throws (same rules as web/src/diag.ts `describe`): an object seen
+  // again is [Circular], a BigInt is 10n, else String(x).
+  const describe = (x) => {
+    if (x?.stack) return x.stack;
+    if (typeof x === 'bigint') return `${x}n`;
+    if (typeof x !== 'object' || x === null) return String(x);
+    const seen = new WeakSet();
+    try {
+      return JSON.stringify(x, (_k, v) => {
+        if (typeof v === 'bigint') return `${v}n`;
+        if (typeof v === 'object' && v !== null) { if (seen.has(v)) return '[Circular]'; seen.add(v); }
+        return v;
+      });
+    } catch (e) { return String(x); }
+  };
   const err = console.error;
-  console.error = (...a) => { send('console.error', a.map((x) => x?.stack || (typeof x === 'object' ? JSON.stringify(x) : String(x))).join(' ')); err.apply(console, a); };
+  console.error = (...a) => { send('console.error', a.map(describe).join(' ')); err.apply(console, a); };
   window.visualViewport?.addEventListener('resize', () => {
     const v = window.visualViewport;
     send('viewport', `resize ${v.width.toFixed(0)}x${v.height.toFixed(1)} top ${v.offsetTop.toFixed(1)} scale ${v.scale}`);

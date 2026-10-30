@@ -86,6 +86,13 @@ export const sections: Section[] = [
 export const tasks: Task[] = [
   makeTask({ id: "t-inbox", project_id: "p-inbox", content: "Call the dentist", priority: "P2" }),
   makeTask({
+    id: "t-taxes",
+    project_id: "p-inbox",
+    content: "File the taxes",
+    due: dueOn(localDate(-2), "2 days ago"),
+    child_order: 1,
+  }),
+  makeTask({
     id: "t-laundry",
     project_id: "p-home",
     section_id: "s-chores",
@@ -121,26 +128,26 @@ export const tasks: Task[] = [
 // Hand-written view results: "what keel-core would return for this data".
 // The mock never computes a view; it looks these ids up.
 export const viewIds = {
-  /** Today: the two tasks due today (nothing is overdue in this data). */
-  today: ["t-laundry", "t-sheets"],
-  /** Upcoming (7 days): today's tasks, then tomorrow's. */
+  /** Today: the overdue task, then the two due today. */
+  today: ["t-taxes", "t-laundry", "t-sheets"],
+  /** Upcoming's window (from today): today's tasks, then tomorrow's. */
   upcoming: ["t-laundry", "t-sheets", "t-groceries"],
-  project: {
-    "p-inbox": ["t-inbox"],
-    "p-home": ["t-laundry", "t-sheets", "t-groceries"],
-  } as Record<string, string[]>,
   label: { errand: ["t-laundry"] } as Record<string, string[]>,
   /** The "Important" filter (p1). */
   filter: ["t-laundry"],
-  /** Completed today / in a project / with a label. */
-  completed: ["t-done"],
   /** Search results, whatever the query. */
   searchOpen: ["t-laundry", "t-sheets"],
   searchCompleted: ["t-done"],
 };
 
-/** Ids the Today view returns. */
-export const todayTaskIds: string[] = viewIds.today;
+/** Search queries with their own results (anything else gets searchOpen / searchCompleted). */
+export const searchResults: Record<string, { open: string[]; completed: string[] }> = {
+  bins: { open: [], completed: ["t-done"] },
+  nothing: { open: [], completed: [] },
+};
+
+/** Queries the mock's filter check rejects, with the backend's message. */
+export const badQueries: Record<string, string> = { "p1 &": "expected a term after '&'" };
 
 export const labels: Label[] = [
   { id: "l-errand", name: "errand", color: "orange", item_order: 0, is_favorite: false, is_deleted: false },
@@ -153,6 +160,15 @@ export const filters: Filter[] = [
     query: "p1",
     color: "red",
     item_order: 0,
+    is_favorite: false,
+    is_deleted: false,
+  },
+  {
+    id: "f-bad",
+    name: "Broken",
+    query: "p1 &",
+    color: "grey",
+    item_order: 1,
     is_favorite: false,
     is_deleted: false,
   },

@@ -19,7 +19,7 @@ use keel_core::quickadd::{QuickAdd, Span, SpanKind};
 use keel_core::recurrence::Recurrence;
 use keel_core::reminders::{PlannedReminder, ReminderSettings};
 use keel_core::search::SearchResults;
-use keel_core::views::{Card, CardMode, CardRow, DueBucket, Progress};
+use keel_core::views::{Card, CardMode, CardRow, DateGroup, DateGroupMode, DueBucket, Progress};
 use ts_rs::TS;
 
 /// `TS_RS_EXPORT_DIR` from `.cargo/config.toml` (absolute: `relative = true`).
@@ -58,7 +58,7 @@ fn bindings_cover_ipc_types() {
         // commands
         Action, Command, ApplyResult, DueEdit,
         // views / quick add / calendar (the wasm boundary)
-        CardRow, Card, CardMode, Progress, DueBucket, QuickAdd, Span, SpanKind, MonthView, DayCell,
+        CardRow, Card, CardMode, DateGroup, DateGroupMode, Progress, DueBucket, QuickAdd, Span, SpanKind, MonthView, DayCell,
         // query results
         PlannedReminder, ReminderSettings, SearchResults, FilterGroup, ImportSummary,
     );

@@ -298,7 +298,7 @@ final class CardModel: ObservableObject {
   var shown: CardState?
 
   func show(_ s: CardState) {
-    Diag.log("CARD show")
+    GlassLog.log("CARD show")
     shown = s
     state = s
     description = s.description
@@ -317,12 +317,12 @@ final class CardModel: ObservableObject {
 
   /// Slides the card down off screen together with the keyboard: the
   /// keyboard is dismissed first (it otherwise waits for the card to be
-  /// gone), and the card leaves at the keyboard's pace (`KeyboardPace`).
+  /// gone), and the card leaves at the keyboard's pace (`GlassKeyboard`).
   func hide() {
-    Diag.log("CARD hide")
+    GlassLog.log("CARD hide")
     guard state != nil else { return }
     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-    withAnimation(.easeOut(duration: KeyboardPace.seconds)) {
+    withAnimation(.easeOut(duration: GlassKeyboard.seconds)) {
       state = nil
     }
     picker = nil

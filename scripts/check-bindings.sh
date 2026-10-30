@@ -9,10 +9,16 @@ cd "$(dirname "$0")/.."
 
 dir=web/src/bindings
 find "$dir" -maxdepth 1 -name '*.ts' -delete 2>/dev/null || true
-cargo test -p keel --features ts --test commands_list --quiet
+# A failed cargo run would leave the bindings deleted: put back HEAD's.
+restore() { git checkout HEAD -- "$dir"; echo "error: cargo failed; restored $dir from HEAD" >&2; }
+trap restore ERR
+# keel-core's first: Commands.ts imports its types.
 cargo test -p keel-core --features ts --test ts_bindings --quiet
+cargo test -p keel --features ts --test commands_list --quiet
+trap - ERR
 
-if ! git diff --exit-code --stat -- "$dir" || [ -n "$(git ls-files --others --exclude-standard -- "$dir")" ]; then
+# Against HEAD, not the index: staged-but-uncommitted bindings still fail.
+if ! git diff --exit-code --stat HEAD -- "$dir" || [ -n "$(git ls-files --others --exclude-standard -- "$dir")" ]; then
   git ls-files --others --exclude-standard -- "$dir" | sed 's/^/untracked: /'
   echo "error: $dir is stale; run scripts/check-bindings.sh and commit the result" >&2
   exit 1

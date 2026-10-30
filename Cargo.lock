@@ -1923,6 +1923,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-glass",
+ "tauri-plugin-keel-ios",
  "tauri-plugin-notification",
  "time",
  "ts-rs",
@@ -3676,6 +3677,14 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-glass"
+version = "0.1.0"
+dependencies = [
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
+name = "tauri-plugin-keel-ios"
 version = "0.1.0"
 dependencies = [
  "serde",

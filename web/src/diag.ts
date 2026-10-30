@@ -24,12 +24,30 @@ function send(source: string, msg: unknown): void {
   }
 }
 
-function describe(x: unknown): string {
+/**
+ * A value as one log line. Never throws: an object seen again prints
+ * `[Circular]`, a BigInt prints `10n`, and anything JSON can't handle falls
+ * back to `String(x)`. Same rules as the hook in crates/ui/src/diag.rs.
+ */
+export function describe(x: unknown): string {
   if (x instanceof Error && x.stack) return x.stack;
+  if (typeof x === "bigint") return `${x}n`;
   if (typeof x === "object" && x !== null) {
     const stack = (x as { stack?: unknown }).stack;
     if (typeof stack === "string" && stack) return stack;
-    return JSON.stringify(x);
+    const seen = new WeakSet<object>();
+    try {
+      return JSON.stringify(x, (_key, v: unknown) => {
+        if (typeof v === "bigint") return `${v}n`;
+        if (typeof v === "object" && v !== null) {
+          if (seen.has(v)) return "[Circular]";
+          seen.add(v);
+        }
+        return v;
+      });
+    } catch {
+      return String(x);
+    }
   }
   return String(x);
 }
