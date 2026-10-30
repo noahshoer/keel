@@ -34,6 +34,11 @@
       "formatter": { "enabled": false }
     },
     {
+      "includes": ["src/styles/app.css"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false }
+    },
+    {
       "includes": ["src/core/index.ts"],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     }
