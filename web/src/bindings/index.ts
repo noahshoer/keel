@@ -2,6 +2,7 @@
 export type * from "./Action";
 export type * from "./ApplyResult";
 export type * from "./Card";
+export type * from "./CardMode";
 export type * from "./CardRow";
 export type * from "./CheckFilterArgs";
 export type * from "./Command";

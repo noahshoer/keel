@@ -160,7 +160,7 @@ pub fn children<'a>(parent: &Id, all: &'a [Task]) -> Vec<&'a Task> {
 }
 
 /// One task in a card, with its sub-task counts.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct CardRow {
     pub task: Task,
@@ -169,7 +169,7 @@ pub struct CardRow {
 
 /// A head task and the matched rows grouped under it. `head_matches == false`
 /// means the head is context only (no circle; tapping it opens the head task).
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Card {
     pub head: CardRow,
@@ -177,7 +177,9 @@ pub struct Card {
     pub rows: Vec<CardRow>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// How [`cards`] groups a view's matches.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub enum CardMode {
     /// Only top-level matches, one card each. A task whose parent is in
     /// another project counts as top-level here.

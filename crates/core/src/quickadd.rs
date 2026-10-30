@@ -31,6 +31,10 @@ pub struct QuickAdd {
 }
 
 /// A recognized phrase in the input (`input[start..end]`).
+// `start`/`end` are UTF-8 byte offsets into the Rust string, not JS UTF-16
+// indices. Any wasm export that returns spans (Plan 3's quick add) must
+// convert them first. A plain comment, not `///`: ts-rs copies doc comments
+// into the binding.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Span {

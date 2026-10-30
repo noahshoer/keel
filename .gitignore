@@ -1,5 +1,7 @@
 # Rust
 /target
+# Project-local cargo tools (wasm-bindgen CLI; see web/scripts/build-wasm.ts)
+.tools/
 **/target
 Cargo.lock.bak
 

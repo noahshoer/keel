@@ -8,7 +8,21 @@
     "domains": { "react": "recommended" },
     "rules": {
       "suspicious": { "noExplicitAny": "error" },
-      "style": { "noNonNullAssertion": "error", "useComponentExportOnlyModules": "error" },
+      "style": {
+        "noNonNullAssertion": "error",
+        "useComponentExportOnlyModules": "error",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["**/core/pkg", "**/core/pkg/**", "./pkg", "./pkg/**"],
+                "message": "Only src/core/index.ts imports the wasm pkg; use the wrappers from src/core."
+              }
+            ]
+          }
+        }
+      },
       "complexity": { "useLiteralKeys": "off" },
       "correctness": { "noNestedComponentDefinitions": "error" },
       "nursery": { "noFloatingPromises": "error" }
@@ -18,6 +32,10 @@
     {
       "includes": ["src/bindings/**"],
       "formatter": { "enabled": false }
+    },
+    {
+      "includes": ["src/core/index.ts"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     }
   ]
 }
