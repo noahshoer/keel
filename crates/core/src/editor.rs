@@ -841,8 +841,10 @@ pub struct AddPlan {
 
 pub fn add_plan(v: &EditorValues, projects: &[Project], sections: &[Section], labels: &[Label], today: NaiveDate) -> AddPlan {
     let qa = parse_title(v, projects, sections, today);
+    // Typed labels, and picked ones: ticking a label moves the typed
+    // @labels into the picks (and out of the title).
     let mut new_labels: Vec<String> = Vec::new();
-    for name in &qa.labels {
+    for name in qa.labels.iter().chain(&v.labels) {
         let known = labels.iter().any(|l| l.name.eq_ignore_ascii_case(name));
         if !known && !new_labels.iter().any(|n| n.eq_ignore_ascii_case(name)) {
             new_labels.push(name.clone());
@@ -1094,6 +1096,17 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn add_plan_creates_a_typed_label_moved_into_the_picks() {
+        let known = vec![Label::new("home")];
+        let mut v = typed("Buy milk @groceries");
+        // Ticking "home" moves the typed @groceries into the picked labels.
+        toggle_label(&mut v, "home", true, &[], &[], day30());
+        assert_eq!(v.content, "Buy milk");
+        let plan = add_plan(&v, &[], &[], &known, day30());
+        assert_eq!(plan.labels, ["groceries"]);
     }
 
     #[test]
