@@ -27,6 +27,14 @@ if (version !== `wasm-bindgen ${pinned}`) {
   fail(`${cli} is "${version}", but crates/core-wasm pins ${pinned}; reinstall with: ${install}`);
 }
 
-const run = (cmd: string, args: string[]) => execFileSync(cmd, args, { cwd: repo, stdio: "inherit" });
+// The command's own output (cargo's errors) is already on the terminal, so a
+// failure only adds one line instead of Node's stack trace.
+const run = (cmd: string, args: string[]) => {
+  try {
+    execFileSync(cmd, args, { cwd: repo, stdio: "inherit" });
+  } catch {
+    fail(`${cmd} ${args[0] ?? ""} failed`);
+  }
+};
 run("cargo", ["build", "-p", "keel-core-wasm", "--target", "wasm32-unknown-unknown", "--release"]);
 run(cli, ["--target", "web", "--out-dir", outDir, "--out-name", "keel_core_wasm", wasm]);

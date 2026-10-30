@@ -50,6 +50,23 @@ cd crates/src-tauri && cargo tauri dev       # desktop app (serves crates/ui/dis
 - App icons come from `crates/src-tauri/icons/keel.svg`: `cd crates/src-tauri && cargo tauri icon icons/keel.svg`. The sidebar logo is `icons::logo()` in `crates/ui/src/icons.rs`; keep the two in sync.
 - Stop a running `cargo tauri dev` before big builds. Its watcher rebuilds on file changes and fights over `target/debug/keel.exe`.
 
+## React frontend (in progress)
+
+`web/` is the React + TypeScript app that will replace `crates/ui` (strict TS, Vite, Vitest, Biome, pnpm; Node 24). So far it has the shell and a read-only Today. The Dioxus UI keeps shipping until the cutover: `tauri.conf.json` still points at `crates/ui/dist`, and the React app runs through the overlay config `crates/src-tauri/tauri.react.conf.json` (`devUrl` `http://localhost:5173`, `beforeDevCommand` `pnpm dev` and `beforeBuildCommand` `pnpm build`, both with cwd `web/`, `frontendDist` `web/dist`).
+
+```bash
+cd web && pnpm check                     # wasm build, tsc, Biome, Vitest, dependency vetting
+cd web && pnpm dev                       # browser at http://localhost:5173 with the mock backend
+cd crates/src-tauri && cargo tauri dev --config tauri.react.conf.json       # desktop, HMR
+cd crates/src-tauri && cargo tauri ios dev --config tauri.react.conf.json   # phone over Wi-Fi, HMR
+cd crates/src-tauri && cargo tauri build --no-bundle --debug --config tauri.react.conf.json
+```
+- `pnpm dev` builds keel-core's wasm (`scripts/build-wasm.ts`), then `scripts/dev.ts` runs Vite and `scripts/watch-wasm.ts`. The watcher rebuilds the wasm when `crates/core/src` or `crates/core-wasm/src` changes and logs one line per rebuild (`watch-wasm: rebuilt in 1.5s (…)`). A failed build prints cargo's error and it keeps watching. Vite reloads the page when the new `src/core/pkg` lands. The watcher stops when the dev server does. Edits to `web/src` hot-reload without restarting Rust.
+- With `cargo tauri ios dev`, Tauri swaps the `localhost` in `devUrl` for the Mac's address and sets `TAURI_DEV_HOST`, and `vite.config.ts` binds to it, with HMR on port 1421.
+- Styles are `web/src/styles/app.css`, moved verbatim from `crates/ui/src/style.rs` (Biome skips that file). Until the cutover, a CSS change goes in both. Inter loads as files from `web/src/assets/fonts`.
+- Diagnostics: `web/src/diag.ts` ports `crates/ui/src/diag.rs` exactly (the same `diag_log` sources and hooks, installed only while logging is on). The React app has no Settings screen yet, so turn logging on from the Dioxus build's Settings (the setting is device-local in `keel.db` and stays on), or use `KEEL_DIAG=1` on the desktop.
+- Shell and Today reuse the Dioxus markup and class names, so `app.css` applies unchanged and `Demo.swift` and `scripts/sim-checks/*.js` find what they query (`.sidebar`, `.brand .theme-toggle`, `.task-row`, `.task-body`, `.task-content`, `.task-badges`, `.task-count`, `.task-project`).
+
 ## Conventions
 
 - Workflow per phase: write a short plan in `docs/superpowers/plans/` → feature branch → **TDD** (failing test first) → commit per task → merge `--no-ff` to `main` → push. Noah prefers you build without asking for routine decisions; ask about genuinely personal choices (names, visual direction), ideally with visual options.
