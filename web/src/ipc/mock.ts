@@ -13,7 +13,9 @@ const state = {
   nextId: 1,
 };
 
-const open = () => state.tasks.filter((t) => !t.checked && !t.is_deleted);
+const byId = (ids: readonly string[]): Task[] => ids.flatMap((id) => state.tasks.filter((t) => t.id === id));
+// Open views drop a task once its own flags say it is done or deleted.
+const openById = (ids: readonly string[]): Task[] => byId(ids).filter((t) => !t.checked && !t.is_deleted);
 
 function newTask(id: string, content: string, projectId: string): Task {
   return fx.makeTask({ id, content, project_id: projectId, added_at: new Date().toISOString() });
@@ -21,22 +23,22 @@ function newTask(id: string, content: string, projectId: string): Task {
 
 export const mockHandlers: Handlers = {
   list_projects: async () => fx.projects,
-  list_tasks: async ({ project_id }) => open().filter((t) => t.project_id === project_id),
-  today_view: async () => open().filter((t) => t.due?.date.startsWith(fx.today) === true),
-  all_tasks: async () => open(),
-  upcoming_view: async () => open().filter((t) => t.due !== null),
-  project_view: async ({ project_id }) => open().filter((t) => t.project_id === project_id),
+  // Plain id lookup: every open task in the project.
+  list_tasks: async ({ project_id }) =>
+    state.tasks.filter((t) => t.project_id === project_id && !t.checked && !t.is_deleted),
+  today_view: async () => openById(fx.viewIds.today),
+  all_tasks: async () => state.tasks.filter((t) => !t.checked && !t.is_deleted),
+  upcoming_view: async () => openById(fx.viewIds.upcoming),
+  project_view: async ({ project_id }) => openById(fx.viewIds.project[project_id] ?? []),
   list_labels: async () => fx.labels,
-  label_view: async ({ name }) => open().filter((t) => t.labels.includes(name)),
-  completed_today: async () => state.tasks.filter((t) => t.checked && !t.is_deleted),
-  completed_in_project: async ({ project_id }) =>
-    state.tasks.filter((t) => t.checked && !t.is_deleted && t.project_id === project_id),
-  completed_with_label: async ({ name }) =>
-    state.tasks.filter((t) => t.checked && !t.is_deleted && t.labels.includes(name)),
+  label_view: async ({ name }) => openById(fx.viewIds.label[name] ?? []),
+  completed_today: async () => byId(fx.viewIds.completed),
+  completed_in_project: async () => byId(fx.viewIds.completed),
+  completed_with_label: async () => byId(fx.viewIds.completed),
   list_sections: async ({ project_id }) => fx.sections.filter((s) => s.project_id === project_id),
   list_filters: async () => fx.filters,
   check_filter: async () => null,
-  filter_view: async ({ query }) => [{ query, tasks: open() }],
+  filter_view: async ({ query }) => [{ query, tasks: openById(fx.viewIds.filter) }],
   dispatch: async ({ cmd }) => {
     const idMapping: Record<string, string> = {};
     const a = cmd.action;
@@ -67,14 +69,10 @@ export const mockHandlers: Handlers = {
     }
     return { id_mapping: idMapping };
   },
-  search: async ({ query }) => {
-    const q = query.toLowerCase();
-    const match = (t: Task) => t.content.toLowerCase().includes(q);
-    return {
-      open: open().filter(match),
-      completed: state.tasks.filter((t) => t.checked && !t.is_deleted && match(t)),
-    };
-  },
+  search: async () => ({
+    open: openById(fx.viewIds.searchOpen),
+    completed: byId(fx.viewIds.searchCompleted),
+  }),
   list_reminders: async () => fx.reminders,
   import_todoist_csv: async ({ project_name }) => ({
     project_id: "p-import",

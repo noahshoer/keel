@@ -109,10 +109,38 @@ export const tasks: Task[] = [
     due: dueOn(localDate(1), "tomorrow"),
     child_order: 1,
   }),
+  makeTask({
+    id: "t-done",
+    project_id: "p-home",
+    content: "Take out the bins",
+    checked: true,
+    completed_at: NOW,
+  }),
 ];
 
-/** Ids the mock's Today view returns (open tasks due today). */
-export const todayTaskIds: string[] = ["t-laundry", "t-sheets"];
+// Hand-written view results: "what keel-core would return for this data".
+// The mock never computes a view; it looks these ids up.
+export const viewIds = {
+  /** Today: the two tasks due today (nothing is overdue in this data). */
+  today: ["t-laundry", "t-sheets"],
+  /** Upcoming (7 days): today's tasks, then tomorrow's. */
+  upcoming: ["t-laundry", "t-sheets", "t-groceries"],
+  project: {
+    "p-inbox": ["t-inbox"],
+    "p-home": ["t-laundry", "t-sheets", "t-groceries"],
+  } as Record<string, string[]>,
+  label: { errand: ["t-laundry"] } as Record<string, string[]>,
+  /** The "Important" filter (p1). */
+  filter: ["t-laundry"],
+  /** Completed today / in a project / with a label. */
+  completed: ["t-done"],
+  /** Search results, whatever the query. */
+  searchOpen: ["t-laundry", "t-sheets"],
+  searchCompleted: ["t-done"],
+};
+
+/** Ids the Today view returns. */
+export const todayTaskIds: string[] = viewIds.today;
 
 export const labels: Label[] = [
   { id: "l-errand", name: "errand", color: "orange", item_order: 0, is_favorite: false, is_deleted: false },

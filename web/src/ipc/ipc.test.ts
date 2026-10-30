@@ -1,7 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 import commandNames from "../bindings/commands.json";
 import { COMMAND_TYPES } from "./commands";
-import { todayTaskIds } from "./fixtures";
 import { invoke } from "./invoke";
 
 afterEach(() => {
@@ -26,8 +25,7 @@ test("sends args wrapped and snake_case", async () => {
 
 test("uses the mock without Tauri", async () => {
   const tasks = await invoke("today_view", {});
-  expect(tasks.map((t) => t.id)).toEqual(todayTaskIds);
-  expect(tasks.length).toBeGreaterThan(0);
+  expect(tasks.map((t) => t.id)).toEqual(["t-laundry", "t-sheets"]);
 });
 
 test("the mock applies a TaskAdd and a TaskComplete", async () => {
@@ -60,4 +58,13 @@ test("a production build without Tauri throws", async () => {
   } finally {
     vi.unstubAllEnvs();
   }
+});
+
+test("mock views are static lists; only a task's own flags change them", async () => {
+  const a = await invoke("search", { query: "laundry" });
+  const b = await invoke("search", { query: "zzz" });
+  expect(b).toEqual(a);
+  await invoke("dispatch", { cmd: { uuid: "u3", action: { type: "task_complete", id: "t-sheets" } } });
+  const today = await invoke("today_view", {});
+  expect(today.map((t) => t.id)).toEqual(["t-laundry"]);
 });
