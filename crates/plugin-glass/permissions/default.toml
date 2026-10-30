@@ -6,7 +6,6 @@ permissions = [
   "allow-update",
   "allow-hide",
   "allow-buttons",
-  "allow-diag",
   "allow-sheet",
   "allow-actions",
   "allow-prompt",

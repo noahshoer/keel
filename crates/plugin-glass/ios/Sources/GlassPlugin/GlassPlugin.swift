@@ -18,14 +18,6 @@ class PromptArgs: Decodable {
   let prompt: PromptState
 }
 
-/// `enabled` switches the diagnostics log; `line` (with `source`) adds to it.
-class DiagArgs: Decodable {
-  let enabled: Bool?
-  let source: String?
-  let line: String?
-  let fresh: Bool?
-}
-
 class ButtonsArgs: Decodable {
   let visible: Bool
   let add: Bool
@@ -83,8 +75,8 @@ class GlassPlugin: Plugin {
     }
     DispatchQueue.main.async {
       self.hosting = attachOverlay(model: self.model, to: webview)
-      Diag.attach(webview, hosting: self.hosting?.view)
-      KeyboardPace.attach(webview)
+      GlassLog.watch(overlay: self.hosting?.view)
+      GlassKeyboard.attach()
       Demo.run(webview: webview, model: self.model)
     }
   }
@@ -123,16 +115,6 @@ class GlassPlugin: Plugin {
         self.model.prompt = args.prompt
       }
     }
-    invoke.resolve()
-  }
-
-  /// The diagnostics log (see `Diag`): Rust turns it on or off and forwards
-  /// the page's and its own lines here.
-  @objc public func diag(_ invoke: Invoke) throws {
-    let args = try invoke.parseArgs(DiagArgs.self)
-    if args.fresh == true { Diag.startFresh() }
-    if let on = args.enabled { Diag.setEnabled(on) }
-    if let line = args.line { Diag.log(line, source: args.source ?? "js") }
     invoke.resolve()
   }
 

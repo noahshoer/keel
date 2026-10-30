@@ -42,6 +42,37 @@ fn exports_command_names() {
     assert!(!names.iter().any(|x| x.contains("::")), "{names:?}");
 }
 
+/// Liquid Glass is parked for the React app: only the Dioxus config turns
+/// the `glass` feature on, so the React build never loads the plugin.
+#[test]
+fn glass_is_opt_in() {
+    let dir = env!("CARGO_MANIFEST_DIR");
+    let cargo = std::fs::read_to_string(format!("{dir}/Cargo.toml")).expect("read Cargo.toml");
+    let dep = cargo.lines().find(|l| l.starts_with("tauri-plugin-glass")).expect("glass dependency");
+    assert!(dep.contains("optional = true"), "{dep}");
+    let default = cargo.lines().find(|l| l.starts_with("default =")).unwrap_or("default = []");
+    assert!(!default.contains("glass"), "{default}");
+
+    let conf = |name: &str| -> serde_json::Value {
+        serde_json::from_str(&std::fs::read_to_string(format!("{dir}/{name}")).expect(name)).expect(name)
+    };
+    assert_eq!(conf("tauri.react.conf.json")["build"]["features"], serde_json::json!([]));
+    assert_eq!(conf("tauri.conf.json")["build"]["features"], serde_json::json!(["glass"]));
+}
+
+/// The capabilities a build without glass loads never name the glass plugin.
+#[test]
+fn base_capabilities_skip_glass() {
+    let base = concat!(env!("CARGO_MANIFEST_DIR"), "/capabilities/base");
+    let files: Vec<_> = std::fs::read_dir(base).expect("capabilities/base").map(|e| e.expect("entry").path()).collect();
+    assert!(!files.is_empty());
+    for f in files {
+        let text = std::fs::read_to_string(&f).expect("read capability");
+        assert!(!text.contains("glass:"), "{}", f.display());
+        assert!(text.contains("keel-ios:default"), "{}", f.display());
+    }
+}
+
 #[cfg(feature = "ts")]
 mod ts {
     use super::{bindings_dir, command_names};

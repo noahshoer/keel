@@ -92,7 +92,7 @@ final class PageGlass: NSObject {
       glass.view.frame = host.bounds
       host.addSubview(glass.view)
       placed[b.id] = glass
-      Diag.log("GLASS \(name) \(b.id) in \(host.convert(host.bounds, to: nil))")
+      GlassLog.log("GLASS \(name) \(b.id) in \(host.convert(host.bounds, to: nil))")
     }
     // Leaving the app (home, app switcher, Control Center), WebKit drops its
     // layers while frames still tick; they come back once it's active again.
@@ -102,7 +102,7 @@ final class PageGlass: NSObject {
     }
     missing += 1
     if missing == Self.giveUpAfter {
-      Diag.log("GLASS \(name) gave up")
+      GlassLog.log("GLASS \(name) gave up")
       hide()
       webview.evaluateJavaScript(fallback)
     }

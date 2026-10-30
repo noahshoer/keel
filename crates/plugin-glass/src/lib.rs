@@ -1,6 +1,10 @@
 //! Native Liquid Glass controls drawn over the web view on iOS. The Swift
 //! side (`ios/`) owns the views; the web UI drives it with plugin commands
 //! and listens for its events. On other platforms the plugin does nothing.
+//!
+//! Parked: only the Dioxus build loads it (the `keel` crate's `glass`
+//! feature). The diagnostics log and keyboard pace it used to carry are in
+//! `tauri-plugin-keel-ios`.
 
 use tauri::{
     plugin::{Builder, TauriPlugin},
@@ -23,48 +27,6 @@ fn is_available() -> bool {
 
 #[cfg(target_os = "ios")]
 struct GlassHandle<R: Runtime>(tauri::plugin::PluginHandle<R>);
-
-#[cfg(target_os = "ios")]
-#[derive(serde::Serialize)]
-struct DiagArgs<'a> {
-    enabled: Option<bool>,
-    source: Option<&'a str>,
-    line: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    fresh: Option<bool>,
-}
-
-/// Talks to the Swift diagnostics log (iOS; a no-op elsewhere): `enabled`
-/// switches it on or off, `line` (with its `source`) adds an entry. Errors
-/// are ignored, since logging must never get in the way.
-pub fn diag<R: Runtime>(
-    _app: &tauri::AppHandle<R>,
-    _enabled: Option<bool>,
-    _source: &str,
-    _line: Option<&str>,
-) {
-    #[cfg(target_os = "ios")]
-    {
-        use tauri::Manager;
-        if let Some(h) = _app.try_state::<GlassHandle<R>>() {
-            let args = DiagArgs { enabled: _enabled, source: Some(_source), line: _line, fresh: None };
-            let _ = h.0.run_mobile_plugin::<()>("diag", args);
-        }
-    }
-}
-
-/// Starts a new diagnostics log on iOS (the last one becomes diag.1.log);
-/// a no-op elsewhere.
-pub fn diag_fresh<R: Runtime>(_app: &tauri::AppHandle<R>) {
-    #[cfg(target_os = "ios")]
-    {
-        use tauri::Manager;
-        if let Some(h) = _app.try_state::<GlassHandle<R>>() {
-            let args = DiagArgs { enabled: None, source: None, line: None, fresh: Some(true) };
-            let _ = h.0.run_mobile_plugin::<()>("diag", args);
-        }
-    }
-}
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("glass")

@@ -3,7 +3,7 @@ import WebKit
 
 /// Keel's diagnostics log: timestamped lines appended to
 /// Library/Caches/diag.log in the app's container (`scripts/diag.sh` pulls
-/// it). Off by default; the Settings switch (via `GlassPlugin.diag`) or the
+/// it). Off by default; the Settings switch (via `KeelIosPlugin.diag`) or the
 /// `KEEL_DIAG=1` environment variable turns it on. When off, nothing is
 /// written and nothing is observed. The file rolls over to diag.1.log at
 /// ~2 MB, keeping one previous file.
@@ -18,7 +18,6 @@ enum Diag {
   private static var kvo: [NSKeyValueObservation] = []
   private static var _enabled = ProcessInfo.processInfo.environment["KEEL_DIAG"] == "1"
   private static weak var watched: WKWebView?
-  private static weak var watchedHost: UIView?
 
   static var enabled: Bool { queue.sync { _enabled } }
 
@@ -41,7 +40,9 @@ enum Diag {
   }
 
   /// One line, written only while logging is on. `source` is "swift" for
-  /// native lines; the page and Rust send theirs through `GlassPlugin.diag`.
+  /// native lines; the page and Rust send theirs through `KeelIosPlugin.diag`, and
+  /// the glass plugin (Dioxus build only) posts its lines as `keel.diag.line`
+  /// notifications.
   static func log(_ text: String, source: String = "swift") {
     guard enabled else { return }
     let line = String(format: "%.3f ", Date().timeIntervalSince1970) + "[\(source)] "
@@ -66,15 +67,23 @@ enum Diag {
   /// A rectangle as "[x,y wxh]" for log lines.
   static func r(_ r: CGRect) -> String { String(format: "[%.1f,%.1f %.1fx%.1f]", r.minX, r.minY, r.width, r.height) }
 
-  /// Remembers the web view so watching can start whenever logging is on.
-  static func attach(_ webview: WKWebView, hosting: UIView?) {
+  private static var posted: NSObjectProtocol?
+
+  /// Remembers the web view so watching can start whenever logging is on,
+  /// and takes the lines other Swift packages post.
+  static func attach(_ webview: WKWebView) {
     watched = webview
-    watchedHost = hosting
+    if posted == nil {
+      posted = NotificationCenter.default.addObserver(forName: Notification.Name("keel.diag.line"), object: nil, queue: nil) { n in
+        guard let line = n.userInfo?["line"] as? String else { return }
+        log(line, source: n.userInfo?["source"] as? String ?? "swift")
+      }
+    }
     if enabled { DispatchQueue.main.async { startWatching() } }
   }
 
-  /// Keyboard notifications, the web view's scroll view (which iOS moves for
-  /// the keyboard) and the overlay's frame.
+  /// Keyboard notifications and the web view's scroll view (which iOS moves
+  /// for the keyboard).
   private static func startWatching() {
     stopWatching()
     guard let webview = watched else { return }
@@ -94,9 +103,6 @@ enum Diag {
       log("SV offset \(String(format: "%.1f,%.1f", sv.contentOffset.x, sv.contentOffset.y)) inset top \(sv.adjustedContentInset.top) bottom \(sv.adjustedContentInset.bottom) size \(String(format: "%.0fx%.0f", sv.contentSize.width, sv.contentSize.height))")
     })
     kvo.append(webview.observe(\.frame, options: [.new]) { w, _ in log("WV frame \(r(w.frame))") })
-    if let hosting = watchedHost {
-      kvo.append(hosting.observe(\.frame, options: [.new]) { h, _ in log("HOST frame \(r(h.frame)) safe \(h.safeAreaInsets)") })
-    }
   }
 
   private static func stopWatching() {
