@@ -18,15 +18,10 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-/// Parses a `YYYY-MM-DD` date, or the date part of a `YYYY-MM-DDTHH:MM…`
-/// datetime (a `Due.date`).
+/// Parses a strict `YYYY-MM-DD` date (conversion only: which date a `Due`
+/// falls on is `views::due_date_of`, exported as `dueDateOf`).
 fn parse_date(s: &str) -> Result<NaiveDate, String> {
-    let date = match s.get(10..11) {
-        None if s.len() == 10 => s,
-        Some("T") => &s[..10],
-        _ => return Err(format!("invalid date \"{s}\": expected YYYY-MM-DD")),
-    };
-    NaiveDate::parse_from_str(date, "%Y-%m-%d").map_err(|_| format!("invalid date \"{s}\": expected YYYY-MM-DD"))
+    NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| format!("invalid date \"{s}\": expected YYYY-MM-DD"))
 }
 
 /// Parses an `HH:MM` or `HH:MM:SS` time of day.
@@ -46,12 +41,32 @@ fn output<T: Serialize>(value: &T) -> Result<JsValue, JsError> {
         .map_err(|e| JsError::new(&format!("serialize: {e}")))
 }
 
-/// `views::due_label` for two date strings (`due` may be a datetime).
+/// `views::due_label` for two `YYYY-MM-DD` date strings.
 #[wasm_bindgen(js_name = dueLabel)]
 pub fn due_label(due: &str, today: &str) -> Result<String, JsError> {
     let due = parse_date(due).map_err(|e| JsError::new(&e))?;
     let today = parse_date(today).map_err(|e| JsError::new(&e))?;
     Ok(views::due_label(due, today))
+}
+
+/// `views::due_date_of`: the calendar date of a task's due as `YYYY-MM-DD`,
+/// `null` without one.
+#[wasm_bindgen(js_name = dueDateOf, unchecked_return_type = "string | null")]
+pub fn due_date_of(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task")] task: JsValue,
+) -> Result<JsValue, JsError> {
+    let task: Task = input("task", task)?;
+    output(&views::due_date_of(&task).map(|d| d.format("%Y-%m-%d").to_string()))
+}
+
+/// `views::due_time`: the time of day of a task's due as `HH:MM:SS`, `null`
+/// for a date-only due or none.
+#[wasm_bindgen(js_name = dueTime, unchecked_return_type = "string | null")]
+pub fn due_time(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task")] task: JsValue,
+) -> Result<JsValue, JsError> {
+    let task: Task = input("task", task)?;
+    output(&views::due_time(&task).map(|t| t.format("%H:%M:%S").to_string()))
 }
 
 /// `views::time_label` for an `HH:MM[:SS]` string.
@@ -95,15 +110,11 @@ mod tests {
     }
 
     #[test]
-    fn parses_the_date_of_a_datetime() {
-        let d = NaiveDate::from_ymd_opt(2026, 10, 30).unwrap();
-        assert_eq!(parse_date("2026-10-30T17:00:00"), Ok(d));
-        assert_eq!(parse_date("2026-10-30T17:00:00Z"), Ok(d));
-    }
-
-    #[test]
     fn rejects_malformed_dates() {
-        for bad in ["", "30/10/2026", "2026-10-3", "2026-13-01", "2026-10-30 17:00", "2026-10-30x"] {
+        // Strict: a datetime is not a date (use dueDateOf for a Due).
+        for bad in [
+            "", "30/10/2026", "2026-13-01", "2026-10-30T17:00:00", "2026-10-30 17:00", "2026-10-30x",
+        ] {
             assert_eq!(parse_date(bad), Err(format!("invalid date \"{bad}\": expected YYYY-MM-DD")), "{bad}");
         }
     }

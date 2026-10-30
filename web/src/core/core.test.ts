@@ -1,7 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import type { Task } from "../bindings";
 import { makeTask } from "../ipc/fixtures";
 import { loadCoreForTests } from "../test/wasm";
-import { cards, dueLabel, progress, timeLabel } from ".";
+import { cards, dueDateOf, dueLabel, dueTime, progress, timeLabel } from ".";
 
 beforeAll(() => {
   loadCoreForTests();
@@ -13,12 +14,33 @@ describe("keel-core over wasm", () => {
     expect(dueLabel("2026-10-30", "2026-10-29")).toBe("Tomorrow");
     expect(dueLabel("2026-10-29", "2026-10-29")).toBe("Today");
     expect(dueLabel("2027-03-04", "2026-10-19")).toBe("4 Mar 2027");
-    // A datetime due labels by its date.
-    expect(dueLabel("2026-10-30T17:00:00", "2026-10-29")).toBe("Tomorrow");
   });
 
   it("due label rejects a malformed date", () => {
     expect(() => dueLabel("30/10/2026", "2026-10-29")).toThrow(/invalid date "30\/10\/2026"/);
+    // Strict: a datetime goes through dueDateOf first.
+    expect(() => dueLabel("2026-10-30T17:00:00", "2026-10-29")).toThrow(/invalid date/);
+  });
+
+  it("due date and time of a task match Rust", () => {
+    // Same cases as due_date_of_reads_date_and_datetime / reads_time_from_due in views.rs.
+    const due = (date: string): Task["due"] => ({
+      date,
+      timezone: null,
+      string: "",
+      lang: "en",
+      is_recurring: false,
+    });
+    const none = makeTask({ id: "t", project_id: "p", content: "x" });
+    expect(dueDateOf(none)).toBeNull();
+    expect(dueTime(none)).toBeNull();
+    const dateOnly = makeTask({ id: "t", project_id: "p", content: "x", due: due("2026-10-19") });
+    expect(dueDateOf(dateOnly)).toBe("2026-10-19");
+    expect(dueTime(dateOnly)).toBeNull();
+    const timed = makeTask({ id: "t", project_id: "p", content: "x", due: due("2026-10-19T17:30:00") });
+    expect(dueDateOf(timed)).toBe("2026-10-19");
+    expect(dueTime(timed)).toBe("17:30:00");
+    expect(timeLabel("17:30:00")).toBe("5:30 PM");
   });
 
   it("time label matches Rust", () => {

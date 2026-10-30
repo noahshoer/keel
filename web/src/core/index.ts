@@ -24,10 +24,22 @@ function ready(): void {
   if (!initialised) throw new Error("keel core not initialised: await initCore() first");
 }
 
-/** Due chip text ("Today", "Friday", "3 Nov"). Dates are `YYYY-MM-DD` (or a `Due.date` datetime). */
+/** Due chip text ("Today", "Friday", "3 Nov"). Both dates are `YYYY-MM-DD`. */
 export function dueLabel(due: string, today: string): string {
   ready();
   return core.dueLabel(due, today);
+}
+
+/** The calendar date (`YYYY-MM-DD`) a task's due falls on; `null` without a due. */
+export function dueDateOf(task: Task): string | null {
+  ready();
+  return core.dueDateOf(task);
+}
+
+/** The time of day (`HH:MM:SS`) of a task's due; `null` for a date-only due or none. */
+export function dueTime(task: Task): string | null {
+  ready();
+  return core.dueTime(task);
 }
 
 /** 12-hour label ("5 PM", "5:30 PM") for an `HH:MM[:SS]` time. */
