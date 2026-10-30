@@ -8,6 +8,10 @@ use std::path::PathBuf;
 
 use keel_core::calendar::{DayCell, MonthView};
 use keel_core::commands::{Action, ApplyResult, Command, DueEdit};
+use keel_core::editor::{
+    AddPlan, EditPlan, EditorValues, EditorView, LocationChoice, LocationKind, Pick, PreviewChip, ReminderDraft, TaskPatch,
+    TitleSegment,
+};
 use keel_core::filter::FilterGroup;
 use keel_core::ids::Id;
 use keel_core::import::todoist::ImportSummary;
@@ -59,6 +63,9 @@ fn bindings_cover_ipc_types() {
         Action, Command, ApplyResult, DueEdit,
         // views / quick add / calendar (the wasm boundary)
         CardRow, Card, CardMode, DateGroup, DateGroupMode, Progress, DueBucket, QuickAdd, Span, SpanKind, MonthView, DayCell,
+        // the editor (the wasm boundary)
+        EditorValues, EditorView, ReminderDraft, Pick, TaskPatch, LocationChoice, LocationKind, TitleSegment, PreviewChip,
+        AddPlan, EditPlan,
         // query results
         PlannedReminder, ReminderSettings, SearchResults, FilterGroup, ImportSummary,
     );

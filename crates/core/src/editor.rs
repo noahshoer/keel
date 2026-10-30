@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::commands::{Action, DueEdit};
 use crate::ids::Id;
 use crate::model::{Due, Label, Priority, Project, Reminder, ReminderType, Section, Task};
-use crate::quickadd::{self, QuickAdd, SpanKind};
+use crate::quickadd::{self, QuickAdd, Span, SpanKind};
 use crate::recurrence::{self, Recurrence};
 use crate::reminders::offset_text;
 use crate::views::{self, DueBucket};
@@ -163,9 +163,10 @@ pub fn custom_reminder_at(text: &str, today: NaiveDate) -> Option<String> {
     }
 }
 
-/// A value chosen in a picker, in [`EditorValues`]' formats.
+/// A value chosen in a picker, in [`EditorValues`]' formats. (TypeScript
+/// calls it `EditorPick`: `Pick` is a built-in type there.)
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export, rename = "EditorPick"))]
 #[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Pick {
     Date { date: String, time: String },
@@ -636,6 +637,239 @@ pub fn quick_dates(today: NaiveDate) -> Vec<(&'static str, String, NaiveDate)> {
     ]
 }
 
+/// One stretch of the title: plain text, or a phrase quick add recognized.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct TitleSegment {
+    pub text: String,
+    /// The phrase's kind; `None` for plain text.
+    pub kind: Option<SpanKind>,
+    /// A priority phrase's level (its last digit: "p2", "!!2"), 4 when it
+    /// has none; 0 for anything else.
+    pub level: u8,
+}
+
+/// The title cut into plain and recognized stretches, covering all of it
+/// (overlapping or misaligned spans are skipped).
+pub fn title_segments(value: &str, spans: &[Span]) -> Vec<TitleSegment> {
+    let plain = |text: &str| TitleSegment { text: text.to_string(), kind: None, level: 0 };
+    let mut segments = Vec::new();
+    let mut at = 0;
+    for s in spans.iter().filter(|s| s.end <= value.len() && value.is_char_boundary(s.start) && value.is_char_boundary(s.end)) {
+        if s.start < at {
+            continue;
+        }
+        if s.start > at {
+            segments.push(plain(&value[at..s.start]));
+        }
+        let text = &value[s.start..s.end];
+        let level = match s.kind {
+            SpanKind::Priority => text.chars().rev().find_map(|c| c.to_digit(10)).filter(|d| (1..=3).contains(d)).unwrap_or(4) as u8,
+            _ => 0,
+        };
+        segments.push(TitleSegment { text: text.to_string(), kind: Some(s.kind), level });
+        at = s.end;
+    }
+    if at < value.len() {
+        segments.push(plain(&value[at..]));
+    }
+    segments
+}
+
+/// A chip under the title previewing what quick add understood.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct PreviewChip {
+    /// `Date` for the date (and its time).
+    pub kind: SpanKind,
+    pub text: String,
+}
+
+/// The preview chips for a parse: date and time, repeat, priority, project
+/// (with section), each label, deadline.
+pub fn preview_chips(qa: &QuickAdd, projects: &[Project], sections: &[Section], today: NaiveDate) -> Vec<PreviewChip> {
+    let chip = |kind, text| PreviewChip { kind, text };
+    let mut chips = Vec::new();
+    if let Some(d) = qa.date {
+        let mut text = views::due_label(d, today);
+        if let Some(t) = qa.time {
+            text = format!("{text} {}", views::time_label(t));
+        }
+        chips.push(chip(SpanKind::Date, text));
+    }
+    if let Some(r) = &qa.recurrence {
+        chips.push(chip(SpanKind::Repeat, repeat_text(r)));
+    }
+    if let Some(p) = qa.priority {
+        chips.push(chip(SpanKind::Priority, format!("P{}", 5 - p.to_api())));
+    }
+    if let Some(pid) = &qa.project_id {
+        let project = projects.iter().find(|p| &p.id == pid).map(|p| p.name.clone()).unwrap_or_default();
+        let text = match qa.section_id.as_ref().and_then(|s| sections.iter().find(|x| &x.id == s)) {
+            Some(section) => format!("#{project} / {}", section.name),
+            None => format!("#{project}"),
+        };
+        chips.push(chip(SpanKind::Project, text));
+    }
+    for l in &qa.labels {
+        chips.push(chip(SpanKind::Label, format!("@{l}")));
+    }
+    if let Some(d) = qa.deadline {
+        chips.push(chip(SpanKind::Deadline, format!("Deadline {}", views::due_label(d, today))));
+    }
+    chips
+}
+
+/// Everything the editor draws for its values, from one parse of the title.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct EditorView {
+    /// The title has a name to save (see [`has_name`]).
+    pub can_submit: bool,
+    pub segments: Vec<TitleSegment>,
+    pub preview: Vec<PreviewChip>,
+    /// Picked plus typed labels (the labels menu ticks both).
+    pub shown_labels: Vec<String>,
+    /// The days it will repeat on: the typed rule, or the Repeat menu's.
+    pub repeat_rule: Option<Recurrence>,
+    /// Relative reminders count back from a due date (typed or picked).
+    pub has_due: bool,
+    /// The location menu's selected value.
+    pub location: String,
+    pub location_text: String,
+    pub locations: Vec<LocationChoice>,
+    pub priority_text: String,
+    pub labels_text: String,
+    pub repeat_options: Vec<(String, String)>,
+    pub repeat_chip_text: String,
+    pub date_chip: (String, Option<DueBucket>),
+    pub deadline_text: String,
+    /// `None` without a deadline.
+    pub deadline_urgent: Option<bool>,
+    pub reminders_text: String,
+    /// Each reminder's text, in order.
+    pub reminder_labels: Vec<String>,
+}
+
+/// What the editor shows for `v`. `quick_add` parses the title (adding);
+/// `keep_label` names an existing custom rule and `existing` is that rule
+/// (editing).
+pub fn editor_view(
+    v: &EditorValues,
+    quick_add: bool,
+    keep_label: Option<&str>,
+    existing: Option<Recurrence>,
+    projects: &[Project],
+    sections: &[Section],
+    today: NaiveDate,
+) -> EditorView {
+    let qa = quick_add.then(|| parse_title(v, projects, sections, today));
+    let can_submit = match &qa {
+        Some(q) => !q.content.trim().is_empty(),
+        None => !v.content.trim().is_empty(),
+    };
+    let spans = qa.as_ref().map(|q| q.spans.as_slice()).unwrap_or(&[]);
+    let mut shown_labels = v.labels.clone();
+    for l in qa.iter().flat_map(|q| q.labels.iter()) {
+        if !shown_labels.iter().any(|n| n.eq_ignore_ascii_case(l)) {
+            shown_labels.push(l.clone());
+        }
+    }
+    let repeat_rule = qa
+        .as_ref()
+        .and_then(|q| q.recurrence.clone())
+        .or_else(|| recurrence_for(&v.repeat, &v.date, existing, today));
+    let has_due = !v.date.is_empty() || !v.time.is_empty() || qa.as_ref().is_some_and(|q| q.date.is_some());
+    let opts = repeat_options(&v.date, keep_label, today);
+    let date = NaiveDate::parse_from_str(&v.date, "%Y-%m-%d").ok();
+    let time = NaiveTime::parse_from_str(&v.time, "%H:%M").ok();
+    let deadline = NaiveDate::parse_from_str(&v.deadline, "%Y-%m-%d").ok();
+    EditorView {
+        can_submit,
+        segments: title_segments(&v.content, spans),
+        preview: qa.as_ref().map(|q| preview_chips(q, projects, sections, today)).unwrap_or_default(),
+        shown_labels,
+        repeat_rule,
+        has_due,
+        location: v.location(),
+        location_text: location_text(&v.project_id, v.section_id.as_ref(), projects, sections),
+        locations: location_choices(projects, sections),
+        priority_text: priority_text(&v.priority),
+        labels_text: labels_text(&v.labels),
+        repeat_chip_text: repeat_chip_text(&v.repeat, &opts),
+        repeat_options: opts,
+        date_chip: date_chip(date, time, today),
+        deadline_text: deadline_text(deadline, today),
+        deadline_urgent: deadline.map(|d| views::deadline_urgent(d, today)),
+        reminders_text: reminders_text(&v.reminders, today),
+        reminder_labels: v.reminders.iter().map(|r| r.label(today)).collect(),
+    }
+}
+
+/// [`unhighlight`] at a browser caret (UTF-16 units).
+pub fn unhighlight_at(v: &mut EditorValues, projects: &[Project], sections: &[Section], today: NaiveDate, caret: usize) -> bool {
+    let end = byte_at_utf16(&v.content, caret);
+    unhighlight(v, projects, sections, today, end)
+}
+
+/// The reminder changes as actions: removals first, then additions.
+pub fn reminder_actions(task_id: &Id, before: &[ReminderDraft], after: &[ReminderDraft]) -> Vec<Action> {
+    let mut out = Vec::new();
+    for old in before {
+        if let Some(id) = &old.id {
+            if !after.iter().any(|a| a.id.as_ref() == Some(id)) {
+                out.push(Action::ReminderDelete { id: id.clone() });
+            }
+        }
+    }
+    for new in after.iter().filter(|a| a.id.is_none()) {
+        out.push(Action::ReminderAdd { task_id: task_id.clone(), minute_offset: new.minute_offset, at: new.at.clone() });
+    }
+    out
+}
+
+/// What adding the editor's task sends, in order: the labels it mentions
+/// that don't exist yet, the task, then (once the task has its id) its
+/// reminders through [`reminder_actions`].
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct AddPlan {
+    pub labels: Vec<String>,
+    pub task: Action,
+    pub reminders: Vec<ReminderDraft>,
+}
+
+pub fn add_plan(v: &EditorValues, projects: &[Project], sections: &[Section], labels: &[Label], today: NaiveDate) -> AddPlan {
+    let qa = parse_title(v, projects, sections, today);
+    let mut new_labels: Vec<String> = Vec::new();
+    for name in &qa.labels {
+        let known = labels.iter().any(|l| l.name.eq_ignore_ascii_case(name));
+        if !known && !new_labels.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+            new_labels.push(name.clone());
+        }
+    }
+    AddPlan { labels: new_labels, task: new_task_from(v, &qa, today).into_action(), reminders: v.reminders.clone() }
+}
+
+/// What saving an edit sends, in order: the move (it carries the sub-tree),
+/// the reminder changes, then the field changes (`None` when none changed).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct EditPlan {
+    pub moved: Option<Action>,
+    pub reminders: Vec<Action>,
+    pub update: Option<Action>,
+}
+
+pub fn edit_plan(id: &Id, before: &EditorValues, after: &EditorValues, existing: Option<Recurrence>, today: NaiveDate) -> EditPlan {
+    let (patch, moved) = changes(before, after, existing, today);
+    EditPlan {
+        moved: moved.map(|(project_id, section_id)| Action::TaskMove { id: id.clone(), project_id, section_id }),
+        reminders: reminder_actions(id, &before.reminders, &after.reminders),
+        update: (!patch.is_empty()).then(|| patch.into_action(id.clone())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -755,5 +989,171 @@ mod tests {
         assert_eq!(p, Pick::Location { project_id: Id::from("P"), section_id: None });
         let d: ReminderDraft = serde_json::from_str(r#"{"id":null,"minuteOffset":30,"at":null}"#).unwrap();
         assert_eq!(d.minute_offset, Some(30));
+    }
+    fn kinds(view: &EditorView) -> Vec<Option<SpanKind>> {
+        view.segments.iter().map(|s| s.kind).collect()
+    }
+
+    fn view_of(v: &EditorValues, quick_add: bool) -> EditorView {
+        editor_view(v, quick_add, None, None, &[], &[], day30())
+    }
+
+    #[test]
+    fn segments_cover_the_title() {
+        let v = typed("Call mom tomorrow p2");
+        let qa = parse_title(&v, &[], &[], day30());
+        let segs = title_segments(&v.content, &qa.spans);
+        let texts: Vec<&str> = segs.iter().map(|s| s.text.as_str()).collect();
+        assert_eq!(texts, ["Call mom ", "tomorrow", " ", "p2"]);
+        assert_eq!(segs[1].kind, Some(SpanKind::Date));
+        assert_eq!((segs[3].kind, segs[3].level), (Some(SpanKind::Priority), 2));
+        assert_eq!((segs[0].kind, segs[0].level), (None, 0));
+    }
+
+    #[test]
+    fn segments_and_caret_survive_non_ascii() {
+        let mut v = typed("Café tomorrow p1 🍰");
+        assert!(kinds(&view_of(&v, true)).contains(&Some(SpanKind::Date)));
+        let mut miss = v.clone();
+        assert!(!unhighlight_at(&mut miss, &[], &[], day30(), 5));
+        // "Café tomorrow" is 13 UTF-16 units (14 bytes).
+        assert!(unhighlight_at(&mut v, &[], &[], day30(), 13));
+        let after = view_of(&v, true);
+        assert!(!kinds(&after).contains(&Some(SpanKind::Date)));
+        assert!(kinds(&after).contains(&Some(SpanKind::Priority)));
+        assert_eq!(after.segments.iter().map(|s| s.text.as_str()).collect::<String>(), "Café tomorrow p1 🍰");
+    }
+
+    #[test]
+    fn preview_lists_what_was_typed() {
+        let mut home = Project::new("Home");
+        home.id = Id::from("P-HOME");
+        let v = typed("x tomorrow 5pm every day p1 #Home @phone {nov 2}");
+        let view = editor_view(&v, true, None, None, &[home], &[], day30());
+        let chips: Vec<(SpanKind, &str)> = view.preview.iter().map(|c| (c.kind, c.text.as_str())).collect();
+        assert_eq!(
+            chips,
+            [
+                (SpanKind::Date, "Tomorrow 5 PM"),
+                (SpanKind::Repeat, "Every day"),
+                (SpanKind::Priority, "P1"),
+                (SpanKind::Project, "#Home"),
+                (SpanKind::Label, "@phone"),
+                (SpanKind::Deadline, "Deadline Monday"),
+            ]
+        );
+    }
+
+    #[test]
+    fn editor_view_cannot_submit_a_phrase_alone() {
+        assert!(!view_of(&typed("tomorrow"), true).can_submit);
+        assert!(view_of(&typed("x tomorrow"), true).can_submit);
+        assert!(view_of(&typed("tomorrow"), false).can_submit, "editing doesn't parse");
+        assert!(view_of(&typed("x tomorrow p1"), false).segments.iter().all(|s| s.kind.is_none()));
+    }
+
+    #[test]
+    fn editor_view_chip_texts() {
+        let mut v = typed("x");
+        v.date = "2026-10-31".into();
+        v.deadline = "2026-10-30".into();
+        v.priority = "2".into();
+        v.repeat = "weekly".into();
+        v.reminders = vec![ReminderDraft { id: None, minute_offset: Some(30), at: None }];
+        let view = view_of(&v, true);
+        assert_eq!(view.date_chip, ("Tomorrow".to_string(), Some(DueBucket::Tomorrow)));
+        assert_eq!((view.deadline_text.as_str(), view.deadline_urgent), ("Today", Some(true)));
+        assert_eq!(view.priority_text, "P2");
+        assert_eq!(view.repeat_chip_text, "Every week on Saturday");
+        assert_eq!(view.repeat_rule, Some(Recurrence::Weekly(vec![5])));
+        assert_eq!(view.reminders_text, "30 min before");
+        assert!(view.has_due);
+        assert_eq!(view.location_text, "Inbox");
+    }
+
+    #[test]
+    fn shown_labels_merge_typed_and_picked() {
+        let mut v = typed("x @Home @work");
+        v.labels = vec!["home".into(), "errands".into()];
+        let view = view_of(&v, true);
+        assert_eq!(view.shown_labels, ["home", "errands", "work"]);
+        assert_eq!(view.labels_text, "home, errands");
+    }
+
+    #[test]
+    fn add_plan_creates_unknown_labels_once() {
+        let known = vec![Label::new("Home")];
+        let v = typed("x @home @Errands @errands");
+        let plan = add_plan(&v, &[], &[], &known, day30());
+        assert_eq!(plan.labels, ["Errands"]);
+        match plan.task {
+            Action::TaskAdd { labels, .. } => {
+                let labels = labels.unwrap();
+                assert!(labels.iter().any(|l| l.eq_ignore_ascii_case("home")));
+                assert!(labels.iter().any(|l| l.eq_ignore_ascii_case("errands")));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn add_plan_task_is_a_task_add() {
+        let mut v = typed("Pay rent tomorrow p1 {nov 2}");
+        v.description = "  online  ".into();
+        v.parent_id = Some(Id::from("T-P"));
+        v.reminders = vec![ReminderDraft { id: None, minute_offset: Some(0), at: None }];
+        let plan = add_plan(&v, &[], &[], &[], day30());
+        assert_eq!(plan.reminders.len(), 1);
+        match plan.task {
+            Action::TaskAdd { content, description, priority, due, parent_id, deadline, project_id, .. } => {
+                assert_eq!(content, "Pay rent");
+                assert_eq!(description.as_deref(), Some("online"));
+                assert_eq!(priority, Some(Priority::P1));
+                assert_eq!(due.unwrap().date, "2026-10-31");
+                assert_eq!(parent_id, Some(Id::from("T-P")));
+                assert_eq!(deadline.as_deref(), Some("2026-11-02"));
+                assert_eq!(project_id, Id::from("P-IN"));
+            }
+            other => panic!("{other:?}"),
+        }
+        let blank = add_plan(&typed("x"), &[], &[], &[], day30());
+        assert!(matches!(blank.task, Action::TaskAdd { description: None, due: None, .. }));
+    }
+
+    #[test]
+    fn edit_plan_orders_move_reminders_update() {
+        let id = Id::from("T-1");
+        let mut before = typed("x");
+        before.reminders = vec![ReminderDraft { id: Some(Id::from("R-1")), minute_offset: Some(10), at: None }];
+        let mut after = before.clone();
+        after.section_id = Some(Id::from("S-1"));
+        after.priority = "1".into();
+        after.reminders = vec![ReminderDraft { id: None, minute_offset: Some(60), at: None }];
+        let plan = edit_plan(&id, &before, &after, None, day30());
+        assert_eq!(
+            plan.moved,
+            Some(Action::TaskMove { id: id.clone(), project_id: Id::from("P-IN"), section_id: Some(Id::from("S-1")) })
+        );
+        assert_eq!(
+            plan.reminders,
+            [
+                Action::ReminderDelete { id: Id::from("R-1") },
+                Action::ReminderAdd { task_id: id.clone(), minute_offset: Some(60), at: None },
+            ]
+        );
+        match plan.update {
+            Some(Action::TaskUpdate { priority, content, labels, due, .. }) => {
+                assert_eq!(priority, Some(Priority::P1));
+                assert_eq!((content, labels, due), (None, None, None));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn edit_plan_without_changes_is_empty() {
+        let v = typed("x");
+        let plan = edit_plan(&Id::from("T-1"), &v, &v, None, day30());
+        assert_eq!(plan, EditPlan { moved: None, reminders: Vec::new(), update: None });
     }
 }

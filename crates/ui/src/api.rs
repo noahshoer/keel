@@ -108,18 +108,12 @@ pub async fn dispatch(cmd: &Command) -> Result<ApplyResult, String> {
     invoke("dispatch", &CmdArg { cmd }).await
 }
 
-fn command(action: Action, temp: bool) -> Command {
+pub fn command(action: Action, temp: bool) -> Command {
     Command {
         uuid: uuid(),
         temp_id: temp.then(|| format!("tmp-{}", uuid())),
         action,
     }
-}
-
-pub use keel_core::editor::{NewTask, TaskPatch};
-
-pub async fn add_task(t: NewTask) -> Result<ApplyResult, String> {
-    dispatch(&command(t.into_action(), true)).await
 }
 
 pub async fn add_project(name: String) -> Result<ApplyResult, String> {
@@ -140,10 +134,6 @@ pub async fn set_streak(id: Id, enabled: bool, goal: Option<i64>) -> Result<Appl
 
 pub async fn add_label(name: String) -> Result<ApplyResult, String> {
     dispatch(&command(Action::LabelAdd { name }, true)).await
-}
-
-pub async fn update_task(id: Id, p: TaskPatch) -> Result<ApplyResult, String> {
-    dispatch(&command(p.into_action(id), false)).await
 }
 
 pub async fn completed_today() -> Result<Vec<Task>, String> {
@@ -192,11 +182,6 @@ pub async fn rename_section(id: Id, name: String) -> Result<ApplyResult, String>
 
 pub async fn delete_section(id: Id) -> Result<ApplyResult, String> {
     dispatch(&command(Action::SectionDelete { id }, false)).await
-}
-
-/// Move a task (and its sub-tasks) to a project and optional section.
-pub async fn move_task(id: Id, project_id: Id, section_id: Option<Id>) -> Result<ApplyResult, String> {
-    dispatch(&command(Action::TaskMove { id, project_id, section_id }, false)).await
 }
 
 /// No UI since lists stopped nesting sub-tasks (the task view shows them);
@@ -305,15 +290,6 @@ pub async fn search(query: &str) -> Result<SearchResults, String> {
 
 pub async fn list_reminders() -> Result<Vec<Reminder>, String> {
     invoke("list_reminders", &NoArgs {}).await
-}
-
-/// `minute_offset` before the due time, or at `at` (`YYYY-MM-DDTHH:MM`).
-pub async fn add_reminder(task_id: Id, minute_offset: Option<i64>, at: Option<String>) -> Result<ApplyResult, String> {
-    dispatch(&command(Action::ReminderAdd { task_id, minute_offset, at }, true)).await
-}
-
-pub async fn delete_reminder(id: Id) -> Result<ApplyResult, String> {
-    dispatch(&command(Action::ReminderDelete { id }, false)).await
 }
 
 #[derive(Serialize)]

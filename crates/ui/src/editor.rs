@@ -9,7 +9,6 @@ use keel_core::editor::{self as core_editor, LocationKind, Pick};
 use keel_core::model::{Label, Project, Section};
 use keel_core::quickadd::{Span, SpanKind};
 use keel_core::recurrence::Recurrence;
-use keel_core::views;
 
 pub use keel_core::editor::{
     apply_pick, has_name, labels_text, labels_to_create, location_pick, location_text, parse_title as parse_title_at,
@@ -68,16 +67,13 @@ pub async fn add_from_editor(
     sections: Vec<Section>,
     labels: Vec<Label>,
 ) -> Result<(), String> {
-    let qa = parse_title(&v, &projects, &sections);
-    let task = core_editor::new_task_from(&v, &qa, crate::today());
-    for name in &qa.labels {
-        if !labels.iter().any(|l| l.name.eq_ignore_ascii_case(name)) {
-            let _ = api::add_label(name.clone()).await;
-        }
+    let plan = core_editor::add_plan(&v, &projects, &sections, &labels, crate::today());
+    for name in plan.labels {
+        let _ = api::add_label(name).await;
     }
-    let result = api::add_task(task).await?;
+    let result = api::dispatch(&api::command(plan.task, true)).await?;
     if let Some(id) = result.id_mapping.values().next() {
-        sync_reminders(id.clone(), &[], &v.reminders).await;
+        sync_reminders(id.clone(), &[], &plan.reminders).await;
     }
     Ok(())
 }
@@ -86,28 +82,23 @@ pub async fn add_from_editor(
 /// then the field changes. Fails when the move or the field changes weren't
 /// saved.
 pub async fn save_edit(id: Id, before: EditorValues, after: EditorValues, existing: Option<Recurrence>) -> Result<(), String> {
-    let (patch, moved) = core_editor::changes(&before, &after, existing, crate::today());
-    if let Some((project, section)) = moved {
-        api::move_task(id.clone(), project, section).await?;
+    let plan = core_editor::edit_plan(&id, &before, &after, existing, crate::today());
+    if let Some(moved) = plan.moved {
+        api::dispatch(&api::command(moved, false)).await?;
     }
-    sync_reminders(id.clone(), &before.reminders, &after.reminders).await;
-    if !patch.is_empty() {
-        api::update_task(id, patch).await?;
+    for action in plan.reminders {
+        let _ = api::dispatch(&api::command(action, false)).await;
+    }
+    if let Some(update) = plan.update {
+        api::dispatch(&api::command(update, false)).await?;
     }
     Ok(())
 }
 
 /// Saves reminder edits: removes the ones taken out, adds the new ones.
 pub async fn sync_reminders(task_id: Id, before: &[ReminderDraft], after: &[ReminderDraft]) {
-    for old in before {
-        if let Some(id) = &old.id {
-            if !after.iter().any(|a| a.id.as_ref() == Some(id)) {
-                let _ = api::delete_reminder(id.clone()).await;
-            }
-        }
-    }
-    for new in after.iter().filter(|a| a.id.is_none()) {
-        let _ = api::add_reminder(task_id.clone(), new.minute_offset, new.at.clone()).await;
+    for action in core_editor::reminder_actions(&task_id, before, after) {
+        let _ = api::dispatch(&api::command(action, false)).await;
     }
 }
 
@@ -205,40 +196,23 @@ pub fn TaskEditor(
             shown_labels.push(l.clone());
         }
     }
-    let preview: Vec<(&'static str, String)> = match &qa {
-        Some(qa) => {
-            let mut chips = Vec::new();
-            if let Some(d) = qa.date {
-                let mut text = views::due_label(d, today);
-                if let Some(t) = qa.time {
-                    text = format!("{text} {}", views::time_label(t));
-                }
-                chips.push(("chip-date", text));
-            }
-            if let Some(r) = &qa.recurrence {
-                chips.push(("chip-repeat", repeat_text(r)));
-            }
-            if let Some(p) = qa.priority {
-                chips.push(("chip-priority", format!("P{}", 5 - p.to_api())));
-            }
-            if let Some(pid) = &qa.project_id {
-                let project = projects.iter().find(|p| &p.id == pid).map(|p| p.name.clone()).unwrap_or_default();
-                let text = match qa.section_id.as_ref().and_then(|s| sections.iter().find(|x| &x.id == s)) {
-                    Some(section) => format!("#{project} / {}", section.name),
-                    None => format!("#{project}"),
-                };
-                chips.push(("chip-project", text));
-            }
-            for l in &qa.labels {
-                chips.push(("chip-label", format!("@{l}")));
-            }
-            if let Some(d) = qa.deadline {
-                chips.push(("chip-deadline", format!("Deadline {}", views::due_label(d, today))));
-            }
-            chips
-        }
-        None => Vec::new(),
-    };
+    let preview: Vec<(&'static str, String)> = qa
+        .as_ref()
+        .map(|qa| core_editor::preview_chips(qa, &projects, &sections, today))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|c| {
+            let class = match c.kind {
+                SpanKind::Date | SpanKind::Time => "chip-date",
+                SpanKind::Repeat => "chip-repeat",
+                SpanKind::Priority => "chip-priority",
+                SpanKind::Project | SpanKind::Section => "chip-project",
+                SpanKind::Label => "chip-label",
+                SpanKind::Deadline => "chip-deadline",
+            };
+            (class, c.text)
+        })
+        .collect();
 
     // The days it will repeat on (typed rule, or the Repeat menu's).
     let repeat_rule = qa
@@ -425,35 +399,27 @@ fn HighlightedTitle(
     on_enter: EventHandler<()>,
 ) -> Element {
     // (text, highlight class) segments covering the whole value.
-    let mut segments: Vec<(String, &'static str)> = Vec::new();
-    let mut at = 0;
-    for s in spans.iter().filter(|s| s.end <= value.len() && value.is_char_boundary(s.start) && value.is_char_boundary(s.end)) {
-        if s.start < at {
-            continue;
-        }
-        if s.start > at {
-            segments.push((value[at..s.start].to_string(), ""));
-        }
-        let class = match s.kind {
-            SpanKind::Date | SpanKind::Time => "hl hl-date",
-            SpanKind::Repeat => "hl hl-repeat",
-            // The flag's color: the level is the phrase's digit ("p2", "!!2").
-            SpanKind::Priority => match value[s.start..s.end].chars().rev().find(|c| c.is_ascii_digit()) {
-                Some('1') => "hl hl-p1",
-                Some('2') => "hl hl-p2",
-                Some('3') => "hl hl-p3",
-                _ => "hl hl-p4",
-            },
-            SpanKind::Project | SpanKind::Section => "hl hl-project",
-            SpanKind::Label => "hl hl-label",
-            SpanKind::Deadline => "hl hl-deadline",
-        };
-        segments.push((value[s.start..s.end].to_string(), class));
-        at = s.end;
-    }
-    if at < value.len() {
-        segments.push((value[at..].to_string(), ""));
-    }
+    let segments: Vec<(String, &'static str)> = core_editor::title_segments(&value, &spans)
+        .into_iter()
+        .map(|s| {
+            let class = match s.kind {
+                None => "",
+                Some(SpanKind::Date | SpanKind::Time) => "hl hl-date",
+                Some(SpanKind::Repeat) => "hl hl-repeat",
+                // The flag's color: the level is the phrase's digit ("p2", "!!2").
+                Some(SpanKind::Priority) => match s.level {
+                    1 => "hl hl-p1",
+                    2 => "hl hl-p2",
+                    3 => "hl hl-p3",
+                    _ => "hl hl-p4",
+                },
+                Some(SpanKind::Project | SpanKind::Section) => "hl hl-project",
+                Some(SpanKind::Label) => "hl hl-label",
+                Some(SpanKind::Deadline) => "hl hl-deadline",
+            };
+            (s.text, class)
+        })
+        .collect();
 
     rsx! {
         div { class: "title-wrap", "data-editor": "{editor_id}",
