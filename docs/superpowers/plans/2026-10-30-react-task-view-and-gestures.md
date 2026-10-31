@@ -179,8 +179,8 @@ The pure parts of `gestures.rs`, with all its Rust tests ported as Vitest (same 
 - [x] **Step 1: Simulator, React build** (iPhone 17 with test data): `scripts/sim-check.sh <udid> scripts/sim-checks/subtask-view.js end@12` and `edge-back.js end@14` → the same `[check]` lines as the Dioxus build gives (header buttons differ only by the glass ones; record the lines in "As built"). Diag log: no JS errors.
 - [ ] **Step 2: Phone check for Noah:** open a task (sheet at medium), drag up to large and down to close, tap the scrim; push a sub-task and edge-swipe back; edit the title and description (the keyboard keeps the sheet's header in view); swipe the drawer open and closed. Recorded in "As built" when done.
 - [x] **Step 3: Write the docs.**
-- [ ] **Step 4: Run** `cargo test`, UI `cargo test` + wasm check, `pnpm check`, `scripts/check-bindings.sh` → green.
-- [ ] **Step 5: Commit** `docs: React task view as built`, merge `react-task-view` `--no-ff` to `main`, push.
+- [x] **Step 4: Run** `cargo test`, UI `cargo test` + wasm check, `pnpm check`, `scripts/check-bindings.sh` → green.
+- [x] **Step 5: Commit** `docs: React task view as built`, merge `react-task-view` `--no-ff` to `main`, push.
 
 ## Left for later plans
 
