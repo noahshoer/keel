@@ -65,7 +65,8 @@ it("shows every section with the stored values", async () => {
   expect(screen.getByTitle("Tasks without a time").textContent).toContain("9 AM");
   expect(screen.getByTitle("Daily summary").textContent).toContain("Off");
   expect(diagSwitch().getAttribute("aria-checked")).toBe("false");
-  expect(document.querySelector(".modal")).toBe(document.activeElement);
+  // The focus effect runs after the commit that shows the values, so wait for it.
+  await waitFor(() => expect(document.activeElement).toBe(document.querySelector(".modal")));
   await waitFor(() =>
     expect(document.querySelector(".modal-foot")?.textContent).toBe(
       "Reminders appear while Keel is open on this computer.",
