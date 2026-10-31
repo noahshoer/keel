@@ -18,6 +18,7 @@ function fresh() {
     reminders: structuredClone(fx.reminders),
     reminderSettings: structuredClone(fx.reminderSettings),
     diag: false,
+    pageScrollHeld: false,
     nextId: 1,
   };
 }
@@ -27,6 +28,11 @@ let state = fresh();
 /** Back to the fixtures (tests call this before each case). */
 export function resetMock(): void {
   state = fresh();
+}
+
+/** Whether the page's scroll is held (`hold_page_scroll`), for tests. */
+export function mockPageScrollHeld(): boolean {
+  return state.pageScrollHeld;
 }
 
 const live = (t: Task) => !t.is_deleted;
@@ -293,6 +299,10 @@ const handlers: Handlers = {
     return null;
   },
   diag_log: async () => null,
+  hold_page_scroll: async ({ on }) => {
+    state.pageScrollHeld = on;
+    return null;
+  },
 };
 
 /** Each handler, returning a copy so callers can't change the mock's state. */

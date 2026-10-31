@@ -74,6 +74,7 @@ cd crates/src-tauri && cargo tauri build --no-bundle --debug --config tauri.reac
 - **Liquid Glass is parked** (Noah, 2026-10-30). The React app never calls `plugin:glass|*` and always takes the Dioxus no-glass paths (header menu button, inline forms, hover or long-press row actions). Its build doesn't load the glass plugin at all (`glass` feature off in `tauri.react.conf.json`), so no overlay is attached. The glass code stays for later. Parity on iPhone means parity with the Dioxus app's no-glass behavior.
 - Data rules come from `keel-core` through `web/src/core` (`dateGroups`, `upcomingTasks`, `dueBucket`, `deadlineUrgent`, `reminderLabel`, `allDone`, `cards`, …); TypeScript never compares a task's date to today. Command return types are generated (`web/src/bindings/Commands.ts`, from `crates/src-tauri/tests/commands_list.rs`).
 - Forms opened by a tap focus their field inside the tap (`web/src/shell/focus.ts`), so iOS raises the keyboard.
+- While the task view is open, Swift holds the page's scroll (`hold_page_scroll`, keel-ios `PageScroll.swift`; plan `docs/superpowers/plans/2026-10-30-page-scroll-hold.md`), so WebKit revealing a field in the sheet doesn't move the list under it. WebKit's keyboard handling is otherwise unchanged.
 - The screens reuse the Dioxus markup and class names, so `app.css` applies unchanged and `Demo.swift` and `scripts/sim-checks/*.js` find what they query (`.sidebar`, `.brand .theme-toggle`, `.task-row`, `.task-body`, `.task-content`, `.task-badges`, `.task-count`, `.task-project`).
 
 ## Conventions
