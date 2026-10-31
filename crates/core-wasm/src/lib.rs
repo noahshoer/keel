@@ -10,14 +10,16 @@
 //! Only data rules live here, and only as thin calls into `keel_core`: date
 //! strings are parsed here, everything else is `keel_core`'s.
 
-use chrono::{NaiveDate, NaiveTime, Weekday};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Weekday};
 use keel_core::calendar;
 use keel_core::editor::{self, EditorValues, Pick, ReminderDraft};
 use keel_core::ids::Id;
 use keel_core::model::{Label, Project, Reminder, Section, Task};
 use keel_core::quickadd;
 use keel_core::recurrence::Recurrence;
-use keel_core::reminders;
+use keel_core::import::todoist::ImportSummary;
+use keel_core::reminders::{self, ReminderSettings};
+use keel_core::settings::{self, MenuKind};
 use keel_core::task_view;
 use keel_core::views::{self, CardMode, DateGroupMode, Progress};
 use serde::de::DeserializeOwned;
@@ -35,6 +37,13 @@ fn parse_time(s: &str) -> Result<NaiveTime, String> {
     NaiveTime::parse_from_str(s, "%H:%M:%S")
         .or_else(|_| NaiveTime::parse_from_str(s, "%H:%M"))
         .map_err(|_| format!("invalid time \"{s}\": expected HH:MM or HH:MM:SS"))
+}
+
+/// Parses a `YYYY-MM-DDTHH:MM[:SS]` local date and time.
+fn parse_datetime(s: &str) -> Result<NaiveDateTime, String> {
+    NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+        .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M"))
+        .map_err(|_| format!("invalid date and time \"{s}\": expected YYYY-MM-DDTHH:MM[:SS]"))
 }
 
 fn input<T: DeserializeOwned>(name: &str, value: JsValue) -> Result<T, JsError> {
@@ -557,4 +566,43 @@ mod tests {
         assert_eq!(native_time(""), Some(None), "cleared");
         assert_eq!(native_time("5pm"), None, "not the input's format");
     }
+}
+
+/// `settings::reminder_menus`: the three reminder menus in Settings.
+#[wasm_bindgen(js_name = reminderMenus, unchecked_return_type = "import('../../bindings').ReminderMenus")]
+pub fn reminder_menus(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ReminderSettings")] settings: JsValue,
+) -> Result<JsValue, JsError> {
+    let settings: ReminderSettings = input("settings", settings)?;
+    output(&settings::reminder_menus(&settings))
+}
+
+/// `settings::pick_setting`: the settings after a pick in one menu.
+#[wasm_bindgen(js_name = pickSetting, unchecked_return_type = "import('../../bindings').ReminderSettings")]
+pub fn pick_setting(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ReminderSettings")] settings: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').MenuKind")] kind: JsValue,
+    value: &str,
+) -> Result<JsValue, JsError> {
+    let settings: ReminderSettings = input("settings", settings)?;
+    let kind: MenuKind = input("kind", kind)?;
+    output(&settings::pick_setting(&settings, kind, value))
+}
+
+/// `settings::upcoming_when` for a planned reminder's `at` and a
+/// `YYYY-MM-DD` today.
+#[wasm_bindgen(js_name = upcomingWhen)]
+pub fn upcoming_when(at: &str, today: &str) -> Result<String, JsError> {
+    let at = parse_datetime(at).map_err(|e| JsError::new(&e))?;
+    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    Ok(settings::upcoming_when(at, today))
+}
+
+/// `settings::import_line`: one imported file's result line.
+#[wasm_bindgen(js_name = importLine)]
+pub fn import_line(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ImportSummary")] summary: JsValue,
+) -> Result<String, JsError> {
+    let summary: ImportSummary = input("summary", summary)?;
+    Ok(settings::import_line(&summary))
 }
