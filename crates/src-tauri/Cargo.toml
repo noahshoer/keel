@@ -26,6 +26,6 @@ ts-rs = { version = "=11.1.0", optional = true }
 [features]
 # TypeScript bindings for the IPC types (web/src/bindings); off by default.
 ts = ["dep:ts-rs", "keel-core/ts", "keel-service/ts"]
-# The parked Liquid Glass controls (iOS). Only the Dioxus config
-# (tauri.conf.json) turns this on; the React build never loads the plugin.
+# The parked Liquid Glass controls (iOS). No config turns this on, so the app
+# never loads the plugin; it comes back with `--features glass`.
 glass = ["dep:tauri-plugin-glass"]

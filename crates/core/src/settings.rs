@@ -1,4 +1,4 @@
-//! What Settings shows about the data, shared by the Dioxus and React UIs:
+//! What Settings shows about the data, for the React UI:
 //! the reminder menus (choices, labels, which is checked), what a pick
 //! changes, when an upcoming reminder fires, and an import's result line.
 

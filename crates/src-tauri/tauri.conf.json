@@ -4,10 +4,16 @@
   "version": "0.1.0",
   "identifier": "com.nshoe.keel",
   "build": {
-    "frontendDist": "../ui/dist",
-    "features": [
-      "glass"
-    ]
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": {
+      "script": "pnpm dev",
+      "cwd": "../../web"
+    },
+    "frontendDist": "../../web/dist",
+    "beforeBuildCommand": {
+      "script": "pnpm build",
+      "cwd": "../../web"
+    }
   },
   "app": {
     "withGlobalTauri": true,

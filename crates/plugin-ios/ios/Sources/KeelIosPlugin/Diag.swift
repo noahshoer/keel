@@ -41,7 +41,7 @@ enum Diag {
 
   /// One line, written only while logging is on. `source` is "swift" for
   /// native lines; the page and Rust send theirs through `KeelIosPlugin.diag`, and
-  /// the glass plugin (Dioxus build only) posts its lines as `keel.diag.line`
+  /// the parked glass plugin (feature `glass` only) posts its lines as `keel.diag.line`
   /// notifications.
   static func log(_ text: String, source: String = "swift") {
     guard enabled else { return }

@@ -1,7 +1,7 @@
 //! The task editor's data rules, shared by every UI: the values it edits,
 //! the chip texts and menus, how a picked value or a typed title changes
-//! the values, and what adding or saving sends. The Dioxus editor, the glass
-//! card and the React editor (through `core-wasm`) all run this code.
+//! the values, and what adding or saving sends. The React editor (through
+//! `core-wasm`) and the parked glass card run this code.
 
 use chrono::{Datelike, Duration, NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};

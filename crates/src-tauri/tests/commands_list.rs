@@ -42,8 +42,8 @@ fn exports_command_names() {
     assert!(!names.iter().any(|x| x.contains("::")), "{names:?}");
 }
 
-/// Liquid Glass is parked for the React app: only the Dioxus config turns
-/// the `glass` feature on, so the React build never loads the plugin.
+/// Liquid Glass is parked: no config turns the `glass` feature on, so the
+/// app never loads the plugin, and Tauri serves the React app (`web/dist`).
 #[test]
 fn glass_is_opt_in() {
     let dir = env!("CARGO_MANIFEST_DIR");
@@ -53,11 +53,12 @@ fn glass_is_opt_in() {
     let default = cargo.lines().find(|l| l.starts_with("default =")).unwrap_or("default = []");
     assert!(!default.contains("glass"), "{default}");
 
-    let conf = |name: &str| -> serde_json::Value {
-        serde_json::from_str(&std::fs::read_to_string(format!("{dir}/{name}")).expect(name)).expect(name)
-    };
-    assert_eq!(conf("tauri.react.conf.json")["build"]["features"], serde_json::json!([]));
-    assert_eq!(conf("tauri.conf.json")["build"]["features"], serde_json::json!(["glass"]));
+    let conf: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(format!("{dir}/tauri.conf.json")).expect("tauri.conf.json"))
+            .expect("tauri.conf.json");
+    let features = &conf["build"]["features"];
+    assert!(features.is_null() || features == &serde_json::json!([]), "{features}");
+    assert_eq!(conf["build"]["frontendDist"], "../../web/dist");
 }
 
 /// The capabilities a build without glass loads never name the glass plugin.

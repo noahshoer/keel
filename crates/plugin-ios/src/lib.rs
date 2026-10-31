@@ -3,8 +3,8 @@
 //! through `window.keelKeyboard`), holding the page still under the task view
 //! (`PageScroll.swift`), and the simulator-check script runner
 //! (`Script.swift`, `KEEL_SCRIPT`). It draws no views. The Liquid Glass
-//! controls are a separate plugin (`tauri-plugin-glass`) that only the
-//! Dioxus build loads. On other platforms this plugin does nothing.
+//! controls are a separate, parked plugin (`tauri-plugin-glass`) that only a
+//! build with the `glass` feature loads. On other platforms this plugin does nothing.
 
 use tauri::{
     plugin::{Builder, TauriPlugin},
