@@ -17,4 +17,6 @@
 - Simulator (React build, iPhone 17): `page scroll held` / `page scroll free` in the diag log as the view opens and closes; `SV offset 0.0,0.0` while held, `0.0,200.0` once free.
 - A scroll asked for from the page itself (`window.scrollTo`) still moves the page's own scroll position while held (the web view's stays put); the app never does that, and WebKit's keyboard reveal moves the web view's.
 
-Phone check: pending (Noah).
+- The first keyboard after launch comes with no pace (`KB WillShowNotification … dur 0.0` in the phone log, `DidShow` 2 ms later), so the sheet jumped to large instead of sliding. With no pace it now slides at its own settle pace (0.3 s, `EASE`); `bottom` only transitions with a pace.
+
+Phone check (Noah, 2026-10-30): the list stays put under the sheet; the first keyboard's slide is being rechecked.

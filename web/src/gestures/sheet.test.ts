@@ -159,6 +159,16 @@ describe("keelKeyboard", () => {
     expect(el("sheet").classList.contains("tv-large")).toBe(true);
   });
 
+  it("slides at the sheet's own pace when the keyboard gives none", () => {
+    // The first keyboard after launch: iOS reports a 0 s animation.
+    window.keelKeyboard?.({ kb: 396, secs: 0, ease: "ease" });
+    // One transition, no "none" in the list (that would void it).
+    expect(el("sheet").style.transition).toBe("transform 0.3s cubic-bezier(.32,.72,0,1)");
+    expect(el("sheet").style.transform).toBe("translateY(0px)");
+    vi.advanceTimersByTime(300);
+    expect(el("sheet").style.transform).toBe("");
+  });
+
   it("does nothing elsewhere", () => {
     vi.mocked(currentPlatform).mockReturnValue("other");
     window.keelKeyboard?.({ kb: 328, secs: 0.25, ease: "ease" });
