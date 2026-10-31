@@ -5,6 +5,7 @@ import { useLoaded } from "../app/load";
 import type { View } from "../app/view";
 import { localToday } from "../clock";
 import { invoke } from "../ipc/invoke";
+import { TaskNavProvider } from "../taskview/nav";
 import { loadCoreForTests } from "../test/wasm";
 import { MainPane } from "./MainPane";
 
@@ -20,15 +21,17 @@ function Harness({ view, showCompleted = false }: { view: View; showCompleted?: 
   const { loaded } = useLoaded(view, completed, reloadKey);
   if (loaded === null) return null;
   return (
-    <MainPane
-      loaded={loaded}
-      showCompleted={completed}
-      onToggleCompleted={() => setCompleted((c) => !c)}
-      onOpenDrawer={() => {}}
-      motion="fade"
-      swap={0}
-      onChanged={() => setReloadKey((k) => k + 1)}
-    />
+    <TaskNavProvider all={loaded.all}>
+      <MainPane
+        loaded={loaded}
+        showCompleted={completed}
+        onToggleCompleted={() => setCompleted((c) => !c)}
+        onOpenDrawer={() => {}}
+        motion="fade"
+        swap={0}
+        onChanged={() => setReloadKey((k) => k + 1)}
+      />
+    </TaskNavProvider>
   );
 }
 

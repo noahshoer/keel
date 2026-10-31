@@ -23,6 +23,7 @@ use keel_core::quickadd::{QuickAdd, Span, SpanKind};
 use keel_core::recurrence::Recurrence;
 use keel_core::reminders::{PlannedReminder, ReminderSettings};
 use keel_core::search::SearchResults;
+use keel_core::task_view::{Field, FieldLayout, Missing, MissingPill, TaskDetail};
 use keel_core::views::{Card, CardMode, CardRow, DateGroup, DateGroupMode, DueBucket, Progress};
 use ts_rs::TS;
 
@@ -67,6 +68,8 @@ fn bindings_cover_ipc_types() {
         // the editor (the wasm boundary)
         EditorValues, EditorView, ReminderDraft, Pick, TaskPatch, LocationChoice, LocationKind, TitleSegment, PreviewChip,
         AddPlan, EditPlan,
+        // the task view (the wasm boundary)
+        Field, Missing, MissingPill, FieldLayout, TaskDetail,
         // query results
         PlannedReminder, ReminderSettings, SearchResults, FilterGroup, ImportSummary,
     );

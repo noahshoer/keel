@@ -13,6 +13,7 @@ import type {
   EditorValues,
   EditorView,
   EditPlan,
+  FieldLayout,
   Id,
   Label,
   MonthView,
@@ -23,6 +24,7 @@ import type {
   ReminderDraft,
   Section,
   Task,
+  TaskDetail,
 } from "../bindings";
 import init, * as core from "./pkg/keel_core_wasm.js";
 
@@ -133,6 +135,32 @@ export function progressShort(p: Progress): string {
   return core.progressShort(p);
 }
 
+/** A parent's sub-task count as "2 of 5". */
+export function progressLong(p: Progress): string {
+  ready();
+  return core.progressLong(p);
+}
+
+// The task view (keel_core::task_view).
+
+/** The fields card: set fields as rows, missing ones as pills. */
+export function fieldLayout(v: EditorValues, inboxId: Id): FieldLayout {
+  ready();
+  return core.fieldLayout(v, inboxId);
+}
+
+/** What one level of the task view renders; null for an unknown id. */
+export function taskDetail(id: Id, all: Task[], showCompleted: boolean): TaskDetail | null {
+  ready();
+  return core.taskDetail(id, all, showCompleted);
+}
+
+/** A task's ancestors from the top, then the task itself. */
+export function chain(id: Id, all: Task[]): Id[] {
+  ready();
+  return core.chain(id, all);
+}
+
 // The task editor (keel_core::editor). Every function takes and returns
 // whole values; the editor keeps them in state and re-renders from editorView.
 
@@ -215,6 +243,29 @@ export function unhighlightAt(
 export function locationPick(value: string): EditorPick {
   ready();
   return core.locationPick(value);
+}
+
+/** "Project" or "Project / Section"; "Inbox" for an unknown project. */
+export function locationText(
+  projectId: Id,
+  sectionId: Id | null,
+  projects: Project[],
+  sections: Section[],
+): string {
+  ready();
+  return core.locationText(projectId, sectionId, projects, sections);
+}
+
+/** A repeat rule as text: "Every Mon, Wed". */
+export function repeatText(rule: Recurrence): string {
+  ready();
+  return core.repeatText(rule);
+}
+
+/** A stored reminder as the editor edits it. */
+export function reminderDraftOf(r: Reminder): ReminderDraft {
+  ready();
+  return core.reminderDraftOf(r);
 }
 
 /** What adding the editor's task sends: new labels, the task, then its reminders. */

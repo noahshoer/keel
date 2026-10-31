@@ -3,49 +3,18 @@
 // is parsed as quick add with live highlighting and preview chips. Every
 // decision about the values is keel-core's (`editorView`, `applyPick`, …).
 import { type RefObject, useRef, useState } from "react";
-import type {
-  EditorPick,
-  EditorValues,
-  Label,
-  LocationKind,
-  Project,
-  Recurrence,
-  Section,
-  SpanKind,
-} from "../bindings";
+import type { EditorPick, EditorValues, Label, Project, Recurrence, Section, SpanKind } from "../bindings";
 import { localToday } from "../clock";
 import { applyPick, editorView, locationPick, toggleLabel, unhighlightAt, withTitle } from "../core";
-import {
-  FlagFilledIcon,
-  FlagSmallIcon,
-  HashSmallIcon,
-  InboxIcon,
-  RepeatSmallIcon,
-  SectionSmallIcon,
-} from "../shell/icons";
+import { FlagSmallIcon, HashSmallIcon, RepeatSmallIcon } from "../shell/icons";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
 import { HighlightedTitle } from "./HighlightedTitle";
+import { flagClass, locationItems, PRIORITY_ITEMS } from "./items";
 import { LabelPicker } from "./LabelPicker";
 import { Menu, type MenuItem } from "./Menu";
 import type { Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
-
-/** A priority's flag colour ("4" is no priority). */
-const flagClass = (priority: string) => (["1", "2", "3"].includes(priority) ? `pri-${priority}` : "pri-4");
-
-const PRIORITY_ITEMS: MenuItem[] = ["1", "2", "3", "4"].map((p) => ({
-  value: p,
-  label: `Priority ${p}`,
-  icon: <FlagFilledIcon />,
-  iconClass: flagClass(p),
-}));
-
-const LOCATION: Record<LocationKind, { icon: React.ReactNode; iconClass: string; indent: boolean }> = {
-  Inbox: { icon: <InboxIcon />, iconClass: "loc-inbox", indent: false },
-  Project: { icon: <HashSmallIcon />, iconClass: "loc-project", indent: false },
-  Section: { icon: <SectionSmallIcon />, iconClass: "loc-section", indent: true },
-};
 
 const PREVIEW: Record<SpanKind, string> = {
   Date: "chip-date",
@@ -123,11 +92,6 @@ export function TaskEditor({
     onSubmit(v);
   };
 
-  const locationItems: MenuItem[] = view.locations.map((c) => ({
-    value: c.value,
-    label: c.label,
-    ...LOCATION[c.kind],
-  }));
   const repeatItems: MenuItem[] = view.repeat_options.map(([value, label]) => ({ value, label }));
 
   return (
@@ -238,7 +202,7 @@ export function TaskEditor({
           title="Project / section"
           icon={<HashSmallIcon />}
           text={view.location_text}
-          items={locationItems}
+          items={locationItems(view.locations)}
           selected={view.location}
           open={open}
           setOpen={setOpen}

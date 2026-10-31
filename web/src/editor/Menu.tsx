@@ -2,7 +2,7 @@
 // (crates/ui/src/pickers.rs `Menu`): priority, repeat, project / section.
 import { type ReactNode, useRef } from "react";
 import { CheckSmallIcon, ChevronDownSmallIcon } from "../shell/icons";
-import { cx, type Pop, type PopProps } from "./pop";
+import { cx, type Face, type Pop, type PopProps } from "./pop";
 import { usePlacedPopover } from "./popover";
 
 export type MenuItem = {
@@ -62,6 +62,7 @@ export function Menu({
   open,
   setOpen,
   onSelect,
+  face,
 }: PopProps & {
   id: Exclude<Pop, null>;
   title: string;
@@ -71,21 +72,29 @@ export function Menu({
   items: MenuItem[];
   selected: string;
   onSelect: (value: string) => void;
+  /** The task view's look for the button. */
+  face?: Face;
 }) {
   const isOpen = open === id;
   return (
     <div className="chip-wrap">
       <button
         type="button"
-        className={cx("chip chip-btn", isOpen && "chip-open")}
+        className={cx(face?.className ?? "chip chip-btn", isOpen && "chip-open")}
         title={title}
         onClick={() => setOpen(isOpen ? null : id)}
       >
-        <span className={cx("chip-icon", iconClass)}>{icon}</span>
-        {text}
-        <span className="chip-caret">
-          <ChevronDownSmallIcon />
-        </span>
+        {face === undefined || face.icon ? <span className={cx("chip-icon", iconClass)}>{icon}</span> : null}
+        {face === undefined ? (
+          <>
+            {text}
+            <span className="chip-caret">
+              <ChevronDownSmallIcon />
+            </span>
+          </>
+        ) : (
+          face.text
+        )}
       </button>
       {isOpen ? (
         <MenuList

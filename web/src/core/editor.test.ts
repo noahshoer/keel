@@ -1,6 +1,7 @@
 // The editor's exports (keel_core::editor through crates/core-wasm), with
 // 2026-10-30 (a Friday) as today.
 import { beforeAll, describe, expect, it } from "vitest";
+import * as fx from "../ipc/fixtures";
 import { loadCoreForTests } from "../test/wasm";
 import {
   addPlan,
@@ -9,10 +10,13 @@ import {
   customReminderAt,
   editorView,
   editPlan,
+  locationText,
   monthNames,
   monthView,
   nativeTime,
   quickDates,
+  reminderDraftOf,
+  repeatText,
   shiftMonth,
   typedTime,
   unhighlightAt,
@@ -94,5 +98,23 @@ describe("editor over wasm", () => {
     expect(shiftMonth(2026, 12, 1)).toEqual([2027, 1]);
     expect(yearChoices(TODAY, 2026)[0]).toBe(2025);
     expect(monthNames()[0]).toBe("January");
+  });
+
+  it("the task view's texts: a rule, a location and a stored reminder", () => {
+    expect(repeatText({ Weekly: [0, 2] })).toBe("Every Mon, Wed");
+    expect(locationText("p-home", null, fx.projects, fx.sections)).toBe("Home");
+    expect(locationText("p-home", "s-chores", fx.projects, fx.sections)).toBe("Home / Chores");
+    expect(locationText("gone", null, fx.projects, fx.sections)).toBe("Inbox");
+    const relative = fx.reminders[0];
+    if (relative === undefined) throw new Error("no reminder fixture");
+    expect(reminderDraftOf(relative)).toEqual({ id: "r-laundry", minuteOffset: 30, at: null });
+    expect(
+      reminderDraftOf({
+        ...relative,
+        kind: "Absolute",
+        minute_offset: null,
+        due: { date: "2026-10-31T09:00:00", timezone: null, string: "", lang: "en", is_recurring: false },
+      }),
+    ).toEqual({ id: "r-laundry", minuteOffset: null, at: "2026-10-31T09:00" });
   });
 });

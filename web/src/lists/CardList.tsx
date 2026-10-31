@@ -2,6 +2,7 @@
 // and in dated views the sub-tasks that match sit inside their parent's card.
 import type { Card, CardRow, Id, Reminder } from "../bindings";
 import { ChevronRightIcon, FlagFilledIcon } from "../shell/icons";
+import { useTaskNav } from "../taskview/nav-context";
 import { dueChip, FLAG_CLASS } from "./chips";
 import { SubtaskCount, TaskRow } from "./TaskRow";
 
@@ -10,8 +11,12 @@ function CardHead({ row, today }: { row: CardRow; today: string }) {
   const { task, progress } = row;
   const flag = FLAG_CLASS[task.priority];
   const due = dueChip(task, today);
+  const nav = useTaskNav();
+  // Dioxus opens just [id]; the chain open is the same here, as card heads are top-level.
   return (
-    <div className="card-head" title="Open task">
+    // biome-ignore lint/a11y/useKeyWithClickEvents: same markup as the Dioxus UI.
+    // biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI.
+    <div className="card-head" title="Open task" onClick={() => nav.open(task.id)}>
       {flag !== null ? (
         <span className={flag}>
           <FlagFilledIcon />

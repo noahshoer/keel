@@ -1,7 +1,7 @@
 // The Deadline chip and its date-only scheduler
 // (crates/ui/src/pickers.rs `DeadlinePicker`).
 import { TargetSmallIcon } from "../shell/icons";
-import { cx, type PopProps } from "./pop";
+import { cx, type Face, type PopProps } from "./pop";
 import { Scheduler } from "./Scheduler";
 
 export function DeadlinePicker({
@@ -12,6 +12,7 @@ export function DeadlinePicker({
   open,
   setOpen,
   onChange,
+  face,
 }: PopProps & {
   /** `YYYY-MM-DD` or "". */
   deadline: string;
@@ -22,6 +23,8 @@ export function DeadlinePicker({
   today: string;
   /** `YYYY-MM-DD`, or "" to clear. */
   onChange: (date: string) => void;
+  /** The task view's look for the button. */
+  face?: Face;
 }) {
   const isOpen = open === "deadline";
   const state = urgent === null ? "deadline-chip" : urgent ? "deadline-chip urgent" : "deadline-chip set";
@@ -29,12 +32,12 @@ export function DeadlinePicker({
     <div className="chip-wrap">
       <button
         type="button"
-        className={cx("chip chip-btn", state, isOpen && "chip-open")}
+        className={cx(face?.className ?? `chip chip-btn ${state}`, isOpen && "chip-open")}
         title="Deadline: the date it must be done by"
         onClick={() => setOpen(isOpen ? null : "deadline")}
       >
-        <TargetSmallIcon />
-        {text}
+        {face === undefined || face.icon ? <TargetSmallIcon /> : null}
+        {face?.text ?? text}
       </button>
       {isOpen ? (
         <Scheduler

@@ -1,9 +1,12 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import type { CardRow, Reminder, Task } from "../bindings";
 import { localToday } from "../clock";
 import * as fx from "../ipc/fixtures";
 import { invoke } from "../ipc/invoke";
+import { TaskNavProvider } from "../taskview/nav";
+import { useTaskNav } from "../taskview/nav-context";
 import { loadCoreForTests } from "../test/wasm";
 import { CardList } from "./CardList";
 import { CompletedRow } from "./CompletedRow";
@@ -27,6 +30,19 @@ const fixture = (id: string): Task => {
   if (!t) throw new Error(id);
   return structuredClone(t);
 };
+/** The task view's nav, shown as "stack|add" so a test can read what a tap opened. */
+// biome-ignore lint/style/useComponentExportOnlyModules: a test probe, never hot-reloaded.
+function NavProbe() {
+  const nav = useTaskNav();
+  return <output data-testid="nav">{`${nav.stack.join(",")}|${nav.addSub ? "add" : ""}`}</output>;
+}
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <TaskNavProvider all={fx.tasks}>
+    {children}
+    <NavProbe />
+  </TaskNavProvider>
+);
+const opened = () => screen.getByTestId("nav").textContent;
 const row = (task: Task, progress: CardRow["progress"] = null): CardRow => ({ task, progress });
 const taskEl = (container: HTMLElement) => container.querySelector(".task");
 const circle = (container: HTMLElement) => {
@@ -47,6 +63,7 @@ function renderRow(task: Task, opts: { reminders?: Reminder[]; progress?: CardRo
       reminders={opts.reminders ?? []}
       onChanged={onChanged}
     />,
+    { wrapper },
   );
   return { ...view, onChanged };
 }
@@ -124,6 +141,7 @@ it("due chips are coloured by keel-core's bucket", () => {
         onChanged={() => {}}
       />
     </>,
+    { wrapper },
   );
   const chips = [...container.querySelectorAll(".task-meta > span:first-child")].map((e) => e.className);
   expect(chips).toEqual(["due overdue", "due today"]);
@@ -183,6 +201,7 @@ it("a completed row reopens from its filled check", async () => {
   const onChanged = vi.fn();
   const { container } = render(
     <CompletedRow task={fixture("t-done")} today={today} location="Home" onChanged={onChanged} />,
+    { wrapper },
   );
   expect(container.querySelector(".task")?.className).toBe("task completed");
   expect(container.querySelector(".done-when")?.textContent).toBe("Completed · Today");
@@ -203,6 +222,7 @@ it("a card whose head doesn't match shows it as context, with its sub-task rows"
       reminders={[]}
       onChanged={() => {}}
     />,
+    { wrapper },
   );
   const head = container.querySelector(".task-card > .card-head");
   expect(head?.querySelector(".pname")?.textContent).toBe("Do laundry");
@@ -237,4 +257,47 @@ it("a completion stops when its row goes away", async () => {
   await tick(1000);
   expect(await completed()).not.toContain("t-laundry");
   expect(onChanged).not.toHaveBeenCalled();
+});
+
+it("a row's body opens its task with its ancestors under it", () => {
+  const { container } = renderRow(fixture("t-bag"));
+  expect(opened()).toBe("|");
+  fireEvent.click(container.querySelector(".task-body") as HTMLElement);
+  expect(opened()).toBe("t-trip,t-bag|");
+});
+
+it("Add sub-task opens the task with its sub-task editor", () => {
+  renderRow(fixture("t-laundry"));
+  fireEvent.click(screen.getByTitle("Add sub-task"));
+  expect(opened()).toBe("t-laundry|add");
+});
+
+it("a card head opens its task", () => {
+  const { container } = render(
+    <CardList
+      cards={[
+        {
+          head: row(fixture("t-laundry"), { done: 0, total: 1 }),
+          head_matches: false,
+          rows: [row(fixture("t-sheets"))],
+        },
+      ]}
+      today={today}
+      locations={null}
+      reminders={[]}
+      onChanged={() => {}}
+    />,
+    { wrapper },
+  );
+  fireEvent.click(container.querySelector(".card-head") as HTMLElement);
+  expect(opened()).toBe("t-laundry|");
+});
+
+it("a completed row's body opens its task", () => {
+  const { container } = render(
+    <CompletedRow task={fixture("t-done")} today={today} location="Home" onChanged={() => {}} />,
+    { wrapper },
+  );
+  fireEvent.click(container.querySelector(".task-body") as HTMLElement);
+  expect(opened()).toBe("t-done|");
 });

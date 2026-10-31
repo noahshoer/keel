@@ -1,8 +1,7 @@
 // One task in a list: the markup and behavior of crates/ui/src/task_row.rs
 // `TaskRow` without its glass parts (Liquid Glass is parked). Tapping the
 // circle completes the task after the fill and switch-off; the body opens
-// the task view, and Add sub-task opens it adding, both once the task view
-// exists (Plan 5).
+// the task view, and Add sub-task opens it adding.
 import { useContext, useEffect, useRef, useState } from "react";
 import type { CardRow, Progress, Reminder } from "../bindings";
 import { allDone, deadlineUrgent, dueLabel, progressShort, reminderLabel } from "../core";
@@ -18,6 +17,7 @@ import {
   TargetSmallIcon,
   TrashIcon,
 } from "../shell/icons";
+import { useTaskNav } from "../taskview/nav-context";
 import { CHECK_CLASS, dueChip } from "./chips";
 import { CompletionIconContext, FILL_MS, nextOnTap, OFF_MS, type Phase, sleep } from "./completion";
 import { StreakPanel } from "./StreakPanel";
@@ -59,6 +59,7 @@ export function TaskRow({
 }) {
   const { task, progress } = row;
   const icon = useContext(CompletionIconContext);
+  const nav = useTaskNav();
   const [phase, setPhase] = useState<Phase>(0);
   const [panel, setPanel] = useState(false);
   // A tap while filled cancels: each start bumps `gen`, and pending steps
@@ -131,7 +132,9 @@ export function TaskRow({
         >
           <DoneMark icon={icon} />
         </button>
-        <div className="task-body" title="Open task">
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: same markup as the Dioxus UI. */}
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI. */}
+        <div className="task-body" title="Open task" onClick={() => nav.open(task.id)}>
           <div className="task-title">
             <div className="task-content">{task.content}</div>
           </div>
@@ -166,7 +169,12 @@ export function TaskRow({
           ) : null}
         </div>
         <div className="task-actions">
-          <button type="button" className="icon-btn" title="Add sub-task">
+          <button
+            type="button"
+            className="icon-btn"
+            title="Add sub-task"
+            onClick={() => nav.openAdding(task.id)}
+          >
             <SubtaskIcon />
           </button>
           {recurring ? (

@@ -5,6 +5,7 @@ import { loadCoreForTests } from "../test/wasm";
 import {
   allDone,
   cards,
+  chain,
   dateGroups,
   daySubtitle,
   deadlineUrgent,
@@ -12,11 +13,15 @@ import {
   dueDateOf,
   dueLabel,
   dueTime,
+  fieldLayout,
   progress,
+  progressLong,
   progressShort,
   reminderLabel,
+  taskDetail,
   timeLabel,
   upcomingTasks,
+  valuesFromTask,
 } from ".";
 
 beforeAll(() => {
@@ -170,5 +175,57 @@ describe("keel-core over wasm", () => {
     expect(daySubtitle("2026-10-30")).toBe("Friday 30 Oct");
     expect(daySubtitle("2026-11-01")).toBe("Sunday 1 Nov");
     expect(progressShort({ done: 2, total: 5 })).toBe("2/5");
+  });
+
+  it("field layout splits set fields from pills", () => {
+    const t = makeTask({
+      id: "t",
+      project_id: "p-inbox",
+      content: "A",
+      description: "Notes",
+      priority: "P2",
+      labels: ["errand"],
+      due: {
+        date: "2026-10-30",
+        string: "today",
+        is_recurring: false,
+        recurrence: null,
+        lang: "en",
+        timezone: null,
+      },
+    });
+    const out = fieldLayout(valuesFromTask(t), "p-inbox");
+    expect(out.fields).toEqual(["Description", "Date", "Priority", "Labels"]);
+    expect(out.missing.map((m) => m.label)).toEqual(["+ Repeat", "+ Deadline", "+ Reminders", "+ Location"]);
+  });
+
+  it("task detail hides checked sub-tasks unless asked", () => {
+    const parent = makeTask({ id: "p", project_id: "p-home", content: "Pack" });
+    const a = makeTask({ id: "a", project_id: "p-home", content: "A", parent_id: "p" });
+    const b = makeTask({
+      id: "b",
+      project_id: "p-home",
+      content: "B",
+      parent_id: "p",
+      checked: true,
+      child_order: 1,
+    });
+    const all = [parent, a, b];
+    const hidden = taskDetail("a", all, false);
+    expect(hidden?.parent?.id).toBe("p");
+    expect(taskDetail("p", all, false)?.visible).toHaveLength(1);
+    expect(taskDetail("p", all, true)?.visible).toHaveLength(2);
+    expect(taskDetail("nope", all, false)).toBeNull();
+  });
+
+  it("chain runs from the top parent down", () => {
+    const p = makeTask({ id: "P", project_id: "x", content: "P" });
+    const c = makeTask({ id: "C", project_id: "x", content: "C", parent_id: "P" });
+    const g = makeTask({ id: "G", project_id: "x", content: "G", parent_id: "C" });
+    expect(chain("G", [p, c, g])).toEqual(["P", "C", "G"]);
+  });
+
+  it("progress long reads 2 of 5", () => {
+    expect(progressLong({ done: 2, total: 5 })).toBe("2 of 5");
   });
 });

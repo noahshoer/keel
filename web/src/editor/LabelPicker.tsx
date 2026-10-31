@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import type { Label } from "../bindings";
 import { addLabel } from "../ipc/actions";
 import { TagSmallIcon } from "../shell/icons";
-import { cx, type PopProps } from "./pop";
+import { cx, type Face, type PopProps } from "./pop";
 import { usePlacedPopover } from "./popover";
 
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
@@ -64,6 +64,7 @@ export function LabelPicker({
   setOpen,
   onToggle,
   onChanged,
+  face,
 }: PopProps & {
   labels: Label[];
   /** The ticked names. */
@@ -73,20 +74,24 @@ export function LabelPicker({
   onToggle: (name: string) => void;
   /** After a label was created (reload the lists). */
   onChanged: () => void;
+  /** The task view's look for the button. */
+  face?: Face;
 }) {
   const isOpen = open === "labels";
   return (
     <div className="chip-wrap">
       <button
         type="button"
-        className={cx("chip chip-btn", isOpen && "chip-open")}
+        className={cx(face?.className ?? "chip chip-btn", isOpen && "chip-open")}
         title="Labels"
         onClick={() => setOpen(isOpen ? null : "labels")}
       >
-        <span className="chip-icon">
-          <TagSmallIcon />
-        </span>
-        {text}
+        {face === undefined || face.icon ? (
+          <span className="chip-icon">
+            <TagSmallIcon />
+          </span>
+        ) : null}
+        {face?.text ?? text}
       </button>
       {isOpen ? (
         <LabelMenu labels={labels} selected={selected} onToggle={onToggle} onChanged={onChanged} />

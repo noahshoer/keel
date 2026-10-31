@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 use keel_core::ids::Id;
 use keel_core::model::Task;
-use keel_core::views::{self, CardRow, Progress};
+use keel_core::views;
 
 /// Open tasks, oldest first. The last one is on screen.
 #[derive(Clone, Default, PartialEq, Debug)]
@@ -19,21 +19,7 @@ impl ViewStack {
     /// so Back walks up to the parent. The walk follows `parent_id` through
     /// live tasks in `all` and stops at a missing or deleted parent, or at a cycle.
     pub fn open_chain(&mut self, id: Id, all: &[Task]) {
-        let mut chain = vec![id];
-        loop {
-            let cur = chain.last().expect("chain starts non-empty");
-            let parent = all
-                .iter()
-                .find(|t| &t.id == cur)
-                .and_then(|t| t.parent_id.as_ref())
-                .and_then(|p| all.iter().find(|t| !t.is_deleted && &t.id == p));
-            match parent {
-                Some(p) if !chain.contains(&p.id) => chain.push(p.id.clone()),
-                _ => break,
-            }
-        }
-        chain.reverse();
-        self.0 = chain;
+        self.0 = views::chain(&id, all);
     }
 
     /// Opens a sub-task on top of the current task.
@@ -67,26 +53,7 @@ impl ViewStack {
     }
 }
 
-/// Everything one level of the view renders.
-#[derive(Clone, PartialEq, Debug)]
-pub struct TaskDetail {
-    pub task: Task,
-    pub parent: Option<Task>,
-    pub progress: Option<Progress>,
-    /// Direct sub-tasks in child order; checked ones only when `show_completed`.
-    pub visible: Vec<CardRow>,
-}
-
-pub fn detail(id: &Id, all: &[Task], show_completed: bool) -> Option<TaskDetail> {
-    let task = all.iter().find(|t| &t.id == id)?.clone();
-    let parent = task.parent_id.as_ref().and_then(|p| all.iter().find(|t| &t.id == p)).cloned();
-    let visible = views::children(id, all)
-        .into_iter()
-        .filter(|c| show_completed || !c.checked)
-        .map(|c| CardRow { task: c.clone(), progress: views::progress(&c.id, all) })
-        .collect();
-    Some(TaskDetail { progress: views::progress(id, all), task, parent, visible })
-}
+pub use keel_core::task_view::{detail, TaskDetail};
 
 /// Context shared by the whole app: the stack and the view's own show-completed toggle.
 #[derive(Clone, Copy)]
@@ -216,41 +183,11 @@ mod tests {
     }
 
     #[test]
-    fn open_chain_builds_ancestors() {
+    fn open_chain_replaces_the_stack_with_the_chain() {
         let all = vec![task("P", None, 0), task("C", Some("P"), 0), task("G", Some("C"), 0)];
         let mut s = stack(&["X"]);
         s.open_chain(id("G"), &all);
         assert_eq!(s, stack(&["P", "C", "G"]));
-    }
-
-    #[test]
-    fn open_chain_top_level_is_single() {
-        let all = vec![task("P", None, 0), task("C", Some("P"), 0)];
-        let mut s = ViewStack::default();
-        s.open_chain(id("P"), &all);
-        assert_eq!(s, stack(&["P"]));
-    }
-
-    #[test]
-    fn open_chain_stops_at_missing_parent() {
-        // B is gone (or deleted); C's chain starts at C.
-        let mut b = task("B", Some("A"), 0);
-        b.is_deleted = true;
-        let all = vec![task("A", None, 0), b, task("C", Some("B"), 0), task("D", Some("Z"), 0)];
-        let mut s = ViewStack::default();
-        s.open_chain(id("C"), &all);
-        assert_eq!(s, stack(&["C"]));
-        s.open_chain(id("D"), &all);
-        assert_eq!(s, stack(&["D"]));
-    }
-
-    #[test]
-    fn open_chain_cycle_terminates() {
-        let all = vec![task("A", Some("B"), 0), task("B", Some("A"), 0)];
-        let mut s = ViewStack::default();
-        s.open_chain(id("A"), &all);
-        assert_eq!(s.top(), Some(&id("A")));
-        assert!(s.0.len() <= 2);
     }
 
     #[test]
@@ -305,48 +242,5 @@ mod tests {
         let mut s = stack(&["A"]);
         s.prune(&all);
         assert_eq!(s, stack(&["A"]));
-        assert!(detail(&id("A"), &all, false).unwrap().task.checked);
-    }
-
-    #[test]
-    fn detail_hides_completed_unless_shown() {
-        let mut c = task("C", Some("P"), 0);
-        c.checked = true;
-        let all = vec![task("P", None, 0), task("S", Some("P"), 1), c];
-        let hidden = detail(&id("P"), &all, false).unwrap();
-        let ids: Vec<_> = hidden.visible.iter().map(|r| r.task.id.clone()).collect();
-        assert_eq!(ids, vec![id("S")]);
-        let shown = detail(&id("P"), &all, true).unwrap();
-        let ids: Vec<_> = shown.visible.iter().map(|r| r.task.id.clone()).collect();
-        assert_eq!(ids, vec![id("C"), id("S")]);
-    }
-
-    #[test]
-    fn detail_reflects_reloaded_tasks() {
-        let before = vec![task("P", None, 0), task("C", Some("P"), 0), task("S", Some("P"), 1)];
-        assert_eq!(detail(&id("P"), &before, false).unwrap().progress, Some(Progress { done: 0, total: 2 }));
-        let mut after = before.clone();
-        after[1].checked = true;
-        assert_eq!(detail(&id("P"), &after, false).unwrap().progress, Some(Progress { done: 1, total: 2 }));
-    }
-
-    #[test]
-    fn detail_none_for_missing() {
-        assert!(detail(&id("X"), &[task("A", None, 0)], false).is_none());
-    }
-
-    #[test]
-    fn detail_has_parent() {
-        let all = vec![task("P", None, 0), task("C", Some("P"), 0)];
-        let d = detail(&id("C"), &all, false).unwrap();
-        assert_eq!(d.parent.unwrap().id, id("P"));
-        assert!(detail(&id("P"), &all, false).unwrap().parent.is_none());
-    }
-
-    #[test]
-    fn visible_rows_carry_their_own_progress() {
-        let all = vec![task("P", None, 0), task("C", Some("P"), 0), task("G", Some("C"), 0)];
-        let d = detail(&id("P"), &all, false).unwrap();
-        assert_eq!(d.visible[0].progress, Some(Progress { done: 0, total: 1 }));
     }
 }

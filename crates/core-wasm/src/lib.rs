@@ -18,6 +18,7 @@ use keel_core::model::{Label, Project, Reminder, Section, Task};
 use keel_core::quickadd;
 use keel_core::recurrence::Recurrence;
 use keel_core::reminders;
+use keel_core::task_view;
 use keel_core::views::{self, CardMode, DateGroupMode, Progress};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -181,6 +182,46 @@ pub fn progress_short(
     Ok(progress.short())
 }
 
+/// `Progress::long`: "2 of 5".
+#[wasm_bindgen(js_name = progressLong)]
+pub fn progress_long(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Progress")] progress: JsValue,
+) -> Result<String, JsError> {
+    let progress: Progress = input("progress", progress)?;
+    Ok(progress.long())
+}
+
+/// `task_view::field_layout`: the fields card's rows and pills.
+#[wasm_bindgen(js_name = fieldLayout, unchecked_return_type = "import('../../bindings').FieldLayout")]
+pub fn field_layout(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] values: JsValue,
+    inbox_id: String,
+) -> Result<JsValue, JsError> {
+    let v: EditorValues = input("values", values)?;
+    output(&task_view::field_layout(&v, &Id::from(inbox_id)))
+}
+
+/// `task_view::detail`: what one level of the task view renders; `null` for an unknown id.
+#[wasm_bindgen(js_name = taskDetail, unchecked_return_type = "import('../../bindings').TaskDetail | null")]
+pub fn task_detail(
+    id: String,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] all: JsValue,
+    show_completed: bool,
+) -> Result<JsValue, JsError> {
+    let all: Vec<Task> = input("all", all)?;
+    output(&task_view::detail(&Id::from(id), &all, show_completed))
+}
+
+/// `views::chain`: a task's ancestors from the top, then the task itself.
+#[wasm_bindgen(js_name = chain, unchecked_return_type = "string[]")]
+pub fn chain(
+    id: String,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] all: JsValue,
+) -> Result<JsValue, JsError> {
+    let all: Vec<Task> = input("all", all)?;
+    output(&views::chain(&Id::from(id), &all))
+}
+
 /// A browser `<input type="time">` value: `""` (cleared) is `None`,
 /// `HH:MM[:SS]` is `Some(HH:MM)`; anything else isn't the input's format.
 fn native_time(v: &str) -> Option<Option<String>> {
@@ -311,6 +352,39 @@ pub fn unhighlight_at(
 #[wasm_bindgen(js_name = locationPick, unchecked_return_type = "import('../../bindings').EditorPick")]
 pub fn location_pick(value: &str) -> Result<JsValue, JsError> {
     output(&editor::location_pick(value))
+}
+
+/// `editor::location_text`: "Project" or "Project / Section" ("Inbox" for an unknown project).
+#[wasm_bindgen(js_name = locationText)]
+pub fn location_text(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id")] project_id: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id | null")] section_id: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
+) -> Result<String, JsError> {
+    let project_id: Id = input("projectId", project_id)?;
+    let section_id: Option<Id> = input("sectionId", section_id)?;
+    let projects: Vec<Project> = input("projects", projects)?;
+    let sections: Vec<Section> = input("sections", sections)?;
+    Ok(editor::location_text(&project_id, section_id.as_ref(), &projects, &sections))
+}
+
+/// `editor::repeat_text`: a rule as text ("Every Mon, Wed").
+#[wasm_bindgen(js_name = repeatText)]
+pub fn repeat_text(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence")] rule: JsValue,
+) -> Result<String, JsError> {
+    let rule: Recurrence = input("rule", rule)?;
+    Ok(editor::repeat_text(&rule))
+}
+
+/// `ReminderDraft::from_reminder`: a stored reminder as the editor edits it.
+#[wasm_bindgen(js_name = reminderDraftOf, unchecked_return_type = "import('../../bindings').ReminderDraft")]
+pub fn reminder_draft_of(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Reminder")] reminder: JsValue,
+) -> Result<JsValue, JsError> {
+    let reminder: Reminder = input("reminder", reminder)?;
+    output(&ReminderDraft::from_reminder(&reminder))
 }
 
 /// `editor::add_plan`: what adding the editor's task sends.

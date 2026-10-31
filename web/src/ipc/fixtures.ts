@@ -65,6 +65,7 @@ const dueOn = (date: string, text: string): Task["due"] => ({
 export const projects: Project[] = [
   project({ id: "p-inbox", name: "Inbox", color: "grey", is_inbox: true }),
   project({ id: "p-home", name: "Home", color: "green", child_order: 1, is_favorite: true }),
+  project({ id: "p-trip", name: "Trip", color: "blue", child_order: 2 }),
 ];
 
 export const sections: Section[] = [
@@ -122,6 +123,37 @@ export const tasks: Task[] = [
     content: "Take out the bins",
     checked: true,
     completed_at: NOW,
+  }),
+  // The task view's parent: three sub-tasks, one checked, one with its own.
+  makeTask({
+    id: "t-trip",
+    project_id: "p-trip",
+    content: "Pack for the trip",
+    due: dueOn(today, "today"),
+    labels: ["errand"],
+  }),
+  makeTask({
+    id: "t-passport",
+    project_id: "p-trip",
+    parent_id: "t-trip",
+    content: "Find the passport",
+    checked: true,
+    completed_at: NOW,
+  }),
+  makeTask({
+    id: "t-bag",
+    project_id: "p-trip",
+    parent_id: "t-trip",
+    content: "Pack the bag",
+    child_order: 1,
+  }),
+  makeTask({ id: "t-socks", project_id: "p-trip", parent_id: "t-bag", content: "Socks" }),
+  makeTask({
+    id: "t-tickets",
+    project_id: "p-trip",
+    parent_id: "t-trip",
+    content: "Print the tickets",
+    child_order: 2,
   }),
 ];
 

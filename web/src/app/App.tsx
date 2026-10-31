@@ -1,18 +1,25 @@
 // The app's frame and state, as the Dioxus `App` (crates/ui/src/main.rs):
 // which view is showing, reloads after each change, Show completed, the
-// drawer on narrow layouts, and the Search push / pop motion. Liquid Glass
-// is parked, so there are no glass buttons; the header's menu button opens
-// the drawer.
-import { useCallback, useEffect, useRef, useState } from "react";
+// drawer on narrow layouts (swipes open and close it), the Search push / pop
+// motion, and the task view's sheet. Liquid Glass is parked, so there are no
+// glass buttons; the header's menu button opens the drawer.
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { localToday } from "../clock";
 import { installLongPress } from "../gestures/long-press";
+import { installSheet } from "../gestures/sheet";
+import { drawerSwipe } from "../gestures/sheet-rules";
+import { installSwipe } from "../gestures/swipe";
 import { CompletionIconContext, savedIcon } from "../lists/completion";
 import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
 import { SearchPane } from "../screens/SearchPane";
 import { Sidebar } from "../shell/Sidebar";
 import { applyTheme, savedTheme, type Theme } from "../shell/theme";
-import { useLoaded } from "./load";
+import { TaskNavProvider } from "../taskview/nav";
+import { useTaskNav } from "../taskview/nav-context";
+import { prune as pruned, top } from "../taskview/stack";
+import { TaskSheet } from "../taskview/TaskSheet";
+import { type Loaded, useLoaded } from "./load";
 import { isSearchShortcut, isTyping } from "./shortcuts";
 import { type Motion, sameView, type View, viewKey, viewMotion } from "./view";
 
@@ -32,6 +39,18 @@ export function App() {
 
   // Touch: a long press shows a row's actions.
   useEffect(() => installLongPress(document), []);
+  // Touch: swipe right opens the drawer, swipe left closes it. Installed
+  // once, so the handler reads the drawer through a ref.
+  const drawerNow = useRef(drawer);
+  drawerNow.current = drawer;
+  useEffect(
+    () =>
+      installSwipe(document, (s) => {
+        const open = drawerSwipe(s, drawerNow.current);
+        if (open !== null) setDrawer(open);
+      }),
+    [],
+  );
 
   // "/" (when not typing) or Ctrl/Cmd+K opens Search and focuses the box.
   useEffect(() => {
@@ -113,6 +132,7 @@ export function App() {
           setTheme={setTheme}
           onChanged={reload}
         />
+        <TaskSheet loaded={loaded} onChanged={reload} />
         <MainPane
           loaded={loaded}
           showCompleted={showCompleted}
@@ -140,14 +160,51 @@ export function App() {
 
   return (
     <CompletionIconContext.Provider value={icon}>
-      <div className={drawer ? "app drawer-open" : "app"}>
-        {drawer ? (
-          // biome-ignore lint/a11y/useKeyWithClickEvents: the scrim is a pointer target; Escape isn't part of the Dioxus drawer.
-          // biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI.
-          <div className="drawer-scrim" onClick={() => setDrawer(false)} />
-        ) : null}
-        {body}
-      </div>
+      <TaskNavProvider all={loaded?.all ?? []}>
+        <Frame loaded={loaded} drawer={drawer} onCloseDrawer={() => setDrawer(false)}>
+          {body}
+        </Frame>
+      </TaskNavProvider>
     </CompletionIconContext.Provider>
+  );
+}
+
+/** The `.app` element, inside the task view's nav: its classes, the drawer scrim, and the sheet's listeners. */
+function Frame({
+  loaded,
+  drawer,
+  onCloseDrawer,
+  children,
+}: {
+  loaded: Loaded | null;
+  drawer: boolean;
+  onCloseDrawer: () => void;
+  children: ReactNode;
+}) {
+  const nav = useTaskNav();
+  // Touch: the task sheet follows the finger between its two heights and
+  // closes past a threshold (through the view, which saves first). Installed
+  // once: removing it would drop a slide-close still under way.
+  const askClose = useRef(nav.askClose);
+  askClose.current = nav.askClose;
+  useEffect(() => installSheet(document, window, () => askClose.current()), []);
+  // A deleted task's view closes, and every view above it.
+  const { prune } = nav;
+  useEffect(() => {
+    if (loaded !== null) prune(loaded.all);
+  }, [loaded, prune]);
+
+  // Open while a task on the stack still exists, judged from the stack as
+  // pruned against this load (the same pass the sheet draws from).
+  const viewOpen = loaded !== null && top(pruned(nav.stack, loaded.all)) !== null;
+  return (
+    <div className={`app${drawer ? " drawer-open" : ""}${viewOpen ? " view-open" : ""}`}>
+      {drawer ? (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: the scrim is a pointer target; Escape isn't part of the Dioxus drawer.
+        // biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI.
+        <div className="drawer-scrim" onClick={onCloseDrawer} />
+      ) : null}
+      {children}
+    </div>
   );
 }
