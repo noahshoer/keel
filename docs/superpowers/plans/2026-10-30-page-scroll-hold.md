@@ -17,6 +17,6 @@
 - Simulator (React build, iPhone 17): `page scroll held` / `page scroll free` in the diag log as the view opens and closes; `SV offset 0.0,0.0` while held, `0.0,200.0` once free.
 - A scroll asked for from the page itself (`window.scrollTo`) still moves the page's own scroll position while held (the web view's stays put); the app never does that, and WebKit's keyboard reveal moves the web view's.
 
-- The first keyboard after launch comes with no pace (`KB WillShowNotification … dur 0.0` in the phone log, `DidShow` 2 ms later), so the sheet jumped to large instead of sliding. With no pace it now slides at its own settle pace (0.3 s, `EASE`); `bottom` only transitions with a pace.
+- The first keyboard after launch comes with no pace (`KB WillShowNotification … dur 0.0` in the phone log, `DidShow` 2 ms later), so the sheet jumped to large instead of sliding. Swift now sends the usual pace for a keyboard coming up that reports none (the last pace seen, or iOS's 0.3833 s, at Keel's 0.9 speed: 0.426 s), so the sheet slides with it; Noah found the sheet's own 0.3 s too fast. The page's fallback for a pace of 0 (its own settle, 0.3 s) stays for safety; `bottom` only transitions with a pace.
 
 Phone check (Noah, 2026-10-30): the list stays put under the sheet; the first keyboard's slide is being rechecked.
