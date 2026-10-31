@@ -200,3 +200,24 @@ it("picking a view in the drawer closes it once the view has loaded", async () =
   await waitFor(() => expect(title()).toBe("Inbox"));
   await waitFor(() => expect(container.querySelector(".app")?.className).toBe("app"));
 });
+
+it("the gear opens Settings and × closes it", async () => {
+  await start();
+  expect(document.querySelector(".modal")).toBeNull();
+  fireEvent.click(sidebar().querySelector(".settings-btn") as HTMLElement);
+  await screen.findByText("Task reminders");
+  expect(document.querySelector(".modal-head h2")?.textContent).toBe("Settings");
+  fireEvent.click(within(document.querySelector(".modal-head") as HTMLElement).getByTitle("Close"));
+  expect(document.querySelector(".modal")).toBeNull();
+});
+
+it("a mark picked in Settings is the one rows complete with", async () => {
+  await start();
+  fireEvent.click(sidebar().querySelector(".settings-btn") as HTMLElement);
+  await screen.findByText("Task reminders");
+  fireEvent.click(screen.getByTitle("Pine"));
+  fireEvent.click(within(document.querySelector(".modal-head") as HTMLElement).getByTitle("Close"));
+  const row = screen.getByText("Do laundry").closest(".task-row") as HTMLElement;
+  // The pine's viewBox, as DoneMark draws it in the circle.
+  expect(row.querySelector(".check svg.done-mark")?.getAttribute("viewBox")).toBe("20 12 24 22");
+});

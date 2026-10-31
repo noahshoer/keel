@@ -29,7 +29,7 @@ export function App() {
   const [reloadKey, setReloadKey] = useState(0);
   const [showCompleted, setShowCompleted] = useState(false);
   const [drawer, setDrawer] = useState(false);
-  const [icon] = useState(savedIcon);
+  const [icon, setIcon] = useState(savedIcon);
   const [theme, setTheme] = useState<Theme>(savedTheme);
   // Applied and remembered on every change (main.tsx applies the saved one before the first paint).
   useEffect(() => applyTheme(theme), [theme]);
@@ -131,6 +131,8 @@ export function App() {
           loaded={loaded}
           theme={theme}
           setTheme={setTheme}
+          icon={icon}
+          setIcon={setIcon}
           onChanged={reload}
         />
         <TaskSheet loaded={loaded} onChanged={reload} />
