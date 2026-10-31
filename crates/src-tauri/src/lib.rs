@@ -183,6 +183,13 @@ async fn test_notification(_args: NoArgs, app: tauri::AppHandle) -> Result<(), S
         .map_err(|e| e.to_string())
 }
 
+/// Holds the page's scroll while the task view is open (iOS; see
+/// `tauri_plugin_keel_ios::hold_page_scroll`). Async: it calls into Swift.
+#[tauri::command(rename_all = "snake_case")]
+async fn hold_page_scroll(args: HoldPageScrollArgs, app: tauri::AppHandle) -> Result<(), String> {
+    tauri_plugin_keel_ios::hold_page_scroll(&app, args.on)
+}
+
 /// The app was renamed from "todo-planner" (identifier `com.nshoe.todoplanner`,
 /// store `todo.db`). On first launch as Keel, copy that store into the new
 /// data dir so existing tasks carry over. The old copy is left in place.
@@ -258,7 +265,8 @@ pub fn run() {
             diag::set_diag_enabled,
             diag::diag_log,
             request_notification_permission,
-            test_notification
+            test_notification,
+            hold_page_scroll
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

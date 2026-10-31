@@ -396,7 +396,11 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
     sheet.classList.add("tv-large");
     place(p, dragFrom("medium", settling, p.M), 0);
     sheet.getBoundingClientRect();
-    sheet.style.transition = s > 0 ? `transform ${s}s ${ease}, ${bottom}` : "none";
+    // The first keyboard after launch comes with no pace (iOS reports a 0 s
+    // animation): the sheet still slides, at its own settle pace.
+    const slide = s > 0 ? `transform ${s}s ${ease}` : reduce() ? "" : `transform ${SETTLE_S}s ${EASE}`;
+    const slideS = s > 0 ? s : reduce() ? 0 : SETTLE_S;
+    sheet.style.transition = [slide, s > 0 ? bottom : ""].filter(Boolean).join(", ") || "none";
     sheet.style.transform = "translateY(0px)";
     viewport();
     const mine = seq;
@@ -409,7 +413,7 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
         sc.style.transition = "none";
         sc.style.opacity = "";
       }
-    }, s * 1000);
+    }, slideS * 1000);
   };
 
   const passive = { passive: true, capture: true } as const;

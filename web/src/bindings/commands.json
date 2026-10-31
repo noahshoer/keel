@@ -9,6 +9,7 @@
   "dispatch",
   "filter_view",
   "get_reminder_settings",
+  "hold_page_scroll",
   "import_todoist_csv",
   "label_view",
   "list_filters",

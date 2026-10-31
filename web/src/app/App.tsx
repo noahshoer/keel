@@ -9,6 +9,7 @@ import { installLongPress } from "../gestures/long-press";
 import { installSheet } from "../gestures/sheet";
 import { drawerSwipe } from "../gestures/sheet-rules";
 import { installSwipe } from "../gestures/swipe";
+import { invoke } from "../ipc/invoke";
 import { CompletionIconContext, savedIcon } from "../lists/completion";
 import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
@@ -197,6 +198,15 @@ function Frame({
   // Open while a task on the stack still exists, judged from the stack as
   // pruned against this load (the same pass the sheet draws from).
   const viewOpen = loaded !== null && top(pruned(nav.stack, loaded.all)) !== null;
+  // iOS: WebKit scrolls the whole page to reveal a field focused in the
+  // sheet, moving the list under it; Swift holds the page still while a view
+  // is open (keel-ios PageScroll). Sent only when it changes.
+  const held = useRef(false);
+  useEffect(() => {
+    if (held.current === viewOpen) return;
+    held.current = viewOpen;
+    invoke("hold_page_scroll", { on: viewOpen }).catch(() => {});
+  }, [viewOpen]);
   return (
     <div className={`app${drawer ? " drawer-open" : ""}${viewOpen ? " view-open" : ""}`}>
       {drawer ? (

@@ -103,6 +103,12 @@ pub struct SetDiagEnabledArgs {
 
 #[derive(Debug, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct HoldPageScrollArgs {
+    pub on: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct DiagLogArgs {
     pub source: String,
     pub msg: String,

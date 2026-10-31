@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, expect, it } from "vitest";
+import { mockPageScrollHeld } from "../ipc/mock";
 import { setWidth, touch } from "../test/touch";
 import { loadCoreForTests } from "../test/wasm";
 import { App } from "./App";
@@ -59,6 +60,19 @@ it("a row's body opens the task view; the scrim closes it at desktop width", asy
   await waitFor(() => expect(container.querySelector(".tv-sheet")).toBeNull());
   expect(container.querySelector(".tv-scrim")).toBeNull();
   expect(appClass(container)).toBe("app");
+});
+
+it("the page under the task view holds still while it's open", async () => {
+  // iOS: WebKit scrolls the page to reveal a field focused in the sheet;
+  // Swift holds it (keel-ios PageScroll) while the view is open.
+  setWidth(1024);
+  const { container } = render(<App />);
+  await screen.findByText("Do laundry");
+  expect(mockPageScrollHeld()).toBe(false);
+  fireEvent.click(rowOf(container, "t-laundry").querySelector(".task-body") as HTMLElement);
+  await waitFor(() => expect(mockPageScrollHeld()).toBe(true));
+  fireEvent.click(container.querySelector(".tv-scrim") as HTMLElement);
+  await waitFor(() => expect(mockPageScrollHeld()).toBe(false));
 });
 
 it("deleting the open task from its row closes the sheet after the reload", async () => {
