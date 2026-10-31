@@ -1,72 +1,16 @@
 //! Settings window (gear in the sidebar header): notification preferences.
 //! Notifications are per device, so these never sync.
 
-use chrono::{NaiveTime, Timelike};
 use dioxus::prelude::*;
-use keel_core::reminders::{PlannedReminder, ReminderSettings};
-use keel_core::views;
+use keel_core::reminders::ReminderSettings;
+use keel_core::settings::{self as rules, MenuKind, SettingMenu};
 
 use crate::api;
 use crate::icons::{self, Icon};
 use crate::pickers::{Menu, MenuItem, OpenPop};
 
-fn hm(h: u32, m: u32) -> NaiveTime {
-    NaiveTime::from_hms_opt(h, m, 0).expect("valid time")
-}
-
-/// Menu value for an optional time ("off" or "HH:MM").
-fn time_value(t: Option<NaiveTime>) -> String {
-    t.map(|t| format!("{:02}:{:02}", t.hour(), t.minute())).unwrap_or_else(|| "off".to_string())
-}
-
-fn parse_time_value(v: &str) -> Option<NaiveTime> {
-    NaiveTime::parse_from_str(v, "%H:%M").ok()
-}
-
-fn time_items(off_label: &str, times: &[NaiveTime]) -> Vec<MenuItem> {
-    std::iter::once(MenuItem::new("off", off_label))
-        .chain(times.iter().map(|t| MenuItem::new(time_value(Some(*t)), views::time_label(*t))))
-        .collect()
-}
-
-fn offset_label(m: i64) -> String {
-    match m {
-        0 => "At the due time".to_string(),
-        60 => "1 hour before".to_string(),
-        m => format!("{m} minutes before"),
-    }
-}
-
-/// "Travel: 12 tasks, 2 sections, 3 new labels, 1 date kept as text".
-fn import_line(s: &keel_core::import::todoist::ImportSummary) -> String {
-    let plural = |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
-    let mut parts = vec![plural(s.tasks, "task", "tasks")];
-    if s.sections > 0 {
-        parts.push(plural(s.sections, "section", "sections"));
-    }
-    if s.labels_created > 0 {
-        parts.push(plural(s.labels_created, "new label", "new labels"));
-    }
-    if s.comments > 0 {
-        parts.push(plural(s.comments, "comment", "comments"));
-    }
-    if s.kept_as_text > 0 {
-        parts.push(format!("{} kept as text in the description", plural(s.kept_as_text, "date", "dates")));
-    }
-    format!("{}: {}", s.project_name, parts.join(", "))
-}
-
-/// "Today 5 PM", "Tue 9 AM", "3 Nov 9 AM".
-fn when_text(r: &PlannedReminder) -> String {
-    let today = crate::today();
-    let date = r.at.date();
-    let day = match (date - today).num_days() {
-        0 => "Today".to_string(),
-        1 => "Tomorrow".to_string(),
-        2..=6 => date.format("%a").to_string(),
-        _ => views::due_label(date, today),
-    };
-    format!("{day} {}", views::time_label(r.at.time()))
+fn items(menu: &SettingMenu) -> Vec<MenuItem> {
+    menu.items.iter().map(|c| MenuItem::new(c.value.clone(), c.label.clone())).collect()
 }
 
 /// How reminders reach this device: the OS holds them on iPhone; the
@@ -120,7 +64,7 @@ pub fn SettingsDialog(on_close: EventHandler<()>, reload: Signal<u32>) -> Elemen
     let mut permission = use_signal(String::new);
     let mut when_closed = use_signal(|| None::<bool>);
     let mut diag_on = use_signal(|| false);
-    let mut upcoming = use_signal(Vec::<PlannedReminder>::new);
+    let mut upcoming = use_signal(Vec::<keel_core::reminders::PlannedReminder>::new);
     let mut message = use_signal(|| None::<String>);
     let mut open: OpenPop = use_signal(|| None);
 
@@ -191,12 +135,7 @@ pub fn SettingsDialog(on_close: EventHandler<()>, reload: Signal<u32>) -> Elemen
         }
     };
 
-    let offsets = [0i64, 5, 10, 15, 30, 60];
-    let offset_items: Vec<MenuItem> = offsets.iter().map(|m| MenuItem::new(m.to_string(), offset_label(*m))).collect();
-    let all_day_items = time_items("No reminder", &[hm(7, 0), hm(8, 0), hm(9, 0), hm(10, 0), hm(12, 0), hm(18, 0)]);
-    let summary_items = time_items("Off", &[hm(6, 30), hm(7, 0), hm(7, 30), hm(8, 0), hm(9, 0)]);
-    let all_day_text = s.all_day_time.map(views::time_label).unwrap_or_else(|| "No reminder".to_string());
-    let summary_text = s.daily_summary.map(views::time_label).unwrap_or_else(|| "Off".to_string());
+    let menus = rules::reminder_menus(&s);
     let (s1, s2, s3) = (s.clone(), s.clone(), s.clone());
     let enabled = s.enabled;
 
@@ -252,11 +191,11 @@ pub fn SettingsDialog(on_close: EventHandler<()>, reload: Signal<u32>) -> Elemen
                             id: "offset",
                             title: "Remind me",
                             icon: icons::clock_small(),
-                            text: offset_label(s.offset_minutes),
-                            items: offset_items,
-                            selected: s.offset_minutes.to_string(),
+                            text: menus.offset.text.clone(),
+                            items: items(&menus.offset),
+                            selected: menus.offset.selected.clone(),
                             open,
-                            on_select: move |v: String| save(ReminderSettings { offset_minutes: v.parse().unwrap_or(0), ..s1.clone() }),
+                            on_select: move |v: String| save(rules::pick_setting(&s1, MenuKind::Offset, &v)),
                         }
                     }
                     div { class: "setting-row",
@@ -265,11 +204,11 @@ pub fn SettingsDialog(on_close: EventHandler<()>, reload: Signal<u32>) -> Elemen
                             id: "allday",
                             title: "Tasks without a time",
                             icon: icons::calendar_small(),
-                            text: all_day_text,
-                            items: all_day_items,
-                            selected: time_value(s.all_day_time),
+                            text: menus.all_day.text.clone(),
+                            items: items(&menus.all_day),
+                            selected: menus.all_day.selected.clone(),
                             open,
-                            on_select: move |v: String| save(ReminderSettings { all_day_time: parse_time_value(&v), ..s2.clone() }),
+                            on_select: move |v: String| save(rules::pick_setting(&s2, MenuKind::AllDay, &v)),
                         }
                     }
                     div { class: "setting-row",
@@ -281,11 +220,11 @@ pub fn SettingsDialog(on_close: EventHandler<()>, reload: Signal<u32>) -> Elemen
                             id: "summary",
                             title: "Daily summary",
                             icon: icons::sun(),
-                            text: summary_text,
-                            items: summary_items,
-                            selected: time_value(s.daily_summary),
+                            text: menus.summary.text.clone(),
+                            items: items(&menus.summary),
+                            selected: menus.summary.selected.clone(),
                             open,
-                            on_select: move |v: String| save(ReminderSettings { daily_summary: parse_time_value(&v), ..s3.clone() }),
+                            on_select: move |v: String| save(rules::pick_setting(&s3, MenuKind::Summary, &v)),
                         }
                     }
                     div { class: "setting-row",
@@ -310,7 +249,7 @@ pub fn SettingsDialog(on_close: EventHandler<()>, reload: Signal<u32>) -> Elemen
                         ul { class: "upcoming-list",
                             for r in upcoming().iter() {
                                 li { key: "{r.id}",
-                                    span { class: "upcoming-when", "{when_text(r)}" }
+                                    span { class: "upcoming-when", "{rules::upcoming_when(r.at, crate::today())}" }
                                     span { class: "upcoming-title",
                                         if r.task_id.is_some() { "{r.title}" } else { "Daily summary · {r.body}" }
                                     }
@@ -376,7 +315,7 @@ pub fn SettingsDialog(on_close: EventHandler<()>, reload: Signal<u32>) -> Elemen
                                         let line = match files.read_file_to_string(&name).await {
                                             None => (false, format!("{project}: couldn't read the file")),
                                             Some(text) => match api::import_todoist_csv(&project, &text).await {
-                                                Ok(s) => (true, import_line(&s)),
+                                                Ok(s) => (true, rules::import_line(&s)),
                                                 Err(e) => (false, format!("{project}: {e}")),
                                             },
                                         };
