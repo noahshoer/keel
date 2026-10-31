@@ -22,6 +22,22 @@ export function savedIcon(): CompletionIcon {
   }
 }
 
+/** Remembers this device's choice. */
+export function saveIcon(icon: CompletionIcon): void {
+  try {
+    localStorage.setItem("completion-icon", icon);
+  } catch {
+    // Private mode: the choice still applies for this session.
+  }
+}
+
+/** The name Settings shows for each mark. */
+export function iconLabel(icon: CompletionIcon): string {
+  if (icon === "pine") return "Pine";
+  if (icon === "reflection") return "Pine + reflection";
+  return "Waterline";
+}
+
 /** The mark every row's circle uses (App provides the saved one). */
 export const CompletionIconContext = createContext<CompletionIcon>("wave");
 

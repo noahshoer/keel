@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from "vitest";
-import { COMPLETION_ICONS, FILL_MS, nextOnTap, OFF_MS, savedIcon } from "./completion";
+import { COMPLETION_ICONS, FILL_MS, iconLabel, nextOnTap, OFF_MS, savedIcon, saveIcon } from "./completion";
 
 afterEach(() => {
   localStorage.clear();
@@ -28,4 +28,10 @@ it("a tap starts, cancels during the fill, and is ignored during the switch-off"
   expect(nextOnTap(0)).toBe("start");
   expect(nextOnTap(1)).toBe("cancel");
   expect(nextOnTap(2)).toBe("ignore");
+});
+
+it("a saved icon is the one read back, with its label", () => {
+  saveIcon("pine");
+  expect(savedIcon()).toBe("pine");
+  expect(COMPLETION_ICONS.map(iconLabel)).toEqual(["Waterline", "Pine", "Pine + reflection"]);
 });
