@@ -14,13 +14,17 @@ import {
   dueLabel,
   dueTime,
   fieldLayout,
+  importLine,
+  pickSetting,
   progress,
   progressLong,
   progressShort,
   reminderLabel,
+  reminderMenus,
   taskDetail,
   timeLabel,
   upcomingTasks,
+  upcomingWhen,
   valuesFromTask,
 } from ".";
 
@@ -227,5 +231,42 @@ describe("keel-core over wasm", () => {
 
   it("progress long reads 2 of 5", () => {
     expect(progressLong({ done: 2, total: 5 })).toBe("2 of 5");
+  });
+});
+
+describe("settings", () => {
+  const settings = { enabled: true, offset_minutes: 0, all_day_time: "09:00:00", daily_summary: null };
+
+  it("reminder menus select a stored time with seconds", () => {
+    const m = reminderMenus(settings);
+    expect(m.all_day.selected).toBe("09:00");
+    expect(m.all_day.text).toBe("9 AM");
+    expect(m.summary.selected).toBe("off");
+    expect(m.offset.items.map((i) => i.label)[1]).toBe("5 minutes before");
+  });
+
+  it("a pick changes one setting", () => {
+    const next = pickSetting(settings, "Summary", "07:30");
+    expect(next.daily_summary).toBe("07:30:00");
+    expect(next.all_day_time).toBe("09:00:00");
+    expect(pickSetting(settings, "Offset", "15").offset_minutes).toBe(15);
+  });
+
+  it("upcoming times read from today", () => {
+    expect(upcomingWhen("2026-10-30T17:00:00", "2026-10-30")).toBe("Today 5 PM");
+    expect(upcomingWhen("2026-10-31T09:30:00", "2026-10-30")).toBe("Tomorrow 9:30 AM");
+  });
+
+  it("an import line counts what was created", () => {
+    const line = importLine({
+      project_id: "p",
+      project_name: "Travel",
+      tasks: 2,
+      sections: 1,
+      labels_created: 0,
+      comments: 0,
+      kept_as_text: 0,
+    });
+    expect(line).toBe("Travel: 2 tasks, 1 section");
   });
 });

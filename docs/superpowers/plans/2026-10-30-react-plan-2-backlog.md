@@ -8,7 +8,7 @@ Carried over from the React foundation (plan `2026-10-29-react-foundation.md`, m
 - ~~**Generated return types.**~~ `web/src/ipc/commands.ts` hand-writes each command's return type. Generate them from Rust (ts-rs or a `commands.json` extension) so a changed return shape fails `tsc`.
 - ~~**`describe()` can throw.**~~ `web/src/diag.ts` and `crates/ui/src/diag.rs` throw on circular objects and BigInt, so logging such a value loses the log line. Fix both.
 - ~~**Today's missing pieces.**~~ Due-chip colours, the Overdue split, and the all-done state need `dueBucket` / `allDone` from `keel-core` (exported through `crates/core-wasm`) plus core grouping. No date logic in TypeScript.
-- **Remaining screens.** ~~Task view~~, ~~editor and quick add~~, Settings, ~~the drawer's swipes and the other gestures~~ (Plans 3 and 5), then the cutover (`tauri.conf.json` → `web/dist`, remove `crates/ui`).
+- **Remaining screens.** ~~Task view~~, ~~editor and quick add~~, ~~Settings~~ (Plan 6), ~~the drawer's swipes and the other gestures~~ (Plans 3 and 5), then the cutover (`tauri.conf.json` → `web/dist`, remove `crates/ui`).
 
 ## Minor (from the task reviews)
 

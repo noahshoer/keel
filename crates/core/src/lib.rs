@@ -10,6 +10,7 @@ pub mod recurrence;
 pub mod reminders;
 pub mod repository;
 pub mod search;
+pub mod settings;
 pub mod streak;
 pub mod task_view;
 pub mod views;

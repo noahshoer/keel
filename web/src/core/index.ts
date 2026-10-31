@@ -15,13 +15,17 @@ import type {
   EditPlan,
   FieldLayout,
   Id,
+  ImportSummary,
   Label,
+  MenuKind,
   MonthView,
   Progress,
   Project,
   Recurrence,
   Reminder,
   ReminderDraft,
+  ReminderMenus,
+  ReminderSettings,
   Section,
   Task,
   TaskDetail,
@@ -363,4 +367,30 @@ export function typedTime(text: string): string | null {
 export function nativeTime(value: string): string | null | undefined {
   ready();
   return core.nativeTime(value);
+}
+
+// Settings (keel_core::settings).
+
+/** The reminder menus: each one's choices, button text and checked value. */
+export function reminderMenus(s: ReminderSettings): ReminderMenus {
+  ready();
+  return core.reminderMenus(s);
+}
+
+/** The settings after picking `value` in one menu. */
+export function pickSetting(s: ReminderSettings, kind: MenuKind, value: string): ReminderSettings {
+  ready();
+  return core.pickSetting(s, kind, value);
+}
+
+/** When a planned reminder fires: "Today 5 PM", "Tue 9 AM". */
+export function upcomingWhen(at: string, today: string): string {
+  ready();
+  return core.upcomingWhen(at, today);
+}
+
+/** One imported file's result: "Travel: 12 tasks, 2 sections". */
+export function importLine(s: ImportSummary): string {
+  ready();
+  return core.importLine(s);
 }

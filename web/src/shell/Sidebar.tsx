@@ -1,7 +1,6 @@
 // The sidebar, with the markup and class names of crates/ui/src/sidebar.rs
 // so app.css applies unchanged: the fixed views, then projects, labels and
-// filters, each with its add form and row actions. The Settings button
-// opens Settings once it exists (Plan 6).
+// filters, each with its add form and row actions. The gear opens Settings.
 import { useRef, useState } from "react";
 import type { Loaded } from "../app/load";
 import type { View } from "../app/view";
@@ -16,6 +15,8 @@ import {
   renameProject,
   updateFilter,
 } from "../ipc/actions";
+import type { CompletionIcon } from "../lists/completion";
+import { Settings } from "../settings/Settings";
 import { FilterForm, FilterRow } from "./FilterForm";
 import { openAndFocus } from "./focus";
 import {
@@ -85,6 +86,8 @@ export function Sidebar({
   loaded,
   theme,
   setTheme,
+  icon,
+  setIcon,
   onChanged,
 }: {
   view: View;
@@ -93,8 +96,12 @@ export function Sidebar({
   theme: Theme;
   /** Takes the next theme from the current one (App applies it). */
   setTheme: (next: (t: Theme) => Theme) => void;
+  /** The completion mark, chosen in Settings. */
+  icon: CompletionIcon;
+  setIcon: (i: CompletionIcon) => void;
   onChanged: () => void;
 }) {
+  const [showSettings, setShowSettings] = useState(false);
   const [adding, setAdding] = useState<"project" | "label" | "filter" | null>(null);
   const projectField = useRef<HTMLInputElement>(null);
   const labelField = useRef<HTMLInputElement>(null);
@@ -136,10 +143,23 @@ export function Sidebar({
         >
           {themeIcon}
         </button>
-        <button type="button" className="icon-btn settings-btn" title="Settings">
+        <button
+          type="button"
+          className="icon-btn settings-btn"
+          title="Settings"
+          onClick={() => setShowSettings(true)}
+        >
           <GearIcon />
         </button>
       </div>
+      {showSettings ? (
+        <Settings
+          onClose={() => setShowSettings(false)}
+          onImported={onChanged}
+          icon={icon}
+          setIcon={setIcon}
+        />
+      ) : null}
       {fixed("search", <SearchIcon />, "Search")}
       {fixed("inbox", <InboxIcon />, "Inbox")}
       {fixed("today", <TodayIcon day={day} />, "Today")}
