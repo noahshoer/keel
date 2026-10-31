@@ -1,5 +1,5 @@
 //! What the task view shows, as data: the fields card's layout, the data one
-//! level renders, shared by the Dioxus and React UIs.
+//! level renders, for the React UI.
 
 use serde::Serialize;
 

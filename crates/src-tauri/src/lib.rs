@@ -213,7 +213,7 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_keel_ios::init());
-    // Liquid Glass is parked: only the Dioxus build (feature `glass`) loads it.
+    // Liquid Glass is parked: only a build with the `glass` feature loads it.
     #[cfg(feature = "glass")]
     let builder = builder.plugin(tauri_plugin_glass::init());
     builder
