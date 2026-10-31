@@ -136,4 +136,17 @@
 
 ## As built
 
-(Filled in at the end.)
+Deviations from this plan:
+
+- `completion.ts` also gained `iconLabel` (the mark names Settings shows), next to `saveIcon`.
+- Settings is rendered inside `.sidebar`, as in Dioxus. On the phone the sidebar is the drawer, so the dialog shows while the drawer is open, which is always the case when the gear is tapped. `scripts/sim-checks/settings.js` opens the drawer first for the same reason.
+- Steps were ticked by running them; the checkboxes above stay as written.
+
+Checked in the simulator (React build, iPhone 17, test data, 2026-10-30), `scripts/sim-checks/settings.js`:
+
+- `modal: true sections Notifications / Appearance / Diagnostics / Import`
+- `switches: Task reminders=false, Diagnostics logging=true`, `menus: At the due time / 9 AM / Off`, `upcoming: 0 rows`, `marks: Waterline*, Pine, Pine + reflection`, `foot: Reminders arrive even when Keel is closed.`
+- `menu open: true items 6`, `after Escape: menu false modal true`, `after second Escape: modal false`
+- Screenshot: the dialog over the open drawer in dark mode with the "Remind me" menu open. The diag log has no JS errors.
+
+Phone check (Task 6 step 2): pending, for Noah. Turn reminders on (the system prompt the first time), change each menu, send a test notification, pick a mark and complete a task, toggle diagnostics, import a Todoist CSV.
