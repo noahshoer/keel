@@ -197,6 +197,7 @@ Deviations from this plan:
 - `FieldControl` takes a `MissingPill`, so a pill's label comes from core.
 - `window.keelSheetViewport` isn't ported: nothing calls it.
 - `edgeBackAction` drops the unused `x` parameter.
+- The sheet and `.app.view-open` draw from the stack pruned against the current load in the render itself (`prune` in `TaskSheet` and `Frame`; the effect still stores it), as Dioxus prunes in the loader: deleting an open sub-task makes its parent active in the same sheet instead of closing and reopening it.
 - No `pnpm dev` browser walk for Task 7 (no Chrome on this Mac). The simulator checks below cover the sheet.
 
 Checked in the simulator (React build, iPhone 17, test data, 2026-10-30), the same `[check]` lines as the Dioxus build gave on 2026-10-28 except for the header buttons:

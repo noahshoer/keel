@@ -348,7 +348,8 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
   };
 
   // The keyboard: keep the sheet in the visible area above it. Only on a
-  // touch device at 1x: a desktop pinch-zoom mustn't lift the sheet.
+  // touch device at 1x: a desktop pinch-zoom mustn't lift the sheet. A
+  // touch-screen Windows laptop counts too, harmlessly: --kb is 0 at 1x there.
   // `kbHold`: the height of a keyboard still coming up, standing in until the
   // visual viewport (resized only once it's up) has caught up (`keyboardInset`).
   const touchDevice = () => currentPlatform() === "touch";

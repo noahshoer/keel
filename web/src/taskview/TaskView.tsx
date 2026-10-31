@@ -163,9 +163,11 @@ export function TaskView({
     setBase(after);
     void settle(save({ before, after })).then(onChanged);
   };
-  const pick = (p: EditorPick) => saveValues(applyPick(baseRef.current, p, false, projects, sections, today));
+  // Today at pick time, as Dioxus reads it: a view left open past midnight.
+  const pick = (p: EditorPick) =>
+    saveValues(applyPick(baseRef.current, p, false, projects, sections, localToday()));
   const toggle = (name: string) =>
-    saveValues(toggleLabel(baseRef.current, name, false, projects, sections, today));
+    saveValues(toggleLabel(baseRef.current, name, false, projects, sections, localToday()));
 
   const completeHere = () => {
     if (!nav.holdCircles()) return;

@@ -12,6 +12,7 @@ function CardHead({ row, today }: { row: CardRow; today: string }) {
   const flag = FLAG_CLASS[task.priority];
   const due = dueChip(task, today);
   const nav = useTaskNav();
+  // Dioxus opens just [id]; the chain open is the same here, as card heads are top-level.
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: same markup as the Dioxus UI.
     // biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI.

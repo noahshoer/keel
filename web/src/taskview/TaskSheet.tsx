@@ -9,7 +9,7 @@ import type { Id, Task, TaskDetail } from "../bindings";
 import { taskDetail } from "../core";
 import { slideClose } from "../gestures/sheet";
 import { useTaskNav } from "./nav-context";
-import { top, under } from "./stack";
+import { prune, top, under } from "./stack";
 import { TaskView } from "./TaskView";
 
 /**
@@ -36,11 +36,15 @@ function useDetails(all: Task[], showCompleted: boolean): (id: Id | null) => Tas
 export function TaskSheet({ loaded, onChanged }: { loaded: Loaded; onChanged: () => void }) {
   const nav = useTaskNav();
   const detail = useDetails(loaded.all, nav.showCompleted);
-  const open = detail(top(nav.stack));
+  // Drawn from the stack as pruned against this load (App stores it after
+  // the render), as Dioxus prunes in the loader: a deleted sub-task's parent
+  // becomes active in place instead of the sheet closing for a render.
+  const stack = prune(nav.stack, loaded.all);
+  const open = detail(top(stack));
   if (open === null) return null;
   // The view under it too, when a sub-task is on top: it stays mounted
   // (hidden) so the edge swipe slides it in, and a Back keeps it as is.
-  const below = detail(under(nav.stack));
+  const below = detail(under(stack));
   const levels: Array<{ d: TaskDetail; active: boolean }> = [{ d: open, active: true }];
   if (below !== null) levels.unshift({ d: below, active: false });
   return (
@@ -61,7 +65,7 @@ export function TaskSheet({ loaded, onChanged }: { loaded: Loaded; onChanged: ()
             <TaskView
               key={d.task.id}
               detail={d}
-              depth={nav.stack.length - (active ? 0 : 1)}
+              depth={stack.length - (active ? 0 : 1)}
               active={active}
               loaded={loaded}
               onChanged={onChanged}

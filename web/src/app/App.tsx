@@ -17,7 +17,7 @@ import { Sidebar } from "../shell/Sidebar";
 import { applyTheme, savedTheme, type Theme } from "../shell/theme";
 import { TaskNavProvider } from "../taskview/nav";
 import { useTaskNav } from "../taskview/nav-context";
-import { top } from "../taskview/stack";
+import { prune as pruned, top } from "../taskview/stack";
 import { TaskSheet } from "../taskview/TaskSheet";
 import { type Loaded, useLoaded } from "./load";
 import { isSearchShortcut, isTyping } from "./shortcuts";
@@ -194,9 +194,9 @@ function Frame({
     if (loaded !== null) prune(loaded.all);
   }, [loaded, prune]);
 
-  // Open while the task on top still exists (the sheet shows nothing otherwise).
-  const topId = top(nav.stack);
-  const viewOpen = topId !== null && loaded?.all.some((t) => t.id === topId) === true;
+  // Open while a task on the stack still exists, judged from the stack as
+  // pruned against this load (the same pass the sheet draws from).
+  const viewOpen = loaded !== null && top(pruned(nav.stack, loaded.all)) !== null;
   return (
     <div className={`app${drawer ? " drawer-open" : ""}${viewOpen ? " view-open" : ""}`}>
       {drawer ? (

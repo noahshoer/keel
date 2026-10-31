@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, expect, it } from "vitest";
 import { setWidth, touch } from "../test/touch";
 import { loadCoreForTests } from "../test/wasm";
@@ -70,6 +70,31 @@ it("deleting the open task from its row closes the sheet after the reload", asyn
   fireEvent.click(rowOf(container, "t-laundry").querySelector('[title="Delete task"]') as HTMLElement);
   await waitFor(() => expect(container.querySelector(".tv-sheet")).toBeNull());
   expect(appClass(container)).toBe("app");
+});
+
+it("deleting a sub-task from its ••• makes the parent active in the same sheet", async () => {
+  setWidth(1024);
+  const { container } = render(<App />);
+  await screen.findByText("Do laundry");
+  fireEvent.click(rowOf(container, "t-laundry").querySelector(".task-body") as HTMLElement);
+  const sheet = container.querySelector(".tv-sheet");
+  const parentView = sheet?.querySelector('.task-view[data-view-id="t-laundry"]');
+  fireEvent.click(parentView?.querySelector(".tv-sub .tv-sub-body") as HTMLElement);
+  const child = () => container.querySelector('.task-view[data-view-id="t-sheets"]');
+  expect(child()?.className).toContain("task-view");
+  // Every class the app takes from here on: the view stays open throughout.
+  const app = container.querySelector(".app") as HTMLElement;
+  const classes: string[] = [];
+  const watch = new MutationObserver(() => classes.push(app.className));
+  watch.observe(app, { attributes: true, attributeFilter: ["class"] });
+  fireEvent.click(child()?.querySelector(".tv-more") as HTMLElement);
+  fireEvent.click(within(child() as HTMLElement).getByText("Delete task"));
+  await waitFor(() => expect(child()).toBeNull());
+  watch.disconnect();
+  expect(container.querySelector(".tv-sheet")).toBe(sheet);
+  expect(container.querySelector(".tv-stack > .task-view")).toBe(parentView);
+  expect(container.querySelector(".tv-under")).toBeNull();
+  expect(classes.every((c) => c.includes("view-open"))).toBe(true);
 });
 
 it("on a phone, a swipe right opens the drawer and a swipe left closes it", async () => {

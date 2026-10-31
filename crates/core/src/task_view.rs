@@ -97,6 +97,7 @@ pub fn field_layout(v: &EditorValues, inbox_id: &Id) -> FieldLayout {
     }
     FieldLayout { fields, missing }
 }
+
 /// Everything one level of the view renders.
 #[derive(Clone, PartialEq, Debug, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
