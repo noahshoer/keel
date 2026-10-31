@@ -11,7 +11,7 @@ const swipe = async (dx) => {
   for (let i = 1; i <= 8; i++) { await sleep(16); touch('touchmove', 6 + (dx * i) / 8, y); }
   touch('touchend', 6 + dx, y);
 };
-const title = () => document.querySelector('.tv-sheet .tv-title, .tv-sheet textarea, .tv-sheet input')?.value ?? '?';
+const title = () => document.querySelector('.tv-sheet .task-view:not(.tv-under) .tv-title textarea')?.value ?? '?';
 document.querySelector('.task-body').click();
 await sleep(3000);
 document.querySelector('.tv-sub-body').click();
