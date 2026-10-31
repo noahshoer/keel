@@ -77,3 +77,11 @@
 ### Task 5: Phone pass (Noah)
 
 - [ ] `/deploy-keel`, then the open phone checks in CLAUDE.md: tap-target sizes, the keyboard covering the editor, the task view's packing flow (open a task, add and complete sub-tasks), whether "+ Description" raises the keyboard, the card circle's hit area. Findings become a follow-up plan.
+
+## As built (2026-10-30)
+
+- Tasks 1–4 done. The simulator build from the base config bundles the React app (`#root .sidebar` present, no `#main`); `cargo test` (289), `pnpm check` (306 Vitest) and `cargo tauri build --no-bundle --debug` pass.
+- Sim-checks: all eight remaining scenarios pass on the iPhone 17 simulator. `edge-back.js` printed `?` for the title in both builds (its selector matched the `.tv-title` wrapper div); it now reads the top view's textarea.
+- `glass_is_opt_in` (`crates/src-tauri/tests/commands_list.rs`) now asserts the base config has no features and serves `../../web/dist`.
+- The `crates/ui/src/…` provenance comments in `web/src` stay; they name the Dioxus code in history.
+- Task 5 (phone pass) is Noah's.
