@@ -101,6 +101,17 @@ pub fn progress(
     output(&views::progress(&parent, &all))
 }
 
+/// `views::label_groups`: a task's labels grouped by color, in added order.
+#[wasm_bindgen(js_name = labelGroups, unchecked_return_type = "import('../../bindings').LabelGroup[]")]
+pub fn label_groups(
+    #[wasm_bindgen(unchecked_param_type = "string[]")] task_labels: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Label[]")] labels: JsValue,
+) -> Result<JsValue, JsError> {
+    let task_labels: Vec<String> = input("task_labels", task_labels)?;
+    let labels: Vec<Label> = input("labels", labels)?;
+    output(&views::label_groups(&task_labels, &labels))
+}
+
 /// `views::cards`: groups a view's matched tasks into cards.
 #[wasm_bindgen(js_name = cards, unchecked_return_type = "import('../../bindings').Card[]")]
 pub fn cards(

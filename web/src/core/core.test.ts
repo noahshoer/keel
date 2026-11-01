@@ -15,6 +15,7 @@ import {
   dueTime,
   fieldLayout,
   importLine,
+  labelGroups,
   pickSetting,
   progress,
   progressLong,
@@ -268,5 +269,15 @@ describe("settings", () => {
       kept_as_text: 0,
     });
     expect(line).toBe("Travel: 2 tasks, 1 section");
+  });
+});
+
+describe("labelGroups", () => {
+  it("groups a task's labels by color, unknown names as the default", () => {
+    const label = { id: "l", name: "a", color: "red", item_order: 0, is_favorite: false, is_deleted: false };
+    expect(labelGroups(["zzz", "A"], [label])).toEqual([
+      { color: "charcoal", names: ["zzz"] },
+      { color: "red", names: ["A"] },
+    ]);
   });
 });

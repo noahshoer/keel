@@ -34,6 +34,7 @@ export type * from "./Id";
 export type * from "./ImportSummary";
 export type * from "./ImportTodoistCsvArgs";
 export type * from "./Label";
+export type * from "./LabelGroup";
 export type * from "./LabelViewArgs";
 export type * from "./ListSectionsArgs";
 export type * from "./ListTasksArgs";

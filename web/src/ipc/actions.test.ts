@@ -12,6 +12,7 @@ import {
   renameLabel,
   renameProject,
   renameSection,
+  setLabelColor,
   setStreak,
   uncompleteTask,
   updateFilter,
@@ -75,6 +76,8 @@ it("streaks, projects, labels, sections and filters change through dispatch", as
   const label = (await invoke("list_labels", {})).find((l) => l.name === "garden");
   await renameLabel(label?.id ?? "", "yard");
   expect((await invoke("list_labels", {})).map((l) => l.name)).toContain("yard");
+  await setLabelColor(label?.id ?? "", "red");
+  expect((await invoke("list_labels", {})).find((l) => l.name === "yard")?.color).toBe("red");
 
   const f = await addFilter("Soon", "7 days");
   const fid = Object.values(f.id_mapping)[0] ?? "";

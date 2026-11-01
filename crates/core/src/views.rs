@@ -5,7 +5,7 @@ use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
-use crate::model::Task;
+use crate::model::{Label, Task};
 
 /// Which colored due chip a date gets, relative to today.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -186,6 +186,34 @@ pub fn children<'a>(parent: &Id, all: &'a [Task]) -> Vec<&'a Task> {
 pub struct CardRow {
     pub task: Task,
     pub progress: Option<Progress>,
+}
+
+/// A task's labels of one color, for the row's one tag per color.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct LabelGroup {
+    pub color: String,
+    pub names: Vec<String>,
+}
+
+/// The color of a label with no record (deleted, or never created).
+const DEFAULT_LABEL_COLOR: &str = "charcoal";
+
+/// A task's labels grouped by color. Groups come in the order their first
+/// label was added, and names keep their added order and the task's spelling.
+pub fn label_groups(task_labels: &[String], labels: &[Label]) -> Vec<LabelGroup> {
+    let mut groups: Vec<LabelGroup> = Vec::new();
+    for name in task_labels {
+        let color = labels
+            .iter()
+            .find(|l| !l.is_deleted && l.name.eq_ignore_ascii_case(name))
+            .map_or(DEFAULT_LABEL_COLOR, |l| l.color.as_str());
+        match groups.iter_mut().find(|g| g.color == color) {
+            Some(group) => group.names.push(name.clone()),
+            None => groups.push(LabelGroup { color: color.to_string(), names: vec![name.clone()] }),
+        }
+    }
+    groups
 }
 
 /// A head task and the matched rows grouped under it. `head_matches == false`
@@ -1018,5 +1046,73 @@ mod chain_tests {
         let c = chain(&id("A"), &all);
         assert_eq!(c.last(), Some(&id("A")));
         assert!(c.len() <= 2);
+    }
+}
+
+#[cfg(test)]
+mod label_group_tests {
+    use super::{label_groups, LabelGroup};
+    use crate::ids::Id;
+    use crate::model::Label;
+
+    fn label(name: &str, color: &str) -> Label {
+        Label {
+            id: Id::from(name),
+            name: name.to_string(),
+            color: color.to_string(),
+            item_order: 0,
+            is_favorite: false,
+            is_deleted: false,
+        }
+    }
+
+    fn all() -> Vec<Label> {
+        vec![label("a", "red"), label("b", "red"), label("c", "blue"), label("d", "charcoal")]
+    }
+
+    fn groups(names: &[&str], labels: &[Label]) -> Vec<(String, Vec<String>)> {
+        let names: Vec<String> = names.iter().map(|n| n.to_string()).collect();
+        label_groups(&names, labels).into_iter().map(|LabelGroup { color, names }| (color, names)).collect()
+    }
+
+    fn g(color: &str, names: &[&str]) -> (String, Vec<String>) {
+        (color.to_string(), names.iter().map(|n| n.to_string()).collect())
+    }
+
+    #[test]
+    fn groups_in_the_order_their_first_label_was_added() {
+        assert_eq!(
+            groups(&["c", "a", "d", "b"], &all()),
+            vec![g("blue", &["c"]), g("red", &["a", "b"]), g("charcoal", &["d"])]
+        );
+    }
+
+    #[test]
+    fn removing_a_groups_first_label_keeps_added_order() {
+        assert_eq!(groups(&["a", "d", "b"], &all()), vec![g("red", &["a", "b"]), g("charcoal", &["d"])]);
+        assert_eq!(groups(&["d", "b", "a"], &all()), vec![g("charcoal", &["d"]), g("red", &["b", "a"])]);
+    }
+
+    #[test]
+    fn an_unknown_name_groups_as_the_default_keeping_its_spelling() {
+        assert_eq!(groups(&["zzz"], &all()), vec![g("charcoal", &["zzz"])]);
+        assert_eq!(groups(&["zzz", "d"], &all()), vec![g("charcoal", &["zzz", "d"])]);
+    }
+
+    #[test]
+    fn a_deleted_label_counts_as_unknown() {
+        let mut labels = all();
+        labels[0].is_deleted = true;
+        assert_eq!(groups(&["a"], &labels), vec![g("charcoal", &["a"])]);
+    }
+
+    #[test]
+    fn names_match_case_insensitively_keeping_the_tasks_spelling() {
+        assert_eq!(groups(&["A"], &all()), vec![g("red", &["A"])]);
+    }
+
+    #[test]
+    fn no_labels_no_groups() {
+        assert_eq!(groups(&[], &all()), vec![]);
     }
 }

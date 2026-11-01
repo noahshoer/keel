@@ -17,6 +17,7 @@ import type {
   Id,
   ImportSummary,
   Label,
+  LabelGroup,
   MenuKind,
   MonthView,
   Progress,
@@ -95,6 +96,12 @@ export function cards(matched: Task[], all: Task[], mode: CardMode): Card[] {
 export function dueBucket(due: string, today: string): DueBucket {
   ready();
   return core.dueBucket(due, today);
+}
+
+/** A task's labels grouped by color, in added order. */
+export function labelGroups(taskLabels: string[], labels: Label[]): LabelGroup[] {
+  ready();
+  return core.labelGroups(taskLabels, labels);
 }
 
 /** True when there is at least one counted sub-task and all are checked. */
