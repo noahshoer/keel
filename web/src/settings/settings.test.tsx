@@ -74,6 +74,28 @@ it("shows every section with the stored values", async () => {
   );
 });
 
+it("runs Notifications, Appearance, Import, Diagnostics, each in one card", async () => {
+  backend();
+  render(<Settings onClose={() => {}} onImported={() => {}} icon="wave" setIcon={() => {}} />);
+  await screen.findByText("Task reminders");
+  const heads = [...document.querySelectorAll(".modal-section")];
+  expect(heads.map((h) => h.textContent)).toEqual(["Notifications", "Appearance", "Import", "Diagnostics"]);
+  for (const head of heads) expect(head.nextElementSibling?.className).toBe("settings-card");
+  expect(document.querySelectorAll(".settings-card")).toHaveLength(4);
+  for (const row of document.querySelectorAll(".setting-row")) {
+    expect(row.closest(".settings-card")).not.toBeNull();
+  }
+});
+
+it("Back closes it too, for the phone's full screen", async () => {
+  backend();
+  const onClose = vi.fn();
+  render(<Settings onClose={onClose} onImported={() => {}} icon="wave" setIcon={() => {}} />);
+  await screen.findByText("Task reminders");
+  fireEvent.click(screen.getByRole("button", { name: "Back" }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
 it("the delivery note follows reminders_when_closed", async () => {
   backend({ reminders_when_closed: async () => true });
   await open();

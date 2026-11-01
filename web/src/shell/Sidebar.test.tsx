@@ -280,7 +280,7 @@ it("the gear opens Settings and × closes it", async () => {
   expect(document.querySelector(".modal")).toBeNull();
   fireEvent.click(sidebar().querySelector(".settings-btn") as HTMLElement);
   await screen.findByText("Task reminders");
-  expect(document.querySelector(".modal-head h2")?.textContent).toBe("Settings");
+  expect(document.querySelector(".modal-title")?.textContent).toBe("Settings");
   fireEvent.click(within(document.querySelector(".modal-head") as HTMLElement).getByTitle("Close"));
   expect(document.querySelector(".modal")).toBeNull();
 });

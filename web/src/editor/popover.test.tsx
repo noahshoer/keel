@@ -37,6 +37,40 @@ export function Picker() {
   return <div ref={ref} className="popover" />;
 }
 
+export function ChipPicker() {
+  const ref = useRef<HTMLDivElement>(null);
+  usePlacedPopover(ref);
+  return (
+    <div>
+      <button type="button">chip</button>
+      <div ref={ref} className="popover" />
+    </div>
+  );
+}
+
+describe("usePlacedPopover by its chip", () => {
+  it("places again when a step makes it taller, so it stays on screen", async () => {
+    const { container } = render(<ChipPicker />);
+    const chip = container.querySelector("button") as HTMLElement;
+    const pop = container.querySelector(".popover") as HTMLElement;
+    chip.getBoundingClientRect = () => rect(20, 500, 80, 30) as DOMRect;
+    pop.getBoundingClientRect = () => rect(0, 0, 280, 400) as DOMRect;
+    pop.appendChild(document.createElement("div"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // jsdom's window is 768 tall: 536 + 400 won't fit below, so it flips above.
+    expect(pop.style.top).toBe("94px");
+  });
+
+  it("scrolls when it's taller than the window", async () => {
+    const { container } = render(<ChipPicker />);
+    const pop = container.querySelector(".popover") as HTMLElement;
+    expect(pop.style.maxHeight).toBe(`${innerHeight - 16}px`);
+    expect(pop.style.overflowY).toBe("auto");
+  });
+});
+
 describe("usePlacedPopover on the keyboard", () => {
   afterEach(() => {
     vi.unstubAllGlobals();

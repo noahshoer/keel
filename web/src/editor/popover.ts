@@ -82,18 +82,30 @@ export function usePlacedPopover(ref: RefObject<HTMLElement | null>): void {
     if (pop && card) return followCard(pop, card);
     const chip = pop?.previousElementSibling;
     if (!pop || !chip) return;
-    const { top, left } = placePopover(
-      chip.getBoundingClientRect(),
-      pop.getBoundingClientRect(),
-      innerWidth,
-      innerHeight,
-    );
-    Object.assign(pop.style, {
-      position: "fixed",
-      top: `${top}px`,
-      left: `${left}px`,
-      right: "auto",
-      margin: "0",
-    });
+    const place = () => {
+      const scrolled = pop.scrollTop;
+      Object.assign(pop.style, { maxHeight: "" });
+      const { top, left } = placePopover(
+        chip.getBoundingClientRect(),
+        pop.getBoundingClientRect(),
+        innerWidth,
+        innerHeight,
+      );
+      Object.assign(pop.style, {
+        position: "fixed",
+        top: `${top}px`,
+        left: `${left}px`,
+        right: "auto",
+        margin: "0",
+        maxHeight: `${innerHeight - MARGIN * 2}px`,
+        overflowY: "auto",
+      });
+      pop.scrollTop = scrolled;
+    };
+    place();
+    // A step inside the picker swaps its content.
+    const changed = new MutationObserver(place);
+    changed.observe(pop, { childList: true, subtree: true });
+    return () => changed.disconnect();
   }, [ref]);
 }
