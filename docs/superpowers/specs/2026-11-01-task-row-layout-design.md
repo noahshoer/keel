@@ -111,10 +111,14 @@ Why: pickers placed on the page feel disconnected from the task being typed. On 
 - **Labels:** choose several, or find and add one. Each label has a tag icon in its color to the left of its name, and a Color option that opens the color choices with a way back.
 - **Reminder:** choose several from the presets, or type a custom time.
 
+**Fit above the keyboard** (Noah, 2026-11-01, from a simulator test on iPhone 17, iOS 27.1; re-check on the phone). The keyboard takes 396pt of the 874pt screen, including its bar above the keys, which leaves about 334pt above the 136pt task card, or about 270pt below the Dynamic Island.
+
+- **Time:** the real iOS picker. It can't sit in the keyboard's place: tapping Time closes the keyboard and iOS shows a floating card with Reset and a check mark. The keyboard stays down after confirming, so the task card returns to the bottom of the screen.
+- **Calendars (Date and Deadline):** the keyboard stays up and the card scrolls inside the room above the task card, since a calendar with its rows needs 339 to 425pt. Time and Repeat start below the fold.
+- **Quick choices and other tall lists:** the keyboard stays up and the list scrolls inside the same room.
+
 **Still open:**
 
-- Whether the iOS time picker can sit in place of the keyboard, since the web view may show it as its own popover. Check on the phone.
-- Whether the calendars fit above a real keyboard. The mockups draw it at 216px, shorter than a real one at about 300px.
 - The label color palette, which is a placeholder. Colors must pass the contrast rule.
 - How pickers look on desktop.
 
