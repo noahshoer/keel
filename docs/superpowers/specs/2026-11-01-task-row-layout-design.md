@@ -1,0 +1,126 @@
+# UI refresh: task rows and visual rules
+
+Decided by Noah, 2026-11-01. Not built yet. This records the task row, icons, contrast, corners and spacing, for all platforms, and the task creation pickers on iPhone.
+
+Mockups: https://claude.ai/artifact/Jmd7n1csJfHq2bsRj1SSsN (private). The approved "When and what rows: all scenarios" board was version 19; later versions hold only the picker work.
+
+## Why
+
+Task rows must stay easy to scan when a task has every field set. Labels and project both help tell tasks apart, so neither can be sacrificed for the other.
+
+## Row order
+
+Each row appears only when it has content.
+
+1. **Title**, wrapping across the card's full width, followed by the streak (Phosphor fire icon and count, Keel green).
+2. **Deadline**, always its own row: filled red Phosphor flag and the date.
+3. **Description**, one line across the full width, 2pt smaller than the title, regular weight, ending in "..." when too long.
+4. **Bottom rows**, from the matrix below.
+
+## Bottom rows
+
+The project is always shown and always pinned bottom right. Tasks without a project show "Inbox".
+
+The **when group** is, in order: sub-tasks, date or time, repeat icon, ringing bell icon (when the task has reminders). Any one of these counts as the group. Repeat shows only the icon, not the frequency.
+
+| When group | Labels | Bottom rows |
+|---|---|---|
+| No | No | `project` |
+| Yes | No | `when` + `project` |
+| No | Yes | `labels` + `project` |
+| Yes | Yes | `when`, then `labels` + `project` below it |
+
+## Labels on a task row
+
+Labels are grouped by color, with one tag icon per color group. The icon and the label text take the group's color, for example: red tag `red_label 1, red_label 2`, blue tag `blue_label 1, blue_label 2`. Tinted text follows the contrast rule below, so label colors must reach 4.5:1 on the card.
+
+Order follows when labels were added to the task. Color groups appear in the order their first label was added, and labels within a group stay in added order.
+
+## Sub-task icon
+
+Shown with "X of Y":
+
+- None done: Phosphor `circle-dashed`.
+- Some done: a ring whose edge fills by the percentage done, in Keel green.
+- All done: Phosphor `check-circle`.
+
+## Long text
+
+- The when group never shortens.
+- The project shortens beside it, section first, then ends in "...". It never moves to a new row, so a task's row count depends only on which fields it has.
+- Labels and project sharing a row shrink together. The section shortens before the project name.
+- Hidden labels show a count such as "+2".
+
+## Icons
+
+- Phosphor (MIT, SVG) on every platform. SF Symbols were ruled out because Apple's license limits them to Apple platforms.
+- Bold weight, plain: no circles or added edges. Filled weight only where stated, such as the deadline flag.
+- Gray icons are dark, `#3d3d3d` on light backgrounds, rather than today's `#8a8a8a`.
+- The green add button keeps its circle, since it isn't a gray icon.
+
+## Contrast
+
+- All text meets 4.5:1 against its background, in light and dark. Today's muted `#8a8a8a` is about 3:1 on the app background, so it can't be used for text.
+- Secondary text is `#5a5a5a` in light mode.
+- Mockup values on white: due dates `#1f6f55`, overdue dates and deadlines `#b83328`.
+- The empty priority 4 task circle darkens from `#b8b8b8` to `#767676`.
+- Dark mode values aren't chosen yet. They follow the same rule.
+
+## Corners
+
+Rounder throughout, using these mockup values:
+
+| Element | Radius |
+|---|---|
+| Phone task cards | 20px |
+| Desktop task cards | 16px |
+| Desktop main panel | 20px |
+| Sidebar items | 12px |
+| Pills and round buttons | Fully rounded |
+
+## Spacing and type
+
+| | Phone | Desktop |
+|---|---|---|
+| View title | 34/40 bold | 30/36 bold |
+| Task title | 17/23 medium | 15/21 medium |
+| Secondary text | 14/19 | 13/18 |
+| Task circle | 26px | 22px |
+| Row padding | 14px by 16px | 12px by 16px |
+| Gap from circle to text | 12px | 12px |
+
+- Phone tap targets are at least 44pt, whatever the visible size of the icon or circle.
+- The phone page gutter is 16px.
+- Desktop surfaces are separated by tint and elevation: tinted sidebar, raised main panel.
+
+## Task creation pickers
+
+Why: pickers placed on the page feel disconnected from the task being typed. On iPhone they belong to the keyboard. Approved in the mockups' "Task creation: every setting" board (version 21).
+
+**Task card.** Sits directly on the keyboard: title, description, a sideways-scrolling row of setting pills (Date, Deadline, Priority, Project, Labels, Reminder, Repeat), and a fixed save button.
+
+**Pickers.** Each opens as a rounded card just above the task card.
+
+- **Date:** quick choices (Today, Tomorrow, This weekend, Next week, Pick a date and time, No date).
+- **Pick a date and time:** a calendar, then a Time row and a Repeat row. Time uses the iOS time picker.
+- **Repeat in the date card:** the row shows the current choice. Tapping it opens the repeat options with a way back, and choosing an option returns to the date card.
+- **Repeat pill:** the same options, also available on their own.
+- **Deadline:** a calendar with no time, plus No deadline.
+- **Priority:** 1 to 4 with colored flags.
+- **Project:** projects with their sections indented below.
+- **Labels:** choose several, or find and add one. Each label has a tag icon in its color to the left of its name, and a Color option that opens the color choices with a way back.
+- **Reminder:** choose several from the presets, or type a custom time.
+
+**Still open:**
+
+- Whether the iOS time picker can sit in place of the keyboard, since the web view may show it as its own popover. Check on the phone.
+- Whether the calendars fit above a real keyboard. The mockups draw it at 216px, shorter than a real one at about 300px.
+- The label color palette, which is a placeholder. Colors must pass the contrast rule.
+- How pickers look on desktop.
+
+## Left to the builder
+
+- Applying the row rules to the desktop layout; the desktop mockup still shows an older row.
+- Choosing the dark mode values.
+- Where the logic lives: which rows a task shows is about the screen, so it can stay in the frontend, while facts such as the sub-task counts come from `keel-core` as they do now.
+- How the "+N" label count is measured.
