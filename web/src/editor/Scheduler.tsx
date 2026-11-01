@@ -46,6 +46,7 @@ export function Scheduler({
   today,
   onPick,
   close,
+  onCalendar,
 }: {
   /** `YYYY-MM-DD` or `null`. */
   selected: string | null;
@@ -63,6 +64,8 @@ export function Scheduler({
   /** A date (`null` for none) and a time (`HH:MM` or ""). */
   onPick: (date: string | null, time: string) => void;
   close: () => void;
+  /** When the quick choices give way to the calendar. */
+  onCalendar?: (() => void) | undefined;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   usePlacedPopover(ref);
@@ -162,7 +165,14 @@ export function Scheduler({
               ) : null}
             </button>
           ))}
-          <button type="button" className="menu-item" onClick={() => setStep("card")}>
+          <button
+            type="button"
+            className="menu-item"
+            onClick={() => {
+              setStep("card");
+              onCalendar?.();
+            }}
+          >
             <span className="menu-label">Pick a date and time</span>
           </button>
           <button
@@ -271,28 +281,34 @@ export function Scheduler({
                     {d}
                   </span>
                 ))}
-                {view.weeks.flat().map((cell) => {
-                  const cls = ["cal-day"];
-                  if (!cell.inMonth) cls.push("other");
-                  if (cell.past) cls.push("past");
-                  if (cell.today) cls.push("is-today");
-                  if (cell.selected) cls.push("selected", `sel-${BUCKET_CLASS[dueBucket(cell.date, today)]}`);
-                  if (cell.repeat) cls.push("repeat-day");
-                  return (
-                    <button
-                      key={cell.date}
-                      type="button"
-                      className={cls.join(" ")}
-                      onClick={() => {
-                        onPick(cell.date, timeStr);
-                        // A date still has its Time and Repeat rows to offer.
-                        if (!withTime) close();
-                      }}
-                    >
-                      {cell.day}
-                    </button>
-                  );
-                })}
+                {view.weeks
+                  .filter((week) => week.some((cell) => cell.inMonth))
+                  .flat()
+                  .map((cell) => {
+                    const cls = ["cal-day"];
+                    if (!cell.inMonth) cls.push("other");
+                    if (cell.past) cls.push("past");
+                    if (cell.today) cls.push("is-today");
+                    // A date's fill follows its bucket; a deadline's stays the plain selected color.
+                    if (cell.selected) cls.push("selected");
+                    if (cell.selected && withTime)
+                      cls.push(`sel-${BUCKET_CLASS[dueBucket(cell.date, today)]}`);
+                    if (cell.repeat) cls.push("repeat-day");
+                    return (
+                      <button
+                        key={cell.date}
+                        type="button"
+                        className={cls.join(" ")}
+                        onClick={() => {
+                          onPick(cell.date, timeStr);
+                          // A date still has its Time and Repeat rows to offer.
+                          if (!withTime) close();
+                        }}
+                      >
+                        {cell.day}
+                      </button>
+                    );
+                  })}
               </div>
             )}
           </div>

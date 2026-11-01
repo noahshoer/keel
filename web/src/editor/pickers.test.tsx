@@ -149,11 +149,11 @@ export function RepeatDateHost() {
     />
   );
 }
-export function DeadlineHost() {
+export function DeadlineHost({ deadline = "" }: { deadline?: string }) {
   const [open, setOpen] = usePop();
   return (
     <DeadlinePicker
-      deadline=""
+      deadline={deadline}
       text="Deadline"
       urgent={null}
       today={TODAY}
@@ -337,6 +337,14 @@ describe("DatePicker", () => {
     expect(document.querySelector(".sched-quick")).toBeNull();
   });
 
+  it("draws no week that's wholly in another month", () => {
+    render(<DateHost onChange={vi.fn()} />);
+    openIt();
+    calendar();
+    // October 2026 starts on a Thursday and ends on a Saturday: five weeks.
+    expect(document.querySelectorAll(".cal-day")).toHaveLength(35);
+  });
+
   it("a day picks and stays open, so a time or repeat can follow", () => {
     const onChange = vi.fn();
     render(<DateHost onChange={onChange} />);
@@ -484,6 +492,14 @@ describe("DeadlinePicker", () => {
     expect(screen.queryByText("Pick a date and time")).toBeNull();
     expect(screen.queryByRole("button", { name: /^Repeat/ })).toBeNull();
     expect(screen.getByText("No deadline")).toBeTruthy();
+  });
+
+  it("marks its day in the plain selected color, not a date's bucket color", () => {
+    render(<DeadlineHost deadline="2026-12-25" />);
+    openIt();
+    const day = document.querySelector(".cal-day.selected") as HTMLElement;
+    expect(day.textContent).toBe("25");
+    expect(day.className).not.toContain("sel-");
   });
 
   it("a day picks and closes", () => {

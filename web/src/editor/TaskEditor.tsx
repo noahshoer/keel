@@ -2,13 +2,21 @@
 // and editing (crates/ui/src/editor.rs `TaskEditor`). When adding, the title
 // is parsed as quick add with live highlighting and preview chips. Every
 // decision about the values is keel-core's (`editorView`, `applyPick`, …).
-import { type MouseEvent, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { holdPage } from "../app/pageHold";
 import type { EditorPick, EditorValues, Label, Project, Recurrence, Section, SpanKind } from "../bindings";
 import { localToday } from "../clock";
 import { applyPick, editorView, locationPick, toggleLabel, unhighlightAt, withTitle } from "../core";
-import { ArrowUpIcon, FlagSmallIcon, HashSmallIcon, RepeatSmallIcon } from "../shell/icons";
+import { ArrowUpIcon, FlagFilledIcon, HashSmallIcon, RepeatSmallIcon } from "../shell/icons";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
 import { HighlightedTitle } from "./HighlightedTitle";
@@ -17,6 +25,7 @@ import { useKeyboard } from "./keyboardAnchor";
 import { LabelPicker } from "./LabelPicker";
 import { isTouch } from "./locale";
 import { Menu, type MenuItem } from "./Menu";
+import { pillsRunOn } from "./pillFade";
 import { cx, type Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
 
@@ -77,6 +86,32 @@ export function TaskEditor({
   const [touch] = useState(isTouch);
   const keyboard = useKeyboard(touch);
   useEffect(() => (touch ? holdPage() : undefined), [touch]);
+  const ownTitle = useRef<HTMLTextAreaElement>(null);
+  const title = titleRef ?? ownTitle;
+  // A calendar needs more room than the keyboard leaves, so it lowers the
+  // keyboard; whatever replaces it brings the keyboard back, inside the tap.
+  const madeRoom = useRef(false);
+  const makeRoom = () => {
+    if (!touch) return;
+    madeRoom.current = true;
+    title.current?.blur();
+  };
+  const setPop = (p: Pop) => {
+    setOpen(p);
+    if (p === "deadline") makeRoom();
+    else if (madeRoom.current) {
+      madeRoom.current = false;
+      title.current?.focus();
+    }
+  };
+  const chips = useRef<HTMLDivElement>(null);
+  const [runOn, setRunOn] = useState(false);
+  const measurePills = () => {
+    const row = chips.current;
+    if (row) setRunOn(pillsRunOn(row.scrollLeft, row.clientWidth, row.scrollWidth));
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a pill's width follows the values.
+  useLayoutEffect(measurePills, [values]);
   // Submits once: a fast second Enter (before the editor closes) is ignored.
   // In keep-open mode the form resets to blank instead (an empty title can't
   // be submitted, so a second Enter is a no-op there too). Refs, so two
@@ -98,7 +133,7 @@ export function TaskEditor({
     if (keepOpen) {
       latest.current = initial;
       setValues(initial);
-      setOpen(null);
+      setPop(null);
     } else {
       submitted.current = true;
     }
@@ -108,7 +143,7 @@ export function TaskEditor({
   const repeatItems: MenuItem[] = view.repeat_options.map(([value, label]) => ({ value, label }));
 
   const pills: ReactNode = (
-    <div className="chips">
+    <div ref={chips} className="chips" onScroll={measurePills}>
       <DatePicker
         date={values.date}
         time={values.time}
@@ -123,8 +158,9 @@ export function TaskEditor({
         }}
         today={today}
         open={open}
-        setOpen={setOpen}
+        setOpen={setPop}
         onChange={(date, time) => pick({ type: "date", date, time })}
+        onCalendar={makeRoom}
       />
       <DeadlinePicker
         deadline={values.deadline}
@@ -132,19 +168,20 @@ export function TaskEditor({
         urgent={view.deadline_urgent}
         today={today}
         open={open}
-        setOpen={setOpen}
+        setOpen={setPop}
         onChange={(date) => pick({ type: "deadline", date })}
       />
       <Menu
         id="priority"
         title="Priority"
-        icon={<FlagSmallIcon />}
+        icon={<FlagFilledIcon />}
         iconClass={flagClass(values.priority)}
         text={view.priority_text}
         items={PRIORITY_ITEMS}
         selected={values.priority}
         open={open}
-        setOpen={setOpen}
+        setOpen={setPop}
+        chipClass={["1", "2", "3"].includes(values.priority) ? `pill-p${values.priority}` : ""}
         onSelect={(value) => pick({ type: "priority", value })}
       />
       <Menu
@@ -155,7 +192,7 @@ export function TaskEditor({
         items={locationItems(view.locations)}
         selected={view.location}
         open={open}
-        setOpen={setOpen}
+        setOpen={setPop}
         onSelect={(value) => pick(locationPick(value))}
       />
       <LabelPicker
@@ -163,7 +200,7 @@ export function TaskEditor({
         selected={view.shown_labels}
         text={view.labels_text}
         open={open}
-        setOpen={setOpen}
+        setOpen={setPop}
         onToggle={(name) => setValues((v) => toggleLabel(v, name, quickAdd, projects, sections, today))}
         onChanged={onChanged}
       />
@@ -174,7 +211,7 @@ export function TaskEditor({
         hasDue={view.has_due}
         today={today}
         open={open}
-        setOpen={setOpen}
+        setOpen={setPop}
         onChange={(drafts) => pick({ type: "reminders", drafts })}
       />
       <Menu
@@ -185,7 +222,7 @@ export function TaskEditor({
         items={repeatItems}
         selected={values.repeat}
         open={open}
-        setOpen={setOpen}
+        setOpen={setPop}
         onSelect={(value) => pick({ type: "repeat", value })}
       />
     </div>
@@ -204,7 +241,7 @@ export function TaskEditor({
       onKeyDown={(e) => {
         if (e.key !== "Escape") return;
         e.preventDefault();
-        if (open !== null) setOpen(null);
+        if (open !== null) setPop(null);
         else onCancel();
       }}
     >
@@ -216,7 +253,7 @@ export function TaskEditor({
       {open !== null ? (
         // biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes the popover from the form; this is the click-away.
         // biome-ignore lint/a11y/noStaticElementInteractions: a transparent click-away layer, as in the Dioxus editor.
-        <div className="pop-backdrop" onClick={() => setOpen(null)} onWheel={() => setOpen(null)} />
+        <div className="pop-backdrop" onClick={() => setPop(null)} onWheel={() => setPop(null)} />
       ) : null}
       <HighlightedTitle
         segments={view.segments}
@@ -227,7 +264,7 @@ export function TaskEditor({
         onUnhighlight={(caret) =>
           setValues((v) => (quickAdd ? (unhighlightAt(v, projects, sections, today, caret) ?? v) : v))
         }
-        inputRef={titleRef}
+        inputRef={title}
       />
       {view.preview.length > 0 ? (
         <div className="quick-preview">
@@ -249,7 +286,7 @@ export function TaskEditor({
         }}
       />
       {touch ? (
-        <div className="editor-actions">
+        <div className={cx("editor-actions", runOn && "pills-run-on")}>
           {pills}
           <button type="submit" className="btn-save" aria-label={submitText} disabled={!view.can_submit}>
             <ArrowUpIcon />

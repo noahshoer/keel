@@ -119,6 +119,67 @@ describe("on touch", () => {
     expect(fireEvent.mouseDown(screen.getByPlaceholderText("Description"))).toBe(true);
   });
 
+  it("fades the pills only while one runs under the save button", () => {
+    adding();
+    const row = document.querySelector(".chips") as HTMLElement;
+    const actions = () => document.querySelector(".editor-actions")?.className;
+    Object.defineProperties(row, {
+      clientWidth: { configurable: true, value: 300 },
+      scrollWidth: { configurable: true, value: 700 },
+    });
+    fireEvent.scroll(row);
+    expect(actions()).toContain("pills-run-on");
+    row.scrollLeft = 400;
+    fireEvent.scroll(row);
+    expect(actions()).not.toContain("pills-run-on");
+  });
+
+  it("the Priority pill shows a flag, in its color once one is set", () => {
+    adding();
+    const pill = () => screen.getByTitle("Priority");
+    expect(pill().querySelector(".chip-icon.pri-4 svg")).not.toBeNull();
+    fireEvent.click(pill());
+    fireEvent.click(screen.getByText("Priority 2"));
+    expect(pill().querySelector(".chip-icon.pri-2 svg")).not.toBeNull();
+    expect(pill().className).toContain("pill-p2");
+  });
+
+  describe("making room for a calendar", () => {
+    const title = () => document.querySelector(".title-input") as HTMLTextAreaElement;
+    const focused = () => document.activeElement === title();
+
+    it("the quick choices leave the keyboard up; the calendar lowers it", () => {
+      adding();
+      title().focus();
+      fireEvent.click(screen.getByTitle("Date"));
+      expect(focused()).toBe(true);
+      fireEvent.click(screen.getByText("Pick a date and time"));
+      expect(focused()).toBe(false);
+    });
+
+    it("Deadline lowers it at once, and picking a day brings it back", () => {
+      adding();
+      title().focus();
+      fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
+      expect(focused()).toBe(false);
+      fireEvent.click(screen.getByText("12", { selector: ".cal-day:not(.other)" }));
+      expect(document.querySelector(".popover")).toBeNull();
+      expect(focused()).toBe(true);
+    });
+
+    it("another pill or a tap outside brings it back", () => {
+      adding();
+      title().focus();
+      fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
+      fireEvent.click(screen.getByTitle("Priority"));
+      expect(focused()).toBe(true);
+      fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
+      expect(focused()).toBe(false);
+      fireEvent.click(document.querySelector(".pop-backdrop") as Element);
+      expect(focused()).toBe(true);
+    });
+  });
+
   it("switches pills in one tap", () => {
     adding();
     fireEvent.click(screen.getByTitle("Priority"));

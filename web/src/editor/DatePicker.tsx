@@ -14,6 +14,7 @@ export function DatePicker({
   bucket,
   rule,
   repeat,
+  onCalendar,
   today,
   open,
   setOpen,
@@ -32,6 +33,8 @@ export function DatePicker({
   rule: Recurrence | null;
   /** The date card's Repeat row and options. */
   repeat?: RepeatChoice;
+  /** When the quick choices give way to the calendar. */
+  onCalendar?: () => void;
   today: string;
   /** The date (`YYYY-MM-DD` or "") and time (`HH:MM` or ""). */
   onChange: (date: string, time: string) => void;
@@ -68,6 +71,7 @@ export function DatePicker({
           time={time === "" ? null : time}
           rule={rule}
           repeat={repeat}
+          onCalendar={onCalendar}
           today={today}
           onPick={(d, t) => onChange(d ?? "", t)}
           close={() => setOpen(null)}

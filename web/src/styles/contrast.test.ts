@@ -52,6 +52,8 @@ const TEXT = [
   "--due-week",
   "--due-later",
   "--p1",
+  "--p2-text",
+  "--p3-text",
   "--accent-text",
   "--streak",
 ];
@@ -86,6 +88,15 @@ describe("the approved light values", () => {
   ])("%s is %s", (token, value) => {
     expect(light[token]).toBe(value);
   });
+});
+
+describe.each(THEMES)("a selected day, %s", (_theme, tokens) => {
+  it.each(["--due-overdue", "--due-today", "--due-tomorrow", "--due-week", "--accent"])(
+    "--on-fill is at least 4.5:1 on %s",
+    (fill) => {
+      expect(contrast(tokens["--on-fill"] as string, tokens[fill] as string)).toBeGreaterThanOrEqual(4.5);
+    },
+  );
 });
 
 describe("due date colors", () => {

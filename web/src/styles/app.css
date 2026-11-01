@@ -49,6 +49,8 @@
   --p1: #b83328; --p1-bg: rgba(209,69,59,.10);
   --p2: #eb8909; --p2-bg: rgba(235,137,9,.10);
   --p3: #246fe0; --p3-bg: rgba(36,111,224,.10);
+  --p2-text: #8a5200; --p3-text: #1d5fc4;
+  --on-fill: #ffffff;
   --p4: #767676;
   --due-overdue: #b83328;
   --due-today: #1f6f55;
@@ -116,6 +118,8 @@
   --p1: #ff7a70; --p1-bg: rgba(255,112,102,.14);
   --p2: #ff9a14; --p2-bg: rgba(255,154,20,.14);
   --p3: #5297ff; --p3-bg: rgba(82,151,255,.14);
+  --p2-text: #ff9a14; --p3-text: #7ab0ff;
+  --on-fill: #111111;
   --p4: #8a8a8a;
   --due-overdue: #ff7a70;
   --due-today: #5cc7a2;
@@ -183,6 +187,8 @@
   --p1: #ff7a70; --p1-bg: rgba(255,112,102,.14);
   --p2: #ff9a14; --p2-bg: rgba(255,154,20,.14);
   --p3: #5297ff; --p3-bg: rgba(82,151,255,.14);
+  --p2-text: #ff9a14; --p3-text: #7ab0ff;
+  --on-fill: #111111;
   --p4: #8a8a8a;
   --due-overdue: #ff7a70;
   --due-today: #5cc7a2;
@@ -388,32 +394,50 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .editor.on-keyboard:not(.keyboard-down)::before { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 420px; background: var(--bg); }
 .editor.on-keyboard.keyboard-down { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
 .editor-scrim { position: fixed; inset: 0; z-index: -1; background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
-.on-keyboard .name { font-size: 18px; line-height: 24px; font-weight: 500; }
-.on-keyboard .desc { font-size: 15px; line-height: 20px; padding: 4px 0 8px; }
-.editor-actions { position: relative; display: flex; align-items: center; gap: 8px; padding-top: 4px; }
-/* Pills fade out before the save button instead of cutting off under it. */
-.editor-actions::after { content: ''; position: absolute; top: 4px; bottom: 0; right: 52px; width: 24px; pointer-events: none;
+.editor.on-keyboard .name { font-size: 18px; line-height: 24px; font-weight: 500; }
+.editor.on-keyboard .desc { display: block; font-size: 15px; line-height: 20px; padding: 8px 0 0; }
+.on-keyboard .title-wrap > .title-mirror, .on-keyboard .title-wrap > .title-input { padding: 0; font-size: 18px; line-height: 24px; font-weight: 500; }
+.editor-actions { position: relative; display: flex; align-items: center; gap: 8px; padding-top: 12px; }
+/* Pills run a third of the way under the save button, fading out there, only while one does. */
+.editor-actions.pills-run-on::after { content: ''; position: absolute; top: 12px; bottom: 0; right: 29px; width: 28px; pointer-events: none;
   background: linear-gradient(to right, transparent, var(--bg)); }
-.on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; padding: 0 24px 0 0; overflow-x: auto; scrollbar-width: none; }
+.on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; margin-right: -23px; padding: 0 31px 0 0; overflow-x: auto; scrollbar-width: none; }
 .on-keyboard .chips::-webkit-scrollbar { display: none; }
 .on-keyboard .chip-btn { height: 44px; max-width: none; padding: 0 14px; border: none; background: var(--field-fill); color: var(--text); font-size: 15px; white-space: nowrap; }
 .on-keyboard .chip-btn .icon, .on-keyboard .chip-caret { display: none; }
-.on-keyboard .chip-btn.chip-open { background: var(--accent); color: #fff; font-weight: 600; }
+.on-keyboard .chip-btn .chip-icon[class*="pri-"] .icon { display: inline-flex; }
+.on-keyboard .chip-btn .chip-icon[class*="pri-"] svg { width: 16px; height: 16px; }
+.on-keyboard .pill-p1 { color: var(--p1); }
+.on-keyboard .pill-p2 { color: var(--p2-text); }
+.on-keyboard .pill-p3 { color: var(--p3-text); }
+.on-keyboard .chip-btn.chip-open .chip-icon { color: inherit; }
+.on-keyboard .chip-btn.chip-open { background: var(--accent); color: var(--on-fill); font-weight: 600; }
 .on-keyboard .chip-wrap { position: static; flex: none; }
 .on-keyboard .popover { width: calc(100vw - 16px); max-width: none; min-width: 0; padding: 12px; border: none; border-radius: 24px; box-shadow: var(--shadow-lg); animation: fade-in .16s var(--ease); }
 .on-keyboard .pop-backdrop { z-index: -1; background: rgba(0,0,0,.2); }
 .on-keyboard .menu-item.checked, .on-keyboard .label-row.on { background: var(--active-tint); }
 .time-wheel .wheel { margin: 0 12px 4px; }
 .on-keyboard .scheduler { padding: 12px; }
+.on-keyboard .sched-quick, .on-keyboard .menu { display: flex; flex-direction: column; gap: 2px; }
+.on-keyboard .menu-icon svg { width: 18px; height: 18px; }
+.on-keyboard .scheduler .menu-item { font-size: 17px; }
+.on-keyboard .scheduler .menu-hint { font-size: 15px; }
+.on-keyboard .cal-nav { padding: 4px 8px 8px; }
+.on-keyboard .cal-title { font-size: 18px; font-weight: 600; }
+.on-keyboard .cal-grid { gap: 0; }
+.on-keyboard .cal-dow { font-size: 14px; font-weight: 600; padding: 0 0 4px; }
+.on-keyboard .wheel-item { font-size: 17px; }
 .on-keyboard .sched-quick, .on-keyboard .sched-cal { padding: 0; }
 .on-keyboard .menu-item { font-size: 16px; border-radius: 14px; padding: 0 12px; min-height: 44px; }
 .on-keyboard .menu-hint { font-size: 14px; }
+.on-keyboard .label-color-name { font-size: 16px; min-height: 44px; padding: 0 12px; }
 .on-keyboard .cal-grid { justify-items: center; }
-.on-keyboard .cal-day { width: 40px; height: 40px; font-size: 15px; }
+.on-keyboard .cal-day { width: 40px; height: 40px; font-size: 16px; }
 .on-keyboard .sched-time { min-height: 44px; padding: 0 12px; border-top: none; }
 .on-keyboard .sched-row-label { font-size: 16px; }
-.btn-save { flex: none; width: 44px; height: 44px; border: none; border-radius: 50%; padding: 0; background: var(--accent); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.btn-save:disabled { opacity: .45; }
+.btn-save { position: relative; z-index: 1; flex: none; width: 44px; height: 44px; border: none; border-radius: 50%; padding: 0; background: var(--accent); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+/* Solid even when disabled: pills pass under it. */
+.btn-save:disabled { background: color-mix(in srgb, var(--accent) 45%, var(--bg)); color: color-mix(in srgb, #fff 60%, var(--bg)); }
 .editor .name { width: 100%; border: none; outline: none; font-size: 15px; font-weight: 600; padding: 2px 0; background: transparent; }
 .editor .desc { width: 100%; border: none; outline: none; font-size: 13px; padding: 5px 0 12px; background: transparent; }
 .editor .name::placeholder, .editor .desc::placeholder, .project-input::placeholder { color: var(--muted); }
@@ -508,7 +532,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .cal-day.other { color: var(--muted); opacity: .6; }
 .cal-day.past { color: var(--muted); opacity: .45; }
 .cal-day.is-today { color: var(--accent-text); font-weight: 700; }
-.cal-day.selected { background: var(--accent); color: #fff; font-weight: 600; opacity: 1; }
+.cal-day.selected { background: var(--accent); color: var(--on-fill); font-weight: 600; opacity: 1; }
 .sched-time { display: flex; align-items: center; gap: 8px; padding: 8px 12px 10px; border-top: 1px solid var(--divider); color: var(--muted); }
 .time-input { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--r); padding: 6px 8px;
   font-size: 12.5px; outline: none; background: var(--bg); color: var(--text); }
@@ -1013,7 +1037,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .cal-day.selected.sel-today { background: var(--due-today); }
 .cal-day.selected.sel-tomorrow { background: var(--due-tomorrow); }
 .cal-day.selected.sel-week { background: var(--due-week); }
-.cal-day.selected.sel-later { background: var(--due-later); }
+.cal-day.selected.sel-later { background: var(--accent); }
 .cal-title.chooser { display: inline-flex; align-items: center; gap: 4px; margin-right: auto; padding: 4px 6px;
   border: none; border-radius: var(--r); background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
 .cal-title.chooser.open .icon { transform: rotate(180deg); }

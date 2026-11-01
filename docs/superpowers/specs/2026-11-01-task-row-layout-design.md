@@ -111,11 +111,13 @@ Why: pickers placed on the page feel disconnected from the task being typed. On 
 - **Labels:** choose several, or find and add one. Each label has a tag icon in its color to the left of its name, and a Color option that opens the color choices with a way back.
 - **Reminder:** choose several from the presets, or type a custom time.
 
-**Fit above the keyboard** (Noah, 2026-11-01, from a simulator test on iPhone 17, iOS 27.1; re-check on the phone). The keyboard takes 396pt of the 874pt screen, including its bar above the keys, which leaves about 334pt above the 136pt task card, or about 270pt below the Dynamic Island.
+**Fit above the keyboard** (Noah, 2026-11-01, from the simulator and two phone checks).
 
-- **Time:** a Keel wheel inside the date card, on touch (Noah's phone check, 2026-11-01). The iOS picker can't be used: it always closes the keyboard, since it takes focus from the title. Desktop types a time.
-- **Calendars (Date and Deadline):** the keyboard stays up and the card scrolls inside the room above the task card, since a calendar with its rows needs 339 to 425pt. Time and Repeat start below the fold.
-- **Quick choices and other tall lists:** the keyboard stays up and the list scrolls inside the same room.
+- **The bar above the keyboard is hidden everywhere**, since its check mark only closed the keyboard. That leaves about 324pt above the task card on an iPhone 17, below the Dynamic Island.
+- **Calendars (Date and Deadline):** they need more room, so opening one lowers the keyboard. Whatever replaces it (a chosen deadline, another pill, a tap outside) brings the keyboard back.
+- **Time:** a Keel wheel inside the date card on touch. The iOS picker would take focus from the title. Desktop types a time.
+- **Quick choices and other tall lists:** the keyboard stays up and the list scrolls inside the room above the card.
+- **Selected day:** Keel green on a deadline. On a date it follows the date's color, with later dates in green.
 
 **Still open:**
 
