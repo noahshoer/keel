@@ -205,7 +205,7 @@
   --label-slate: #a3b1c6;
 }
 
-:root { --r-sm: 6px; --r: 8px; --r-md: 10px; --r-lg: 14px; --r-card: 20px; --r-panel: 20px; --r-item: 12px; --r-full: 999px; --ease: cubic-bezier(.2,.8,.2,1); }
+:root { --safe-top: env(safe-area-inset-top, 0px); --r-sm: 6px; --r: 8px; --r-md: 10px; --r-lg: 14px; --r-card: 20px; --r-panel: 20px; --r-item: 12px; --r-full: 999px; --ease: cubic-bezier(.2,.8,.2,1); }
 @media (min-width: 900px) { :root { --r-card: 16px; } }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
@@ -378,6 +378,24 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   background: var(--bg); box-shadow: var(--shadow-md); animation: pop-in .18s var(--ease);
   transition: border-color .16s, box-shadow .16s; }
 .editor:focus-within { border-color: var(--border-strong); box-shadow: var(--shadow-lg); }
+/* Touch: the task card sits on the keyboard and its pickers on the card. */
+.editor.on-keyboard { position: fixed; left: 0; right: 0; z-index: 45; margin: 0; border: none; border-radius: 24px 24px 0 0;
+  padding: 16px 16px 12px; animation: none; box-shadow: var(--shadow-lg); }
+.editor.on-keyboard.keyboard-down { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+.editor-scrim { position: fixed; inset: 0; z-index: -1; background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
+.on-keyboard .name { font-size: 18px; line-height: 24px; font-weight: 500; }
+.on-keyboard .desc { font-size: 15px; line-height: 20px; padding: 4px 0 8px; }
+.editor-actions { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+.on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; padding-bottom: 0; overflow-x: auto; scrollbar-width: none; }
+.on-keyboard .chips::-webkit-scrollbar { display: none; }
+.on-keyboard .chip-btn { height: 44px; max-width: none; padding: 0 14px; border: none; background: var(--field-fill); color: var(--text); font-size: 15px; white-space: nowrap; }
+.on-keyboard .chip-btn .icon, .on-keyboard .chip-caret { display: none; }
+.on-keyboard .chip-btn.chip-open { background: var(--accent); color: #fff; font-weight: 600; }
+.on-keyboard .chip-wrap { position: static; flex: none; }
+.on-keyboard .popover { width: calc(100vw - 16px); max-width: none; min-width: 0; padding: 12px; border: none; border-radius: 24px; box-shadow: var(--shadow-lg); animation: fade-in .16s var(--ease); }
+.on-keyboard .pop-backdrop { background: rgba(0,0,0,.2); }
+.btn-save { flex: none; width: 44px; height: 44px; border: none; border-radius: 50%; padding: 0; background: var(--accent); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.btn-save:disabled { opacity: .45; }
 .editor .name { width: 100%; border: none; outline: none; font-size: 15px; font-weight: 600; padding: 2px 0; background: transparent; }
 .editor .desc { width: 100%; border: none; outline: none; font-size: 13px; padding: 5px 0 12px; background: transparent; }
 .editor .name::placeholder, .editor .desc::placeholder, .project-input::placeholder { color: var(--muted); }

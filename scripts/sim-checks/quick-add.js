@@ -32,7 +32,7 @@ title.focus();
 title.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 await sleep(1200);
 check(`title cleared: ${document.querySelector('.title-input')?.value === ''}`);
-document.querySelector('.editor .btn-cancel')?.click();
+document.querySelector('.editor-scrim')?.click();
 const upcoming = [...document.querySelectorAll('.nav-item')].find((n) => n.textContent.includes('Upcoming'));
 upcoming?.click();
 await sleep(1000);

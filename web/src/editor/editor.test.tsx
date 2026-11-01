@@ -1,6 +1,6 @@
 // The task editor, with the clock at Friday 2026-10-30 noon.
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditorValues } from "../bindings";
 import { blankValues, valuesFromTask } from "../core";
 import * as fx from "../ipc/fixtures";
@@ -55,6 +55,62 @@ const backspaceAt = (title: HTMLTextAreaElement, at: number) => {
   title.setSelectionRange(at, at);
   return fireEvent.keyDown(title, { key: "Backspace" });
 };
+
+const PILLS = [
+  "Date",
+  "Deadline: the date it must be done by",
+  "Priority",
+  "Project / section",
+  "Labels",
+  "Reminders",
+  "Repeat",
+];
+
+describe("on touch", () => {
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  const form = () => document.querySelector<HTMLFormElement>("form.editor");
+
+  it("sits on the keyboard, outside anything that would move it", () => {
+    const { container } = render(<div data-testid="host" />);
+    adding();
+    expect(form()?.className).toContain("on-keyboard");
+    expect(form()?.parentElement).toBe(document.body);
+    expect(container.querySelector("form")).toBeNull();
+  });
+
+  it("scrolls its pills in the approved order, with a fixed save button and no Cancel", () => {
+    adding();
+    const pills = [...document.querySelectorAll<HTMLElement>(".chips .chip-btn")].map((b) => b.title);
+    expect(pills).toEqual(PILLS);
+    const save = screen.getByRole("button", { name: "Add task" });
+    expect(save.closest(".chips")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+  });
+
+  it("a tap outside cancels; with a picker open it closes the picker first", () => {
+    adding();
+    fireEvent.click(screen.getByTitle("Priority"));
+    expect(document.querySelector(".popover")).not.toBeNull();
+    fireEvent.click(document.querySelector(".pop-backdrop") as Element);
+    expect(document.querySelector(".popover")).toBeNull();
+    expect(onCancel).not.toHaveBeenCalled();
+    fireEvent.click(document.querySelector(".editor-scrim") as Element);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the title focused when a pill is pressed", () => {
+    adding();
+    const pill = screen.getByTitle("Priority");
+    expect(fireEvent.mouseDown(pill)).toBe(false);
+  });
+});
 
 it("highlights what quick add understood and previews it", () => {
   const title = adding();
@@ -113,6 +169,14 @@ it("a picked date replaces the typed one", () => {
   expect(screen.getByTitle("Date").textContent).toBe("Monday");
   fireEvent.keyDown(title, { key: "Enter" });
   expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ content: "call mom", date: "2026-11-02" });
+});
+
+it("orders the pills the same on desktop, and keeps Cancel there", () => {
+  adding();
+  const pills = [...document.querySelectorAll<HTMLElement>(".chips .chip-btn")].map((b) => b.title);
+  expect(pills).toEqual(PILLS);
+  expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
+  expect(document.querySelector("form.editor")?.className).not.toContain("on-keyboard");
 });
 
 it("Escape closes the popover first, then cancels", () => {

@@ -3,6 +3,7 @@
 // `span.icon`. Logo and DoneMark are Keel's own marks.
 import { ArrowBendDownRight } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
 import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { ArrowUp } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { Bell } from "@phosphor-icons/react/dist/csr/Bell";
 import { BellRinging } from "@phosphor-icons/react/dist/csr/BellRinging";
 import { CalendarBlank } from "@phosphor-icons/react/dist/csr/CalendarBlank";
@@ -177,6 +178,10 @@ export function SofaIcon() {
 
 export function ArrowRightIcon() {
   return <Ph icon={ArrowRight} size={16} />;
+}
+
+export function ArrowUpIcon() {
+  return <Ph icon={ArrowUp} size={22} />;
 }
 
 export function NoDateIcon() {

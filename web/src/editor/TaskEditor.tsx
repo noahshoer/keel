@@ -2,19 +2,28 @@
 // and editing (crates/ui/src/editor.rs `TaskEditor`). When adding, the title
 // is parsed as quick add with live highlighting and preview chips. Every
 // decision about the values is keel-core's (`editorView`, `applyPick`, …).
-import { type RefObject, useRef, useState } from "react";
+import { type MouseEvent, type ReactNode, type RefObject, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { EditorPick, EditorValues, Label, Project, Recurrence, Section, SpanKind } from "../bindings";
 import { localToday } from "../clock";
 import { applyPick, editorView, locationPick, toggleLabel, unhighlightAt, withTitle } from "../core";
-import { FlagSmallIcon, HashSmallIcon, RepeatSmallIcon } from "../shell/icons";
+import { ArrowUpIcon, FlagSmallIcon, HashSmallIcon, RepeatSmallIcon } from "../shell/icons";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
 import { HighlightedTitle } from "./HighlightedTitle";
 import { flagClass, locationItems, PRIORITY_ITEMS } from "./items";
+import { useKeyboard } from "./keyboardAnchor";
 import { LabelPicker } from "./LabelPicker";
+import { isTouch } from "./locale";
 import { Menu, type MenuItem } from "./Menu";
-import type { Pop } from "./pop";
+import { cx, type Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
+
+/** Stops a press taking focus from the title, except in a field of its own. */
+function keepFocus(e: MouseEvent<HTMLElement>): void {
+  const target = e.target as HTMLElement;
+  if (!target.closest("input, textarea, select")) e.preventDefault();
+}
 
 const PREVIEW: Record<SpanKind, string> = {
   Date: "chip-date",
@@ -64,6 +73,8 @@ export function TaskEditor({
 }) {
   const [values, setValues] = useState(initial);
   const [open, setOpen] = useState<Pop>(null);
+  const [touch] = useState(isTouch);
+  const keyboard = useKeyboard(touch);
   // Submits once: a fast second Enter (before the editor closes) is ignored.
   // In keep-open mode the form resets to blank instead (an empty title can't
   // be submitted, so a second Enter is a no-op there too). Refs, so two
@@ -94,9 +105,88 @@ export function TaskEditor({
 
   const repeatItems: MenuItem[] = view.repeat_options.map(([value, label]) => ({ value, label }));
 
-  return (
+  const pills: ReactNode = (
+    <div className="chips">
+      <DatePicker
+        date={values.date}
+        time={values.time}
+        text={view.date_chip[0]}
+        bucket={view.date_chip[1]}
+        rule={view.repeat_rule}
+        today={today}
+        open={open}
+        setOpen={setOpen}
+        onChange={(date, time) => pick({ type: "date", date, time })}
+      />
+      <DeadlinePicker
+        deadline={values.deadline}
+        text={view.deadline_text}
+        urgent={view.deadline_urgent}
+        today={today}
+        open={open}
+        setOpen={setOpen}
+        onChange={(date) => pick({ type: "deadline", date })}
+      />
+      <Menu
+        id="priority"
+        title="Priority"
+        icon={<FlagSmallIcon />}
+        iconClass={flagClass(values.priority)}
+        text={view.priority_text}
+        items={PRIORITY_ITEMS}
+        selected={values.priority}
+        open={open}
+        setOpen={setOpen}
+        onSelect={(value) => pick({ type: "priority", value })}
+      />
+      <Menu
+        id="location"
+        title="Project / section"
+        icon={<HashSmallIcon />}
+        text={view.location_text}
+        items={locationItems(view.locations)}
+        selected={view.location}
+        open={open}
+        setOpen={setOpen}
+        onSelect={(value) => pick(locationPick(value))}
+      />
+      <LabelPicker
+        labels={labels}
+        selected={view.shown_labels}
+        text={view.labels_text}
+        open={open}
+        setOpen={setOpen}
+        onToggle={(name) => setValues((v) => toggleLabel(v, name, quickAdd, projects, sections, today))}
+        onChanged={onChanged}
+      />
+      <ReminderPicker
+        reminders={values.reminders}
+        labels={view.reminder_labels}
+        text={view.reminders_text}
+        hasDue={view.has_due}
+        today={today}
+        open={open}
+        setOpen={setOpen}
+        onChange={(drafts) => pick({ type: "reminders", drafts })}
+      />
+      <Menu
+        id="repeat"
+        title="Repeat"
+        icon={<RepeatSmallIcon />}
+        text={view.repeat_chip_text}
+        items={repeatItems}
+        selected={values.repeat}
+        open={open}
+        setOpen={setOpen}
+        onSelect={(value) => pick({ type: "repeat", value })}
+      />
+    </div>
+  );
+
+  const form = (
     <form
-      className="editor"
+      className={cx("editor", touch && "on-keyboard", touch && !keyboard.up && "keyboard-down")}
+      style={touch ? { bottom: keyboard.inset } : undefined}
       onSubmit={(e) => {
         e.preventDefault();
         submit();
@@ -108,6 +198,11 @@ export function TaskEditor({
         else onCancel();
       }}
     >
+      {touch && open === null ? (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: Escape cancels from the form; this is the tap outside.
+        // biome-ignore lint/a11y/noStaticElementInteractions: a dimmed tap-away layer behind the card.
+        <div className="editor-scrim" onClick={onCancel} />
+      ) : null}
       {open !== null ? (
         // biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes the popover from the form; this is the click-away.
         // biome-ignore lint/a11y/noStaticElementInteractions: a transparent click-away layer, as in the Dioxus editor.
@@ -143,89 +238,30 @@ export function TaskEditor({
           setValues((v) => ({ ...v, description }));
         }}
       />
-      <div className="chips">
-        <DatePicker
-          date={values.date}
-          time={values.time}
-          text={view.date_chip[0]}
-          bucket={view.date_chip[1]}
-          rule={view.repeat_rule}
-          today={today}
-          open={open}
-          setOpen={setOpen}
-          onChange={(date, time) => pick({ type: "date", date, time })}
-        />
-        <DeadlinePicker
-          deadline={values.deadline}
-          text={view.deadline_text}
-          urgent={view.deadline_urgent}
-          today={today}
-          open={open}
-          setOpen={setOpen}
-          onChange={(date) => pick({ type: "deadline", date })}
-        />
-        <ReminderPicker
-          reminders={values.reminders}
-          labels={view.reminder_labels}
-          text={view.reminders_text}
-          hasDue={view.has_due}
-          today={today}
-          open={open}
-          setOpen={setOpen}
-          onChange={(drafts) => pick({ type: "reminders", drafts })}
-        />
-        <Menu
-          id="priority"
-          title="Priority"
-          icon={<FlagSmallIcon />}
-          iconClass={flagClass(values.priority)}
-          text={view.priority_text}
-          items={PRIORITY_ITEMS}
-          selected={values.priority}
-          open={open}
-          setOpen={setOpen}
-          onSelect={(value) => pick({ type: "priority", value })}
-        />
-        <Menu
-          id="repeat"
-          title="Repeat"
-          icon={<RepeatSmallIcon />}
-          text={view.repeat_chip_text}
-          items={repeatItems}
-          selected={values.repeat}
-          open={open}
-          setOpen={setOpen}
-          onSelect={(value) => pick({ type: "repeat", value })}
-        />
-        <Menu
-          id="location"
-          title="Project / section"
-          icon={<HashSmallIcon />}
-          text={view.location_text}
-          items={locationItems(view.locations)}
-          selected={view.location}
-          open={open}
-          setOpen={setOpen}
-          onSelect={(value) => pick(locationPick(value))}
-        />
-        <LabelPicker
-          labels={labels}
-          selected={view.shown_labels}
-          text={view.labels_text}
-          open={open}
-          setOpen={setOpen}
-          onToggle={(name) => setValues((v) => toggleLabel(v, name, quickAdd, projects, sections, today))}
-          onChanged={onChanged}
-        />
-      </div>
-      <div className="editor-footer">
-        <button type="button" className="btn btn-cancel" onClick={onCancel}>
-          Cancel
-        </button>
-        <button type="submit" className="btn btn-add" disabled={!view.can_submit}>
-          {submitText}
-        </button>
-      </div>
+      {touch ? (
+        // Pressing a pill or the save button keeps the title focused, so the keyboard stays up.
+        // biome-ignore lint/a11y/noStaticElementInteractions: only stops the press taking focus.
+        <div className="editor-actions" onMouseDown={keepFocus}>
+          {pills}
+          <button type="submit" className="btn-save" aria-label={submitText} disabled={!view.can_submit}>
+            <ArrowUpIcon />
+          </button>
+        </div>
+      ) : (
+        pills
+      )}
+      {touch ? null : (
+        <div className="editor-footer">
+          <button type="button" className="btn btn-cancel" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-add" disabled={!view.can_submit}>
+            {submitText}
+          </button>
+        </div>
+      )}
     </form>
   );
+  // On touch it leaves the page: a moving sheet or pane above it would carry a fixed card along.
+  return touch ? createPortal(form, document.body) : form;
 }
