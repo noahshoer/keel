@@ -6,7 +6,7 @@ import { labelGroups } from "../core";
 import { addLabel, setLabelColor } from "../ipc/actions";
 import { CheckSmallIcon, TagSmallIcon } from "../shell/icons";
 import { LabelColorPicker } from "./LabelColorPicker";
-import { labelColorVar } from "./labelColors";
+import { labelColorVar, labelTagColor } from "./labelColors";
 import { cx, type Face, type PopProps } from "./pop";
 import { usePlacedPopover } from "./popover";
 
@@ -64,7 +64,11 @@ function LabelMenu({
       {shown.map((l) => {
         const on = selected.some((n) => same(n, l.name));
         return (
-          <div key={l.id} className={on ? "label-row on" : "label-row"}>
+          <div
+            key={l.id}
+            className={on ? "label-row on" : "label-row"}
+            style={on ? { color: labelTagColor(l.color) } : undefined}
+          >
             <label className="label-opt">
               <input type="checkbox" checked={on} onChange={() => onToggle(l.name)} />
               <span className="label-tag-icon" style={{ color: labelColorVar(l.color) }}>
@@ -114,15 +118,20 @@ export function LabelPicker({
   face?: Face;
 }) {
   const isOpen = open === "labels";
-  // The chip reads in its first label's color; open, it takes the open pill's.
-  const first = !isOpen ? labelGroups(selected, labels)[0] : undefined;
+  // The chip reads in the color of the label chosen last.
+  const lastChosen = selected[selected.length - 1];
+  const tint = lastChosen === undefined ? undefined : labelGroups([lastChosen], labels)[0];
   return (
     <div className="chip-wrap">
       <button
         type="button"
-        className={cx(face?.className ?? "chip chip-btn", isOpen && "chip-open")}
+        className={cx(
+          face?.className ?? "chip chip-btn",
+          face === undefined && tint !== undefined && "pill-tinted",
+          isOpen && "chip-open",
+        )}
         title="Labels"
-        style={first !== undefined ? { color: labelColorVar(first.color) } : undefined}
+        style={tint !== undefined ? { color: labelColorVar(tint.color) } : undefined}
         onClick={() => setOpen(isOpen ? null : "labels")}
       >
         {face === undefined || face.icon ? (

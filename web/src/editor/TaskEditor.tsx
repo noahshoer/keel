@@ -2,15 +2,7 @@
 // and editing (crates/ui/src/editor.rs `TaskEditor`). When adding, the title
 // is parsed as quick add with live highlighting and preview chips. Every
 // decision about the values is keel-core's (`editorView`, `applyPick`, …).
-import {
-  type MouseEvent,
-  type ReactNode,
-  type RefObject,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { type MouseEvent, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { holdPage } from "../app/pageHold";
 import type { EditorPick, EditorValues, Label, Project, Recurrence, Section, SpanKind } from "../bindings";
@@ -25,7 +17,7 @@ import { useKeyboard } from "./keyboardAnchor";
 import { LabelPicker } from "./LabelPicker";
 import { isTouch } from "./locale";
 import { Menu, type MenuItem } from "./Menu";
-import { pillsRunOn } from "./pillFade";
+import { usePillFade } from "./pillFade";
 import { cx, type Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
 
@@ -110,14 +102,7 @@ export function TaskEditor({
       title.current?.focus();
     }
   };
-  const chips = useRef<HTMLDivElement>(null);
-  const [runOn, setRunOn] = useState(false);
-  const measurePills = () => {
-    const row = chips.current;
-    if (row) setRunOn(pillsRunOn(row.scrollLeft, row.clientWidth, row.scrollWidth));
-  };
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a pill's width follows the values.
-  useLayoutEffect(measurePills, [values]);
+  const pillRow = usePillFade(values);
   // Submits once: a fast second Enter (before the editor closes) is ignored.
   // In keep-open mode the form resets to blank instead (an empty title can't
   // be submitted, so a second Enter is a no-op there too). Refs, so two
@@ -158,7 +143,7 @@ export function TaskEditor({
   };
 
   const pills: ReactNode = (
-    <div ref={chips} className="chips" onScroll={measurePills}>
+    <div ref={pillRow.ref} className="chips" onScroll={pillRow.onScroll}>
       <DatePicker
         date={values.date}
         time={values.time}
@@ -198,7 +183,7 @@ export function TaskEditor({
         selected={values.priority}
         open={open}
         setOpen={setPop}
-        chipClass={["1", "2", "3"].includes(values.priority) ? `pill-p${values.priority}` : ""}
+        chipClass={["1", "2", "3"].includes(values.priority) ? `pill-p${values.priority} pill-tinted` : ""}
         onSelect={(value) => pick({ type: "priority", value })}
       />
       <Menu
@@ -304,7 +289,7 @@ export function TaskEditor({
         }}
       />
       {touch ? (
-        <div className={cx("editor-actions", runOn && "pills-run-on")}>
+        <div className={cx("editor-actions", pillRow.fadeClass)}>
           {pills}
           <button type="submit" className="btn-save" aria-label={submitText} disabled={!view.can_submit}>
             <ArrowUpIcon />

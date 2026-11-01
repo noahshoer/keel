@@ -17,6 +17,7 @@ import {
   toggleLabel,
   valuesFromTask,
 } from "../core";
+import { usePillFade } from "../editor/pillFade";
 import type { Pop } from "../editor/pop";
 import { saveEdit } from "../editor/save";
 import { slideClose } from "../gestures/sheet";
@@ -186,6 +187,7 @@ export function TaskView({
   const view = editorView(v, false, keepLabel, rule, projects, sections, today);
   const { fields, missing } = fieldsShown(fieldLayout(v, loaded.inbox.id), descOpen);
   const rows = fields.filter((f) => f !== "Description");
+  const pillRow = usePillFade(missing.length);
   const fieldProps = {
     values: v,
     view,
@@ -333,12 +335,14 @@ export function TaskView({
             </div>
           ) : null}
           {missing.length > 0 ? (
-            <div className="tv-pills">
-              {missing.map((m) => (
-                <span key={m.label} className="tv-pill-slot">
-                  <FieldControl field={null} missing={m} {...fieldProps} />
-                </span>
-              ))}
+            <div className={`tv-pills-wrap ${pillRow.fadeClass}`}>
+              <div ref={pillRow.ref} className="tv-pills" onScroll={pillRow.onScroll}>
+                {missing.map((m) => (
+                  <span key={m.label} className="tv-pill-slot">
+                    <FieldControl field={null} missing={m} {...fieldProps} />
+                  </span>
+                ))}
+              </div>
             </div>
           ) : null}
           {streak && (recurring || task.streak_enabled) ? (

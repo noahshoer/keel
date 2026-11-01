@@ -186,6 +186,23 @@ it("runs title, description, field card, one row of pills, then sub-tasks", asyn
   expect(top().querySelectorAll(".tv-pills")).toHaveLength(1);
 });
 
+it("the pills fade on whichever side one runs past", async () => {
+  await show(["t-trip"]);
+  const row = top().querySelector(".tv-pills") as HTMLElement;
+  const wrap = () => row.parentElement?.className;
+  Object.defineProperties(row, {
+    clientWidth: { configurable: true, value: 300 },
+    scrollWidth: { configurable: true, value: 700 },
+  });
+  fireEvent.scroll(row);
+  expect(wrap()).toContain("pills-run-on");
+  expect(wrap()).not.toContain("pills-run-back");
+  row.scrollLeft = 400;
+  fireEvent.scroll(row);
+  expect(wrap()).not.toContain("pills-run-on");
+  expect(wrap()).toContain("pills-run-back");
+});
+
 it("the pills never wrap, at any width", () => {
   const css = readFileSync(resolve(process.cwd(), "src/styles/app.css"), "utf8");
   expect(css).not.toMatch(/\.tv-pills\s*\{[^}]*flex-wrap:\s*wrap/);

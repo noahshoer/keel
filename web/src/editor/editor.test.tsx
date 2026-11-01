@@ -137,9 +137,27 @@ describe("on touch", () => {
     });
     fireEvent.scroll(row);
     expect(actions()).toContain("pills-run-on");
+    expect(actions()).not.toContain("pills-run-back");
+    row.scrollLeft = 100;
+    fireEvent.scroll(row);
+    expect(actions()).toContain("pills-run-on");
+    expect(actions()).toContain("pills-run-back");
     row.scrollLeft = 400;
     fireEvent.scroll(row);
     expect(actions()).not.toContain("pills-run-on");
+    expect(actions()).toContain("pills-run-back");
+  });
+
+  it("the open Priority pill keeps its color", () => {
+    adding();
+    const pill = () => screen.getByTitle("Priority");
+    fireEvent.click(pill());
+    expect(pill().className).not.toContain("pill-tinted");
+    fireEvent.click(screen.getByText("Priority 1"));
+    fireEvent.click(pill());
+    expect(pill().className).toContain("chip-open");
+    expect(pill().className).toContain("pill-p1");
+    expect(pill().className).toContain("pill-tinted");
   });
 
   it("the Priority pill shows a flag, in its color once one is set", () => {

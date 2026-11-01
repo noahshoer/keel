@@ -407,8 +407,24 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .on-keyboard .title-wrap > .title-mirror, .on-keyboard .title-wrap > .title-input { padding: 0; font-size: 18px; line-height: 24px; font-weight: 500; }
 .editor-actions { position: relative; display: flex; align-items: center; gap: 8px; padding-top: 12px; }
 /* Pills run a third of the way under the save button, fading out there, only while one does. */
-.editor-actions.pills-run-on::after { content: ''; position: absolute; top: 12px; bottom: 0; right: 29px; width: 28px; pointer-events: none;
-  background: linear-gradient(to right, transparent, var(--bg)); }
+.editor-actions { --pill-fade: var(--bg); }
+.pills-run-on::after, .pills-run-back::before { content: ''; position: absolute; bottom: 0; width: 28px; pointer-events: none; }
+.pills-run-on::after { background: linear-gradient(to right, transparent, var(--pill-fade)); }
+.pills-run-back::before { background: linear-gradient(to left, transparent, var(--pill-fade)); }
+.editor-actions.pills-run-on::after { top: 12px; right: 29px; }
+.editor-actions.pills-run-back::before { top: 12px; left: 0; z-index: 1; }
+.on-keyboard .pill-tinted.chip-btn.chip-open { background: color-mix(in srgb, currentColor 18%, var(--field-fill)); font-weight: 600; }
+.on-keyboard .pill-tinted.pill-p1.chip-btn.chip-open { color: var(--p1); }
+.on-keyboard .pill-tinted.pill-p2.chip-btn.chip-open { color: var(--p2-text); }
+.on-keyboard .pill-tinted.pill-p3.chip-btn.chip-open { color: var(--p3-text); }
+.menu-item.row-p1, .menu-item.row-p1 .menu-check { color: var(--p1); }
+.menu-item.row-p2, .menu-item.row-p2 .menu-check { color: var(--p2-text); }
+.menu-item.row-p3, .menu-item.row-p3 .menu-check { color: var(--p3-text); }
+.on-keyboard .menu-item.checked.row-p1 { background: var(--p1-bg); }
+.on-keyboard .menu-item.checked.row-p2 { background: var(--p2-bg); }
+.on-keyboard .menu-item.checked.row-p3 { background: var(--p3-bg); }
+.label-row[style*="color"] .label-opt, .label-row[style*="color"] .label-color-btn, .label-row[style*="color"] .menu-check { color: inherit; }
+.on-keyboard .label-row.on[style*="color"] { background: color-mix(in srgb, currentColor 16%, transparent); }
 .on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; margin-right: -23px; padding: 0 31px 0 0; overflow-x: auto; scrollbar-width: none; }
 .on-keyboard .chips::-webkit-scrollbar { display: none; }
 .on-keyboard .chip-btn { height: 44px; max-width: none; padding: 0 14px; border: none; background: var(--field-fill); color: var(--text); font-size: 15px; white-space: nowrap; }
@@ -835,7 +851,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-field-btn .pri-3, .tv-field-btn .pri-3 .icon { color: var(--p3); }
 .tv-field-btn.due-chip .icon, .tv-field-btn.due-chip .chip-icon { color: inherit; }
 @media (hover: hover) { .tv-field-btn:hover { background: var(--hover); } }
-.tv-pills { display: flex; gap: 8px; margin: -6px 0 16px; overflow-x: auto; scrollbar-width: none; }
+.tv-pills-wrap { position: relative; margin: -6px 0 16px; --pill-fade: var(--app-bg); }
+.tv-pills-wrap::before, .tv-pills-wrap::after { top: 0; }
+.tv-pills-wrap.pills-run-on::after { right: 0; }
+.tv-pills-wrap.pills-run-back::before { left: 0; z-index: 1; }
+.tv-pills { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
 .tv-pills::-webkit-scrollbar { display: none; }
 .tv-pill-slot { flex: none; display: inline-flex; }
 .tv-pill { flex: none; font: inherit; font-size: 15px; min-height: 44px; padding: 0 14px; border-radius: var(--r-full); border: 1.5px dashed var(--p4);

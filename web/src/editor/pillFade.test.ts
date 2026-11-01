@@ -1,5 +1,10 @@
 import { expect, it } from "vitest";
-import { pillsRunOn } from "./pillFade";
+import { pillsRunBack, pillsRunOn } from "./pillFade";
+
+it("runs back once the row is scrolled from its start", () => {
+  expect(pillsRunBack(0)).toBe(false);
+  expect(pillsRunBack(40)).toBe(true);
+});
 
 it("is true while a pill runs past the end of the row", () => {
   expect(pillsRunOn(0, 300, 700)).toBe(true);

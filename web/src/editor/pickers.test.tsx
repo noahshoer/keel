@@ -8,6 +8,7 @@ import { invoke } from "../ipc/invoke";
 import { loadCoreForTests } from "../test/wasm";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
+import { PRIORITY_ITEMS } from "./items";
 import { LabelPicker } from "./LabelPicker";
 import { LABEL_COLORS } from "./labelColors";
 import { Menu } from "./Menu";
@@ -165,6 +166,27 @@ export function DeadlineHost({ deadline = "" }: { deadline?: string }) {
     />
   );
 }
+describe("Priority's menu", () => {
+  it("colors the chosen row, text and icon, by its priority", () => {
+    render(
+      <Menu
+        id="priority"
+        title="Priority"
+        icon={null}
+        text="P1"
+        items={PRIORITY_ITEMS}
+        selected="1"
+        open="priority"
+        setOpen={() => {}}
+        onSelect={() => {}}
+      />,
+    );
+    const row = (name: string) => screen.getByText(name).closest("button")?.className;
+    expect(row("Priority 1")).toContain("row-p1");
+    expect(row("Priority 2")).not.toContain("row-p2");
+  });
+});
+
 describe("Menu", () => {
   it("opens, ticks the selected item, and closes on a pick", () => {
     const onSelect = vi.fn();
@@ -179,12 +201,46 @@ describe("Menu", () => {
 });
 
 describe("LabelPicker", () => {
-  it("colors its pill by the first chosen label, while closed", () => {
-    render(<LabelHost initial={[{ ...labels[0], color: "red" } as Label]} />);
+  it("colors its pill by the last chosen label, open or closed", () => {
+    render(
+      <LabelPicker
+        labels={[
+          { ...labels[0], id: "a", name: "first", color: "red" } as Label,
+          { ...labels[0], id: "b", name: "last", color: "blue" } as Label,
+        ]}
+        selected={["first", "last"]}
+        text="2 labels"
+        open="labels"
+        setOpen={() => {}}
+        onToggle={() => {}}
+        onChanged={() => {}}
+      />,
+    );
     const pill = screen.getByTitle("Labels");
-    expect(pill.style.color).toBe("var(--label-red)");
-    fireEvent.click(pill);
-    expect(pill.style.color).toBe("");
+    expect(pill.style.color).toBe("var(--label-blue)");
+    expect(pill.className).toContain("pill-tinted");
+  });
+
+  it("a chosen label's row reads in its color; a label with none stays plain", () => {
+    render(
+      <LabelPicker
+        labels={[
+          { ...labels[0], id: "a", name: "red one", color: "red" } as Label,
+          { ...labels[0], id: "b", name: "plain one", color: "charcoal" } as Label,
+          { ...labels[0], id: "c", name: "unchosen", color: "blue" } as Label,
+        ]}
+        selected={["red one", "plain one"]}
+        text="2 labels"
+        open="labels"
+        setOpen={() => {}}
+        onToggle={() => {}}
+        onChanged={() => {}}
+      />,
+    );
+    const row = (name: string) => screen.getByText(name).closest(".label-row") as HTMLElement;
+    expect(row("red one").style.color).toBe("var(--label-red)");
+    expect(row("plain one").style.color).toBe("");
+    expect(row("unchosen").style.color).toBe("");
   });
 
   it("leaves its pill plain with nothing chosen", () => {

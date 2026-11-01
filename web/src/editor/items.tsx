@@ -13,6 +13,7 @@ export const PRIORITY_ITEMS: MenuItem[] = ["1", "2", "3", "4"].map((p) => ({
   label: `Priority ${p}`,
   icon: <FlagFilledIcon />,
   iconClass: flagClass(p),
+  checkedClass: ["1", "2", "3"].includes(p) ? `row-p${p}` : undefined,
 }));
 
 const LOCATION: Record<LocationKind, { icon: React.ReactNode; iconClass: string; indent: boolean }> = {

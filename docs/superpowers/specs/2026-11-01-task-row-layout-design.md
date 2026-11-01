@@ -97,7 +97,7 @@ Rounder throughout, using these mockup values:
 
 Why: pickers placed on the page feel disconnected from the task being typed. On iPhone they belong to the keyboard. Approved in the mockups' "Task creation: every setting" board (version 21).
 
-**Task card.** A rounded card floating 8pt above the keyboard, with nothing behind the keyboard (Noah, 2026-11-01): title, description, a sideways-scrolling row of setting pills (Date, Deadline, Priority, Project, Labels, Reminder, Repeat), and a fixed save button. The Priority, Project and Labels pills show an icon: a flag in the priority's color, the project or section's icon, and a tag. The Labels pill reads in its first label's color.
+**Task card.** A rounded card floating 8pt above the keyboard, with nothing behind the keyboard (Noah, 2026-11-01): title, description, a sideways-scrolling row of setting pills (Date, Deadline, Priority, Project, Labels, Reminder, Repeat), and a fixed save button. The Priority, Project and Labels pills show an icon: a flag in the priority's color, the project or section's icon, and a tag. The Labels pill reads in the color of the label chosen last. A row of pills fades on whichever side one runs past, in the card and the task view. In a picker, the chosen priority or label reads in its color, text and icon, and the pill keeps that color while open.
 
 **Pickers.** Each opens as a rounded card just above the task card.
 

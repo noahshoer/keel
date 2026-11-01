@@ -11,6 +11,8 @@ export type MenuItem = {
   icon?: ReactNode;
   iconClass?: string;
   indent?: boolean;
+  /** Added to the row while it's the chosen one. */
+  checkedClass?: string | undefined;
 };
 
 function MenuList({
@@ -32,7 +34,12 @@ function MenuList({
           <button
             key={item.value}
             type="button"
-            className={cx("menu-item", item.indent && "indent", checked && "checked")}
+            className={cx(
+              "menu-item",
+              item.indent && "indent",
+              checked && "checked",
+              checked && item.checkedClass,
+            )}
             onClick={() => onPick(item.value)}
           >
             {item.icon !== undefined ? (
