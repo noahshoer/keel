@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { LABEL_COLORS } from "../editor/labelColors";
 
 // From disk: Vitest empties CSS imports, `?raw` included.
 const css = readFileSync(resolve(process.cwd(), "src/styles/app.css"), "utf8");
@@ -63,6 +64,14 @@ describe.each(THEMES)("contrast, %s", (_theme, tokens) => {
     expect(fg, t).toBeDefined();
     expect(bg, s).toBeDefined();
     expect(contrast(fg as string, bg as string)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe.each(THEMES)("label colors, %s", (_theme, tokens) => {
+  it.each(LABEL_COLORS.map((c) => c.id))("--label-%s is at least 4.5:1 on --bg", (id) => {
+    const fg = tokens[`--label-${id}`];
+    expect(fg).toBeDefined();
+    expect(contrast(fg as string, tokens["--bg"] as string)).toBeGreaterThanOrEqual(4.5);
   });
 });
 

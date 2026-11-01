@@ -9,6 +9,7 @@ import { loadCoreForTests } from "../test/wasm";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
 import { LabelPicker } from "./LabelPicker";
+import { LABEL_COLORS } from "./labelColors";
 import { Menu } from "./Menu";
 import type { Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
@@ -50,11 +51,19 @@ const labels: Label[] = [
   { id: "l1", name: "Home", color: "grey", item_order: 0, is_favorite: false, is_deleted: false },
 ];
 
-export function LabelHost({ onToggle, onChanged }: { onToggle: (n: string) => void; onChanged: () => void }) {
+export function LabelHost({
+  onToggle = () => {},
+  onChanged = () => {},
+  initial = labels,
+}: {
+  onToggle?: (n: string) => void;
+  onChanged?: () => void;
+  initial?: Label[];
+}) {
   const [open, setOpen] = usePop();
   return (
     <LabelPicker
-      labels={labels}
+      labels={initial}
       selected={["home"]}
       text="home"
       open={open}
@@ -141,6 +150,53 @@ describe("Menu", () => {
 });
 
 describe("LabelPicker", () => {
+  it("shows each label's tag in its color, unknown colors as the default", async () => {
+    const { container } = render(
+      <LabelHost
+        initial={[
+          { ...labels[0], id: "a", name: "red one", color: "red" } as Label,
+          { ...labels[0], id: "b", name: "odd one", color: "mystery" } as Label,
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByTitle("Labels"));
+    const tags = [...container.querySelectorAll<HTMLElement>(".label-tag-icon")];
+    expect(tags.map((t) => t.style.color)).toEqual(["var(--label-red)", "var(--label-charcoal)"]);
+    expect(tags.every((t) => t.querySelector("svg") !== null)).toBe(true);
+  });
+
+  it("finds labels as you type", () => {
+    const errand = { ...labels[0], id: "e", name: "errand" } as Label;
+    render(<LabelHost initial={[...labels, errand]} />);
+    fireEvent.click(screen.getByTitle("Labels"));
+    fireEvent.change(screen.getByPlaceholderText("Find or add a label"), { target: { value: "ERR" } });
+    expect(screen.queryByText("Home")).toBeNull();
+    expect(screen.getByText("errand")).toBeTruthy();
+  });
+
+  it("chooses a label's color from the twelve, with a way back", async () => {
+    const saved = (await invoke("list_labels", {}))[0];
+    if (!saved) throw new Error("no label");
+    const { container } = render(<LabelHost initial={[{ ...saved, color: "orange" }]} />);
+    fireEvent.click(screen.getByTitle("Labels"));
+    fireEvent.click(screen.getByRole("button", { name: `Color for ${saved.name}` }));
+    const swatches = [...container.querySelectorAll<HTMLButtonElement>(".label-swatch")];
+    expect(swatches).toHaveLength(12);
+    expect(swatches.map((b) => b.getAttribute("aria-label"))).toEqual(LABEL_COLORS.map((c) => c.name));
+    expect(container.querySelector(".label-swatch.selected")?.getAttribute("aria-label")).toBe("Orange");
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to labels" }));
+    expect(container.querySelector(".label-swatch")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: `Color for ${saved.name}` }));
+    fireEvent.click(screen.getByRole("button", { name: "Teal" }));
+    expect(container.querySelector(".label-swatch")).toBeNull();
+    await vi.waitFor(async () => {
+      const after = (await invoke("list_labels", {})).find((l) => l.id === saved.id);
+      expect(after?.color).toBe("teal");
+    });
+  });
+
   it("ticks case-insensitively, toggles, and adds a new label", async () => {
     const onToggle = vi.fn();
     const onChanged = vi.fn();
@@ -150,7 +206,7 @@ describe("LabelPicker", () => {
     expect(box.checked).toBe(true);
     fireEvent.click(box);
     expect(onToggle).toHaveBeenCalledWith("Home");
-    const field = screen.getByPlaceholderText("New label, then Enter");
+    const field = screen.getByPlaceholderText("Find or add a label");
     fireEvent.change(field, { target: { value: "Garden" } });
     await act(async () => {
       fireEvent.keyDown(field, { key: "Enter" });

@@ -5,6 +5,7 @@
 import { type CSSProperties, Fragment, useContext, useEffect, useRef, useState } from "react";
 import type { CardRow, Label, LabelGroup, Reminder } from "../bindings";
 import { deadlineUrgent, dueLabel, labelGroups, reminderLabel } from "../core";
+import { labelColorVar } from "../editor/labelColors";
 import { completeTask, deleteTask } from "../ipc/actions";
 import {
   BellRingingIcon,
@@ -35,7 +36,7 @@ function RowLabels({ groups }: { groups: LabelGroup[] }) {
           <span
             key={group.color}
             className="task-label-group"
-            style={{ "--tint": `var(--label-${group.color}, var(--secondary))` } as CSSProperties}
+            style={{ "--tint": labelColorVar(group.color) } as CSSProperties}
           >
             <TagSmallIcon />
             {group.names.map((name, i) => (

@@ -59,6 +59,18 @@
   --inbox: #246fe0;
   --today: #058527;
   --upcoming: #692fc2;
+  --label-charcoal: #5a5a5a;
+  --label-red: #c8372d;
+  --label-orange: #c2410c;
+  --label-amber: #9a5a00;
+  --label-green: #1f7a5c;
+  --label-teal: #0f7a8a;
+  --label-blue: #246fe0;
+  --label-indigo: #4b4fc4;
+  --label-purple: #692fc2;
+  --label-pink: #c2307f;
+  --label-brown: #7a5230;
+  --label-slate: #475569;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   color-scheme: dark;
@@ -113,6 +125,18 @@
   --inbox: #5297ff;
   --today: #25b84c;
   --upcoming: #a970ff;
+  --label-charcoal: #a8a8a8;
+  --label-red: #ff7a70;
+  --label-orange: #ff9a5a;
+  --label-amber: #e8a93a;
+  --label-green: #5cc7a2;
+  --label-teal: #4ec3d4;
+  --label-blue: #7ab0ff;
+  --label-indigo: #9a9dff;
+  --label-purple: #bb8cff;
+  --label-pink: #ff85c4;
+  --label-brown: #d3a57c;
+  --label-slate: #a3b1c6;
 } }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -167,6 +191,18 @@
   --inbox: #5297ff;
   --today: #25b84c;
   --upcoming: #a970ff;
+  --label-charcoal: #a8a8a8;
+  --label-red: #ff7a70;
+  --label-orange: #ff9a5a;
+  --label-amber: #e8a93a;
+  --label-green: #5cc7a2;
+  --label-teal: #4ec3d4;
+  --label-blue: #7ab0ff;
+  --label-indigo: #9a9dff;
+  --label-purple: #bb8cff;
+  --label-pink: #ff85c4;
+  --label-brown: #d3a57c;
+  --label-slate: #a3b1c6;
 }
 
 :root { --r-sm: 6px; --r: 8px; --r-md: 10px; --r-lg: 14px; --r-card: 20px; --r-panel: 20px; --r-item: 12px; --r-full: 999px; --ease: cubic-bezier(.2,.8,.2,1); }
@@ -377,6 +413,17 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chip-btn { cursor: pointer; font-family: inherit; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip-wrap { position: relative; }
 .label-pop { min-width: 230px; }
+.label-row { display: flex; align-items: center; gap: 4px; }
+.label-row .label-opt { flex: 1; min-width: 0; }
+.label-tag-icon { display: inline-flex; flex: none; }
+.label-color-btn { flex: none; border: none; background: none; cursor: pointer; font: inherit; font-size: 12px; color: var(--secondary); padding: 6px 8px; border-radius: var(--r-full); }
+@media (hover: hover) { .label-color-btn:hover { background: var(--hover); } }
+.label-back { font-weight: 600; }
+.label-color-name { display: flex; align-items: center; gap: 8px; padding: 7px 8px; font-size: 13px; }
+.label-swatches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); justify-items: center; padding: 4px 0; }
+.label-swatch { width: 36px; height: 36px; border: 2px solid transparent; border-radius: 50%; background: none; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.label-swatch span { width: 22px; height: 22px; border-radius: 50%; }
+.label-swatch.selected { border-color: var(--text); }
 
 /* Popovers (scheduler, menus, labels): one open per editor; a transparent
    backdrop behind them closes on click. */
@@ -500,7 +547,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   /* Tap targets reach 44pt whatever the visible size. */
   .icon-btn { position: relative; }
   .icon-btn::after { content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
-  .chip-btn, .tv-pill, .menu-item, .label-opt { min-height: 44px; }
+  .chip-btn, .tv-pill, .menu-item, .label-opt, .label-color-btn { min-height: 44px; }
+  .label-swatch { width: 44px; height: 44px; }
+  .label-swatch span { width: 26px; height: 26px; }
   .task-project { font-size: 14px; line-height: 19px; }
   .task-count { font-size: 14px; line-height: 19px; }
   .task-when, .task-bottom, .task-deadline { font-size: 14px; line-height: 19px; }

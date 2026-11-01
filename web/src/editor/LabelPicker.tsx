@@ -2,8 +2,10 @@
 // Enter (it's created and ticked). crates/ui/src/editor.rs `LabelPicker`.
 import { useRef, useState } from "react";
 import type { Label } from "../bindings";
-import { addLabel } from "../ipc/actions";
+import { addLabel, setLabelColor } from "../ipc/actions";
 import { TagSmallIcon } from "../shell/icons";
+import { LabelColorPicker } from "./LabelColorPicker";
+import { labelColorVar } from "./labelColors";
 import { cx, type Face, type PopProps } from "./pop";
 import { usePlacedPopover } from "./popover";
 
@@ -23,23 +25,52 @@ function LabelMenu({
   const ref = useRef<HTMLDivElement>(null);
   usePlacedPopover(ref);
   const [draft, setDraft] = useState("");
+  const [coloring, setColoring] = useState<Label | null>(null);
+  if (coloring !== null) {
+    return (
+      <div ref={ref} className="popover menu label-pop">
+        <LabelColorPicker
+          label={coloring}
+          onBack={() => setColoring(null)}
+          onPick={(color) => {
+            setColoring(null);
+            setLabelColor(coloring.id, color).then(onChanged, onChanged);
+          }}
+        />
+      </div>
+    );
+  }
+  const query = draft.trim().toLowerCase();
+  const shown = labels.filter((l) => l.name.toLowerCase().includes(query));
   return (
     <div ref={ref} className="popover menu label-pop">
       {labels.length === 0 ? <div className="label-empty">No labels yet</div> : null}
-      {labels.map((l) => (
-        <label key={l.id} className="label-opt">
-          <input
-            type="checkbox"
-            checked={selected.some((n) => same(n, l.name))}
-            onChange={() => onToggle(l.name)}
-          />
-          <TagSmallIcon />
-          {l.name}
-        </label>
+      {shown.map((l) => (
+        <div key={l.id} className="label-row">
+          <label className="label-opt">
+            <input
+              type="checkbox"
+              checked={selected.some((n) => same(n, l.name))}
+              onChange={() => onToggle(l.name)}
+            />
+            <span className="label-tag-icon" style={{ color: labelColorVar(l.color) }}>
+              <TagSmallIcon />
+            </span>
+            {l.name}
+          </label>
+          <button
+            type="button"
+            className="label-color-btn"
+            aria-label={`Color for ${l.name}`}
+            onClick={() => setColoring(l)}
+          >
+            Color
+          </button>
+        </div>
       ))}
       <input
         className="label-new"
-        placeholder="New label, then Enter"
+        placeholder="Find or add a label"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {

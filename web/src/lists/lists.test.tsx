@@ -274,8 +274,8 @@ it("labels group by color, one tag each, tinted by that color, in added order", 
   expect(groups.map((g) => g.textContent)).toEqual(["c", "a, b"]);
   expect(groups.map((g) => g.querySelectorAll("svg").length)).toEqual([1, 1]);
   expect(groups.map((g) => g.style.getPropertyValue("--tint"))).toEqual([
-    "var(--label-blue, var(--secondary))",
-    "var(--label-red, var(--secondary))",
+    "var(--label-blue)",
+    "var(--label-red)",
   ]);
 });
 
@@ -284,7 +284,7 @@ it("a label with no record still shows, in the default group", () => {
   const { container } = renderRow(task, { labels: [] });
   const group = container.querySelector<HTMLElement>(".task-label-group");
   expect(group?.textContent).toBe("ghost");
-  expect(group?.style.getPropertyValue("--tint")).toBe("var(--label-charcoal, var(--secondary))");
+  expect(group?.style.getPropertyValue("--tint")).toBe("var(--label-charcoal)");
 });
 
 it("beside a long project the when group never shortens, the project does", () => {
