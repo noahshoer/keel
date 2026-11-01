@@ -2,7 +2,7 @@
 // (crates/ui/src/pickers.rs `DeadlinePicker`).
 import { TargetSmallIcon } from "../shell/icons";
 import { cx, type Face, type PopProps } from "./pop";
-import { Scheduler } from "./Scheduler";
+import { type CalendarActions, Scheduler } from "./Scheduler";
 
 export function DeadlinePicker({
   deadline,
@@ -13,6 +13,7 @@ export function DeadlinePicker({
   setOpen,
   onChange,
   face,
+  actions,
 }: PopProps & {
   /** `YYYY-MM-DD` or "". */
   deadline: string;
@@ -25,6 +26,8 @@ export function DeadlinePicker({
   onChange: (date: string) => void;
   /** The task view's look for the button. */
   face?: Face;
+  /** The calendar's check and X. */
+  actions?: CalendarActions;
 }) {
   const isOpen = open === "deadline";
   const state = urgent === null ? "deadline-chip" : urgent ? "deadline-chip urgent" : "deadline-chip set";
@@ -48,6 +51,7 @@ export function DeadlinePicker({
           rule={null}
           today={today}
           onPick={(d) => onChange(d ?? "")}
+          actions={actions}
           close={() => setOpen(null)}
         />
       ) : null}

@@ -114,10 +114,10 @@ Why: pickers placed on the page feel disconnected from the task being typed. On 
 **Fit above the keyboard** (Noah, 2026-11-01, from the simulator and two phone checks).
 
 - **The bar above the keyboard is hidden everywhere**, since its check mark only closed the keyboard. That leaves about 324pt above the task card on an iPhone 17, below the Dynamic Island.
-- **Calendars (Date and Deadline):** they need more room, so opening one lowers the keyboard. Whatever replaces it (a chosen deadline, another pill, a tap outside) brings the keyboard back.
+- **Calendars (Date and Deadline):** they need more room, so opening one lowers the keyboard. An X and a check at the top of the calendar go back to typing: the check keeps the choice and the X undoes what changed since the calendar opened. Another pill or a tap outside also brings the keyboard back, keeping the choice.
 - **Time:** a Keel wheel inside the date card on touch. The iOS picker would take focus from the title. Desktop types a time.
 - **Quick choices and other tall lists:** the keyboard stays up and the list scrolls inside the room above the card.
-- **Selected day:** Keel green on a deadline. On a date it follows the date's color, with later dates in green.
+- **Colors:** the quick choices' text and the open Date pill follow the date's color, like the selected day (later dates in green). A deadline's selected day, open pill and set pill text are Keel green.
 
 **Still open:**
 

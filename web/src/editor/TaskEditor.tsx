@@ -91,14 +91,17 @@ export function TaskEditor({
   // A calendar needs more room than the keyboard leaves, so it lowers the
   // keyboard; whatever replaces it brings the keyboard back, inside the tap.
   const madeRoom = useRef(false);
+  const beforeCalendar = useRef(initial);
   const makeRoom = () => {
+    // What the calendar's X goes back to.
+    beforeCalendar.current = latest.current;
     if (!touch) return;
     madeRoom.current = true;
     title.current?.blur();
   };
   const setPop = (p: Pop) => {
     setOpen(p);
-    if (p === "deadline") makeRoom();
+    if (p === "deadline" && open !== "deadline") makeRoom();
     else if (madeRoom.current) {
       madeRoom.current = false;
       title.current?.focus();
@@ -142,6 +145,15 @@ export function TaskEditor({
 
   const repeatItems: MenuItem[] = view.repeat_options.map(([value, label]) => ({ value, label }));
 
+  const calendarActions = {
+    onDone: () => setPop(null),
+    onCancel: () => {
+      latest.current = beforeCalendar.current;
+      setValues(beforeCalendar.current);
+      setPop(null);
+    },
+  };
+
   const pills: ReactNode = (
     <div ref={chips} className="chips" onScroll={measurePills}>
       <DatePicker
@@ -161,6 +173,7 @@ export function TaskEditor({
         setOpen={setPop}
         onChange={(date, time) => pick({ type: "date", date, time })}
         onCalendar={makeRoom}
+        actions={calendarActions}
       />
       <DeadlinePicker
         deadline={values.deadline}
@@ -170,6 +183,7 @@ export function TaskEditor({
         open={open}
         setOpen={setPop}
         onChange={(date) => pick({ type: "deadline", date })}
+        actions={calendarActions}
       />
       <Menu
         id="priority"

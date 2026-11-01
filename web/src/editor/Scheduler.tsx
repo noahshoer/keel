@@ -14,7 +14,13 @@ import {
   yearChoices,
 } from "../core";
 import { BUCKET_CLASS } from "../lists/chips";
-import { CheckSmallIcon, ChevronDownSmallIcon, ChevronLeftIcon, ChevronRightIcon } from "../shell/icons";
+import {
+  CheckSmallIcon,
+  ChevronDownSmallIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  XIcon,
+} from "../shell/icons";
 import { isTouch, weekStart } from "./locale";
 import type { MenuItem } from "./Menu";
 import { cx } from "./pop";
@@ -23,6 +29,8 @@ import { TimeWheel } from "./TimeWheel";
 import { installMonthWheel, installYearWheel } from "./wheel";
 
 /** The repeat choices the date card offers: the same ones as the Repeat pill. */
+export type CalendarActions = { onDone: () => void; onCancel: () => void };
+
 export type RepeatChoice = {
   items: MenuItem[];
   selected: string;
@@ -47,6 +55,7 @@ export function Scheduler({
   onPick,
   close,
   onCalendar,
+  actions,
 }: {
   /** `YYYY-MM-DD` or `null`. */
   selected: string | null;
@@ -66,6 +75,8 @@ export function Scheduler({
   close: () => void;
   /** When the quick choices give way to the calendar. */
   onCalendar?: (() => void) | undefined;
+  /** The calendar's check and X; with them a day selects and stays open. */
+  actions?: CalendarActions | undefined;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   usePlacedPopover(ref);
@@ -150,7 +161,11 @@ export function Scheduler({
             <button
               key={label}
               type="button"
-              className={cx("menu-item", d === selected && "checked")}
+              className={cx(
+                "menu-item",
+                `quick-${BUCKET_CLASS[dueBucket(d, today)]}`,
+                d === selected && "checked",
+              )}
               onClick={() => {
                 onPick(d, timeStr);
                 close();
@@ -216,6 +231,21 @@ export function Scheduler({
       ) : null}
       {step === "card" ? (
         <>
+          {actions !== undefined ? (
+            <div className="sched-actions">
+              <button type="button" className="icon-btn" aria-label="Cancel" onClick={actions.onCancel}>
+                <XIcon />
+              </button>
+              <button
+                type="button"
+                className="icon-btn sched-done"
+                aria-label="Done"
+                onClick={actions.onDone}
+              >
+                <CheckSmallIcon />
+              </button>
+            </div>
+          ) : null}
           <div className="sched-cal">
             <div className="cal-nav">
               <button
@@ -302,7 +332,7 @@ export function Scheduler({
                         onClick={() => {
                           onPick(cell.date, timeStr);
                           // A date still has its Time and Repeat rows to offer.
-                          if (!withTime) close();
+                          if (!withTime && actions === undefined) close();
                         }}
                       >
                         {cell.day}

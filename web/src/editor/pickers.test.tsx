@@ -3,7 +3,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { Label, ReminderDraft } from "../bindings";
+import type { DueBucket, Label, ReminderDraft } from "../bindings";
 import { invoke } from "../ipc/invoke";
 import { loadCoreForTests } from "../test/wasm";
 import { DatePicker } from "./DatePicker";
@@ -96,10 +96,12 @@ export function DateHost({
   onChange,
   date = "",
   time = "",
+  bucket = null,
 }: {
   onChange: (d: string, t: string) => void;
   date?: string;
   time?: string;
+  bucket?: DueBucket | null;
 }) {
   const [open, setOpen] = usePop();
   return (
@@ -112,7 +114,7 @@ export function DateHost({
         date={date}
         time={time}
         text="Date"
-        bucket={null}
+        bucket={bucket}
         rule={null}
         today={TODAY}
         open={open}
@@ -319,6 +321,26 @@ describe("DatePicker", () => {
     fireEvent.click(screen.getByText("No date"));
     expect(onChange).toHaveBeenLastCalledWith("", "");
     expect(document.querySelector(".scheduler")).toBeNull();
+  });
+
+  it("colors each quick choice by when it falls", () => {
+    render(<DateHost onChange={vi.fn()} />);
+    openIt();
+    const row = (name: string) => screen.getByText(name).closest("button")?.className;
+    // Friday 2026-10-30: today, tomorrow, and a Saturday and Monday this coming week.
+    expect(row("Today")).toContain("quick-today");
+    expect(row("Tomorrow")).toContain("quick-tomorrow");
+    expect(row("Next week")).toContain("quick-week");
+    expect(row("No date")).not.toContain("quick-");
+    expect(row("Pick a date and time")).not.toContain("quick-");
+  });
+
+  it("the open pill takes its date's color class", () => {
+    render(<DateHost onChange={vi.fn()} date="2026-10-31" bucket="Tomorrow" />);
+    openIt();
+    const pill = screen.getByTitle("Date").className;
+    expect(pill).toContain("chip-open");
+    expect(pill).toContain("tomorrow");
   });
 
   it("marks the quick choice that's set", () => {

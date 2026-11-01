@@ -157,14 +157,54 @@ describe("on touch", () => {
       expect(focused()).toBe(false);
     });
 
-    it("Deadline lowers it at once, and picking a day brings it back", () => {
+    const openDeadline = () => fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
+    const day = (n: string) => screen.getByText(n, { selector: ".cal-day:not(.other)" });
+
+    it("Deadline lowers it at once; a day selects and stays until the check", () => {
       adding();
       title().focus();
-      fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
+      openDeadline();
       expect(focused()).toBe(false);
-      fireEvent.click(screen.getByText("12", { selector: ".cal-day:not(.other)" }));
+      fireEvent.click(day("12"));
+      expect(document.querySelector(".cal-day.selected")?.textContent).toBe("12");
+      expect(focused()).toBe(false);
+      fireEvent.click(screen.getByRole("button", { name: "Done" }));
       expect(document.querySelector(".popover")).toBeNull();
       expect(focused()).toBe(true);
+      expect(screen.getByTitle("Deadline: the date it must be done by").textContent).toContain("12");
+    });
+
+    it("the X undoes the deadline and brings the keyboard back", () => {
+      adding();
+      title().focus();
+      openDeadline();
+      fireEvent.click(day("12"));
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(document.querySelector(".popover")).toBeNull();
+      expect(focused()).toBe(true);
+      expect(screen.getByTitle("Deadline: the date it must be done by").textContent).not.toContain("12");
+    });
+
+    it("the X undoes the date, time and repeat chosen in the date card", () => {
+      adding();
+      title().focus();
+      fireEvent.click(screen.getByTitle("Date"));
+      fireEvent.click(screen.getByText("Pick a date and time"));
+      fireEvent.click(day("12"));
+      fireEvent.click(
+        within(document.querySelector(".scheduler") as HTMLElement).getByRole("button", { name: /^Repeat/ }),
+      );
+      fireEvent.click(screen.getByText("Every day"));
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(focused()).toBe(true);
+      expect(screen.getByTitle("Date").textContent).not.toContain("12");
+      expect(screen.getByTitle("Repeat").textContent).not.toContain("Every day");
+    });
+
+    it("the quick choices need no check or X, with the keyboard still up", () => {
+      adding();
+      fireEvent.click(screen.getByTitle("Date"));
+      expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
     });
 
     it("another pill or a tap outside brings it back", () => {
