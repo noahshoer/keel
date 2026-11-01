@@ -88,6 +88,13 @@ describe("the approved light values", () => {
   });
 });
 
+describe("due date colors", () => {
+  it.each(THEMES)("are told apart by when, %s", (_theme, tokens) => {
+    const due = ["--due-overdue", "--due-today", "--due-tomorrow", "--due-week", "--due-later"];
+    expect(new Set(due.map((t) => tokens[t])).size).toBe(due.length);
+  });
+});
+
 describe("radii", () => {
   it("has the card, panel and item radii", () => {
     expect(css).toMatch(/--r-card:\s*20px/);

@@ -9,6 +9,7 @@ import { labelColorVar } from "../editor/labelColors";
 import { completeTask, deleteTask } from "../ipc/actions";
 import {
   BellRingingIcon,
+  CalendarSmallIcon,
   DoneMark,
   FireIcon,
   FlagFillIcon,
@@ -143,7 +144,12 @@ export function TaskRow({
   const whenGroup = hasWhen ? (
     <div className="task-when task-badges">
       {progress !== null ? <SubtaskProgress progress={progress} /> : null}
-      {due !== null ? <span className={due.cls}>{due.label}</span> : null}
+      {due !== null ? (
+        <span className={due.cls}>
+          <CalendarSmallIcon />
+          {due.label}
+        </span>
+      ) : null}
       {recurring ? (
         <span className="task-repeat" title="Repeats">
           <RepeatSmallIcon />

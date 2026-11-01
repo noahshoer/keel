@@ -32,6 +32,8 @@ function visibleTop(): number {
  */
 function followCard(pop: HTMLElement, card: Element): () => void {
   const place = () => {
+    // Clearing the limit to measure would lose the picker's scroll.
+    const scrolled = pop.scrollTop;
     Object.assign(pop.style, { position: "fixed", right: "auto", margin: "0", maxHeight: "" });
     const at = placeAboveCard(
       card.getBoundingClientRect(),
@@ -46,6 +48,7 @@ function followCard(pop: HTMLElement, card: Element): () => void {
       maxHeight: `${at.maxHeight}px`,
       overflowY: "auto",
     });
+    pop.scrollTop = scrolled;
   };
   place();
   const v = window.visualViewport;

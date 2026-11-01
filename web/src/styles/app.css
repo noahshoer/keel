@@ -52,9 +52,10 @@
   --p4: #767676;
   --due-overdue: #b83328;
   --due-today: #1f6f55;
-  --due-tomorrow: #1f6f55;
-  --due-week: #1f6f55;
-  --due-later: #1f6f55;
+  --due-tomorrow: #8a5200;
+  --due-week: #692fc2;
+  --due-later: #5a5a5a;
+  --active-tint: #e6f1ec;
   --streak: #1f6f55;
   --inbox: #246fe0;
   --today: #058527;
@@ -118,9 +119,10 @@
   --p4: #8a8a8a;
   --due-overdue: #ff7a70;
   --due-today: #5cc7a2;
-  --due-tomorrow: #5cc7a2;
-  --due-week: #5cc7a2;
-  --due-later: #5cc7a2;
+  --due-tomorrow: #ff9a14;
+  --due-week: #b48aff;
+  --due-later: #a8a8a8;
+  --active-tint: rgba(92,199,162,.16);
   --streak: #5cc7a2;
   --inbox: #5297ff;
   --today: #25b84c;
@@ -184,9 +186,10 @@
   --p4: #8a8a8a;
   --due-overdue: #ff7a70;
   --due-today: #5cc7a2;
-  --due-tomorrow: #5cc7a2;
-  --due-week: #5cc7a2;
-  --due-later: #5cc7a2;
+  --due-tomorrow: #ff9a14;
+  --due-week: #b48aff;
+  --due-later: #a8a8a8;
+  --active-tint: rgba(92,199,162,.16);
   --streak: #5cc7a2;
   --inbox: #5297ff;
   --today: #25b84c;
@@ -381,19 +384,26 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Touch: the task card sits on the keyboard and its pickers on the card. */
 .editor.on-keyboard { position: fixed; left: 0; right: 0; z-index: 45; margin: 0; border: none; border-radius: 24px 24px 0 0;
   padding: 16px 16px 12px; animation: none; box-shadow: var(--shadow-lg); }
+/* The keyboard is translucent: its bar shows the card's color, not the list held behind it. */
+.editor.on-keyboard:not(.keyboard-down)::before { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 420px; background: var(--bg); }
 .editor.on-keyboard.keyboard-down { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
 .editor-scrim { position: fixed; inset: 0; z-index: -1; background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
 .on-keyboard .name { font-size: 18px; line-height: 24px; font-weight: 500; }
 .on-keyboard .desc { font-size: 15px; line-height: 20px; padding: 4px 0 8px; }
-.editor-actions { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
-.on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; padding-bottom: 0; overflow-x: auto; scrollbar-width: none; }
+.editor-actions { position: relative; display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+/* Pills fade out before the save button instead of cutting off under it. */
+.editor-actions::after { content: ''; position: absolute; top: 4px; bottom: 0; right: 52px; width: 24px; pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--bg)); }
+.on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; padding: 0 24px 0 0; overflow-x: auto; scrollbar-width: none; }
 .on-keyboard .chips::-webkit-scrollbar { display: none; }
 .on-keyboard .chip-btn { height: 44px; max-width: none; padding: 0 14px; border: none; background: var(--field-fill); color: var(--text); font-size: 15px; white-space: nowrap; }
 .on-keyboard .chip-btn .icon, .on-keyboard .chip-caret { display: none; }
 .on-keyboard .chip-btn.chip-open { background: var(--accent); color: #fff; font-weight: 600; }
 .on-keyboard .chip-wrap { position: static; flex: none; }
 .on-keyboard .popover { width: calc(100vw - 16px); max-width: none; min-width: 0; padding: 12px; border: none; border-radius: 24px; box-shadow: var(--shadow-lg); animation: fade-in .16s var(--ease); }
-.on-keyboard .pop-backdrop { background: rgba(0,0,0,.2); }
+.on-keyboard .pop-backdrop { z-index: -1; background: rgba(0,0,0,.2); }
+.on-keyboard .menu-item.checked, .on-keyboard .label-row.on { background: var(--active-tint); }
+.time-wheel .wheel { margin: 0 12px 4px; }
 .on-keyboard .scheduler { padding: 12px; }
 .on-keyboard .sched-quick, .on-keyboard .sched-cal { padding: 0; }
 .on-keyboard .menu-item { font-size: 16px; border-radius: 14px; padding: 0 12px; min-height: 44px; }
@@ -439,7 +449,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chip-btn { cursor: pointer; font-family: inherit; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip-wrap { position: relative; }
 .label-pop { min-width: 230px; }
-.label-row { display: flex; align-items: center; gap: 4px; }
+.label-row { display: flex; align-items: center; gap: 4px; border-radius: var(--r); padding-right: 8px; }
+.label-opt input { position: absolute; opacity: 0; width: 0; height: 0; }
 .label-row .label-opt { flex: 1; min-width: 0; }
 .label-tag-icon { display: inline-flex; flex: none; }
 .label-color-btn { flex: none; border: none; background: none; cursor: pointer; font: inherit; font-size: 12px; color: var(--secondary); padding: 6px 8px; border-radius: var(--r-full); }
@@ -594,7 +605,15 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .nav-item .count { font-size: 15px; }
   .section-head { font-size: 13px; padding: 22px 10px 8px; }
   .section-head .icon-btn svg { width: 20px; height: 20px; }
-  .project-input { font-size: 16px; padding: 10px 12px; }
+  /* Fields read at full size, and iOS doesn't zoom into them. */
+  input:not([type="checkbox"]), textarea, select { font-size: 16px; }
+  .project-input, .search-input, .time-input { min-height: 44px; }
+  .project-input { padding: 10px 12px; }
+  .label-new { min-height: 44px; margin: 0 0 4px; padding: 0 12px; border: none; border-radius: 14px; background: var(--field-fill); }
+  .label-new.bad { border: 1px solid var(--due-overdue); }
+  .label-row { border-radius: 14px; }
+  .label-opt { font-size: 16px; }
+  .search-input { height: 44px; }
   /* The add row, Reminders-style: a blank next task with a dotted circle,
      lined up with the task circles above it. */
   .add-task-row { padding: 14px 16px; gap: 12px; font-size: 17px; }

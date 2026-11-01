@@ -21,7 +21,7 @@ Each row appears only when it has content.
 
 The project is always shown and always pinned bottom right. Tasks without a project show "Inbox".
 
-The **when group** is, in order: sub-tasks, date or time, repeat icon, ringing bell icon (when the task has reminders). Any one of these counts as the group. Repeat shows only the icon, not the frequency.
+The **when group** is, in order: sub-tasks, date or time with a calendar icon, repeat icon, ringing bell icon (when the task has reminders). Any one of these counts as the group. Repeat shows only the icon, not the frequency.
 
 | When group | Labels | Bottom rows |
 |---|---|---|
@@ -62,7 +62,7 @@ Shown with "X of Y":
 
 - All text meets 4.5:1 against its background, in light and dark. Today's muted `#8a8a8a` is about 3:1 on the app background, so it can't be used for text.
 - Secondary text is `#5a5a5a` in light mode.
-- Mockup values on white: due dates `#1f6f55`, overdue dates and deadlines `#b83328`.
+- Mockup values on white: today `#1f6f55`, overdue dates and deadlines `#b83328`. Tomorrow, this week and later keep their own colors (Noah's phone check, 2026-11-01).
 - The empty priority 4 task circle darkens from `#b8b8b8` to `#767676`.
 - Dark mode values aren't chosen yet. They follow the same rule.
 
@@ -102,7 +102,7 @@ Why: pickers placed on the page feel disconnected from the task being typed. On 
 **Pickers.** Each opens as a rounded card just above the task card.
 
 - **Date:** quick choices (Today, Tomorrow, This weekend, Next week, Pick a date and time, No date).
-- **Pick a date and time:** a calendar, then a Time row and a Repeat row. Time uses the iOS time picker.
+- **Pick a date and time:** a calendar, then a Time row and a Repeat row. Time is a wheel in the card on touch.
 - **Repeat in the date card:** the row shows the current choice. Tapping it opens the repeat options with a way back, and choosing an option returns to the date card.
 - **Repeat pill:** the same options, also available on their own.
 - **Deadline:** a calendar with no time, plus No deadline.
@@ -113,7 +113,7 @@ Why: pickers placed on the page feel disconnected from the task being typed. On 
 
 **Fit above the keyboard** (Noah, 2026-11-01, from a simulator test on iPhone 17, iOS 27.1; re-check on the phone). The keyboard takes 396pt of the 874pt screen, including its bar above the keys, which leaves about 334pt above the 136pt task card, or about 270pt below the Dynamic Island.
 
-- **Time:** the real iOS picker. It can't sit in the keyboard's place: tapping Time closes the keyboard and iOS shows a floating card with Reset and a check mark. The keyboard stays down after confirming, so the task card returns to the bottom of the screen.
+- **Time:** a Keel wheel inside the date card, on touch (Noah's phone check, 2026-11-01). The iOS picker can't be used: it always closes the keyboard, since it takes focus from the title. Desktop types a time.
 - **Calendars (Date and Deadline):** the keyboard stays up and the card scrolls inside the room above the task card, since a calendar with its rows needs 339 to 425pt. Time and Repeat start below the fold.
 - **Quick choices and other tall lists:** the keyboard stays up and the list scrolls inside the same room.
 

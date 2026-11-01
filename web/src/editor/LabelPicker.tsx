@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import type { Label } from "../bindings";
 import { addLabel, setLabelColor } from "../ipc/actions";
-import { TagSmallIcon } from "../shell/icons";
+import { CheckSmallIcon, TagSmallIcon } from "../shell/icons";
 import { LabelColorPicker } from "./LabelColorPicker";
 import { labelColorVar } from "./labelColors";
 import { cx, type Face, type PopProps } from "./pop";
@@ -44,30 +44,6 @@ function LabelMenu({
   const shown = labels.filter((l) => l.name.toLowerCase().includes(query));
   return (
     <div ref={ref} className="popover menu label-pop">
-      {labels.length === 0 ? <div className="label-empty">No labels yet</div> : null}
-      {shown.map((l) => (
-        <div key={l.id} className="label-row">
-          <label className="label-opt">
-            <input
-              type="checkbox"
-              checked={selected.some((n) => same(n, l.name))}
-              onChange={() => onToggle(l.name)}
-            />
-            <span className="label-tag-icon" style={{ color: labelColorVar(l.color) }}>
-              <TagSmallIcon />
-            </span>
-            {l.name}
-          </label>
-          <button
-            type="button"
-            className="label-color-btn"
-            aria-label={`Color for ${l.name}`}
-            onClick={() => setColoring(l)}
-          >
-            Color
-          </button>
-        </div>
-      ))}
       <input
         className="label-new"
         placeholder="Find or add a label"
@@ -83,6 +59,34 @@ function LabelMenu({
           addLabel(name).then(onChanged, onChanged);
         }}
       />
+      {labels.length === 0 ? <div className="label-empty">No labels yet</div> : null}
+      {shown.map((l) => {
+        const on = selected.some((n) => same(n, l.name));
+        return (
+          <div key={l.id} className={on ? "label-row on" : "label-row"}>
+            <label className="label-opt">
+              <input type="checkbox" checked={on} onChange={() => onToggle(l.name)} />
+              <span className="label-tag-icon" style={{ color: labelColorVar(l.color) }}>
+                <TagSmallIcon />
+              </span>
+              {l.name}
+            </label>
+            <button
+              type="button"
+              className="label-color-btn"
+              aria-label={`Color for ${l.name}`}
+              onClick={() => setColoring(l)}
+            >
+              Color
+            </button>
+            {on ? (
+              <span className="menu-check">
+                <CheckSmallIcon />
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }

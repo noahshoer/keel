@@ -7,7 +7,6 @@ import {
   dueBucket,
   monthNames,
   monthView,
-  nativeTime,
   quickDates,
   shiftMonth,
   timeLabel,
@@ -20,6 +19,7 @@ import { isTouch, weekStart } from "./locale";
 import type { MenuItem } from "./Menu";
 import { cx } from "./pop";
 import { usePlacedPopover } from "./popover";
+import { TimeWheel } from "./TimeWheel";
 import { installMonthWheel, installYearWheel } from "./wheel";
 
 /** The repeat choices the date card offers: the same ones as the Repeat pill. */
@@ -296,50 +296,34 @@ export function Scheduler({
               </div>
             )}
           </div>
-          {withTime ? (
+          {withTime && touch ? (
+            <TimeWheel
+              time={timeStr}
+              onChange={(t) => {
+                setTimeText(t === "" ? "" : timeLabel(t));
+                // A time without a date means today.
+                onPick(t === "" ? selected : (selected ?? today), t);
+              }}
+            />
+          ) : withTime ? (
             <div className="sched-time">
               <span className="sched-row-label">Time</span>
-              {touch ? (
-                // Phones: the OS time wheel instead of typing. iOS shows no
-                // placeholder, so an empty field gets a hint.
-                <span className="time-native">
-                  {timeStr === "" ? <span className="time-hint">Add time</span> : null}
-                  <input
-                    type="time"
-                    className="time-input native"
-                    value={timeStr}
-                    onChange={(e) => {
-                      const t = nativeTime(e.target.value);
-                      if (t === undefined) return;
-                      if (t === null) {
-                        setTimeText("");
-                        onPick(selected, "");
-                      } else {
-                        setTimeText(timeLabel(t));
-                        // A time without a date means today.
-                        onPick(selected ?? today, t);
-                      }
-                    }}
-                  />
-                </span>
-              ) : (
-                <input
-                  className={timeBad ? "time-input bad" : "time-input"}
-                  placeholder="Add time, e.g. 5pm or 17:30"
-                  value={timeText}
-                  onChange={(e) => {
-                    setTimeBad(false);
-                    setTimeText(e.target.value);
-                  }}
-                  onBlur={commitTime}
-                  onKeyDown={(e) => {
-                    if (e.key !== "Enter") return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (commitTime()) close();
-                  }}
-                />
-              )}
+              <input
+                className={timeBad ? "time-input bad" : "time-input"}
+                placeholder="Add time, e.g. 5pm or 17:30"
+                value={timeText}
+                onChange={(e) => {
+                  setTimeBad(false);
+                  setTimeText(e.target.value);
+                }}
+                onBlur={commitTime}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (commitTime()) close();
+                }}
+              />
               {time !== null ? (
                 <button
                   type="button"

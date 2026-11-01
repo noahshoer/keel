@@ -165,6 +165,7 @@ it("due chips are coloured by keel-core's bucket", () => {
     { wrapper },
   );
   const chips = [...container.querySelectorAll(".task-when .due")].map((e) => e.className);
+  expect(container.querySelector(".task-when .due svg")).not.toBeNull();
   expect(chips).toEqual(["due overdue", "due today"]);
 });
 

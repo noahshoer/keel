@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import type { EditorValues } from "../bindings";
 import { blankValues, valuesFromTask } from "../core";
 import * as fx from "../ipc/fixtures";
+import { mockPageScrollHeld } from "../ipc/mock";
 import { loadCoreForTests } from "../test/wasm";
 import { TaskEditor } from "./TaskEditor";
 
@@ -105,10 +106,33 @@ describe("on touch", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the title focused when a pill is pressed", () => {
+  it("keeps the title focused when a pill, a picker or the area outside is pressed", () => {
     adding();
-    const pill = screen.getByTitle("Priority");
-    expect(fireEvent.mouseDown(pill)).toBe(false);
+    expect(fireEvent.mouseDown(screen.getByTitle("Priority"))).toBe(false);
+    fireEvent.click(screen.getByTitle("Priority"));
+    expect(fireEvent.mouseDown(document.querySelector(".pop-backdrop") as Element)).toBe(false);
+    expect(fireEvent.mouseDown(screen.getByText("Priority 1"))).toBe(false);
+  });
+
+  it("lets a text field take focus", () => {
+    adding();
+    expect(fireEvent.mouseDown(screen.getByPlaceholderText("Description"))).toBe(true);
+  });
+
+  it("switches pills in one tap", () => {
+    adding();
+    fireEvent.click(screen.getByTitle("Priority"));
+    expect(screen.getByText("Priority 1")).toBeTruthy();
+    fireEvent.click(screen.getByTitle("Repeat"));
+    expect(screen.queryByText("Priority 1")).toBeNull();
+    expect(screen.getByText("Every day")).toBeTruthy();
+  });
+
+  it("holds the page still while it's open", async () => {
+    adding();
+    await vi.waitFor(() => expect(mockPageScrollHeld()).toBe(true));
+    cleanup();
+    await vi.waitFor(() => expect(mockPageScrollHeld()).toBe(false));
   });
 });
 

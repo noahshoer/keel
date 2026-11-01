@@ -2,8 +2,9 @@
 // and editing (crates/ui/src/editor.rs `TaskEditor`). When adding, the title
 // is parsed as quick add with live highlighting and preview chips. Every
 // decision about the values is keel-core's (`editorView`, `applyPick`, …).
-import { type MouseEvent, type ReactNode, type RefObject, useRef, useState } from "react";
+import { type MouseEvent, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { holdPage } from "../app/pageHold";
 import type { EditorPick, EditorValues, Label, Project, Recurrence, Section, SpanKind } from "../bindings";
 import { localToday } from "../clock";
 import { applyPick, editorView, locationPick, toggleLabel, unhighlightAt, withTitle } from "../core";
@@ -75,6 +76,7 @@ export function TaskEditor({
   const [open, setOpen] = useState<Pop>(null);
   const [touch] = useState(isTouch);
   const keyboard = useKeyboard(touch);
+  useEffect(() => (touch ? holdPage() : undefined), [touch]);
   // Submits once: a fast second Enter (before the editor closes) is ignored.
   // In keep-open mode the form resets to blank instead (an empty title can't
   // be submitted, so a second Enter is a no-op there too). Refs, so two
@@ -193,6 +195,8 @@ export function TaskEditor({
     <form
       className={cx("editor", touch && "on-keyboard", touch && !keyboard.up && "keyboard-down")}
       style={touch ? { bottom: keyboard.inset } : undefined}
+      // Pressing anything but a text field keeps the title focused, so the keyboard stays up.
+      onMouseDown={touch ? keepFocus : undefined}
       onSubmit={(e) => {
         e.preventDefault();
         submit();
@@ -245,9 +249,7 @@ export function TaskEditor({
         }}
       />
       {touch ? (
-        // Pressing a pill or the save button keeps the title focused, so the keyboard stays up.
-        // biome-ignore lint/a11y/noStaticElementInteractions: only stops the press taking focus.
-        <div className="editor-actions" onMouseDown={keepFocus}>
+        <div className="editor-actions">
           {pills}
           <button type="submit" className="btn-save" aria-label={submitText} disabled={!view.can_submit}>
             <ArrowUpIcon />

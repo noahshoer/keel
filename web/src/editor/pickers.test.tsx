@@ -177,6 +177,16 @@ describe("Menu", () => {
 });
 
 describe("LabelPicker", () => {
+  it("has the find field first, and marks chosen labels", () => {
+    render(<LabelHost />);
+    fireEvent.click(screen.getByTitle("Labels"));
+    const pop = document.querySelector(".popover") as HTMLElement;
+    expect(pop.firstElementChild?.getAttribute("placeholder")).toBe("Find or add a label");
+    const row = document.querySelector(".label-row") as HTMLElement;
+    expect(row.className).toContain("on");
+    expect(row.querySelector(".menu-check")).not.toBeNull();
+  });
+
   it("shows each label's tag in its color, unknown colors as the default", async () => {
     const { container } = render(
       <LabelHost
@@ -254,21 +264,33 @@ describe("ReminderPicker", () => {
     expect((screen.getByText("At time of task").closest("button") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("adds a preset once, removes it, and parses a custom time", () => {
+  it("has the custom field first, then the presets", () => {
+    render(<ReminderHost hasDue />);
+    fireEvent.click(screen.getByTitle("Reminders"));
+    const pop = document.querySelector(".popover") as HTMLElement;
+    expect(pop.firstElementChild?.getAttribute("placeholder")).toBe("Custom, e.g. tomorrow 9am");
+  });
+
+  it("toggles presets and parses a custom time, which can be removed", () => {
     render(<ReminderHost hasDue />);
     fireEvent.click(screen.getByTitle("Reminders"));
     fireEvent.click(screen.getByText("30 min before"));
-    fireEvent.click(screen.getByText("30 min before"));
     expect(out()).toEqual([{ id: null, minuteOffset: 30, at: null }]);
-    fireEvent.click(screen.getByTitle("Remove reminder"));
+    expect(screen.getByText("30 min before").closest("button")?.className).toContain("checked");
+    fireEvent.click(screen.getByText("At time of task"));
+    expect(out()).toHaveLength(2);
+    fireEvent.click(screen.getByText("At time of task"));
+    fireEvent.click(screen.getByText("30 min before"));
     expect(out()).toEqual([]);
-    const field = screen.getByPlaceholderText("Custom, e.g. tomorrow 9am, then Enter");
+    const field = screen.getByPlaceholderText("Custom, e.g. tomorrow 9am");
     fireEvent.change(field, { target: { value: "tomorrow" } });
     fireEvent.keyDown(field, { key: "Enter" });
     expect(screen.getByText("Needs a time, like “friday 3pm” or “in 2 days at 9am”.")).toBeTruthy();
     fireEvent.change(field, { target: { value: "tomorrow 9am" } });
     fireEvent.keyDown(field, { key: "Enter" });
     expect(out()).toEqual([{ id: null, minuteOffset: null, at: "2026-10-31T09:00" }]);
+    fireEvent.click(screen.getByTitle("Remove reminder"));
+    expect(out()).toEqual([]);
   });
 });
 
@@ -383,17 +405,52 @@ describe("DatePicker", () => {
     expect(document.querySelector(".scheduler")).toBeNull();
   });
 
-  it("uses the native time field on touch screens", () => {
-    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q === "(pointer: coarse)" }));
-    const onChange = vi.fn();
-    render(<DateHost onChange={onChange} date="2026-11-02" />);
-    openIt();
-    calendar();
-    const field = document.querySelector("input.time-input.native") as HTMLInputElement;
-    expect(field.type).toBe("time");
-    expect(screen.getByText("Add time")).toBeTruthy();
-    fireEvent.change(field, { target: { value: "07:05" } });
-    expect(onChange).toHaveBeenLastCalledWith("2026-11-02", "07:05");
+  describe("on touch screens", () => {
+    const wheelOpen = (date: string, onChange: (d: string, t: string) => void, time = "") => {
+      vi.stubGlobal("matchMedia", (q: string) => ({ matches: q === "(pointer: coarse)" }));
+      render(<DateHost onChange={onChange} date={date} time={time} />);
+      openIt();
+      calendar();
+    };
+    const timeRow = () => screen.getByRole("button", { name: /^Time/ });
+
+    it("has no text field for the time, which would take focus from the title", () => {
+      wheelOpen("2026-11-02", vi.fn());
+      expect(document.querySelector("input.time-input")).toBeNull();
+      expect(timeRow().textContent).toContain("Add time");
+      expect(fireEvent.mouseDown(timeRow())).toBeTruthy();
+    });
+
+    it("opening the wheel on an empty time adds the time now", () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 10, 2, 15, 34));
+      const onChange = vi.fn();
+      wheelOpen("2026-11-02", onChange);
+      fireEvent.click(timeRow());
+      vi.useRealTimers();
+      expect(onChange).toHaveBeenLastCalledWith("2026-11-02", "15:34");
+      expect(document.querySelectorAll(".time-wheel .wheel-col")).toHaveLength(3);
+    });
+
+    it("scrolling a column changes the time", async () => {
+      const onChange = vi.fn();
+      wheelOpen("2026-11-02", onChange, "07:05");
+      fireEvent.click(timeRow());
+      const minutes = document.querySelector('.time-wheel [data-col="minute"]') as HTMLElement;
+      expect(minutes.scrollTop).toBe(5 * 36);
+      minutes.scrollTop = 20 * 36;
+      fireEvent.scroll(minutes);
+      await vi.waitFor(() => expect(onChange).toHaveBeenLastCalledWith("2026-11-02", "07:20"));
+    });
+
+    it("removes the time", () => {
+      const onChange = vi.fn();
+      wheelOpen("2026-11-02", onChange, "07:05");
+      expect(timeRow().textContent).toContain("7:05 AM");
+      fireEvent.click(timeRow());
+      fireEvent.click(screen.getByRole("button", { name: "Remove time" }));
+      expect(onChange).toHaveBeenLastCalledWith("2026-11-02", "");
+    });
   });
 
   it("Escape closes the scheduler without reaching the form", () => {
