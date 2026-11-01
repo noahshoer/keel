@@ -237,25 +237,34 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 
 /* Sidebar (sits on the app background; the main pane floats beside it) */
 .sidebar { width: 272px; flex-shrink: 0; background: var(--sidebar); padding: 14px 10px 14px 12px; overflow-y: auto; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; padding: 6px 8px 18px; }
-.brand-mark { width: 28px; height: 28px; flex-shrink: 0; display: flex; color: var(--accent); filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.12)); }
+.brand { display: flex; align-items: center; gap: 4px; padding: 0 0 12px; }
+/* The search field, then cards of rows under their heads. */
+.sidebar-search { position: relative; display: flex; align-items: center; margin-bottom: 12px; }
+.sidebar-search-icon { position: absolute; left: 12px; display: inline-flex; color: var(--icon); pointer-events: none; }
+.sidebar-search-icon svg { width: 16px; height: 16px; }
+.sidebar-search-input { width: 100%; height: 40px; padding: 0 12px 0 36px; border: none; border-radius: var(--r-item); outline: none;
+  background: var(--field-fill); font: inherit; font-size: 14px; color: var(--text); }
+.sidebar-search-input::placeholder { color: var(--secondary); }
+.sidebar-search-input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+.nav-card { background: var(--bg); border-radius: var(--r-card); padding: 2px 0; }
+@media (min-width: 900px) { .nav-card { background: var(--panel); } }
+.nav-tag { display: inline-flex; }
+.brand-mark { width: 32px; height: 32px; flex-shrink: 0; display: flex; color: var(--accent); filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.12)); }
 .brand .theme-toggle { margin-left: auto; }
-.nav-item { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: var(--r-item);
+.nav-item { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 6px 12px; border-radius: var(--r-item);
   cursor: pointer; color: var(--text); user-select: none; margin-bottom: 1px; }
 @media (hover: hover) { .nav-item:hover { background: var(--hover); } }
 .nav-item.pressed { background: var(--hover); }
 .nav-item:active { transform: scale(.985); }
-.nav-item.active { background: var(--active-bg); color: var(--active-text); box-shadow: var(--shadow-sm); font-weight: 500; }
-.nav-item .count { margin-left: auto; color: var(--muted); font-size: 12px; }
+.nav-item.active { background: var(--active-tint); color: var(--active-text); font-weight: 600; }
+.nav-item.active .nav-icon { color: var(--accent); }
+.nav-item .count { margin-left: auto; color: var(--secondary); font-size: 13px; }
 .nav-item.active .count { color: var(--active-text); }
 .nav-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
-.nav-icon.inbox { color: var(--inbox); }
-.nav-icon.today { color: var(--today); }
-.nav-icon.upcoming { color: var(--upcoming); }
+.nav-icon { color: var(--icon); }
 .nav-icon.hash { color: var(--icon); font-size: 16px; font-weight: 500; }
 .section-head { display: flex; align-items: center; justify-content: space-between;
-  padding: 20px 10px 6px; font-weight: 600; color: var(--muted); font-size: 12px;
-  text-transform: uppercase; letter-spacing: .04em; }
+  padding: 16px 12px 4px; font-weight: 600; color: var(--secondary); font-size: 13px; line-height: 18px; }
 .project-form { padding: 4px 8px; }
 .project-input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r);
   font-size: 13px; outline: none; background: var(--bg); transition: border-color .16s, box-shadow .16s; }
@@ -633,15 +642,18 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .streak { font-size: 14px; line-height: 19px; }
   .card-head { font-size: 14px; padding: 11px 16px 10px; }
   /* Sidebar: bigger rows, icons and logo to match the task rows. */
-  .brand { font-size: 20px; gap: 12px; padding: 6px 8px 20px; }
-  .brand-mark, .brand-mark svg { width: 40px; height: 40px; }
-  .brand .icon-btn svg { width: 22px; height: 22px; }
-  .nav-item { height: 46px; gap: 12px; font-size: 17px; margin-bottom: 2px; }
-  .nav-icon { width: 28px; height: 28px; }
-  .nav-icon svg { width: 22px; height: 22px; }
-  .nav-icon.hash { font-size: 19px; }
+  .brand { padding: 0 0 16px; }
+  .brand-mark, .brand-mark svg { width: 36px; height: 36px; }
+  .brand .icon-btn { width: 44px; height: 44px; }
+  .brand .icon-btn svg { width: 24px; height: 24px; }
+  .sidebar-search { margin-bottom: 16px; }
+  .sidebar-search-input { height: 44px; border-radius: 14px; font-size: 16px; }
+  .nav-item { min-height: 44px; gap: 12px; padding: 8px 16px; font-size: 16px; border-radius: 16px; }
+  .nav-icon { width: 20px; height: 20px; }
+  .nav-icon svg { width: 20px; height: 20px; }
+  .nav-icon.hash { font-size: 18px; }
   .nav-item .count { font-size: 15px; }
-  .section-head { font-size: 13px; padding: 22px 10px 8px; }
+  .section-head { font-size: 14px; line-height: 19px; padding: 16px 16px 6px; }
   .section-head .icon-btn svg { width: 20px; height: 20px; }
   /* Fields read at full size, and iOS doesn't zoom into them. */
   input:not([type="checkbox"]), textarea, select { font-size: 16px; }
@@ -651,7 +663,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .label-new.bad { border: 1px solid var(--due-overdue); }
   .label-row { border-radius: 14px; }
   .label-opt { font-size: 16px; }
-  .search-input { height: 44px; }
+  .search-input { height: 44px; border-radius: 14px; }
   /* The add row, Reminders-style: a blank next task with a dotted circle,
      lined up with the task circles above it. */
   .add-task-row { padding: 14px 16px; gap: 12px; font-size: 17px; }
@@ -663,7 +675,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 @media (hover: none) { .task-row, .nav-item { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
 .view-head .view-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .view-head .view-toggle { flex-shrink: 0; }
-.menu-btn { display: none; margin-left: -6px; color: var(--subtle); }
+.menu-btn { display: none; margin-left: -6px; color: var(--icon); }
+.back-btn { display: none; margin-left: -6px; }
+.back-btn svg { width: 24px; height: 24px; }
 .view-toggle { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; cursor: pointer;
   color: var(--muted); font-size: 13px; padding: 6px 10px; border-radius: var(--r-full); }
 @media (hover: hover) { .view-toggle:hover { background: var(--icon-hover); color: var(--text); } }
@@ -997,7 +1011,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
      fade-in's animation). */
   .content { transition: translate .26s var(--ease); }
   .app.drawer-open .content { translate: 28px 0; }
-  .menu-btn { display: inline-flex; }
+  .menu-btn, .back-btn { display: inline-flex; }
+  .view-head:has(.back-btn) .view-title { display: none; }
   .main { margin: 0; border-radius: 0; box-shadow: none; }
   .content { padding: calc(10px + env(safe-area-inset-top)) 16px 80px; }
   .view-toggle { padding: 6px 8px; }

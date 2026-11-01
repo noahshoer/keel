@@ -37,6 +37,9 @@ export function App() {
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   // Kept across visits to the Search view.
   const [searchQuery, setSearchQuery] = useState("");
+  // Where the Search screen's Back goes.
+  const beforeSearch = useRef(view);
+  if (view.kind !== "search") beforeSearch.current = view;
 
   // Touch: a long press shows a row's actions.
   useEffect(() => installLongPress(document), []);
@@ -59,7 +62,14 @@ export function App() {
       if (!isSearchShortcut(ev, isTyping(document.activeElement))) return;
       ev.preventDefault();
       setView({ kind: "search" });
-      setTimeout(() => document.querySelector<HTMLInputElement>(".search-input")?.focus(), 60);
+      // The Search screen's box, or the sidebar's on desktop, where the screen has none.
+      setTimeout(
+        () =>
+          document
+            .querySelector<HTMLInputElement>(".search-input, .sidebar-search-input:not([readonly])")
+            ?.focus(),
+        60,
+      );
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -133,6 +143,8 @@ export function App() {
           setTheme={setTheme}
           icon={icon}
           setIcon={setIcon}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
           onChanged={reload}
         />
         <TaskSheet loaded={loaded} onChanged={reload} />
@@ -141,6 +153,7 @@ export function App() {
           showCompleted={showCompleted}
           onToggleCompleted={() => setShowCompleted((c) => !c)}
           onOpenDrawer={() => setDrawer(true)}
+          onLeaveSearch={() => setView(beforeSearch.current)}
           motion={swap.motion}
           swap={swap.n}
           onChanged={reload}

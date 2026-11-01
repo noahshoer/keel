@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 // Which kind of device the UI runs on, for text that names keys
 // (crates/ui/src/platform.rs).
 export type Platform = "touch" | "mac" | "other";
@@ -31,4 +32,20 @@ export function searchTooltip(p: Platform): string {
   if (p === "touch") return "Search";
   if (p === "mac") return "Search (/ or ⌘K)";
   return "Search (/ or Ctrl+K)";
+}
+
+const WIDE = "(min-width: 900px)";
+
+/** Whether the window has the desktop layout, with the sidebar always showing. */
+export function useWideLayout(): boolean {
+  const [wide, setWide] = useState(() => typeof matchMedia === "function" && matchMedia(WIDE).matches);
+  useEffect(() => {
+    if (typeof matchMedia !== "function") return;
+    const media = matchMedia(WIDE);
+    const update = () => setWide(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return wide;
 }

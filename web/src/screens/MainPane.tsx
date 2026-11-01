@@ -21,7 +21,7 @@ import { AddTask } from "../editor/AddTask";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
-import { CheckCircleIcon, MenuIcon } from "../shell/icons";
+import { CheckCircleIcon, ChevronLeftIcon, MenuIcon } from "../shell/icons";
 import { AddSection, SectionBlock } from "./SectionBlock";
 
 /** "Project" or "Project / Section" for each task the pane lists. */
@@ -36,6 +36,7 @@ export function MainPane({
   showCompleted,
   onToggleCompleted,
   onOpenDrawer,
+  onLeaveSearch,
   motion,
   swap,
   onChanged,
@@ -45,6 +46,8 @@ export function MainPane({
   showCompleted: boolean;
   onToggleCompleted: () => void;
   onOpenDrawer: () => void;
+  /** The phone's Search screen goes back to the view before it. */
+  onLeaveSearch: () => void;
   motion: Motion;
   /** Bumped when a different view lands; alternates the fade-in. */
   swap: number;
@@ -169,15 +172,21 @@ export function MainPane({
     <main className={motion === "push" ? "main view-push" : "main"}>
       <div className={contentClass(motion, swap)}>
         <div className="view-head">
-          <button
-            type="button"
-            className="icon-btn menu-btn"
-            title="Open menu"
-            aria-label="Open menu"
-            onClick={onOpenDrawer}
-          >
-            <MenuIcon />
-          </button>
+          {search ? (
+            <button type="button" className="icon-btn back-btn" aria-label="Back" onClick={onLeaveSearch}>
+              <ChevronLeftIcon />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="icon-btn menu-btn"
+              title="Open menu"
+              aria-label="Open menu"
+              onClick={onOpenDrawer}
+            >
+              <MenuIcon />
+            </button>
+          )}
           <h1 className="view-title">{viewTitle(view)}</h1>
           {toggle ? (
             <button
