@@ -131,6 +131,7 @@ Approved in the mockups' iPhone and desktop screens boards (version 25). Desktop
 **Task view**
 
 - Title and description, then one rounded card of the filled-in fields, each with its icon: streak, date and time, repeat, reminders, deadline, priority, project, labels.
+- The header has the X and the ••• menu, with Back inside a sub-task. The circle beside the title stays, as the way to complete a task from its view (Noah, 2026-11-01).
 - **Streak row:** repeating tasks with a streak show the fire icon, the current streak and the best (`streak_best`). It opens the existing streak panel. Enabling streaks and deleting the task stay in the ••• menu.
 - **Unset options:** one sideways-scrolling row of dotted "+ Field" pills, below the filled-in fields and above sub-tasks.
 - **Inbox:** an Inbox task has no project row and shows a "+ Project" pill. Task lists still show "Inbox".

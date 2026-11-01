@@ -201,7 +201,7 @@ describe("keel-core over wasm", () => {
     });
     const out = fieldLayout(valuesFromTask(t), "p-inbox");
     expect(out.fields).toEqual(["Description", "Date", "Priority", "Labels"]);
-    expect(out.missing.map((m) => m.label)).toEqual(["+ Repeat", "+ Deadline", "+ Reminders", "+ Location"]);
+    expect(out.missing.map((m) => m.label)).toEqual(["+ Repeat", "+ Reminders", "+ Deadline", "+ Project"]);
   });
 
   it("task detail hides checked sub-tasks unless asked", () => {

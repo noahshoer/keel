@@ -115,7 +115,7 @@ export function LabelPicker({
 }) {
   const isOpen = open === "labels";
   // The chip reads in its first label's color; open, it takes the open pill's.
-  const first = face === undefined && !isOpen ? labelGroups(selected, labels)[0] : undefined;
+  const first = !isOpen ? labelGroups(selected, labels)[0] : undefined;
   return (
     <div className="chip-wrap">
       <button

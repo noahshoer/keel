@@ -1,6 +1,8 @@
 // The task view over the mock backend: "Pack for the trip" (Trip, due today,
 // labelled errand) has three sub-tasks: "Find the passport" (checked),
 // "Pack the bag" (with "Socks" under it) and "Print the tickets".
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useEffect, useState } from "react";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
@@ -9,6 +11,7 @@ import { useLoaded } from "../app/load";
 import type { View } from "../app/view";
 import type { Action, Id } from "../bindings";
 import { taskDetail } from "../core";
+import { setStreak } from "../ipc/actions";
 import { invoke } from "../ipc/invoke";
 import { mockHandlers } from "../ipc/mock";
 import { loadCoreForTests } from "../test/wasm";
@@ -115,19 +118,18 @@ async function show(start: Id[], under = false) {
   await waitFor(() => expect(document.querySelector(`.task-view[data-view-id="${last}"]`)).not.toBeNull());
 }
 
-it("the header has Close, the project as crumb and More, and no Back at the top", async () => {
+it("the header has Close and More, with no name and no Back at the top", async () => {
   await show(["t-trip"]);
   expect(top().querySelector(".tv-head .tv-close.tv-round")?.getAttribute("title")).toBe("Close");
-  expect(top().querySelector(".tv-crumb")?.textContent).toBe("Trip");
+  expect(top().querySelector(".tv-crumb")).toBeNull();
   expect(top().querySelector(".tv-head-actions .tv-more")?.getAttribute("title")).toBe("More");
   expect(top().querySelector(".tv-back")).toBeNull();
   expect(titleField().value).toBe("Pack for the trip");
   expect(top().getAttribute("aria-hidden")).toBe("false");
 });
 
-it("a sub-task's crumb is its parent, with Back", async () => {
+it("a sub-task's view has Back", async () => {
   await show(["t-trip", "t-bag"]);
-  expect(top().querySelector(".tv-crumb")?.textContent).toBe("Pack for the trip");
   expect(top().querySelector(".tv-back")?.textContent).toBe("Back");
 });
 
@@ -135,7 +137,9 @@ it("the sub-task card counts, toggles completed, and strikes the checked row", a
   await show(["t-trip"]);
   const side = () => top().querySelector(".tv-sub-head .tv-sub-side") as HTMLElement;
   expect(side().textContent).toBe("1 of 3 · Show completed");
-  expect(top().querySelector(".tv-sub-list .tv-progress i")?.getAttribute("style")).toBe("width: 33%;");
+  expect(top().querySelector(".tv-progress")).toBeNull();
+  expect(top().querySelector('.tv-sub-head [data-progress="some"] circle[stroke-dasharray]')).not.toBeNull();
+  expect(top().querySelector(".tv-sub-head")?.closest(".tv-subtasks")).toBeNull();
   const rows = () =>
     [...top().querySelectorAll(".tv-sub")].map((r) => r.querySelector(".task-content")?.textContent);
   expect(rows()).toEqual(["Pack the bag", "Print the tickets"]);
@@ -154,12 +158,77 @@ it("the sub-task card counts, toggles completed, and strikes the checked row", a
 it("set fields are rows in order; missing ones are pills", async () => {
   await show(["t-trip"]);
   const rows = [...top().querySelectorAll(".tv-fields > .tv-row")];
-  expect(rows.map((r) => r.textContent)).toEqual(["Today", "errand", "Trip"]);
+  expect(rows.map((r) => r.textContent)).toEqual(["Today", "Trip", "errand"]);
   const date = rows[0]?.querySelector("button") as HTMLButtonElement;
   expect(date.className).toBe("tv-field-btn due-chip today");
   const pills = [...top().querySelectorAll(".tv-pills .tv-pill-slot")].map((p) => p.textContent);
-  expect(pills).toEqual(["+ Description", "+ Repeat", "+ Deadline", "+ Priority", "+ Reminders"]);
+  expect(pills).toEqual(["+ Description", "+ Repeat", "+ Reminders", "+ Deadline", "+ Priority"]);
   expect(top().querySelector(".tv-pills .tv-pill-slot button.tv-pill")).not.toBeNull();
+});
+
+const before = (a: Element | null, b: Element | null) =>
+  a !== null && b !== null && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+
+it("runs title, description, field card, one row of pills, then sub-tasks", async () => {
+  await setStreak("t-trip", false, null);
+  await show(["t-trip"]);
+  fireEvent.click(within(top()).getByText("+ Description"));
+  const desc = top().querySelector(".tv-desc-line");
+  const card = top().querySelector(".tv-fields");
+  const pills = top().querySelector(".tv-pills");
+  const subs = top().querySelector(".tv-subtasks");
+  expect(before(top().querySelector(".tv-titleline"), desc)).toBe(true);
+  expect(before(desc, card)).toBe(true);
+  expect(before(card, pills)).toBe(true);
+  expect(before(pills, subs)).toBe(true);
+  expect(card?.querySelector(".tv-pills")).toBeNull();
+  expect(card?.querySelector(".tv-desc")).toBeNull();
+  expect(top().querySelectorAll(".tv-pills")).toHaveLength(1);
+});
+
+it("the pills never wrap, at any width", () => {
+  const css = readFileSync(resolve(process.cwd(), "src/styles/app.css"), "utf8");
+  expect(css).not.toMatch(/\.tv-pills\s*\{[^}]*flex-wrap:\s*wrap/);
+});
+
+it("a repeat gets its own row, under the date", async () => {
+  await show(["t-trip"]);
+  fireEvent.click(within(top()).getByText("+ Repeat"));
+  fireEvent.click(within(top()).getByText("Every day"));
+  await waitFor(() => {
+    const rows = [...top().querySelectorAll(".tv-fields > .tv-row")].map((r) => r.textContent);
+    expect(rows.slice(0, 2)).toEqual(["Today", "Every day"]);
+  });
+});
+
+it("a tracked streak's row shows current and best, and opens the streak panel", async () => {
+  await setStreak("t-trip", true, null);
+  await show(["t-trip"]);
+  const row = top().querySelector(".tv-fields > .tv-row button.tv-streak") as HTMLElement;
+  expect(row.textContent).toBe("0 day streakBest 0");
+  expect(row.querySelector("svg")).not.toBeNull();
+  await setStreak("t-trip", false, null);
+});
+
+it("no streak row without a tracked streak", async () => {
+  await setStreak("t-trip", false, null);
+  await show(["t-trip"]);
+  expect(top().querySelector(".tv-streak")).toBeNull();
+});
+
+it("an Inbox task has no project row, and a + Project pill", async () => {
+  await show(["t-inbox"]);
+  const rows = [...top().querySelectorAll(".tv-fields > .tv-row")].map((r) => r.textContent);
+  expect(rows).not.toContain("Inbox");
+  const pills = [...top().querySelectorAll(".tv-pills .tv-pill-slot")].map((p) => p.textContent);
+  expect(pills).toContain("+ Project");
+});
+
+it("without sub-tasks there's no count, only Add sub-task", async () => {
+  await show(["t-inbox"]);
+  expect(top().querySelector(".tv-sub-head")?.textContent).toBe("Sub-tasks");
+  expect(top().querySelector(".tv-subtasks .tv-add-sub")?.textContent).toBe("Add sub-task");
+  expect(top().querySelector(".tv-sub")).toBeNull();
 });
 
 it("picking Priority 1 from its pill saves it and it becomes a row", async () => {
@@ -178,7 +247,7 @@ it("picking Priority 1 from its pill saves it and it becomes a row", async () =>
 it("+ Description opens a focused field; typing and leaving it saves", async () => {
   await show(["t-trip"]);
   fireEvent.click(within(top()).getByText("+ Description"));
-  const field = top().querySelector(".tv-fields .tv-row .tv-desc textarea") as HTMLTextAreaElement;
+  const field = top().querySelector(".tv-desc-line .tv-desc textarea") as HTMLTextAreaElement;
   expect(field).not.toBeNull();
   expect(document.activeElement).toBe(field);
   expect(field.getAttribute("placeholder")).toBe("Description");

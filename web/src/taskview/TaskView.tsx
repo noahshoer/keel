@@ -12,7 +12,6 @@ import {
   applyPick,
   editorView,
   fieldLayout,
-  locationText,
   reminderDraftOf,
   repeatText,
   toggleLabel,
@@ -24,7 +23,7 @@ import { slideClose } from "../gestures/sheet";
 import { completeTask, deleteTask, uncompleteTask } from "../ipc/actions";
 import { CHECK_CLASS } from "../lists/chips";
 import { StreakPanel } from "../lists/StreakPanel";
-import { CheckIcon, ChevronLeftIcon, MoreIcon, TextLinesIcon, XIcon } from "../shell/icons";
+import { CheckIcon, ChevronLeftIcon, FireIcon, MoreIcon, XIcon } from "../shell/icons";
 import { commitDrafts, takesStoredText } from "./drafts";
 import { FieldControl } from "./FieldControl";
 import { GrowingText } from "./GrowingText";
@@ -186,7 +185,7 @@ export function TaskView({
   const v: EditorValues = { ...base, description: desc };
   const view = editorView(v, false, keepLabel, rule, projects, sections, today);
   const { fields, missing } = fieldsShown(fieldLayout(v, loaded.inbox.id), descOpen);
-  const crumb = detail.parent?.content ?? locationText(task.project_id, null, projects, sections);
+  const rows = fields.filter((f) => f !== "Description");
   const fieldProps = {
     values: v,
     view,
@@ -237,7 +236,6 @@ export function TaskView({
               <span>Back</span>
             </button>
           ) : null}
-          <span className="tv-crumb">{crumb}</span>
           <div className="chip-wrap tv-head-actions">
             <button
               type="button"
@@ -286,43 +284,64 @@ export function TaskView({
               onCommit={saveDrafts}
             />
           </div>
-          <div className="tv-card tv-fields">
-            {fields.map((f) => (
-              <div key={f} className="tv-row">
-                {f === "Description" ? (
-                  <>
-                    <span className="tv-row-icon">
-                      <TextLinesIcon />
-                    </span>
-                    <GrowingText
-                      className="tv-desc"
-                      value={desc}
-                      placeholder="Description"
-                      multiline
-                      autoFocus={descOpen && baseRef.current.description.trim() === ""}
-                      onInput={setDesc}
-                      onCommit={() => {
-                        saveDrafts();
-                        setDescOpen(false);
-                      }}
-                    />
-                  </>
-                ) : (
-                  <FieldControl field={f} missing={null} {...fieldProps} />
-                )}
-              </div>
-            ))}
-            {missing.length > 0 ? (
-              <div className="tv-pills">
-                {missing.map((m) => (
-                  <span key={m.label} className="tv-pill-slot">
-                    <FieldControl field={null} missing={m} {...fieldProps} />
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          {streak && recurring ? (
+          {fields.includes("Description") ? (
+            <div className="tv-desc-line">
+              <GrowingText
+                className="tv-desc"
+                value={desc}
+                placeholder="Description"
+                multiline
+                autoFocus={descOpen && baseRef.current.description.trim() === ""}
+                onInput={setDesc}
+                onCommit={() => {
+                  saveDrafts();
+                  setDescOpen(false);
+                }}
+              />
+            </div>
+          ) : null}
+          {rows.length > 0 || task.streak_enabled ? (
+            <div className="tv-card tv-fields">
+              {task.streak_enabled ? (
+                <div className="tv-row">
+                  <button
+                    type="button"
+                    className="tv-field-btn tv-streak"
+                    onClick={() => setStreak((s) => !s)}
+                  >
+                    <FireIcon />
+                    {`${task.streak_current} day streak`}
+                    <span className="tv-streak-best">{`Best ${task.streak_best}`}</span>
+                  </button>
+                </div>
+              ) : null}
+              {rows.flatMap((f) => {
+                const row = (
+                  <div key={f} className="tv-row">
+                    <FieldControl field={f} missing={null} {...fieldProps} />
+                  </div>
+                );
+                return f === "Date" && v.repeat !== "none"
+                  ? [
+                      row,
+                      <div key="repeat" className="tv-row">
+                        <FieldControl field="Repeat" missing={null} {...fieldProps} />
+                      </div>,
+                    ]
+                  : [row];
+              })}
+            </div>
+          ) : null}
+          {missing.length > 0 ? (
+            <div className="tv-pills">
+              {missing.map((m) => (
+                <span key={m.label} className="tv-pill-slot">
+                  <FieldControl field={null} missing={m} {...fieldProps} />
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {streak && (recurring || task.streak_enabled) ? (
             <div className="tv-card">
               <StreakPanel task={task} onChanged={onChanged} />
             </div>

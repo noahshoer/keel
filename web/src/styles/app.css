@@ -740,15 +740,16 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .app.view-open .main { margin-right: calc(360px + 8px); }
 }
 @media (prefers-reduced-motion: reduce) { .tv-sheet, .tv-scrim { animation: none; } }
-.tv-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; }
+.tv-head { display: flex; align-items: center; gap: 8px; padding: 8px 16px; }
+.tv-head-actions { margin-left: auto; }
 .tv-back { display: inline-flex; align-items: center; gap: 2px; width: auto; padding: 0 8px 0 4px; color: var(--accent-text); }
 .tv-crumb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
 .tv-head-actions { flex: none; }
 /* X (top left) and •••: round, like the iPhone's glass buttons, which are
    drawn in their place there (the web ones stay hidden; gestures.rs). */
-.tv-round { flex: none; width: 36px; height: 36px; padding: 0; border: none; border-radius: 50%; cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center; color: var(--text);
-  background: color-mix(in srgb, var(--text) 7%, transparent); }
+.tv-round { flex: none; width: 44px; height: 44px; padding: 0; border: none; border-radius: 50%; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--icon); background: none; }
+.tv-round svg { width: 24px; height: 24px; }
 @media (hover: hover) { .tv-round:hover { background: color-mix(in srgb, var(--text) 12%, transparent); } }
 .native-glass .tv-round { width: 40px; height: 40px; }
 /* Under glass, each keeps a compositing layer of its own (WebKit's view for
@@ -764,11 +765,12 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-stack { position: relative; flex: 1; min-height: 0; }
 .tv-stack > .task-view { position: absolute; inset: 0; }
 .tv-under { visibility: hidden; pointer-events: none; }
-.tv-head-space { flex: none; height: 52px; }
+.tv-head-space { flex: none; height: 60px; }
 .tv-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--app-bg); }
 .tv-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
-  padding: 4px 12px calc(24px + env(safe-area-inset-bottom)); }
-.tv-titleline { display: flex; align-items: flex-start; gap: 10px; margin: 4px 2px 12px; }
+  padding: 4px 16px calc(24px + env(safe-area-inset-bottom)); }
+.tv-titleline { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 16px; }
+.tv-desc-line { margin: -12px 0 16px 36px; }
 .tv-titleline .check { margin-top: 4px; }
 .tv-titleline.done .tv-title textarea { text-decoration: line-through; color: var(--muted); }
 .tv-grow { display: grid; flex: 1; min-width: 0; }
@@ -777,17 +779,25 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-grow-mirror { visibility: hidden; }
 .tv-grow textarea { resize: none; overflow: hidden; border: none; outline: none; background: transparent; color: var(--text); }
 .tv-grow textarea::placeholder { color: var(--muted); }
-.tv-title { font-size: 20px; font-weight: 600; line-height: 26px; min-width: 0; overflow-wrap: anywhere; }
-.tv-desc { font-size: 14px; line-height: 20px; color: var(--subtle); }
-.tv-desc textarea { color: var(--subtle); }
-.tv-card { background: var(--bg); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
-.tv-row { display: flex; align-items: center; gap: 4px; padding: 6px 8px; min-height: 40px; }
-.tv-row + .tv-row, .tv-row + .tv-pills { border-top: 1px solid var(--border); }
+.tv-title { font-size: 24px; font-weight: 700; line-height: 29px; min-width: 0; overflow-wrap: anywhere; }
+.tv-desc { font-size: 15px; line-height: 20px; color: var(--secondary); }
+.tv-desc textarea { color: var(--secondary); }
+.tv-card { background: var(--bg); border-radius: var(--r-card); margin-bottom: 16px; padding: 2px 0; overflow: hidden; }
+.tv-section .tv-card { margin-bottom: 0; }
+.tv-section { margin-bottom: 16px; }
+.tv-row { display: flex; align-items: center; min-height: 44px; }
+.tv-row > .chip-wrap, .tv-row > .chip-wrap > .tv-field-btn { flex: 1; width: 100%; }
+.tv-field-btn.tv-streak { color: var(--accent-text); }
+.tv-field-btn.tv-streak .icon { color: var(--accent); }
+.tv-streak-best { margin-left: auto; font-size: 15px; color: var(--secondary); }
+.tv-field-btn svg { width: 20px; height: 20px; }
+.tv-field-btn .pill-tag, .tv-field-btn .pill-tag .icon { color: inherit; }
+.tv-field-btn.deadline-chip.set, .tv-field-btn.deadline-chip.urgent { color: var(--due-overdue); }
 .tv-row-icon { display: inline-flex; width: 28px; justify-content: center; color: var(--icon); flex: none; }
 .tv-row .chip-wrap { min-width: 0; }
 .tv-row .chip-wrap:first-child { flex: 0 1 auto; }
-.tv-field-btn { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; border: none; background: none;
-  cursor: pointer; font: inherit; font-size: 14px; color: var(--text); text-align: left; padding: 4px 6px; border-radius: var(--r);
+.tv-field-btn { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 44px; width: 100%; border: none; background: none;
+  cursor: pointer; font: inherit; font-size: 16px; color: var(--text); text-align: left; padding: 8px 16px; border-radius: 16px;
   overflow-wrap: anywhere; }
 .tv-field-btn .icon, .tv-field-btn .chip-icon { flex: none; color: var(--icon); }
 /* The flag and calendar are filled with the priority's and the date's color. */
@@ -796,31 +806,43 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-field-btn .pri-3, .tv-field-btn .pri-3 .icon { color: var(--p3); }
 .tv-field-btn.due-chip .icon, .tv-field-btn.due-chip .chip-icon { color: inherit; }
 @media (hover: hover) { .tv-field-btn:hover { background: var(--hover); } }
-.tv-field-btn.tv-repeat { color: var(--due-week); }
-.tv-pills { display: flex; gap: 6px; padding: 10px 12px; overflow-x: auto; scrollbar-width: none; }
+.tv-pills { display: flex; gap: 8px; margin: -6px 0 16px; overflow-x: auto; scrollbar-width: none; }
 .tv-pills::-webkit-scrollbar { display: none; }
-@media (min-width: 900px) { .tv-pills { flex-wrap: wrap; } }
 .tv-pill-slot { flex: none; display: inline-flex; }
-.tv-pill { flex: none; font: inherit; font-size: 13px; padding: 4px 12px; border-radius: var(--r-full); border: 1px dashed var(--border-strong);
-  background: none; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.tv-pill { flex: none; font: inherit; font-size: 15px; min-height: 44px; padding: 0 14px; border-radius: var(--r-full); border: 1.5px dashed var(--p4);
+  background: none; color: var(--icon); cursor: pointer; white-space: nowrap; }
 @media (hover: hover) { .tv-pill:hover { color: var(--text); border-color: var(--muted); } }
 .tv-sub-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px;
-  padding: 10px 12px 6px; font-size: 13px; color: var(--muted); }
-.tv-sub-head b { color: var(--text); font-size: 14px; }
+  padding: 0 16px 6px; font-size: 14px; line-height: 19px; color: var(--secondary); }
+.tv-sub-head b { font-weight: 600; }
 .tv-sub-side { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; white-space: nowrap; }
 .tv-toggle { border: none; background: none; padding: 0; font: inherit; color: var(--muted); cursor: pointer; }
 @media (hover: hover) { .tv-toggle:hover { color: var(--text); } }
-.tv-sub-side .done-check { margin-left: 4px; }
-.tv-progress { height: 4px; border-radius: 2px; background: var(--border); margin: 0 12px 6px; overflow: hidden; }
-.tv-progress i { display: block; height: 100%; background: var(--accent); }
-.tv-sub { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--border); }
-.tv-sub-body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 14px; }
+.tv-sub { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 16px; }
+.tv-sub-body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 16px; }
 .tv-sub-body .task-content { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .tv-sub.done .task-content { text-decoration: line-through; color: var(--muted); }
-.tv-add-sub { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; border: none;
-  border-top: 1px solid var(--border); background: none; color: var(--accent-text); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
-.tv-sub-list > .tv-add-sub:first-child { border-top: none; }
-.tv-add-editor { border-top: 1px solid var(--border); padding: 8px; }
+.tv-add-sub { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 8px 16px; border: none;
+  background: none; color: var(--accent-text); font: inherit; font-size: 16px; font-weight: 500; cursor: pointer; text-align: left; }
+.tv-add-sub svg { color: var(--accent); }
+.tv-add-editor { padding: 8px; }
+/* Desktop: the same layout with its spacing. */
+@media (min-width: 900px) {
+  .tv-title { font-size: 22px; line-height: 27px; }
+  .tv-desc { font-size: 14px; }
+  .tv-row, .tv-field-btn { min-height: 36px; }
+  .tv-field-btn { padding: 6px 12px; gap: 10px; font-size: 14px; border-radius: var(--r-item); }
+  .tv-round { width: 36px; height: 36px; }
+  .tv-round svg { width: 20px; height: 20px; }
+  .tv-head { padding: 8px 12px; }
+  .tv-field-btn svg { width: 18px; height: 18px; }
+  .tv-streak-best { font-size: 13px; }
+  .tv-pill { font-size: 13px; min-height: 36px; padding: 0 12px; }
+  .tv-sub-head { padding: 0 12px 4px; font-size: 13px; line-height: 18px; }
+  .tv-sub { min-height: 36px; padding: 6px 12px; gap: 10px; }
+  .tv-sub-body { font-size: 14px; }
+  .tv-add-sub { min-height: 36px; padding: 6px 12px; gap: 10px; font-size: 14px; }
+}
 .tv-card .streak-panel { margin: 10px 12px; }
 /* iPhone: iOS sizes (17pt text, 44pt rows, 16pt margins and gaps). The
    header holds the glass X, ‹ (in a sub-task's view) and •••, with the
