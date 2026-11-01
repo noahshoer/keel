@@ -118,6 +118,32 @@ Why: pickers placed on the page feel disconnected from the task being typed. On 
 - The label color palette, which is a placeholder. Colors must pass the contrast rule.
 - How pickers look on desktop.
 
+## Other screens
+
+Approved in the mockups' iPhone and desktop screens boards (version 25). Desktop mirrors the iPhone layouts, with only the spacing adjusted.
+
+**Task view**
+
+- Title and description, then one rounded card of the filled-in fields, each with its icon: streak, date and time, repeat, reminders, deadline, priority, project, labels.
+- **Streak row:** repeating tasks with a streak show the fire icon, the current streak and the best (`streak_best`). It opens the existing streak panel. Enabling streaks and deleting the task stay in the ••• menu.
+- **Unset options:** one sideways-scrolling row of dotted "+ Field" pills, below the filled-in fields and above sub-tasks.
+- **Inbox:** an Inbox task has no project row and shows a "+ Project" pill. Task lists still show "Inbox".
+- **Sub-tasks:** a card under a header with the same progress icon as the list and "X of Y". With no sub-tasks, the count is hidden and only "Add sub-task" shows.
+
+**Sidebar**
+
+- The Keel logo on the left, with the theme and settings icons together on the right. Search field below.
+- Separate rounded cards for Inbox, Today and Upcoming, then My Projects, Labels (colored tags) and Filters, each with an add control.
+
+**Search**
+
+- Search lives in a field in the sidebar. On the phone it opens a Search screen; on desktop results fill the main area. `/` and Cmd+K keep working.
+- Results use the same task row as the lists, under a result count.
+
+**Settings**
+
+- Grouped rounded cards with the existing options, in the order Notifications, Appearance, Import, Diagnostics. A full screen on the phone, a rounded dialog on desktop.
+
 ## Left to the builder
 
 - Applying the row rules to the desktop layout; the desktop mockup still shows an older row.
