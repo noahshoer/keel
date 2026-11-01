@@ -119,6 +119,13 @@ describe("on touch", () => {
     expect(fireEvent.mouseDown(screen.getByPlaceholderText("Description"))).toBe(true);
   });
 
+  it("dims the page from outside the card, which would dim the card's own color from inside", () => {
+    adding();
+    expect(document.querySelector(".editor-scrim")?.closest("form")).toBeNull();
+    fireEvent.click(screen.getByTitle("Priority"));
+    expect(document.querySelector(".pop-backdrop")?.closest("form")).toBeNull();
+  });
+
   it("floats a small gap above the keyboard", () => {
     vi.stubGlobal("visualViewport", Object.assign(new EventTarget(), { offsetTop: 0, height: 546 }));
     const client = vi.spyOn(document.documentElement, "clientHeight", "get").mockReturnValue(874);

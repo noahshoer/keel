@@ -401,7 +401,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .editor.on-keyboard { position: fixed; left: 8px; right: 8px; z-index: 45; margin: 0; border: none; border-radius: 24px;
   padding: 16px 16px 12px; animation: none; box-shadow: var(--shadow-lg); }
 .editor.on-keyboard.keyboard-down { margin-bottom: env(safe-area-inset-bottom); }
-.editor-scrim { position: fixed; inset: 0; z-index: -1; background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
+.editor-scrim { position: fixed; inset: 0; z-index: 44; background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
+.pop-backdrop:has(+ .on-keyboard) { z-index: 44; background: rgba(0,0,0,.2); }
 .editor.on-keyboard .name { font-size: 18px; line-height: 24px; font-weight: 500; }
 .editor.on-keyboard .desc { display: block; font-size: 15px; line-height: 20px; padding: 8px 0 0; }
 .on-keyboard .title-wrap > .title-mirror, .on-keyboard .title-wrap > .title-input { padding: 0; font-size: 18px; line-height: 24px; font-weight: 500; }
@@ -410,9 +411,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .editor-actions { --pill-fade: var(--bg); }
 .pills-run-on::after, .pills-run-back::before { content: ''; position: absolute; bottom: 0; width: 28px; pointer-events: none; }
 .pills-run-on::after { background: linear-gradient(to right, transparent, var(--pill-fade)); }
-.pills-run-back::before { background: linear-gradient(to left, transparent, var(--pill-fade)); }
+.pills-run-back::before { background: linear-gradient(to left, transparent,
+  color-mix(in srgb, var(--pill-fade) 18%, transparent) 25%, color-mix(in srgb, var(--pill-fade) 50%, transparent) 50%,
+  color-mix(in srgb, var(--pill-fade) 82%, transparent) 75%, var(--pill-fade)); }
 .editor-actions.pills-run-on::after { top: 12px; right: 29px; }
-.editor-actions.pills-run-back::before { top: 12px; left: 0; z-index: 1; }
+.editor-actions.pills-run-back::before { top: 12px; left: -12px; width: 48px; z-index: 1; }
 .on-keyboard .pill-tinted.chip-btn.chip-open { background: color-mix(in srgb, currentColor 18%, var(--field-fill)); font-weight: 600; }
 .on-keyboard .pill-tinted.pill-p1.chip-btn.chip-open { color: var(--p1); }
 .on-keyboard .pill-tinted.pill-p2.chip-btn.chip-open { color: var(--p2-text); }
@@ -425,7 +428,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .on-keyboard .menu-item.checked.row-p3 { background: var(--p3-bg); }
 .label-row[style*="color"] .label-opt, .label-row[style*="color"] .label-color-btn, .label-row[style*="color"] .menu-check { color: inherit; }
 .on-keyboard .label-row.on[style*="color"] { background: color-mix(in srgb, currentColor 16%, transparent); }
-.on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; margin-right: -23px; padding: 0 31px 0 0; overflow-x: auto; scrollbar-width: none; }
+.on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; margin: 0 -23px 0 -12px; padding: 0 31px 0 12px; overflow-x: auto; scrollbar-width: none; }
 .on-keyboard .chips::-webkit-scrollbar { display: none; }
 .on-keyboard .chip-btn { height: 44px; max-width: none; padding: 0 14px; border: none; background: var(--field-fill); color: var(--text); font-size: 15px; white-space: nowrap; }
 .on-keyboard .chip-btn .icon, .on-keyboard .chip-caret { display: none; }
@@ -438,7 +441,6 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .on-keyboard .chip-btn.chip-open { background: var(--accent); color: var(--on-fill); font-weight: 600; }
 .on-keyboard .chip-wrap { position: static; flex: none; }
 .on-keyboard .popover { width: calc(100vw - 16px); max-width: none; min-width: 0; padding: 12px; border: none; border-radius: 24px; box-shadow: var(--shadow-lg); animation: fade-in .16s var(--ease); }
-.on-keyboard .pop-backdrop { z-index: -1; background: rgba(0,0,0,.2); }
 .on-keyboard .menu-item.checked, .on-keyboard .label-row.on { background: var(--active-tint); }
 .time-wheel .wheel { margin: 0 12px 4px; }
 .on-keyboard .scheduler { padding: 12px; }

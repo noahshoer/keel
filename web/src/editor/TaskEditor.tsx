@@ -231,6 +231,17 @@ export function TaskEditor({
     </div>
   );
 
+  const clickAway = (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes the popover from the form; this is the click-away.
+    // biome-ignore lint/a11y/noStaticElementInteractions: a click-away layer, as in the Dioxus editor.
+    <div
+      className="pop-backdrop"
+      onClick={() => setPop(null)}
+      onWheel={() => setPop(null)}
+      onMouseDown={touch ? keepFocus : undefined}
+    />
+  );
+
   const form = (
     <form
       className={cx("editor", touch && "on-keyboard", touch && !keyboard.up && "keyboard-down")}
@@ -248,16 +259,7 @@ export function TaskEditor({
         else onCancel();
       }}
     >
-      {touch && open === null ? (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: Escape cancels from the form; this is the tap outside.
-        // biome-ignore lint/a11y/noStaticElementInteractions: a dimmed tap-away layer behind the card.
-        <div className="editor-scrim" onClick={onCancel} />
-      ) : null}
-      {open !== null ? (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes the popover from the form; this is the click-away.
-        // biome-ignore lint/a11y/noStaticElementInteractions: a transparent click-away layer, as in the Dioxus editor.
-        <div className="pop-backdrop" onClick={() => setPop(null)} onWheel={() => setPop(null)} />
-      ) : null}
+      {!touch && open !== null ? clickAway : null}
       <HighlightedTitle
         segments={view.segments}
         value={values.content}
@@ -311,5 +313,19 @@ export function TaskEditor({
     </form>
   );
   // On touch it leaves the page: a moving sheet or pane above it would carry a fixed card along.
-  return touch ? createPortal(form, document.body) : form;
+  if (!touch) return form;
+  // The dim layer sits beside the card: inside it, it would dim the card's own color.
+  return createPortal(
+    <>
+      {open !== null ? (
+        clickAway
+      ) : (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: Escape cancels from the form; this is the tap outside.
+        // biome-ignore lint/a11y/noStaticElementInteractions: a dimmed tap-away layer behind the card.
+        <div className="editor-scrim" onClick={onCancel} onMouseDown={keepFocus} />
+      )}
+      {form}
+    </>,
+    document.body,
+  );
 }
