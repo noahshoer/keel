@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
-import type { CardRow, Reminder, Task } from "../bindings";
+import type { CardRow, Label, Reminder, Task } from "../bindings";
 import { localToday } from "../clock";
 import * as fx from "../ipc/fixtures";
 import { invoke } from "../ipc/invoke";
@@ -10,6 +10,7 @@ import { useTaskNav } from "../taskview/nav-context";
 import { loadCoreForTests } from "../test/wasm";
 import { CardList } from "./CardList";
 import { CompletedRow } from "./CompletedRow";
+import type { RowLocation } from "./rowLayout";
 import { TaskRow } from "./TaskRow";
 
 beforeAll(() => {
@@ -53,13 +54,22 @@ const circle = (container: HTMLElement) => {
 const tick = (ms: number) => act(async () => vi.advanceTimersByTimeAsync(ms));
 const completed = async () => (await invoke("completed_today", {})).map((t) => t.id);
 
-function renderRow(task: Task, opts: { reminders?: Reminder[]; progress?: CardRow["progress"] } = {}) {
+function renderRow(
+  task: Task,
+  opts: {
+    reminders?: Reminder[];
+    progress?: CardRow["progress"];
+    location?: RowLocation;
+    labels?: Label[];
+  } = {},
+) {
   const onChanged = vi.fn();
   const view = render(
     <TaskRow
       row={row(task, opts.progress ?? null)}
       today={today}
-      location="Home"
+      location={opts.location ?? { project: "Home", section: null }}
+      labels={opts.labels ?? fx.labels}
       reminders={opts.reminders ?? []}
       onChanged={onChanged}
     />,
@@ -119,7 +129,16 @@ it("a repeating task comes back on when its next date arrives", async () => {
   await tick(800);
   const next = structuredClone(task);
   if (next.due) next.due = { ...next.due, date: "2099-01-01", is_recurring: true };
-  rerender(<TaskRow row={row(next)} today={today} location="Home" reminders={[]} onChanged={() => {}} />);
+  rerender(
+    <TaskRow
+      row={row(next)}
+      today={today}
+      location={{ project: "Home", section: null }}
+      labels={fx.labels}
+      reminders={[]}
+      onChanged={() => {}}
+    />,
+  );
   expect(taskEl(container)?.className).toBe("task");
 });
 
@@ -129,41 +148,152 @@ it("due chips are coloured by keel-core's bucket", () => {
       <TaskRow
         row={row(fixture("t-taxes"))}
         today={today}
-        location={null}
+        location={{ project: "Inbox", section: null }}
+        labels={[]}
         reminders={[]}
         onChanged={() => {}}
       />
       <TaskRow
         row={row(fixture("t-laundry"))}
         today={today}
-        location={null}
+        location={{ project: "Home", section: null }}
+        labels={[]}
         reminders={[]}
         onChanged={() => {}}
       />
     </>,
     { wrapper },
   );
-  const chips = [...container.querySelectorAll(".task-meta > span:first-child")].map((e) => e.className);
+  const chips = [...container.querySelectorAll(".task-when .due")].map((e) => e.className);
   expect(chips).toEqual(["due overdue", "due today"]);
 });
 
-it("a deadline due today is urgent; reminders show as a bell with their text", () => {
-  const task = { ...fixture("t-laundry"), deadline: today };
-  const { container } = renderRow(task, { reminders: fx.reminders });
-  expect(container.querySelector(".deadline")?.className).toBe("deadline urgent");
-  expect(container.querySelector(".deadline")?.textContent).toBe("Today");
-  expect(container.querySelector(".reminder-tag")?.getAttribute("title")).toBe("30 min before");
-  expect(container.querySelector(".label-tag")?.textContent).toBe("errand");
-  expect(container.querySelector(".task-project")?.textContent).toBe("Home");
+const label = (name: string, color: string): Label => ({
+  id: `l-${name}`,
+  name,
+  color,
+  item_order: 0,
+  is_favorite: false,
+  is_deleted: false,
+});
+const childClasses = (el: Element | null) => [...(el?.children ?? [])].map((c) => c.className.split(" ")[0]);
+
+it("rows run title and streak, deadline, description, then the bottom rows", () => {
+  const task = {
+    ...fixture("t-laundry"),
+    deadline: today,
+    description: "All of it",
+    streak_enabled: true,
+    streak_current: 4,
+  };
+  const { container } = renderRow(task, { progress: { done: 1, total: 2 } });
+  expect(childClasses(container.querySelector(".task-body"))).toEqual([
+    "task-title",
+    "task-deadline",
+    "task-desc",
+    "task-when",
+    "task-bottom",
+  ]);
+  expect(childClasses(container.querySelector(".task-title"))).toEqual(["task-content", "streak"]);
+  expect(container.querySelector(".streak")?.textContent).toBe("4");
+  expect(container.querySelector(".streak svg")).not.toBeNull();
+  expect(container.querySelector(".task-deadline .deadline")?.textContent).toBe("Today");
+  expect(container.querySelector(".task-deadline svg")).not.toBeNull();
+  expect(container.querySelector(".task-desc")?.textContent).toBe("All of it");
 });
 
-it("the green check shows only when every sub-task is done", () => {
-  const all = renderRow(fixture("t-laundry"), { progress: { done: 2, total: 2 } });
-  expect(all.container.querySelector(".done-check")).not.toBeNull();
-  all.unmount();
-  const some = renderRow(fixture("t-laundry"), { progress: { done: 1, total: 2 } });
-  expect(some.container.querySelector(".task-count")?.textContent).toBe("1/2");
-  expect(some.container.querySelector(".done-check")).toBeNull();
+it("a row with no fields set has only the title and the project", () => {
+  const task = { ...fixture("t-taxes"), due: null, labels: [], deadline: null, description: "" };
+  const { container } = renderRow(task);
+  expect(childClasses(container.querySelector(".task-body"))).toEqual(["task-title", "task-bottom"]);
+  expect(childClasses(container.querySelector(".task-bottom"))).toEqual(["task-project"]);
+});
+
+it("the when group runs sub-tasks, date, repeat icon, bell", () => {
+  const base = fixture("t-laundry");
+  const task = { ...base, due: base.due && { ...base.due, is_recurring: true } };
+  const { container } = renderRow(task, { reminders: fx.reminders, progress: { done: 1, total: 2 } });
+  const when = container.querySelector(".task-when");
+  expect(childClasses(when)).toEqual(["task-subtasks", "due", "task-repeat", "reminder-tag"]);
+  expect(when?.querySelector(".task-repeat")?.textContent).toBe("");
+  expect(when?.querySelector(".reminder-tag")?.getAttribute("title")).toBe("30 min before");
+});
+
+it("the project shares a row with the when group when there are no labels", () => {
+  const task = { ...fixture("t-laundry"), labels: [] };
+  const { container } = renderRow(task);
+  expect(childClasses(container.querySelector(".task-body"))).toEqual(["task-title", "task-bottom"]);
+  expect(childClasses(container.querySelector(".task-bottom"))).toEqual(["task-when", "task-project"]);
+});
+
+it("labels share a row with the project when there is no when group", () => {
+  const task = { ...fixture("t-laundry"), due: null, labels: ["errand"] };
+  const { container } = renderRow(task);
+  expect(childClasses(container.querySelector(".task-bottom"))).toEqual(["task-labels", "task-project"]);
+});
+
+it("the when group gets its own row above labels and project", () => {
+  const { container } = renderRow(fixture("t-laundry"));
+  const body = container.querySelector(".task-body");
+  expect(childClasses(body)).toEqual(["task-title", "task-when", "task-bottom"]);
+  expect(childClasses(container.querySelector(".task-bottom"))).toEqual(["task-labels", "task-project"]);
+});
+
+it("the project shows on every row, with its section apart so it can shorten first", () => {
+  const { container } = renderRow(fixture("t-laundry"), {
+    location: { project: "Home", section: "Chores" },
+  });
+  const project = container.querySelector(".task-project");
+  expect(project?.textContent).toBe("Home / Chores");
+  expect(project?.querySelector(".task-project-name")?.textContent).toBe("Home");
+  expect(project?.querySelector(".task-project-section")?.textContent).toBe(" / Chores");
+});
+
+it("sub-tasks show X of Y with an icon for how far along they are", () => {
+  const view = (done: number, total: number) => {
+    const r = renderRow(fixture("t-laundry"), { progress: { done, total } });
+    const sub = r.container.querySelector(".task-subtasks");
+    const out = {
+      text: sub?.querySelector(".task-count")?.textContent,
+      kind: sub?.querySelector("[data-progress]")?.getAttribute("data-progress"),
+      dash: sub?.querySelector("circle[stroke-dasharray]")?.getAttribute("stroke-dasharray") ?? null,
+    };
+    r.unmount();
+    return out;
+  };
+  expect(view(0, 4)).toEqual({ text: "0 of 4", kind: "none", dash: null });
+  expect(view(2, 5)).toEqual({ text: "2 of 5", kind: "some", dash: "241 603" });
+  expect(view(3, 3)).toEqual({ text: "3 of 3", kind: "all", dash: null });
+});
+
+it("labels group by color, one tag each, tinted by that color, in added order", () => {
+  const labels = [label("a", "red"), label("b", "red"), label("c", "blue")];
+  const task = { ...fixture("t-laundry"), labels: ["c", "a", "b"] };
+  const { container } = renderRow(task, { labels });
+  const groups = [...container.querySelectorAll<HTMLElement>(".task-label-group")];
+  expect(groups.map((g) => g.textContent)).toEqual(["c", "a, b"]);
+  expect(groups.map((g) => g.querySelectorAll("svg").length)).toEqual([1, 1]);
+  expect(groups.map((g) => g.style.getPropertyValue("--tint"))).toEqual([
+    "var(--label-blue, var(--secondary))",
+    "var(--label-red, var(--secondary))",
+  ]);
+});
+
+it("a label with no record still shows, in the default group", () => {
+  const task = { ...fixture("t-laundry"), labels: ["ghost"] };
+  const { container } = renderRow(task, { labels: [] });
+  const group = container.querySelector<HTMLElement>(".task-label-group");
+  expect(group?.textContent).toBe("ghost");
+  expect(group?.style.getPropertyValue("--tint")).toBe("var(--label-charcoal, var(--secondary))");
+});
+
+it("beside a long project the when group never shortens, the project does", () => {
+  const task = { ...fixture("t-laundry"), labels: [] };
+  const { container } = renderRow(task, {
+    location: { project: "A very long project name indeed", section: "A long section" },
+  });
+  expect(container.querySelector(".task-when")?.className).not.toContain("row-shrink");
+  expect(container.querySelector(".task-project")?.className).toContain("row-shrink");
 });
 
 it("a repeating task's streak panel starts tracking", async () => {
@@ -183,7 +313,7 @@ it("a tracked streak shows current and best", () => {
   const task = { ...fixture("t-laundry"), streak_enabled: true, streak_current: 4, streak_best: 9 };
   if (task.due) task.due = { ...task.due, is_recurring: true };
   const { container } = renderRow(task);
-  expect(container.querySelector(".streak")?.textContent).toBe("🔥 4");
+  expect(container.querySelector(".streak")?.textContent).toBe("4");
   fireEvent.click(screen.getByTitle("Streak"));
   expect(container.querySelector(".streak-panel")?.textContent).toContain("Best 9");
   expect(screen.getByText("Stop tracking")).toBeTruthy();
@@ -218,7 +348,8 @@ it("a card whose head doesn't match shows it as context, with its sub-task rows"
     <CardList
       cards={[{ head: row(parent, { done: 0, total: 1 }), head_matches: false, rows: [row(sub)] }]}
       today={today}
-      locations={null}
+      locations={new Map()}
+      labels={[]}
       reminders={[]}
       onChanged={() => {}}
     />,
@@ -227,11 +358,11 @@ it("a card whose head doesn't match shows it as context, with its sub-task rows"
   const head = container.querySelector(".task-card > .card-head");
   expect(head?.querySelector(".pname")?.textContent).toBe("Do laundry");
   expect(head?.querySelector(".card-flag")?.className).toBe("card-flag p1");
-  expect(head?.querySelector(".task-count")?.textContent).toBe("0/1");
+  expect(head?.querySelector(".task-count")?.textContent).toBe("0 of 1");
   expect([...container.querySelectorAll(".task-row .task-content")].map((e) => e.textContent)).toEqual([
     "Wash the sheets",
   ]);
-  expect(container.querySelector(".task-project")).toBeNull();
+  expect(container.querySelector(".task-project")?.textContent).toBe("Inbox");
 });
 
 it("the streak goal saves once, when the field is left", async () => {
@@ -283,7 +414,8 @@ it("a card head opens its task", () => {
         },
       ]}
       today={today}
-      locations={null}
+      locations={new Map()}
+      labels={fx.labels}
       reminders={[]}
       onChanged={() => {}}
     />,

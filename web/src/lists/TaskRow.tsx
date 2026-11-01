@@ -2,38 +2,53 @@
 // `TaskRow` without its glass parts (Liquid Glass is parked). Tapping the
 // circle completes the task after the fill and switch-off; the body opens
 // the task view, and Add sub-task opens it adding.
-import { useContext, useEffect, useRef, useState } from "react";
-import type { CardRow, Progress, Reminder } from "../bindings";
-import { allDone, deadlineUrgent, dueLabel, progressShort, reminderLabel } from "../core";
+import { type CSSProperties, Fragment, useContext, useEffect, useRef, useState } from "react";
+import type { CardRow, Label, LabelGroup, Reminder } from "../bindings";
+import { deadlineUrgent, dueLabel, labelGroups, reminderLabel } from "../core";
 import { completeTask, deleteTask } from "../ipc/actions";
 import {
-  BellSmallIcon,
-  CalendarSmallIcon,
-  CheckSmallIcon,
+  BellRingingIcon,
   DoneMark,
   FireIcon,
+  FlagFillIcon,
   RepeatSmallIcon,
   SubtaskIcon,
   TagSmallIcon,
-  TargetSmallIcon,
   TrashIcon,
 } from "../shell/icons";
 import { useTaskNav } from "../taskview/nav-context";
 import { CHECK_CLASS, dueChip } from "./chips";
 import { CompletionIconContext, FILL_MS, nextOnTap, OFF_MS, type Phase, sleep } from "./completion";
+import { bottomLayout, type RowLocation } from "./rowLayout";
 import { StreakPanel } from "./StreakPanel";
+import { SubtaskProgress } from "./SubtaskProgress";
+import { useHiddenCount } from "./useHiddenCount";
 
-/** "x/y" for a task's sub-tasks, then a round green check when all are done. */
-export function SubtaskCount({ progress }: { progress: Progress }) {
+/** The labels on a row: one tag per color, then "+N" for any cut off. */
+function RowLabels({ groups }: { groups: LabelGroup[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const hidden = useHiddenCount(ref, groups.flatMap((g) => g.names).join("\n"));
   return (
-    <>
-      <span className="task-count">{progressShort(progress)}</span>
-      {allDone(progress) ? (
-        <span className="done-check" title="All sub-tasks done">
-          <CheckSmallIcon />
-        </span>
-      ) : null}
-    </>
+    <div className="task-labels row-shrink">
+      <div ref={ref} className="task-label-items">
+        {groups.map((group) => (
+          <span
+            key={group.color}
+            className="task-label-group"
+            style={{ "--tint": `var(--label-${group.color}, var(--secondary))` } as CSSProperties}
+          >
+            <TagSmallIcon />
+            {group.names.map((name, i) => (
+              <Fragment key={name}>
+                {i > 0 ? ", " : null}
+                <span data-label="">{name}</span>
+              </Fragment>
+            ))}
+          </span>
+        ))}
+      </div>
+      {hidden > 0 ? <span className="label-more">{`+${hidden}`}</span> : null}
+    </div>
   );
 }
 
@@ -47,13 +62,16 @@ export function TaskRow({
   row,
   today,
   location,
+  labels,
   reminders,
   onChanged,
 }: {
   row: CardRow;
   today: string;
-  /** "Project / Section", shown in views that mix projects. */
-  location: string | null;
+  /** The task's project and section, on every row. */
+  location: RowLocation;
+  /** Every label; a task's are grouped by their colors. */
+  labels: Label[];
   /** Every task reminder; the row shows its own. */
   reminders: Reminder[];
   onChanged: () => void;
@@ -119,7 +137,33 @@ export function TaskRow({
     : null;
   const due = dueChip(task, today);
   const recurring = task.due?.is_recurring ?? false;
-  const showMeta = due !== null || task.labels.length > 0 || deadline !== null || mine.length > 0;
+  const groups = labelGroups(task.labels, labels);
+  const hasWhen = progress !== null || due !== null || mine.length > 0;
+  const whenGroup = hasWhen ? (
+    <div className="task-when task-badges">
+      {progress !== null ? <SubtaskProgress progress={progress} /> : null}
+      {due !== null ? <span className={due.cls}>{due.label}</span> : null}
+      {recurring ? (
+        <span className="task-repeat" title="Repeats">
+          <RepeatSmallIcon />
+        </span>
+      ) : null}
+      {mine.length > 0 ? (
+        <span className="reminder-tag" title={reminderTitle}>
+          <BellRingingIcon />
+        </span>
+      ) : null}
+    </div>
+  ) : null;
+  const labelRow = groups.length > 0 ? <RowLabels groups={groups} /> : null;
+  const project = (
+    <span className="task-project row-shrink">
+      <span className="task-project-name">{location.project}</span>
+      {location.section !== null ? (
+        <span className="task-project-section">{` / ${location.section}`}</span>
+      ) : null}
+    </span>
+  );
 
   return (
     // One root per row (keyed rows reorder cleanly when a priority changes).
@@ -137,37 +181,37 @@ export function TaskRow({
         {/* biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI. */}
         <div className="task-body" title="Open task" onClick={() => nav.open(task.id)}>
           <div className="task-title">
-            <div className="task-content">{task.content}</div>
+            <span className="task-content">{task.content}</span>
+            {task.streak_enabled ? (
+              <span className="streak" title="Current streak">
+                <FireIcon />
+                {task.streak_current}
+              </span>
+            ) : null}
           </div>
-          {task.description ? <div className="task-desc">{task.description}</div> : null}
-          {showMeta ? (
-            <div className="task-meta">
-              {due !== null ? (
-                <span className={due.cls}>
-                  <CalendarSmallIcon />
-                  {due.label}
-                  {recurring ? <RepeatSmallIcon /> : null}
-                </span>
-              ) : null}
-              {deadline !== null ? (
-                <span className={`deadline ${deadline.cls}`} title="Deadline">
-                  <TargetSmallIcon />
-                  {deadline.label}
-                </span>
-              ) : null}
-              {mine.length > 0 ? (
-                <span className="reminder-tag" title={reminderTitle}>
-                  <BellSmallIcon />
-                </span>
-              ) : null}
-              {task.labels.map((name) => (
-                <span key={name} className="label-tag">
-                  <TagSmallIcon />
-                  {name}
-                </span>
-              ))}
+          {deadline !== null ? (
+            <div className="task-deadline">
+              <span className={`deadline ${deadline.cls}`} title="Deadline">
+                <FlagFillIcon />
+                {deadline.label}
+              </span>
             </div>
           ) : null}
+          {task.description ? <div className="task-desc">{task.description}</div> : null}
+          {bottomLayout(hasWhen, labelRow !== null) === "two-rows" ? (
+            <>
+              {whenGroup}
+              <div className="task-bottom">
+                {labelRow}
+                {project}
+              </div>
+            </>
+          ) : (
+            <div className="task-bottom">
+              {whenGroup ?? labelRow}
+              {project}
+            </div>
+          )}
         </div>
         <div className="task-actions">
           <button
@@ -194,17 +238,6 @@ export function TaskRow({
             <TrashIcon />
           </button>
         </div>
-        {progress !== null || task.streak_enabled || location !== null ? (
-          <div className="task-side">
-            <div className="task-badges">
-              {progress !== null ? <SubtaskCount progress={progress} /> : null}
-              {task.streak_enabled ? (
-                <span className="streak" title="Current streak">{`🔥 ${task.streak_current}`}</span>
-              ) : null}
-            </div>
-            {location !== null ? <span className="task-project">{location}</span> : null}
-          </div>
-        ) : null}
       </div>
       {panel && recurring ? <StreakPanel task={task} onChanged={onChanged} /> : null}
     </div>

@@ -141,7 +141,7 @@ it("the sub-task card counts, toggles completed, and strikes the checked row", a
   expect(rows()).toEqual(["Pack the bag", "Print the tickets"]);
   // "Pack the bag" has its own sub-task count and a chevron.
   const bag = top().querySelector(".tv-sub") as HTMLElement;
-  expect(bag.querySelector(".tv-sub-body .task-count")?.textContent).toBe("0/1");
+  expect(bag.querySelector(".tv-sub-body .task-count")?.textContent).toBe("0 of 1");
   expect(bag.querySelector(".tv-sub-body .card-chev")).not.toBeNull();
   fireEvent.click(within(side()).getByText("Show completed"));
   expect(side().textContent).toBe("1 of 3 · Hide completed");

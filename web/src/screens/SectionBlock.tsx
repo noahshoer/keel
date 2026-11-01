@@ -10,6 +10,7 @@ import { blankValues, cards } from "../core";
 import { AddTask } from "../editor/AddTask";
 import { addSection, deleteSection, renameSection } from "../ipc/actions";
 import { CardList } from "../lists/CardList";
+import { locationsOf } from "../lists/rowLayout";
 import { PencilIcon, TrashSmallIcon } from "../shell/icons";
 
 type Mode = "normal" | "renaming" | "confirm";
@@ -106,7 +107,14 @@ export function SectionBlock({
           </span>
         </div>
       )}
-      <CardList cards={list} today={today} locations={null} reminders={reminders} onChanged={onChanged} />
+      <CardList
+        cards={list}
+        today={today}
+        locations={locationsOf(all, loaded.projects, loaded.sections)}
+        labels={loaded.labels}
+        reminders={reminders}
+        onChanged={onChanged}
+      />
       <AddTask
         defaults={blankValues(section.project_id, section.id, "", [])}
         projects={loaded.projects}

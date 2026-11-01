@@ -4,19 +4,13 @@
 // (crates/ui/src/search.rs).
 import { useEffect, useRef, useState } from "react";
 import type { Loaded } from "../app/load";
-import type { Project, SearchResults, Section, Task } from "../bindings";
+import type { SearchResults, Task } from "../bindings";
 import { invoke } from "../ipc/invoke";
 import { CompletedRow } from "../lists/CompletedRow";
+import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
 import { TaskRow } from "../lists/TaskRow";
 import { SearchIcon, XSmallIcon } from "../shell/icons";
 import { currentPlatform, searchHint } from "../shell/platform";
-
-/** "Project" or "Project / Section". */
-function locationOf(t: Task, projects: Project[], sections: Section[]): string {
-  const project = projects.find((p) => p.id === t.project_id)?.name ?? "";
-  const section = t.section_id === null ? undefined : sections.find((s) => s.id === t.section_id);
-  return section === undefined ? project : `${project} / ${section.name}`;
-}
 
 type Found = { query: string; results: SearchResults | null; error: string | null };
 
@@ -53,7 +47,12 @@ export function SearchPane({
     );
   }, [query, reloadKey]);
 
-  const where = (t: Task) => locationOf(t, loaded.projects, loaded.sections);
+  const locations = locationsOf(
+    [...(found.results?.open ?? []), ...(found.results?.completed ?? [])],
+    loaded.projects,
+    loaded.sections,
+  );
+  const where = (t: Task) => locations.get(t.id) ?? INBOX_LOCATION;
   // The last results stay up while a newer query loads (as Dioxus'
   // use_resource keeps its value); "Searching…" only before the first one.
   const current = found.results === null && found.error === null ? null : found;
@@ -92,6 +91,7 @@ export function SearchPane({
             row={{ task, progress: null }}
             today={today}
             location={where(task)}
+            labels={loaded.labels}
             reminders={loaded.reminders}
             onChanged={onChanged}
           />
@@ -107,7 +107,7 @@ export function SearchPane({
                 key={`done-${task.id}`}
                 task={task}
                 today={today}
-                location={where(task)}
+                location={locationText(where(task))}
                 onChanged={onChanged}
               />
             ))}

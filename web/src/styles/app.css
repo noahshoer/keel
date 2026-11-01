@@ -278,7 +278,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .check.p3 { border: 2px solid var(--p3); background: var(--p3-bg); color: var(--p3); }
 .task-body { flex: 1; min-width: 0; }
 .task-content { font-size: 15px; line-height: 21px; font-weight: 500; word-wrap: break-word; }
-.task-desc { color: var(--secondary); font-size: 13px; line-height: 18px; margin-top: 2px; }
+.task-desc { color: var(--secondary); font-size: 13px; line-height: 18px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 5px; font-size: 13px; line-height: 18px; }
 .due { display: inline-flex; align-items: center; gap: 4px; }
 .due.overdue { color: var(--due-overdue); }
@@ -286,17 +286,40 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .due.tomorrow { color: var(--due-tomorrow); }
 .due.week { color: var(--due-week); }
 .due.later { color: var(--due-later); }
-.streak { color: var(--streak); font-weight: 500; }
-.task-side { flex: none; align-self: stretch; display: flex; flex-direction: column; align-items: flex-end;
-  justify-content: space-between; gap: 4px; min-width: 0; }
-.task-badges { display: flex; align-items: center; gap: 6px; min-height: 20px; }
-.task-project { font-size: 13px; line-height: 18px; color: var(--secondary); white-space: nowrap; padding-bottom: 2px; }
-.task-actions { display: flex; gap: 2px; opacity: 0; transform: translateX(4px); }
+.streak { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; vertical-align: -2px; color: var(--streak); font-size: 13px; line-height: 18px; font-weight: 600; }
+/* Rows, each only when it has content: title and streak, deadline, description,
+   the when group, labels and project. The when group never shortens; beside it
+   the project does, section first. Labels and project shrink together. */
+.task-when { display: flex; flex: none; align-items: center; gap: 8px; margin-top: 4px; font-size: 13px; line-height: 18px; white-space: nowrap; color: var(--secondary); }
+.task-bottom .task-when { margin-top: 0; }
+.task-bottom { display: flex; align-items: center; gap: 12px; min-width: 0; margin-top: 4px; font-size: 13px; line-height: 18px; }
+.task-deadline { margin-top: 2px; font-size: 13px; line-height: 18px; font-weight: 600; }
+.task-deadline .deadline { color: var(--due-overdue); font-weight: 600; }
+.row-shrink { flex: 0 1 auto; min-width: 0; }
+.task-subtasks { display: inline-flex; align-items: center; gap: 4px; }
+.subtask-icon { display: inline-flex; color: var(--icon); }
+.subtask-icon[data-progress="all"] { color: var(--accent); }
+.subtask-ring { width: 15px; height: 15px; }
+.subtask-ring-track { stroke: var(--border-strong); }
+.subtask-ring-fill { stroke: var(--accent); }
+.task-repeat { display: inline-flex; color: var(--icon); }
+.task-labels { display: flex; align-items: center; gap: 4px; overflow: hidden; }
+.task-label-items { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-label-group { color: var(--tint, var(--secondary)); }
+.task-label-group + .task-label-group { margin-left: 8px; }
+.task-label-group .icon { vertical-align: -1px; margin-right: 3px; }
+.label-more { flex: none; color: var(--secondary); }
+.task-project-name, .task-project-section { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+.task-project-name { flex: 0 1 auto; }
+.task-project-section { flex: 0 100 auto; }
+.task-project { display: flex; margin-left: auto; font-size: 13px; line-height: 18px; color: var(--secondary); white-space: nowrap; }
+.task-actions { position: absolute; top: 4px; right: 4px; padding: 2px; border-radius: var(--r-full); background: var(--row-hover);
+  box-shadow: var(--shadow-sm); pointer-events: none; display: flex; gap: 2px; opacity: 0; transform: translateX(4px); }
 .task-actions { transition: opacity .16s var(--ease), transform .16s var(--ease); }
 /* Mouse: hover shows a task's actions. Touch: a long press does (gestures.rs);
    a hover reveal on iPhone would cost every tap on a task an extra tap. */
 @media (hover: hover) { .task:hover .task-actions { opacity: 1; transform: none; pointer-events: auto; } }
-.task.pressed .task-actions { opacity: 1; transform: none; }
+.task.pressed .task-actions, .task-actions:focus-within { opacity: 1; transform: none; pointer-events: auto; }
 .streak-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin: 2px 0 10px 40px;
   padding: 12px 14px; background: var(--panel); border-radius: var(--r-lg); font-size: 13px;
   animation: pop-in .18s var(--ease); }
@@ -479,10 +502,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .icon-btn::after { content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
   .chip-btn, .tv-pill, .menu-item, .label-opt { min-height: 44px; }
   .task-project { font-size: 14px; line-height: 19px; }
-  .task-count { font-size: 14px; line-height: 23px; }
-  .task-badges { min-height: 23px; }
-  .task-badges .streak { font-size: 14px; }
-  .task-title .done-check { margin-top: 1.5px; }
+  .task-count { font-size: 14px; line-height: 19px; }
+  .task-when, .task-bottom, .task-deadline { font-size: 14px; line-height: 19px; }
+  .streak { font-size: 14px; line-height: 19px; }
   .card-head { font-size: 14px; padding: 11px 16px 10px; }
   /* Sidebar: bigger rows, icons and logo to match the task rows. */
   .brand { font-size: 20px; gap: 12px; padding: 6px 8px 20px; }
@@ -539,9 +561,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .task-card > :last-child, .task-card > :last-child .task-row { border-bottom-left-radius: var(--r-card); border-bottom-right-radius: var(--r-card); }
 @media (hover: hover) { .task-card .task:not(.completed) .task-row:hover { background: var(--hover); } }
 .task-card .task.pressed .task-row { background: var(--hover); }
-.task-title { display: flex; align-items: flex-start; gap: 6px; }
-.task-title .task-content { min-width: 0; overflow-wrap: anywhere; }
-.task-count { flex: none; font-size: 13px; line-height: 21px; color: var(--secondary); font-variant-numeric: tabular-nums; }
+.task-title .task-content { overflow-wrap: anywhere; }
+.task-count { flex: none; font-size: 13px; line-height: 18px; color: var(--secondary); font-variant-numeric: tabular-nums; }
 .done-check { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff;
   display: inline-flex; align-items: center; justify-content: center; }
 .card-head { display: flex; align-items: center; gap: 8px; padding: 9px 16px 8px; font-size: 13px;
@@ -825,12 +846,6 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .content { padding: calc(10px + env(safe-area-inset-top)) 16px 80px; }
   .view-toggle { padding: 6px 8px; }
   .section-title { padding-left: 8px; padding-right: 8px; }
-  /* Row actions float over the row instead of reserving width for the title. */
-  .task-actions { position: absolute; top: 4px; right: 4px; padding: 2px; border-radius: var(--r);
-    background: var(--row-hover); box-shadow: var(--shadow-sm); pointer-events: none; }
-  .task.pressed .task-actions, .task-actions:focus-within { pointer-events: auto; }
-  .task-side { max-width: 38%; }
-  .task-project { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .streak-panel { margin-left: 0; gap: 12px; }
   /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */
   .editor { padding: 10px 10px 0; }

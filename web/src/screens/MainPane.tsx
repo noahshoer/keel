@@ -14,28 +14,17 @@ import {
   viewSubtitle,
   viewTitle,
 } from "../app/view";
-import type { Id, Section, Task } from "../bindings";
+import type { Section, Task } from "../bindings";
 import { localToday } from "../clock";
 import { blankValues, cards, dateGroups } from "../core";
 import { AddTask } from "../editor/AddTask";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
+import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
 import { CheckCircleIcon, MenuIcon } from "../shell/icons";
 import { AddSection, SectionBlock } from "./SectionBlock";
 
 /** "Project" or "Project / Section" for each task the pane lists. */
-function locationNames(loaded: Loaded): Map<Id, string> {
-  const projects = new Map(loaded.projects.map((p) => [p.id, p.name]));
-  const sections = new Map(loaded.sections.map((s) => [s.id, s.name]));
-  const out = new Map<Id, string>();
-  for (const t of [...loaded.tasks, ...loaded.completed]) {
-    const project = projects.get(t.project_id) ?? "";
-    const section = t.section_id === null ? undefined : sections.get(t.section_id);
-    out.set(t.id, section === undefined ? project : `${project} / ${section}`);
-  }
-  return out;
-}
-
 function contentClass(motion: Motion, swap: number): string {
   if (motion === "pop") return "content view-pop";
   if (motion === "push") return "content";
@@ -68,7 +57,8 @@ export function MainPane({
   const mode = viewMode(view);
   const toggle = canShowCompleted(view);
   const subtitle = viewSubtitle(view, today);
-  const locations = showsProject(view) ? locationNames(loaded) : null;
+  const locations = locationsOf([...loaded.all, ...loaded.completed], loaded.projects, loaded.sections);
+  const namesProject = showsProject(view);
   const search = view.kind === "search";
   const projectId = view.kind === "project" ? view.id : view.kind === "inbox" ? loaded.inbox.id : null;
   const projectSections: Section[] =
@@ -101,6 +91,7 @@ export function MainPane({
       cards={cards(tasks, loaded.all, mode)}
       today={today}
       locations={locations}
+      labels={loaded.labels}
       reminders={loaded.reminders}
       onChanged={onChanged}
     />
@@ -224,7 +215,7 @@ export function MainPane({
                 <CompletedRow
                   task={task}
                   today={today}
-                  location={locations === null ? null : (locations.get(task.id) ?? "")}
+                  location={namesProject ? locationText(locations.get(task.id) ?? INBOX_LOCATION) : null}
                   onChanged={onChanged}
                 />
               </div>

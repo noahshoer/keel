@@ -37,4 +37,4 @@ const upcoming = [...document.querySelectorAll('.nav-item')].find((n) => n.textC
 upcoming?.click();
 await sleep(1000);
 const added = [...document.querySelectorAll('.task-row')].find((r) => r.textContent.includes('Quick add check'));
-check(`added row: ${added ? added.querySelector('.task-meta')?.textContent : 'missing'}`);
+check(`added row: ${added ? added.querySelector('.task-when')?.textContent : 'missing'}`);
