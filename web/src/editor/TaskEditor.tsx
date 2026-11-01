@@ -29,6 +29,9 @@ import { pillsRunOn } from "./pillFade";
 import { cx, type Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
 
+/** The space between the task card and the keyboard. */
+const CARD_GAP = 8;
+
 /** Stops a press taking focus from the title, except in a field of its own. */
 function keepFocus(e: MouseEvent<HTMLElement>): void {
   const target = e.target as HTMLElement;
@@ -246,7 +249,7 @@ export function TaskEditor({
   const form = (
     <form
       className={cx("editor", touch && "on-keyboard", touch && !keyboard.up && "keyboard-down")}
-      style={touch ? { bottom: keyboard.inset } : undefined}
+      style={touch ? { bottom: keyboard.inset + CARD_GAP } : undefined}
       // Pressing anything but a text field keeps the title focused, so the keyboard stays up.
       onMouseDown={touch ? keepFocus : undefined}
       onSubmit={(e) => {

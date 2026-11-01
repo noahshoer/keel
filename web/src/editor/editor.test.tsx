@@ -119,6 +119,14 @@ describe("on touch", () => {
     expect(fireEvent.mouseDown(screen.getByPlaceholderText("Description"))).toBe(true);
   });
 
+  it("floats a small gap above the keyboard", () => {
+    vi.stubGlobal("visualViewport", Object.assign(new EventTarget(), { offsetTop: 0, height: 546 }));
+    const client = vi.spyOn(document.documentElement, "clientHeight", "get").mockReturnValue(874);
+    adding();
+    expect(document.querySelector<HTMLElement>("form.editor")?.style.bottom).toBe("336px");
+    client.mockRestore();
+  });
+
   it("fades the pills only while one runs under the save button", () => {
     adding();
     const row = document.querySelector(".chips") as HTMLElement;
