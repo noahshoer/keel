@@ -2,6 +2,7 @@
 // Enter (it's created and ticked). crates/ui/src/editor.rs `LabelPicker`.
 import { useRef, useState } from "react";
 import type { Label } from "../bindings";
+import { labelGroups } from "../core";
 import { addLabel, setLabelColor } from "../ipc/actions";
 import { CheckSmallIcon, TagSmallIcon } from "../shell/icons";
 import { LabelColorPicker } from "./LabelColorPicker";
@@ -113,16 +114,19 @@ export function LabelPicker({
   face?: Face;
 }) {
   const isOpen = open === "labels";
+  // The chip reads in its first label's color; open, it takes the open pill's.
+  const first = face === undefined && !isOpen ? labelGroups(selected, labels)[0] : undefined;
   return (
     <div className="chip-wrap">
       <button
         type="button"
         className={cx(face?.className ?? "chip chip-btn", isOpen && "chip-open")}
         title="Labels"
+        style={first !== undefined ? { color: labelColorVar(first.color) } : undefined}
         onClick={() => setOpen(isOpen ? null : "labels")}
       >
         {face === undefined || face.icon ? (
-          <span className="chip-icon">
+          <span className="chip-icon pill-tag">
             <TagSmallIcon />
           </span>
         ) : null}

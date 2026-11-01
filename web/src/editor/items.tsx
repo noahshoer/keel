@@ -24,3 +24,7 @@ const LOCATION: Record<LocationKind, { icon: React.ReactNode; iconClass: string;
 /** The project / section menu's items (`EditorView.locations`). */
 export const locationItems = (choices: LocationChoice[]): MenuItem[] =>
   choices.map((c) => ({ value: c.value, label: c.label, ...LOCATION[c.kind] }));
+
+/** The icon of the chosen project or section, for its pill. */
+export const locationFace = (choices: LocationChoice[], selected: string) =>
+  LOCATION[choices.find((c) => c.value === selected)?.kind ?? "Project"];

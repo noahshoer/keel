@@ -179,6 +179,29 @@ describe("Menu", () => {
 });
 
 describe("LabelPicker", () => {
+  it("colors its pill by the first chosen label, while closed", () => {
+    render(<LabelHost initial={[{ ...labels[0], color: "red" } as Label]} />);
+    const pill = screen.getByTitle("Labels");
+    expect(pill.style.color).toBe("var(--label-red)");
+    fireEvent.click(pill);
+    expect(pill.style.color).toBe("");
+  });
+
+  it("leaves its pill plain with nothing chosen", () => {
+    render(
+      <LabelPicker
+        labels={[{ ...labels[0], color: "red" } as Label]}
+        selected={[]}
+        text="Labels"
+        open={null}
+        setOpen={() => {}}
+        onToggle={() => {}}
+        onChanged={() => {}}
+      />,
+    );
+    expect(screen.getByTitle("Labels").style.color).toBe("");
+  });
+
   it("has the find field first, and marks chosen labels", () => {
     render(<LabelHost />);
     fireEvent.click(screen.getByTitle("Labels"));

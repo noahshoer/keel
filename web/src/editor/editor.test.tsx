@@ -144,6 +144,20 @@ describe("on touch", () => {
     expect(pill().className).toContain("pill-p2");
   });
 
+  it("the Project pill shows the icon of where the task goes", () => {
+    adding();
+    const pill = () => screen.getByTitle("Project / section");
+    expect(pill().querySelector(".chip-icon.loc-inbox svg")).not.toBeNull();
+    fireEvent.click(pill());
+    fireEvent.click(screen.getByText("Trip"));
+    expect(pill().querySelector(".chip-icon.loc-project svg")).not.toBeNull();
+  });
+
+  it("the Labels pill shows a tag", () => {
+    adding();
+    expect(screen.getByTitle("Labels").querySelector(".chip-icon svg")).not.toBeNull();
+  });
+
   describe("making room for a calendar", () => {
     const title = () => document.querySelector(".title-input") as HTMLTextAreaElement;
     const focused = () => document.activeElement === title();

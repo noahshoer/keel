@@ -16,11 +16,11 @@ import { holdPage } from "../app/pageHold";
 import type { EditorPick, EditorValues, Label, Project, Recurrence, Section, SpanKind } from "../bindings";
 import { localToday } from "../clock";
 import { applyPick, editorView, locationPick, toggleLabel, unhighlightAt, withTitle } from "../core";
-import { ArrowUpIcon, FlagFilledIcon, HashSmallIcon, RepeatSmallIcon } from "../shell/icons";
+import { ArrowUpIcon, FlagFilledIcon, RepeatSmallIcon } from "../shell/icons";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
 import { HighlightedTitle } from "./HighlightedTitle";
-import { flagClass, locationItems, PRIORITY_ITEMS } from "./items";
+import { flagClass, locationFace, locationItems, PRIORITY_ITEMS } from "./items";
 import { useKeyboard } from "./keyboardAnchor";
 import { LabelPicker } from "./LabelPicker";
 import { isTouch } from "./locale";
@@ -201,7 +201,8 @@ export function TaskEditor({
       <Menu
         id="location"
         title="Project / section"
-        icon={<HashSmallIcon />}
+        icon={locationFace(view.locations, view.location).icon}
+        iconClass={locationFace(view.locations, view.location).iconClass}
         text={view.location_text}
         items={locationItems(view.locations)}
         selected={view.location}

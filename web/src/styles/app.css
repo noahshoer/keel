@@ -405,8 +405,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .on-keyboard .chips::-webkit-scrollbar { display: none; }
 .on-keyboard .chip-btn { height: 44px; max-width: none; padding: 0 14px; border: none; background: var(--field-fill); color: var(--text); font-size: 15px; white-space: nowrap; }
 .on-keyboard .chip-btn .icon, .on-keyboard .chip-caret { display: none; }
-.on-keyboard .chip-btn .chip-icon[class*="pri-"] .icon { display: inline-flex; }
-.on-keyboard .chip-btn .chip-icon[class*="pri-"] svg { width: 16px; height: 16px; }
+.on-keyboard .chip-btn .chip-icon[class*="pri-"] .icon, .on-keyboard .chip-btn .chip-icon[class*="loc-"] .icon, .on-keyboard .chip-btn .pill-tag .icon { display: inline-flex; }
+.on-keyboard .chip-btn .chip-icon[class*="pri-"] svg, .on-keyboard .chip-btn .chip-icon[class*="loc-"] svg, .on-keyboard .chip-btn .pill-tag svg { width: 16px; height: 16px; }
 .on-keyboard .pill-p1 { color: var(--p1); }
 .on-keyboard .pill-p2 { color: var(--p2-text); }
 .on-keyboard .pill-p3 { color: var(--p3-text); }
