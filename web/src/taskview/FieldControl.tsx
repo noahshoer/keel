@@ -89,6 +89,12 @@ export function FieldControl({
             text={text}
             bucket={bucket}
             rule={view.repeat_rule}
+            repeat={{
+              items: repeatItems,
+              selected: v.repeat,
+              text: repeatItems.find((i) => i.value === v.repeat)?.label ?? view.repeat_chip_text,
+              onSelect: (value) => onPick({ type: "repeat", value }),
+            }}
             today={today}
             {...pop}
             face={face(`due-chip ${bucket !== null ? BUCKET_CLASS[bucket] : ""}`.trim(), text)}

@@ -1,6 +1,6 @@
 import { act, render } from "@testing-library/react";
 import { useRef } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { placePopover, type Rect, usePlacedPopover } from "./popover";
 
 const rect = (left: number, top: number, width: number, height: number): Rect => ({
@@ -38,6 +38,46 @@ export function Picker() {
 }
 
 describe("usePlacedPopover on the keyboard", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("works in what's visible, then offsets into the fixed coordinates WebKit scrolled", async () => {
+    vi.stubGlobal("visualViewport", Object.assign(new EventTarget(), { offsetTop: 396, height: 478 }));
+    const { container } = render(
+      <form className="on-keyboard">
+        <Picker />
+      </form>,
+    );
+    const card = container.querySelector("form") as HTMLElement;
+    const pop = container.querySelector(".popover") as HTMLElement;
+    card.getBoundingClientRect = () => rect(0, 339, 402, 139) as DOMRect;
+    pop.getBoundingClientRect = () => rect(0, 0, 386, 100) as DOMRect;
+    card.style.bottom = "0px";
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(pop.style.top).toBe("627px");
+    expect(pop.style.maxHeight).toBe("323px");
+  });
+
+  it("places again when a step changes what's inside", async () => {
+    const { container } = render(
+      <form className="on-keyboard">
+        <Picker />
+      </form>,
+    );
+    const card = container.querySelector("form") as HTMLElement;
+    const pop = container.querySelector(".popover") as HTMLElement;
+    card.getBoundingClientRect = () => rect(0, 500, 402, 136) as DOMRect;
+    pop.getBoundingClientRect = () => rect(0, 0, 386, 200) as DOMRect;
+    pop.appendChild(document.createElement("div"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(pop.style.top).toBe("292px");
+  });
+
   it("follows the task card when the card moves", async () => {
     const { container } = render(
       <form className="on-keyboard">

@@ -122,6 +122,33 @@ export function DateHost({
     </form>
   );
 }
+export function RepeatDateHost() {
+  const [open, setOpen] = usePop();
+  const [value, setValue] = useState("none");
+  const items = [
+    { value: "none", label: "Does not repeat" },
+    { value: "daily", label: "Every day" },
+  ];
+  return (
+    <DatePicker
+      date=""
+      time=""
+      text="Date"
+      bucket={null}
+      rule={null}
+      today={TODAY}
+      open={open}
+      setOpen={setOpen}
+      onChange={() => {}}
+      repeat={{
+        items,
+        selected: value,
+        text: items.find((i) => i.value === value)?.label ?? "",
+        onSelect: setValue,
+      }}
+    />
+  );
+}
 export function DeadlineHost() {
   const [open, setOpen] = usePop();
   return (
@@ -248,22 +275,89 @@ describe("ReminderPicker", () => {
 describe("DatePicker", () => {
   const openIt = () => fireEvent.click(screen.getByTitle("Date"));
 
-  it("quick dates and day cells pick and close", () => {
+  const calendar = () => fireEvent.click(screen.getByText("Pick a date and time"));
+
+  it("opens on the quick choices; each picks and closes", () => {
     const onChange = vi.fn();
     render(<DateHost onChange={onChange} />);
     openIt();
-    expect(document.querySelector(".sched-head")?.textContent).toBe("No date");
+    expect([...document.querySelectorAll(".scheduler .menu-label")].map((e) => e.textContent)).toEqual([
+      "Today",
+      "Tomorrow",
+      "This weekend",
+      "Next week",
+      "Pick a date and time",
+      "No date",
+    ]);
+    expect(document.querySelector(".cal-grid")).toBeNull();
     fireEvent.click(screen.getByText("Tomorrow"));
     expect(onChange).toHaveBeenLastCalledWith("2026-10-31", "");
     expect(document.querySelector(".scheduler")).toBeNull();
     openIt();
+    fireEvent.click(screen.getByText("No date"));
+    expect(onChange).toHaveBeenLastCalledWith("", "");
+    expect(document.querySelector(".scheduler")).toBeNull();
+  });
+
+  it("marks the quick choice that's set", () => {
+    render(<DateHost onChange={vi.fn()} date="2026-10-31" />);
+    openIt();
+    expect(document.querySelector(".menu-item.checked .menu-label")?.textContent).toBe("Tomorrow");
+  });
+
+  it("Pick a date and time shows the calendar, a Time row and the Repeat row", () => {
+    render(<RepeatDateHost />);
+    openIt();
+    calendar();
+    expect(document.querySelector(".cal-grid")).not.toBeNull();
+    expect(document.querySelector(".sched-time")?.textContent).toContain("Time");
+    expect(screen.getByRole("button", { name: /^Repeat/ }).textContent).toContain("Does not repeat");
+    expect(document.querySelector(".sched-quick")).toBeNull();
+  });
+
+  it("a day picks and stays open, so a time or repeat can follow", () => {
+    const onChange = vi.fn();
+    render(<DateHost onChange={onChange} />);
+    openIt();
+    calendar();
     fireEvent.click(screen.getByText("12", { selector: ".cal-day:not(.other)" }));
     expect(onChange).toHaveBeenLastCalledWith("2026-10-12", "");
+    expect(document.querySelector(".scheduler")).not.toBeNull();
+  });
+
+  it("Repeat opens its options with a way back", () => {
+    render(<RepeatDateHost />);
+    openIt();
+    calendar();
+    fireEvent.click(screen.getByRole("button", { name: /^Repeat/ }));
+    expect(document.querySelector(".cal-grid")).toBeNull();
+    expect(screen.getByText("Every day")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Back to date" }));
+    expect(document.querySelector(".cal-grid")).not.toBeNull();
+  });
+
+  it("choosing a repeat returns to the card with the new text, still open", () => {
+    render(<RepeatDateHost />);
+    openIt();
+    calendar();
+    fireEvent.click(screen.getByRole("button", { name: /^Repeat/ }));
+    fireEvent.click(screen.getByText("Every day"));
+    expect(document.querySelector(".scheduler")).not.toBeNull();
+    expect(document.querySelector(".cal-grid")).not.toBeNull();
+    expect(screen.getByRole("button", { name: /^Repeat/ }).textContent).toContain("Every day");
+  });
+
+  it("has no Repeat row when the caller gives no repeat", () => {
+    render(<DateHost onChange={vi.fn()} />);
+    openIt();
+    calendar();
+    expect(screen.queryByRole("button", { name: /^Repeat/ })).toBeNull();
   });
 
   it("month arrows move the calendar", () => {
     render(<DateHost onChange={vi.fn()} />);
     openIt();
+    calendar();
     expect(document.querySelector(".cal-title")?.textContent).toBe("October 2026");
     fireEvent.click(screen.getByTitle("Next month"));
     expect(document.querySelector(".cal-title")?.textContent).toBe("November 2026");
@@ -278,6 +372,7 @@ describe("DatePicker", () => {
     const onChange = vi.fn();
     render(<DateHost onChange={onChange} />);
     openIt();
+    calendar();
     const field = screen.getByPlaceholderText("Add time, e.g. 5pm or 17:30");
     fireEvent.change(field, { target: { value: "bad" } });
     fireEvent.keyDown(field, { key: "Enter" });
@@ -293,6 +388,7 @@ describe("DatePicker", () => {
     const onChange = vi.fn();
     render(<DateHost onChange={onChange} date="2026-11-02" />);
     openIt();
+    calendar();
     const field = document.querySelector("input.time-input.native") as HTMLInputElement;
     expect(field.type).toBe("time");
     expect(screen.getByText("Add time")).toBeTruthy();
@@ -312,6 +408,7 @@ describe("DatePicker", () => {
   it("the chooser shows month and year wheels", () => {
     render(<DateHost onChange={vi.fn()} />);
     openIt();
+    calendar();
     fireEvent.click(screen.getByTitle("Choose month and year"));
     expect(document.querySelector(".cal-grid")).toBeNull();
     expect(document.querySelector(".wheel-col.loop .wheel-item.on")?.textContent).toBe("October");
@@ -320,11 +417,23 @@ describe("DatePicker", () => {
 });
 
 describe("DeadlinePicker", () => {
-  it("has no time row and its own empty header", () => {
+  const openIt = () => fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
+
+  it("is a calendar and No deadline, with no Time or Repeat row", () => {
     render(<DeadlineHost />);
-    fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
-    expect(document.querySelector(".sched-head")?.textContent).toBe("No deadline");
+    openIt();
+    expect(document.querySelector(".cal-grid")).not.toBeNull();
     expect(document.querySelector(".sched-time")).toBeNull();
+    expect(screen.queryByText("Pick a date and time")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Repeat/ })).toBeNull();
+    expect(screen.getByText("No deadline")).toBeTruthy();
+  });
+
+  it("a day picks and closes", () => {
+    render(<DeadlineHost />);
+    openIt();
+    fireEvent.click(screen.getByText("12", { selector: ".cal-day:not(.other)" }));
+    expect(document.querySelector(".scheduler")).toBeNull();
   });
 });
 

@@ -113,6 +113,12 @@ export function TaskEditor({
         text={view.date_chip[0]}
         bucket={view.date_chip[1]}
         rule={view.repeat_rule}
+        repeat={{
+          items: repeatItems,
+          selected: values.repeat,
+          text: repeatItems.find((i) => i.value === values.repeat)?.label ?? view.repeat_chip_text,
+          onSelect: (value) => pick({ type: "repeat", value }),
+        }}
         today={today}
         open={open}
         setOpen={setOpen}

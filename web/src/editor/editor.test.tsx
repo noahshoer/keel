@@ -1,5 +1,5 @@
 // The task editor, with the clock at Friday 2026-10-30 noon.
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditorValues } from "../bindings";
 import { blankValues, valuesFromTask } from "../core";
@@ -177,6 +177,30 @@ it("orders the pills the same on desktop, and keeps Cancel there", () => {
   expect(pills).toEqual(PILLS);
   expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
   expect(document.querySelector("form.editor")?.className).not.toContain("on-keyboard");
+});
+
+it("a repeat chosen in the date card with no date set uses today, and returns to the card", () => {
+  adding();
+  fireEvent.click(screen.getByTitle("Date"));
+  fireEvent.click(screen.getByText("Pick a date and time"));
+  const repeatRow = () =>
+    within(document.querySelector(".scheduler") as HTMLElement).getByRole("button", { name: /^Repeat/ });
+  expect(repeatRow().textContent).toContain("No repeat");
+  fireEvent.click(repeatRow());
+  fireEvent.click(screen.getByText("Every week on Friday"));
+  expect(document.querySelector(".cal-grid")).not.toBeNull();
+  expect(repeatRow().textContent).toContain("Every week on Friday");
+  const ringed = [...document.querySelectorAll(".cal-day.repeat-day:not(.other)")].map((d) => d.textContent);
+  expect(ringed).toContain("30");
+  expect(ringed).not.toContain("29");
+});
+
+it("the Repeat pill still works on its own", () => {
+  adding();
+  fireEvent.click(screen.getByTitle("Repeat"));
+  fireEvent.click(screen.getByText("Every day"));
+  expect(document.querySelector(".popover")).toBeNull();
+  expect(screen.getByTitle("Repeat").textContent).toContain("Every day");
 });
 
 it("Escape closes the popover first, then cancels", () => {

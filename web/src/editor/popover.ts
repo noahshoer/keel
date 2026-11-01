@@ -19,13 +19,17 @@ export function placePopover(chip: Rect, pop: Rect, vw: number, vh: number): { t
   return { top, left };
 }
 
-/** The top of what's visible, below the status bar, in fixed coordinates. */
+/** The top of what's visible, below the status bar, from the visible top. */
 function visibleTop(): number {
   const safe = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-top"));
-  return (window.visualViewport?.offsetTop ?? 0) + (Number.isNaN(safe) ? 0 : safe) + MARGIN;
+  return (Number.isNaN(safe) ? 0 : safe) + MARGIN;
 }
 
-/** Keeps a picker above the task card as the keyboard moves or its content changes. */
+/**
+ * Keeps a picker above the task card as the keyboard moves or its content
+ * changes. Rects are relative to what's visible; a fixed `top` is relative to
+ * the layout viewport, which starts `offsetTop` higher once WebKit scrolls.
+ */
 function followCard(pop: HTMLElement, card: Element): () => void {
   const place = () => {
     Object.assign(pop.style, { position: "fixed", right: "auto", margin: "0", maxHeight: "" });
@@ -35,8 +39,9 @@ function followCard(pop: HTMLElement, card: Element): () => void {
       innerWidth,
       visibleTop(),
     );
+    const offset = window.visualViewport?.offsetTop ?? 0;
     Object.assign(pop.style, {
-      top: `${at.top}px`,
+      top: `${at.top + offset}px`,
       left: `${at.left}px`,
       maxHeight: `${at.maxHeight}px`,
       overflowY: "auto",
@@ -46,17 +51,20 @@ function followCard(pop: HTMLElement, card: Element): () => void {
   const v = window.visualViewport;
   v?.addEventListener("resize", place);
   v?.addEventListener("scroll", place);
-  const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
-  observer?.observe(card);
-  observer?.observe(pop.firstElementChild ?? pop);
+  const resized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+  resized?.observe(card);
   // The card moves after the viewport does, when its inset state lands.
   const moved = new MutationObserver(place);
   moved.observe(card, { attributes: true, attributeFilter: ["style", "class"] });
+  // A step inside the picker swaps its content.
+  const changed = new MutationObserver(place);
+  changed.observe(pop, { childList: true, subtree: true });
   return () => {
-    moved.disconnect();
     v?.removeEventListener("resize", place);
     v?.removeEventListener("scroll", place);
-    observer?.disconnect();
+    resized?.disconnect();
+    moved.disconnect();
+    changed.disconnect();
   };
 }
 
