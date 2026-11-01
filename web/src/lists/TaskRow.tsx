@@ -11,6 +11,7 @@ import {
   CalendarSmallIcon,
   CheckSmallIcon,
   DoneMark,
+  FireIcon,
   RepeatSmallIcon,
   SubtaskIcon,
   TagSmallIcon,
@@ -179,7 +180,7 @@ export function TaskRow({
           </button>
           {recurring ? (
             <button type="button" className="icon-btn" title="Streak" onClick={() => setPanel((p) => !p)}>
-              🔥
+              <FireIcon />
             </button>
           ) : null}
           <button

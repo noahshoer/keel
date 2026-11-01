@@ -1,282 +1,250 @@
-// The line icons the app uses, as JSX ports of
-// crates/ui/src/icons.rs (same paths, sizes and strokes). Each renders inside
-// a `span.icon`, like the Dioxus `Icon` component.
+// The app's icons: Phosphor (MIT) in bold, plain, on every platform. Filled
+// weight only for the deadline and priority flags. Each renders inside a
+// `span.icon`. Logo and DoneMark are Keel's own marks.
+import { ArrowBendDownRight } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
+import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { Bell } from "@phosphor-icons/react/dist/csr/Bell";
+import { BellRinging } from "@phosphor-icons/react/dist/csr/BellRinging";
+import { CalendarBlank } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { CalendarDots } from "@phosphor-icons/react/dist/csr/CalendarDots";
+import { CaretDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { Check } from "@phosphor-icons/react/dist/csr/Check";
+import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { CircleDashed } from "@phosphor-icons/react/dist/csr/CircleDashed";
+import { Clock } from "@phosphor-icons/react/dist/csr/Clock";
+import { Couch } from "@phosphor-icons/react/dist/csr/Couch";
+import { DotsThree } from "@phosphor-icons/react/dist/csr/DotsThree";
+import { Fire } from "@phosphor-icons/react/dist/csr/Fire";
+import { Flag } from "@phosphor-icons/react/dist/csr/Flag";
+import { Funnel } from "@phosphor-icons/react/dist/csr/Funnel";
+import { Gear } from "@phosphor-icons/react/dist/csr/Gear";
+import { Hash } from "@phosphor-icons/react/dist/csr/Hash";
+import { List } from "@phosphor-icons/react/dist/csr/List";
+import { MagnifyingGlass } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { Monitor } from "@phosphor-icons/react/dist/csr/Monitor";
+import { Moon } from "@phosphor-icons/react/dist/csr/Moon";
+import { PencilSimple } from "@phosphor-icons/react/dist/csr/PencilSimple";
+import { Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { Prohibit } from "@phosphor-icons/react/dist/csr/Prohibit";
+import { Repeat } from "@phosphor-icons/react/dist/csr/Repeat";
+import { Rows } from "@phosphor-icons/react/dist/csr/Rows";
+import { Sun } from "@phosphor-icons/react/dist/csr/Sun";
+import { Tag } from "@phosphor-icons/react/dist/csr/Tag";
+import { Target } from "@phosphor-icons/react/dist/csr/Target";
+import { TextAlignLeft } from "@phosphor-icons/react/dist/csr/TextAlignLeft";
+import { Trash } from "@phosphor-icons/react/dist/csr/Trash";
+import { Tray } from "@phosphor-icons/react/dist/csr/Tray";
+import { X } from "@phosphor-icons/react/dist/csr/X";
+import type { Icon } from "@phosphor-icons/react/dist/lib/types";
 import type { ReactNode } from "react";
 
-function Line({ size, stroke, children }: { size: number; stroke: string; children: ReactNode }) {
+function Ph({
+  icon: Glyph,
+  size,
+  weight = "bold",
+  children,
+}: {
+  icon: Icon;
+  size: number;
+  weight?: "bold" | "fill";
+  children?: ReactNode;
+}) {
   return (
     <span className="icon">
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
+      <Glyph size={size} weight={weight} aria-hidden="true">
         {children}
-      </svg>
+      </Glyph>
     </span>
   );
 }
 
-export function InboxIcon() {
-  return (
-    <Line size={20} stroke="1.6">
-      <path d="M4 13h4l1.5 2.5h5L16 13h4" />
-      <path d="M5.5 5h13L20 13v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-5z" />
-    </Line>
-  );
+export function FireIcon({ size = 16 }: { size?: number }) {
+  return <Ph icon={Fire} size={size} />;
+}
+
+/** The deadline's flag. */
+export function FlagFillIcon({ size = 14 }: { size?: number }) {
+  return <Ph icon={Flag} size={size} weight="fill" />;
+}
+
+export function PlusIcon({ size }: { size: number }) {
+  return <Ph icon={Plus} size={size} />;
 }
 
 /** Calendar showing today's day-of-month. */
 export function TodayIcon({ day }: { day: number }) {
   return (
-    <Line size={20} stroke="1.6">
-      <rect x="4" y="5" width="16" height="15" rx="2" />
-      <path d="M4 9h16" />
-      <text
-        x="12"
-        y="17.6"
-        textAnchor="middle"
-        fontSize="7.5"
-        fontWeight="600"
-        fill="currentColor"
-        stroke="none"
-        fontFamily="sans-serif"
-      >
+    <Ph icon={CalendarBlank} size={20}>
+      <text x="128" y="190" textAnchor="middle" fontSize="96" fontWeight="700" fontFamily="sans-serif">
         {day}
       </text>
-    </Line>
+    </Ph>
   );
+}
+
+export function InboxIcon() {
+  return <Ph icon={Tray} size={20} />;
 }
 
 export function UpcomingIcon() {
-  return (
-    <Line size={20} stroke="1.6">
-      <rect x="4" y="5" width="16" height="15" rx="2" />
-      <path d="M4 9h16M8 3v4M16 3v4M8 13h2M12 13h2M8 16.5h2M12 16.5h2" />
-    </Line>
-  );
+  return <Ph icon={CalendarDots} size={20} />;
 }
 
 export function SearchIcon() {
-  return (
-    <Line size={20} stroke="1.7">
-      <circle cx="11" cy="11" r="6.5" />
-      <path d="M16 16l4.5 4.5" />
-    </Line>
-  );
+  return <Ph icon={MagnifyingGlass} size={20} />;
 }
 
 export function MenuIcon() {
-  return (
-    <Line size={20} stroke="1.8">
-      <path d="M4 7h16M4 12h16M4 17h16" />
-    </Line>
-  );
+  return <Ph icon={List} size={20} />;
 }
 
 export function MonitorIcon() {
-  return (
-    <Line size={18} stroke="1.6">
-      <rect x="3" y="4" width="18" height="12" rx="2" />
-      <path d="M8 20h8M12 16v4" />
-    </Line>
-  );
+  return <Ph icon={Monitor} size={18} />;
 }
 
 export function GearIcon() {
-  return (
-    <Line size={18} stroke="1.6">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-    </Line>
-  );
-}
-
-export function PlusIcon({ size }: { size: number }) {
-  return (
-    <Line size={size} stroke="2">
-      <path d="M12 5v14M5 12h14" />
-    </Line>
-  );
+  return <Ph icon={Gear} size={18} />;
 }
 
 export function TagIcon() {
-  return (
-    <Line size={18} stroke="1.6">
-      <path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z" />
-      <circle cx="7.5" cy="7.5" r="1.3" />
-    </Line>
-  );
+  return <Ph icon={Tag} size={18} />;
 }
 
 export function TagSmallIcon() {
-  return (
-    <Line size={12} stroke="2">
-      <path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z" />
-      <circle cx="7.5" cy="7.5" r="1.3" />
-    </Line>
-  );
+  return <Ph icon={Tag} size={12} />;
 }
 
 export function FunnelIcon() {
-  return (
-    <Line size={18} stroke="1.6">
-      <path d="M4 5h16l-6 7.5V19l-4-2v-4.5z" />
-    </Line>
-  );
+  return <Ph icon={Funnel} size={18} />;
 }
 
 export function CalendarSmallIcon() {
-  return (
-    <Line size={12} stroke="2">
-      <rect x="4" y="5" width="16" height="15" rx="2" />
-      <path d="M4 10h16M8 3v4M16 3v4" />
-    </Line>
-  );
+  return <Ph icon={CalendarBlank} size={12} />;
 }
 
+/** The task view's date row. Bold like the rest; only flags are filled. */
 export function CalendarFilledIcon() {
-  return (
-    <Line size={12} stroke="2">
-      <rect x="4" y="5" width="16" height="15" rx="2" fill="currentColor" />
-      <path d="M8 3v4M16 3v4" />
-      <path d="M5 10h14" style={{ stroke: "var(--bg)" }} />
-    </Line>
-  );
+  return <Ph icon={CalendarBlank} size={12} />;
 }
 
 export function MoreIcon() {
-  return (
-    <Line size={18} stroke="2">
-      <circle cx="5" cy="12" r="1" />
-      <circle cx="12" cy="12" r="1" />
-      <circle cx="19" cy="12" r="1" />
-    </Line>
-  );
+  return <Ph icon={DotsThree} size={18} />;
 }
 
 /** A paragraph: the description's row. */
 export function TextLinesIcon() {
-  return (
-    <Line size={16} stroke="1.6">
-      <path d="M5 7h14M5 12h14M5 17h9" />
-    </Line>
-  );
+  return <Ph icon={TextAlignLeft} size={16} />;
 }
 
 export function RepeatSmallIcon() {
-  return (
-    <Line size={12} stroke="2">
-      <path d="M17 2l3 3-3 3" />
-      <path d="M4 11V9a4 4 0 0 1 4-4h12" />
-      <path d="M7 22l-3-3 3-3" />
-      <path d="M20 13v2a4 4 0 0 1-4 4H4" />
-    </Line>
-  );
+  return <Ph icon={Repeat} size={12} />;
 }
 
-const FLAG_BANNER = "M5 4.5C7.5 3 10 3 12 4.5S16.5 6 19 4.5v9c-2.5 1.5-5 1.5-7 0s-4.5-1.5-7 0z";
-
 export function FlagFilledIcon() {
-  return (
-    <Line size={12} stroke="2">
-      <path d="M5 21V3" />
-      <path d={FLAG_BANNER} fill="currentColor" />
-    </Line>
-  );
+  return <Ph icon={Flag} size={12} weight="fill" />;
 }
 
 export function ClockSmallIcon() {
-  return (
-    <Line size={12} stroke="2">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" />
-    </Line>
-  );
+  return <Ph icon={Clock} size={12} />;
 }
 
 export function FlagSmallIcon() {
-  return (
-    <Line size={12} stroke="2">
-      <path d="M5 21V3" />
-      <path d={FLAG_BANNER} />
-    </Line>
-  );
+  return <Ph icon={Flag} size={12} />;
 }
 
 export function HashSmallIcon() {
-  return (
-    <Line size={14} stroke="2">
-      <path d="M5 9h14M5 15h14M10 4l-2 16M16 4l-2 16" />
-    </Line>
-  );
+  return <Ph icon={Hash} size={14} />;
 }
 
-/** A section: a short bar with lines under it. */
+/** A section. */
 export function SectionSmallIcon() {
-  return (
-    <Line size={14} stroke="2">
-      <path d="M4 6h16M8 12h12M8 18h12" />
-    </Line>
-  );
+  return <Ph icon={Rows} size={14} />;
 }
 
 export function ChevronLeftIcon() {
-  return (
-    <Line size={16} stroke="2">
-      <path d="M15 6l-6 6 6 6" />
-    </Line>
-  );
+  return <Ph icon={CaretLeft} size={16} />;
 }
 
 export function ChevronDownSmallIcon() {
-  return (
-    <Line size={12} stroke="2">
-      <path d="M6 9l6 6 6-6" />
-    </Line>
-  );
+  return <Ph icon={CaretDown} size={12} />;
 }
 
 export function SofaIcon() {
-  return (
-    <Line size={16} stroke="1.8">
-      <path d="M5 11V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3" />
-      <path d="M3 13a2 2 0 0 1 4 0v1h10v-1a2 2 0 0 1 4 0v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />
-      <path d="M6 18v2M18 18v2" />
-    </Line>
-  );
+  return <Ph icon={Couch} size={16} />;
 }
 
 export function ArrowRightIcon() {
-  return (
-    <Line size={16} stroke="1.8">
-      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
-      <path d="M8 12h8M13 9l3 3-3 3" />
-    </Line>
-  );
+  return <Ph icon={ArrowRight} size={16} />;
 }
 
 export function NoDateIcon() {
-  return (
-    <Line size={16} stroke="1.8">
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M6 6l12 12" />
-    </Line>
-  );
+  return <Ph icon={Prohibit} size={16} />;
 }
 
 export function ChevronRightIcon() {
-  return (
-    <Line size={16} stroke="2">
-      <path d="M9 6l6 6-6 6" />
-    </Line>
-  );
+  return <Ph icon={CaretRight} size={16} />;
+}
+
+export function CheckIcon() {
+  return <Ph icon={Check} size={11} />;
+}
+
+export function CheckSmallIcon() {
+  return <Ph icon={Check} size={14} />;
+}
+
+export function CheckCircleIcon() {
+  return <Ph icon={CheckCircle} size={16} />;
+}
+
+export function TargetSmallIcon() {
+  return <Ph icon={Target} size={12} />;
+}
+
+export function BellSmallIcon() {
+  return <Ph icon={Bell} size={12} />;
+}
+
+export function SubtaskIcon() {
+  return <Ph icon={ArrowBendDownRight} size={18} />;
+}
+
+export function TrashIcon() {
+  return <Ph icon={Trash} size={18} />;
+}
+
+export function TrashSmallIcon() {
+  return <Ph icon={Trash} size={16} />;
+}
+
+export function PencilIcon() {
+  return <Ph icon={PencilSimple} size={16} />;
+}
+
+export function SunIcon() {
+  return <Ph icon={Sun} size={18} />;
+}
+
+export function MoonIcon() {
+  return <Ph icon={Moon} size={18} />;
+}
+
+export function XIcon() {
+  return <Ph icon={X} size={16} />;
+}
+
+export function XSmallIcon() {
+  return <Ph icon={X} size={12} />;
+}
+
+export function CircleDashedIcon() {
+  return <Ph icon={CircleDashed} size={15} />;
+}
+
+export function BellRingingIcon() {
+  return <Ph icon={BellRinging} size={14} />;
 }
 
 /** The mark a completing circle fills with (`CompletionIcon::svg`, crates/ui/src/completion.rs). */
@@ -333,119 +301,6 @@ export function DoneMark({ icon = "wave" }: { icon?: "wave" | "pine" | "reflecti
         />
       </svg>
     </span>
-  );
-}
-
-export function CheckIcon() {
-  return (
-    <Line size={11} stroke="3">
-      <path d="M5 12l5 5L20 7" />
-    </Line>
-  );
-}
-
-export function CheckSmallIcon() {
-  return (
-    <Line size={14} stroke="2.4">
-      <path d="M5 12.5l4.5 4.5L19 7.5" />
-    </Line>
-  );
-}
-
-export function CheckCircleIcon() {
-  return (
-    <Line size={16} stroke="1.6">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M8 12.5l2.5 2.5L16 9.5" />
-    </Line>
-  );
-}
-
-export function TargetSmallIcon() {
-  return (
-    <Line size={12} stroke="2">
-      <circle cx="12" cy="12" r="8.5" />
-      <circle cx="12" cy="12" r="4.5" />
-      <circle cx="12" cy="12" r="1" fill="currentColor" />
-    </Line>
-  );
-}
-
-export function BellSmallIcon() {
-  return (
-    <Line size={12} stroke="2">
-      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
-      <path d="M10 20.5a2 2 0 0 0 4 0" />
-    </Line>
-  );
-}
-
-export function SubtaskIcon() {
-  return (
-    <Line size={18} stroke="1.6">
-      <path d="M6 4v8a4 4 0 0 0 4 4h8" />
-      <path d="M15 13l3 3-3 3" />
-    </Line>
-  );
-}
-
-const TRASH = "M5 7h14M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3";
-
-export function TrashIcon() {
-  return (
-    <Line size={18} stroke="1.6">
-      <path d={TRASH} />
-    </Line>
-  );
-}
-
-export function TrashSmallIcon() {
-  return (
-    <Line size={16} stroke="1.6">
-      <path d={TRASH} />
-    </Line>
-  );
-}
-
-export function PencilIcon() {
-  return (
-    <Line size={16} stroke="1.6">
-      <path d="M4 20h4L19 9l-4-4L4 16v4z" />
-      <path d="M13.5 6.5l4 4" />
-    </Line>
-  );
-}
-
-export function SunIcon() {
-  return (
-    <Line size={18} stroke="1.6">
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-    </Line>
-  );
-}
-
-export function MoonIcon() {
-  return (
-    <Line size={18} stroke="1.6">
-      <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
-    </Line>
-  );
-}
-
-export function XIcon() {
-  return (
-    <Line size={16} stroke="2.2">
-      <path d="M7 7l10 10M17 7L7 17" />
-    </Line>
-  );
-}
-
-export function XSmallIcon() {
-  return (
-    <Line size={12} stroke="2.4">
-      <path d="M7 7l10 10M17 7L7 17" />
-    </Line>
   );
 }
 

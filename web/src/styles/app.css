@@ -16,6 +16,7 @@
   --text: #202020;
   --muted: #8a8a8a;
   --subtle: #666666;
+  --icon: #3d3d3d;
   --divider: #efefef;
   --hover: rgba(0,0,0,.045);
   --field-fill: rgba(118,118,128,.12);
@@ -64,6 +65,7 @@
   --text: #e8e8e8;
   --muted: #9a9a9a;
   --subtle: #b0b0b0;
+  --icon: #c8c8c8;
   --divider: #303030;
   --hover: rgba(255,255,255,.06);
   --field-fill: rgba(118,118,128,.24);
@@ -112,6 +114,7 @@
   --text: #e8e8e8;
   --muted: #9a9a9a;
   --subtle: #b0b0b0;
+  --icon: #c8c8c8;
   --divider: #303030;
   --hover: rgba(255,255,255,.06);
   --field-fill: rgba(118,118,128,.24);
@@ -188,7 +191,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .nav-icon.inbox { color: var(--inbox); }
 .nav-icon.today { color: var(--today); }
 .nav-icon.upcoming { color: var(--upcoming); }
-.nav-icon.hash { color: var(--muted); font-size: 16px; font-weight: 500; }
+.nav-icon.hash { color: var(--icon); font-size: 16px; font-weight: 500; }
 .section-head { display: flex; align-items: center; justify-content: space-between;
   padding: 20px 10px 6px; font-weight: 600; color: var(--muted); font-size: 12px;
   text-transform: uppercase; letter-spacing: .04em; }
@@ -198,7 +201,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .project-input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
 
 .icon { display: inline-flex; align-items: center; justify-content: center; }
-.icon-btn { border: none; background: none; cursor: pointer; color: var(--muted); padding: 5px; border-radius: var(--r);
+.icon-btn { border: none; background: none; cursor: pointer; color: var(--icon); padding: 5px; border-radius: var(--r);
   display: inline-flex; align-items: center; justify-content: center; }
 @media (hover: hover) { .icon-btn:hover { background: var(--icon-hover); color: var(--text); } }
 .icon-btn:active { transform: scale(.92); }
@@ -325,7 +328,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Labels + editor pickers */
 .task-body { cursor: pointer; }
 .label-tag { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); }
-.nav-icon.label { color: var(--muted); }
+.nav-icon.label { color: var(--icon); }
 .chip-hash { color: var(--muted); font-weight: 600; }
 .chip-btn { cursor: pointer; font-family: inherit; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip-wrap { position: relative; }
@@ -343,13 +346,13 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 @media (hover: hover) { .menu-item:hover { background: var(--hover); } }
 .menu-item.indent { padding-left: 30px; }
 .menu-item.checked { font-weight: 600; }
-.menu-icon { display: inline-flex; color: var(--muted); }
+.menu-icon { display: inline-flex; color: var(--icon); }
 .menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-hint { color: var(--muted); font-size: 12px; }
 .menu-check { display: inline-flex; color: var(--accent); }
 .chip-open { border-color: var(--border-strong); background: var(--chip-hover); }
 .chip-icon { display: inline-flex; }
-.chip-caret { display: inline-flex; color: var(--muted); margin-left: 1px; }
+.chip-caret { display: inline-flex; color: var(--icon); margin-left: 1px; }
 .pri-1 { color: var(--p1); } .pri-2 { color: var(--p2); } .pri-3 { color: var(--p3); } .pri-4 { color: var(--muted); }
 .loc-inbox { color: var(--inbox); } .loc-project, .loc-section { color: var(--muted); }
 .due-chip.overdue { color: var(--due-overdue); } .due-chip.today { color: var(--due-today); }
@@ -522,7 +525,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .card-flag.p1 { color: var(--p1); }
 .card-flag.p2 { color: var(--p2); }
 .card-flag.p3 { color: var(--p3); }
-.card-chev { display: inline-flex; color: var(--muted); }
+.card-chev { display: inline-flex; color: var(--icon); }
 /* Task view (task_view/view.rs): a sheet below 900px, a panel from 900px. */
 /* Phone: a sheet from the bottom, 67% of the screen, with the list showing
    above it over a light scrim (a tap closes it). It follows a drag from
@@ -595,13 +598,13 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-card { background: var(--bg); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
 .tv-row { display: flex; align-items: center; gap: 4px; padding: 6px 8px; min-height: 40px; }
 .tv-row + .tv-row, .tv-row + .tv-pills { border-top: 1px solid var(--border); }
-.tv-row-icon { display: inline-flex; width: 28px; justify-content: center; color: var(--muted); flex: none; }
+.tv-row-icon { display: inline-flex; width: 28px; justify-content: center; color: var(--icon); flex: none; }
 .tv-row .chip-wrap { min-width: 0; }
 .tv-row .chip-wrap:first-child { flex: 0 1 auto; }
 .tv-field-btn { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; border: none; background: none;
   cursor: pointer; font: inherit; font-size: 14px; color: var(--text); text-align: left; padding: 4px 6px; border-radius: var(--r);
   overflow-wrap: anywhere; }
-.tv-field-btn .icon, .tv-field-btn .chip-icon { flex: none; color: var(--muted); }
+.tv-field-btn .icon, .tv-field-btn .chip-icon { flex: none; color: var(--icon); }
 /* The flag and calendar are filled with the priority's and the date's color. */
 .tv-field-btn .pri-1, .tv-field-btn .pri-1 .icon { color: var(--p1); }
 .tv-field-btn .pri-2, .tv-field-btn .pri-2 .icon { color: var(--p2); }
@@ -692,7 +695,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .deadline { display: inline-flex; align-items: center; gap: 4px; }
 .deadline.set { color: var(--due-week); }
 .deadline.urgent { color: var(--due-overdue); font-weight: 500; }
-.reminder-tag { display: inline-flex; align-items: center; color: var(--muted); }
+.reminder-tag { display: inline-flex; align-items: center; color: var(--icon); }
 .deadline-chip.set { color: var(--due-week); }
 .deadline-chip.urgent { color: var(--due-overdue); }
 .reminder-chip { color: var(--accent); }
@@ -706,11 +709,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .label-new.bad { border-color: var(--due-overdue); }
 
 /* Search view */
-.nav-icon.search { color: var(--subtle); }
+.nav-icon.search { color: var(--icon); }
 /* A filled pill like iOS's search field (and the round glass buttons):
    no outline or glow; a slightly deeper fill while typing. */
 .search-box { position: relative; display: flex; align-items: center; margin: 6px 0 14px; }
-.search-icon { position: absolute; left: 13px; display: inline-flex; color: var(--muted); pointer-events: none; }
+.search-icon { position: absolute; left: 13px; display: inline-flex; color: var(--icon); pointer-events: none; }
 .search-input { width: 100%; height: 42px; padding: 0 40px 0 40px; border: none; border-radius: 999px;
   font-size: 16px; outline: none; background: var(--field-fill); color: var(--text); transition: background .16s;
   -webkit-appearance: none; appearance: none; }
