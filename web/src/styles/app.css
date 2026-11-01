@@ -89,7 +89,7 @@
   --muted: #a8a8a8;
   --secondary: #a8a8a8;
   --subtle: #b8b8b8;
-  --icon: #c8c8c8;
+  --icon: #ffffff;
   --divider: #303030;
   --hover: rgba(255,255,255,.06);
   --field-fill: rgba(118,118,128,.24);
@@ -158,7 +158,7 @@
   --muted: #a8a8a8;
   --secondary: #a8a8a8;
   --subtle: #b8b8b8;
-  --icon: #c8c8c8;
+  --icon: #ffffff;
   --divider: #303030;
   --hover: rgba(255,255,255,.06);
   --field-fill: rgba(118,118,128,.24);
@@ -251,17 +251,18 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .nav-tag { display: inline-flex; }
 .brand-mark { width: 32px; height: 32px; flex-shrink: 0; display: flex; color: var(--accent); filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.12)); }
 .brand .theme-toggle { margin-left: auto; }
+.brand-name { margin-left: 6px; font-size: 15px; font-weight: 700; }
 .nav-item { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 6px 12px; border-radius: var(--r-item);
   cursor: pointer; color: var(--text); user-select: none; margin-bottom: 1px; }
 @media (hover: hover) { .nav-item:hover { background: var(--hover); } }
 .nav-item.pressed { background: var(--hover); }
 .nav-item:active { transform: scale(.985); }
 .nav-item.active { background: var(--active-tint); color: var(--active-text); font-weight: 600; }
-.nav-item.active .nav-icon { color: var(--accent); }
 .nav-item .count { margin-left: auto; color: var(--secondary); font-size: 13px; }
 .nav-item.active .count { color: var(--active-text); }
 .nav-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
 .nav-icon { color: var(--icon); }
+.nav-icon svg { width: 18px; height: 18px; }
 .nav-icon.hash { color: var(--icon); font-size: 16px; font-weight: 500; }
 .section-head { display: flex; align-items: center; justify-content: space-between;
   padding: 16px 12px 4px; font-weight: 600; color: var(--secondary); font-size: 13px; line-height: 18px; }
@@ -517,7 +518,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chip-icon { display: inline-flex; }
 .chip-caret { display: inline-flex; color: var(--icon); margin-left: 1px; }
 .pri-1 { color: var(--p1); } .pri-2 { color: var(--p2); } .pri-3 { color: var(--p3); } .pri-4 { color: var(--muted); }
-.loc-inbox { color: var(--inbox); } .loc-project, .loc-section { color: var(--muted); }
+.loc-inbox, .loc-project, .loc-section { color: var(--icon); }
 .due-chip.overdue { color: var(--due-overdue); } .due-chip.today { color: var(--due-today); }
 .due-chip.tomorrow { color: var(--due-tomorrow); } .due-chip.week { color: var(--due-week); }
 .due-chip.later { color: var(--due-later); }
@@ -643,6 +644,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .card-head { font-size: 14px; padding: 11px 16px 10px; }
   /* Sidebar: bigger rows, icons and logo to match the task rows. */
   .brand { padding: 0 0 16px; }
+  .brand-name { font-size: 20px; }
+  .search-btn { width: 44px; height: 44px; margin-right: -8px; }
+  .search-btn svg { width: 24px; height: 24px; }
   .brand-mark, .brand-mark svg { width: 36px; height: 36px; }
   .brand .icon-btn { width: 44px; height: 44px; }
   .brand .icon-btn svg { width: 24px; height: 24px; }
@@ -678,6 +682,12 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 @media (hover: none) { .task-row, .nav-item { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
 .view-head .view-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .view-head .view-toggle { flex-shrink: 0; }
+.view-toggle .icon { color: var(--icon); }
+.chip-icon:not([class*="pri-"]):not(.pill-tag) .icon { color: var(--icon); }
+.search-btn { flex: none; }
+.search-btn svg { width: 22px; height: 22px; }
+.streak-count { display: inline-flex; align-items: center; gap: 3px; }
+.streak-count .icon { color: var(--accent); }
 .menu-btn { display: none; margin-left: -6px; color: var(--icon); }
 .back-btn { display: none; margin-left: -6px; }
 .back-btn svg { width: 24px; height: 24px; }
@@ -695,6 +705,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
    (gestures.rs); a hover reveal would cost every tap an extra tap. */
 @media (hover: hover) { .nav-item:hover .nav-actions { display: inline-flex; } }
 .nav-actions .icon-btn { padding: 3px; }
+/* Mouse: a row's actions take the count's place while hovered. */
+@media (hover: hover) { .nav-item:hover > .count:has(+ .nav-actions) { display: none; } }
+.nav-item > .count:has(+ .nav-actions) { margin-left: 0; }
 .confirm-box { margin: 4px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md);
   background: var(--bg); box-shadow: var(--shadow-md); animation: pop-in .16s var(--ease); }
 .confirm-text { font-size: 12px; margin-bottom: 8px; }
@@ -904,7 +917,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Filters */
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace; font-size: 12px; }
 .view-sub.mono { color: var(--subtle); }
-.nav-icon.filter { color: var(--accent); }
+.nav-icon.filter { color: var(--icon); }
 .filter-form { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 10px; }
 .project-input.invalid { border-color: var(--due-overdue); }
 .filter-problem { color: var(--due-overdue); font-size: 12px; line-height: 16px; }

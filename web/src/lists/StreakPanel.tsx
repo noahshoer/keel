@@ -1,7 +1,9 @@
 // A repeating task's streak: current and best, a goal, and tracking on or
 // off (crates/ui/src/task_row.rs `StreakPanel`).
+
 import type { Task } from "../bindings";
 import { setStreak } from "../ipc/actions";
+import { FireIcon } from "../shell/icons";
 
 export function StreakPanel({ task, onChanged }: { task: Task; onChanged: () => void }) {
   const on = task.streak_enabled;
@@ -21,7 +23,11 @@ export function StreakPanel({ task, onChanged }: { task: Task; onChanged: () => 
       {on ? (
         <>
           <span className="stat">
-            Current <b>{`🔥 ${task.streak_current}`}</b>
+            Current{" "}
+            <b className="streak-count">
+              <FireIcon />
+              {task.streak_current}
+            </b>
           </span>
           <span className="stat">
             Best <b>{task.streak_best}</b>

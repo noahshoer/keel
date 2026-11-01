@@ -3,8 +3,11 @@
 // filters, each with its add form and row actions. The gear opens Settings.
 import { Children, useRef, useState } from "react";
 import type { Loaded } from "../app/load";
-import type { View } from "../app/view";
-import { labelColorVar } from "../editor/labelColors";
+import { UPCOMING_DAYS, type View } from "../app/view";
+import type { Id } from "../bindings";
+import { localToday } from "../clock";
+import { sidebarCounts } from "../core";
+import { labelTagColor } from "../editor/labelColors";
 import {
   addFilter,
   addLabel,
@@ -22,6 +25,7 @@ import { FilterForm, FilterRow } from "./FilterForm";
 import { openAndFocus } from "./focus";
 import {
   GearIcon,
+  HashSmallIcon,
   InboxIcon,
   Logo,
   MonitorIcon,
@@ -122,7 +126,9 @@ export function Sidebar({
   // Every change reloads; a failed one too (the backend's state is the truth).
   const then = (p: Promise<unknown>) => p.then(onChanged, onChanged);
   const day = new Date().getDate();
-  const count = loaded.todayCount > 0 ? String(loaded.todayCount) : "";
+  const counts = sidebarCounts(loaded.all, localToday(), UPCOMING_DAYS);
+  const ofProject = (id: Id) => counts.projects.find((c) => c.project_id === id)?.count ?? 0;
+  const countOf = { inbox: ofProject(loaded.inbox.id), today: counts.today, upcoming: counts.upcoming };
   const themeIcon = theme === "light" ? <SunIcon /> : theme === "dark" ? <MoonIcon /> : <MonitorIcon />;
 
   const fixed = (kind: "inbox" | "today" | "upcoming", icon: React.ReactNode, label: string) => (
@@ -131,7 +137,7 @@ export function Sidebar({
     <div className={navClass(view.kind === kind)} onClick={() => setView({ kind })}>
       <span className={`nav-icon ${kind}`}>{icon}</span>
       {label}
-      {kind === "today" ? <span className="count">{count}</span> : null}
+      {countOf[kind] > 0 ? <span className="count">{countOf[kind]}</span> : null}
     </div>
   );
 
@@ -141,6 +147,7 @@ export function Sidebar({
         <div className="brand-mark" title="Keel">
           <Logo size={36} />
         </div>
+        <span className="brand-name">Keel</span>
         <button
           type="button"
           className="icon-btn theme-toggle"
@@ -208,7 +215,8 @@ export function Sidebar({
             <ManagedRow
               key={p.id}
               name={p.name}
-              icon="#"
+              count={ofProject(p.id)}
+              icon={<HashSmallIcon />}
               iconClass="hash"
               active={view.kind === "project" && view.id === p.id}
               kind="project"
@@ -243,7 +251,7 @@ export function Sidebar({
               key={l.id}
               name={l.name}
               icon={
-                <span className="nav-tag" style={{ color: labelColorVar(l.color) }}>
+                <span className="nav-tag" style={{ color: labelTagColor(l.color) }}>
                   <TagIcon />
                 </span>
               }

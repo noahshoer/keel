@@ -56,24 +56,28 @@ export function App() {
     [],
   );
 
-  // "/" (when not typing) or Ctrl/Cmd+K opens Search and focuses the box.
+  // Opens Search and focuses the box: the screen's, or the sidebar's on
+  // desktop, where the screen has none.
+  const openSearch = useCallback(() => {
+    setView({ kind: "search" });
+    setTimeout(
+      () =>
+        document
+          .querySelector<HTMLInputElement>(".search-input, .sidebar-search-input:not([readonly])")
+          ?.focus(),
+      60,
+    );
+  }, []);
+  // "/" (when not typing) or Ctrl/Cmd+K does too.
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (!isSearchShortcut(ev, isTyping(document.activeElement))) return;
       ev.preventDefault();
-      setView({ kind: "search" });
-      // The Search screen's box, or the sidebar's on desktop, where the screen has none.
-      setTimeout(
-        () =>
-          document
-            .querySelector<HTMLInputElement>(".search-input, .sidebar-search-input:not([readonly])")
-            ?.focus(),
-        60,
-      );
+      openSearch();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [openSearch]);
 
   // Search slides in and out: a still copy of the page being left is taken
   // as soon as the view changes (before the new one loads).
@@ -154,6 +158,7 @@ export function App() {
           onToggleCompleted={() => setShowCompleted((c) => !c)}
           onOpenDrawer={() => setDrawer(true)}
           onLeaveSearch={() => setView(beforeSearch.current)}
+          onOpenSearch={openSearch}
           motion={swap.motion}
           swap={swap.n}
           onChanged={reload}

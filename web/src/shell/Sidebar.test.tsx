@@ -1,6 +1,10 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import { App } from "../app/App";
+import { UPCOMING_DAYS } from "../app/view";
+import { localToday } from "../clock";
+import { sidebarCounts } from "../core";
+import { addLabel } from "../ipc/actions";
 import { invoke } from "../ipc/invoke";
 import { loadCoreForTests } from "../test/wasm";
 
@@ -28,7 +32,8 @@ it("the brand row has the logo first and the theme and settings buttons last", a
   const kids = [...(sidebar().querySelector(".brand") as HTMLElement).children].map((c) => c.className);
   expect(kids[0]).toContain("brand-mark");
   expect(kids.slice(-2).map((c) => c.split(" ")[1])).toEqual(["theme-toggle", "settings-btn"]);
-  expect(sidebar().querySelector(".brand")?.textContent).toBe("");
+  expect(sidebar().querySelector(".brand")?.textContent).toBe("Keel");
+  expect(kids[1]).toContain("brand-name");
 });
 
 it("a search field sits under the brand row, and opens Search on a phone", async () => {
@@ -89,6 +94,28 @@ it("the fixed views, projects, labels and filters each sit in a card", async () 
   ]);
 });
 
+it("rows show how many tasks each view lists", async () => {
+  await start();
+  const count = (name: string) =>
+    within(sidebar()).getByText(name).closest(".nav-item")?.querySelector(".count")?.textContent;
+  // From the mock's tasks, through keel-core's rule (its own tests cover the rule).
+  const all = await invoke("all_tasks", {});
+  const counts = sidebarCounts(all, localToday(), UPCOMING_DAYS);
+  const ofProject = (id: string) => String(counts.projects.find((c) => c.project_id === id)?.count ?? "");
+  expect(count("Today")).toBe(String(counts.today));
+  expect(count("Upcoming")).toBe(String(counts.upcoming));
+  expect(count("Inbox")).toBe(ofProject("p-inbox"));
+  expect(count("Home")).toBe(ofProject("p-home"));
+  expect(count("Home")).not.toBe("");
+});
+
+it("a project's icon is a bold Phosphor icon, not a typed #", async () => {
+  await start();
+  const icon = within(sidebar()).getByText("Home").closest(".nav-item")?.querySelector(".nav-icon");
+  expect(icon?.textContent).toBe("");
+  expect(icon?.querySelector("svg")).not.toBeNull();
+});
+
 it("labels show tags in their color", async () => {
   await start();
   const row = within(sidebar()).getByText("errand").closest(".nav-item") as HTMLElement;
@@ -97,11 +124,19 @@ it("labels show tags in their color", async () => {
   expect(tag?.querySelector("svg")).not.toBeNull();
 });
 
+it("a label with no color has a plain tag, like the other nav icons", async () => {
+  await addLabel("plain");
+  await start();
+  const row = within(sidebar()).getByText("plain").closest(".nav-item") as HTMLElement;
+  const tag = row.querySelector<HTMLElement>(".nav-icon.label .nav-tag");
+  expect(tag?.style.color).toBe("");
+});
+
 it("nav rows switch the view and mark it active", async () => {
   await start();
   fireEvent.click(within(sidebar()).getByText("Upcoming"));
   await waitFor(() => expect(title()).toBe("Upcoming"));
-  expect(active()).toBe("Upcoming");
+  expect(active()).toContain("Upcoming");
   fireEvent.click(within(sidebar()).getByText("Home"));
   await waitFor(() => expect(title()).toBe("Home"));
   expect(active()).toContain("Home");

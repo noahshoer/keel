@@ -21,7 +21,8 @@ import { AddTask } from "../editor/AddTask";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
-import { CheckCircleIcon, ChevronLeftIcon, MenuIcon } from "../shell/icons";
+import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, SearchIcon } from "../shell/icons";
+import { currentPlatform, searchTooltip } from "../shell/platform";
 import { AddSection, SectionBlock } from "./SectionBlock";
 
 /** "Project" or "Project / Section" for each task the pane lists. */
@@ -37,6 +38,7 @@ export function MainPane({
   onToggleCompleted,
   onOpenDrawer,
   onLeaveSearch,
+  onOpenSearch,
   motion,
   swap,
   onChanged,
@@ -48,6 +50,7 @@ export function MainPane({
   onOpenDrawer: () => void;
   /** The phone's Search screen goes back to the view before it. */
   onLeaveSearch: () => void;
+  onOpenSearch: () => void;
   motion: Motion;
   /** Bumped when a different view lands; alternates the fade-in. */
   swap: number;
@@ -199,6 +202,17 @@ export function MainPane({
               {showCompleted ? "Hide completed" : "Show completed"}
             </button>
           ) : null}
+          {search ? null : (
+            <button
+              type="button"
+              className="icon-btn search-btn"
+              title={searchTooltip(currentPlatform())}
+              aria-label="Search"
+              onClick={onOpenSearch}
+            >
+              <SearchIcon />
+            </button>
+          )}
         </div>
         {subtitle ? (
           <p className={view.kind === "filter" ? "view-sub mono" : "view-sub"}>{subtitle}</p>

@@ -9,6 +9,7 @@ type Mode = "normal" | "renaming" | "confirm";
 
 export function ManagedRow({
   name,
+  count,
   icon,
   iconClass,
   active,
@@ -19,6 +20,8 @@ export function ManagedRow({
   onDelete,
 }: {
   name: string;
+  /** The number beside its name, when it has one. */
+  count?: number;
   icon: ReactNode;
   iconClass: string;
   active: boolean;
@@ -88,6 +91,7 @@ export function ManagedRow({
     <div className={active ? "nav-item active" : "nav-item"} data-menu-id={menuId} onClick={onOpen}>
       <span className={`nav-icon ${iconClass}`}>{icon}</span>
       <span className="nav-name">{name}</span>
+      {count !== undefined && count > 0 ? <span className="count">{count}</span> : null}
       <span className="nav-actions">
         <button
           type="button"

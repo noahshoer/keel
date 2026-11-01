@@ -28,6 +28,7 @@ import type {
   ReminderMenus,
   ReminderSettings,
   Section,
+  SidebarCounts,
   Task,
   TaskDetail,
 } from "../bindings";
@@ -96,6 +97,12 @@ export function cards(matched: Task[], all: Task[], mode: CardMode): Card[] {
 export function dueBucket(due: string, today: string): DueBucket {
   ready();
   return core.dueBucket(due, today);
+}
+
+/** The numbers beside the sidebar's rows: how many tasks each view lists. */
+export function sidebarCounts(all: Task[], today: string, upcomingDays: number): SidebarCounts {
+  ready();
+  return core.sidebarCounts(all, today, upcomingDays);
 }
 
 /** A task's labels grouped by color, in added order. */

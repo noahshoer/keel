@@ -4,7 +4,7 @@
 import { useRef, useState } from "react";
 import type { ReminderDraft } from "../bindings";
 import { customReminderAt, reminderPresets } from "../core";
-import { BellSmallIcon, CheckSmallIcon } from "../shell/icons";
+import { BellSmallIcon, CheckSmallIcon, XSmallIcon } from "../shell/icons";
 import { cx, type Face, type PopProps } from "./pop";
 import { usePlacedPopover } from "./popover";
 
@@ -95,7 +95,7 @@ function ReminderMenu({
               title="Remove reminder"
               onClick={() => onChange(reminders.filter((_, j) => j !== i))}
             >
-              ×
+              <XSmallIcon />
             </button>
           </div>
         ),

@@ -188,6 +188,50 @@ pub struct CardRow {
     pub progress: Option<Progress>,
 }
 
+/// One project's row count in the sidebar.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct ProjectCount {
+    pub project_id: Id,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub count: usize,
+}
+
+/// The numbers beside the sidebar's rows: how many tasks each view lists.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct SidebarCounts {
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub today: usize,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub upcoming: usize,
+    /// The Inbox is a project, so it's here too. A project with none is absent.
+    pub projects: Vec<ProjectCount>,
+}
+
+/// Counts what each view lists: Today has what's due or overdue, Upcoming also
+/// has the next `upcoming_days` days (both with matching sub-tasks, which they
+/// show), and a project has its open top-level tasks (its sub-tasks are hidden
+/// under their parents).
+pub fn sidebar_counts(all: &[Task], today: NaiveDate, upcoming_days: i64) -> SidebarCounts {
+    let end = today + chrono::Duration::days(upcoming_days);
+    let mut counts = SidebarCounts { today: 0, upcoming: 0, projects: Vec::new() };
+    for t in all.iter().filter(|t| !t.checked && !t.is_deleted) {
+        if let Some(d) = due_date_of(t) {
+            counts.today += usize::from(d <= today);
+            counts.upcoming += usize::from(d < end);
+        }
+        if t.parent_id.is_some() {
+            continue;
+        }
+        match counts.projects.iter_mut().find(|c| c.project_id == t.project_id) {
+            Some(c) => c.count += 1,
+            None => counts.projects.push(ProjectCount { project_id: t.project_id.clone(), count: 1 }),
+        }
+    }
+    counts
+}
+
 /// A task's labels of one color, for the row's one tag per color.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -1114,5 +1158,89 @@ mod label_group_tests {
     #[test]
     fn no_labels_no_groups() {
         assert_eq!(groups(&[], &all()), vec![]);
+    }
+}
+
+#[cfg(test)]
+mod sidebar_count_tests {
+    use super::{sidebar_counts, ProjectCount};
+    use crate::ids::Id;
+    use crate::model::{Due, Task};
+    use chrono::NaiveDate;
+
+    const TODAY: &str = "2026-11-01";
+
+    fn today() -> NaiveDate {
+        NaiveDate::parse_from_str(TODAY, "%Y-%m-%d").unwrap()
+    }
+
+    fn task(name: &str, project: &str, due: Option<&str>) -> Task {
+        let mut t = Task::new(name, Id::from(project));
+        t.id = Id::from(name);
+        t.due = due.map(|d| Due {
+            date: d.to_string(),
+            is_recurring: false,
+            string: d.to_string(),
+            lang: "en".to_string(),
+            timezone: None,
+            recurrence: None,
+        });
+        t
+    }
+
+    fn of(counts: &[ProjectCount], project: &str) -> usize {
+        counts.iter().find(|c| c.project_id == Id::from(project)).map_or(0, |c| c.count)
+    }
+
+    #[test]
+    fn today_counts_what_is_due_or_overdue() {
+        let all = [
+            task("old", "a", Some("2026-10-30")),
+            task("now", "a", Some(TODAY)),
+            task("next", "a", Some("2026-11-02")),
+            task("none", "a", None),
+        ];
+        assert_eq!(sidebar_counts(&all, today(), 7).today, 2);
+    }
+
+    #[test]
+    fn upcoming_counts_overdue_and_its_window() {
+        let all = [
+            task("old", "a", Some("2026-10-30")),
+            task("now", "a", Some(TODAY)),
+            task("last", "a", Some("2026-11-07")),
+            task("past_window", "a", Some("2026-11-08")),
+            task("none", "a", None),
+        ];
+        assert_eq!(sidebar_counts(&all, today(), 7).upcoming, 3);
+    }
+
+    #[test]
+    fn a_projects_count_is_its_open_top_level_tasks_as_its_list_shows() {
+        let parent = task("parent", "a", None);
+        let mut sub = task("sub", "a", None);
+        sub.parent_id = Some(parent.id.clone());
+        let mut done = task("done", "a", None);
+        done.checked = true;
+        let other = task("other", "b", None);
+        let counts = sidebar_counts(&[parent, sub, done, other], today(), 7);
+        assert_eq!(of(&counts.projects, "a"), 1);
+        assert_eq!(of(&counts.projects, "b"), 1);
+        assert_eq!(of(&counts.projects, "none"), 0);
+    }
+
+    #[test]
+    fn dated_counts_include_matching_sub_tasks_and_skip_checked_and_deleted() {
+        let parent = task("parent", "a", Some(TODAY));
+        let mut sub = task("sub", "a", Some(TODAY));
+        sub.parent_id = Some(parent.id.clone());
+        let mut done = task("done", "a", Some(TODAY));
+        done.checked = true;
+        let mut gone = task("gone", "a", Some(TODAY));
+        gone.is_deleted = true;
+        let counts = sidebar_counts(&[parent, sub, done, gone], today(), 7);
+        assert_eq!(counts.today, 2);
+        assert_eq!(counts.upcoming, 2);
+        assert_eq!(of(&counts.projects, "a"), 1);
     }
 }

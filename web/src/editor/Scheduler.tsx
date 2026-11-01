@@ -20,6 +20,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   XIcon,
+  XSmallIcon,
 } from "../shell/icons";
 import { isTouch, weekStart } from "./locale";
 import type { MenuItem } from "./Menu";
@@ -380,7 +381,7 @@ export function Scheduler({
                     onPick(selected, "");
                   }}
                 >
-                  ×
+                  <XSmallIcon />
                 </button>
               ) : null}
             </div>

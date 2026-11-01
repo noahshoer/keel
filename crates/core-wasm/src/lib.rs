@@ -101,6 +101,18 @@ pub fn progress(
     output(&views::progress(&parent, &all))
 }
 
+/// `views::sidebar_counts`: the numbers beside the sidebar's rows.
+#[wasm_bindgen(js_name = sidebarCounts, unchecked_return_type = "import('../../bindings').SidebarCounts")]
+pub fn sidebar_counts(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] all: JsValue,
+    today: &str,
+    upcoming_days: i32,
+) -> Result<JsValue, JsError> {
+    let all: Vec<Task> = input("all", all)?;
+    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    output(&views::sidebar_counts(&all, today, i64::from(upcoming_days)))
+}
+
 /// `views::label_groups`: a task's labels grouped by color, in added order.
 #[wasm_bindgen(js_name = labelGroups, unchecked_return_type = "import('../../bindings').LabelGroup[]")]
 pub fn label_groups(

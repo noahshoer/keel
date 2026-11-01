@@ -17,7 +17,6 @@ export type Loaded = {
   labels: Label[];
   filters: Filter[];
   inbox: Project;
-  todayCount: number;
   /** Every task reminder (for the rows' bell chips). */
   reminders: Reminder[];
   /** The view's tasks. */
@@ -100,7 +99,6 @@ export async function loadView(view: View, showCompleted: boolean, today: string
     labels,
     filters,
     inbox,
-    todayCount: todayTasks.length,
     reminders,
     tasks,
     all,

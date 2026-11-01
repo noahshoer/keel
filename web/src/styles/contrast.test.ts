@@ -99,6 +99,12 @@ describe.each(THEMES)("a selected day, %s", (_theme, tokens) => {
   );
 });
 
+describe("icons", () => {
+  it.each(THEMES.slice(1))("are pure white, %s", (_theme, tokens) => {
+    expect(tokens["--icon"]).toBe("#ffffff");
+  });
+});
+
 describe("due date colors", () => {
   it.each(THEMES)("are told apart by when, %s", (_theme, tokens) => {
     const due = ["--due-overdue", "--due-today", "--due-tomorrow", "--due-week", "--due-later"];

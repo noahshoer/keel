@@ -55,7 +55,7 @@ Shown with "X of Y":
 
 - Phosphor (MIT, SVG) on every platform. SF Symbols were ruled out because Apple's license limits them to Apple platforms.
 - Bold weight, plain: no circles or added edges. Filled weight only where stated, such as the deadline flag.
-- Gray icons are dark, `#3d3d3d` on light backgrounds, rather than today's `#8a8a8a`.
+- Gray icons are dark, `#3d3d3d` on light backgrounds, rather than today's `#8a8a8a`, and pure white on dark backgrounds (Noah, 2026-11-01). Icons whose color means something keep it: dates, flags, label tags, the streak.
 - The green add button keeps its circle, since it isn't a gray icon.
 
 ## Contrast
@@ -139,12 +139,13 @@ Approved in the mockups' iPhone and desktop screens boards (version 25). Desktop
 
 **Sidebar**
 
-- The Keel logo on the left, with the theme and settings icons together on the right. Search field below.
+- The Keel logo and wordmark on the left, with the theme and settings icons together on the right. Search field below.
+- Inbox, Today, Upcoming and each project show how many tasks they list (`keel_core::views::sidebar_counts`). A row with none shows no number.
 - Separate rounded cards for Inbox, Today and Upcoming, then My Projects, Labels (colored tags) and Filters, each with an add control.
 
 **Search**
 
-- Search lives in a field in the sidebar. On the phone it opens a Search screen; on desktop results fill the main area. `/` and Cmd+K keep working.
+- Search lives in a field in the sidebar, and a magnifying glass at the top right of the main page opens it too. On the phone it opens a Search screen; on desktop results fill the main area. `/` and Cmd+K keep working.
 - Results use the same task row as the lists, under a result count.
 
 **Settings**

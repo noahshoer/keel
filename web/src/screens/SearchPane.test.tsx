@@ -48,6 +48,16 @@ it("shows Inbox on a result from the Inbox", async () => {
   await waitFor(() => expect(container.querySelector("main.main .task-project")?.textContent).toBe("Inbox"));
 });
 
+it("the magnifying glass on the main page opens Search", async () => {
+  const r = render(<App />);
+  await screen.findByText("Do laundry");
+  const main = r.container.querySelector("main.main") as HTMLElement;
+  fireEvent.click(within(main).getByRole("button", { name: "Search" }));
+  expect(await screen.findByPlaceholderText("Search tasks, descriptions and labels")).toBeTruthy();
+  const live = r.container.querySelector("main.main") as HTMLElement;
+  expect(within(live).queryByRole("button", { name: "Search" })).toBeNull();
+});
+
 it("on a phone Back leaves Search for the view before it", async () => {
   const { container } = await openSearch();
   fireEvent.click(
