@@ -498,6 +498,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Popovers (scheduler, menus, labels): one open per editor; a transparent
    backdrop behind them closes on click. */
 .pop-backdrop { position: fixed; inset: 0; z-index: 19; }
+/* Above the backdrop: a click on them closes the picker and starts typing at once. */
+.editor .title-wrap, .editor .desc { position: relative; z-index: 20; }
 .popover { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; padding: 8px;
   background: var(--bg); border-radius: 20px;
   box-shadow: var(--shadow-lg); animation: pop-in .16s var(--ease); transform-origin: top left; }
@@ -1174,4 +1176,12 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .cal-day::after { content: ''; position: absolute; inset: -2px; }
   .sched-time { min-height: 44px; padding: 0 12px; border-top: none; }
   .sched-row-label { font-size: 16px; }
+  /* The deadline's calendar, above the keyboard: smaller days, and on a phone
+     with less room its weeks give way before the picker has to scroll. */
+  .scheduler-compact { display: flex; flex-direction: column; }
+  .scheduler-compact .sched-head { flex: none; padding-bottom: 4px; }
+  .scheduler-compact .sched-cal { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
+  .scheduler-compact .cal-grid, .scheduler-compact .wheel { flex: none; }
+  .scheduler-compact .cal-scroll { flex: 0 1 auto; min-height: 0; }
+  .scheduler-compact .cal-day { width: 36px; height: 36px; }
 }

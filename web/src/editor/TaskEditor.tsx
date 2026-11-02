@@ -2,7 +2,15 @@
 // and editing (crates/ui/src/editor.rs `TaskEditor`). When adding, the title
 // is parsed as quick add with live highlighting and preview chips. Every
 // decision about the values is keel-core's (`editorView`, `applyPick`, …).
-import { type MouseEvent, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  type PointerEvent,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { holdPage } from "../app/pageHold";
 import type { EditorPick, EditorValues, Label, Project, Recurrence, Section, SpanKind } from "../bindings";
@@ -91,17 +99,18 @@ export function TaskEditor({
   useEffect(() => (touch ? holdPage() : undefined), [touch]);
   const ownTitle = useRef<HTMLTextAreaElement>(null);
   const title = titleRef ?? ownTitle;
-  // A calendar needs more room than the keyboard leaves, so it lowers the
-  // keyboard; whatever replaces it brings the keyboard back, inside the tap.
+  // The date's calendar needs more room than the keyboard leaves, so it lowers
+  // the keyboard; whatever replaces it brings the keyboard back, inside the tap.
+  // The deadline's is the grid alone, which fits above the keyboard.
   const madeRoom = useRef(false);
   const beforeCalendar = useRef(initial);
-  // While a calendar is open, text typed still counts when its X undoes the rest.
-  const inCalendar = useRef(false);
   const roomFrom = useRef<HTMLElement | null>(null);
-  const makeRoom = () => {
+  const startCalendar = () => {
     // What the calendar's X goes back to.
     beforeCalendar.current = latest.current;
-    inCalendar.current = true;
+  };
+  const makeRoom = () => {
+    startCalendar();
     if (!touch) return;
     madeRoom.current = true;
     // The field the keyboard is up for, unless it's inside the picker being replaced.
@@ -112,11 +121,6 @@ export function TaskEditor({
   };
   const setPop = (p: Pop) => {
     setOpen(p);
-    if (p === "deadline" && open !== "deadline") {
-      makeRoom();
-      return;
-    }
-    inCalendar.current = false;
     if (madeRoom.current) {
       madeRoom.current = false;
       (roomFrom.current ?? title.current)?.focus();
@@ -124,6 +128,17 @@ export function TaskEditor({
       // The picker's own field is going away; the keyboard stays for the title.
       title.current?.focus();
     }
+    if (p === "deadline") startCalendar();
+  };
+  /** Going to the title or description closes the picker; that field keeps the keyboard. */
+  const closeForField = () => {
+    if (open === null) return;
+    madeRoom.current = false;
+    setPop(null);
+  };
+  // Pointer up, since iOS sends no click for a tap in the field that has the cursor.
+  const tapField = (e: PointerEvent<HTMLElement>) => {
+    if ((e.target as HTMLElement).closest(".title-input, .desc")) closeForField();
   };
   const pillRow = usePillFade(values);
   // Submits once: a fast second Enter (before the editor closes) is ignored.
@@ -270,6 +285,7 @@ export function TaskEditor({
       style={touch ? { bottom: keyboard.inset + CARD_GAP } : undefined}
       // Pressing anything but a text field keeps the title focused, so the keyboard stays up.
       onMouseDown={touch ? keepFocus : undefined}
+      onPointerUp={tapField}
       onSubmit={(e) => {
         e.preventDefault();
         submit();
@@ -287,13 +303,14 @@ export function TaskEditor({
         value={values.content}
         placeholder={quickAdd ? "Task name — try “Call mom tomorrow 5pm p1 #Home @phone”" : "Task name"}
         onInput={(text) => {
-          if (inCalendar.current) beforeCalendar.current = withTitle(beforeCalendar.current, text);
+          closeForField();
           setValues((v) => withTitle(v, text));
         }}
         onEnter={submit}
-        onUnhighlight={(caret) =>
-          setValues((v) => (quickAdd ? (unhighlightAt(v, projects, sections, today, caret) ?? v) : v))
-        }
+        onUnhighlight={(caret) => {
+          closeForField();
+          setValues((v) => (quickAdd ? (unhighlightAt(v, projects, sections, today, caret) ?? v) : v));
+        }}
         inputRef={title}
       />
       {view.preview.length > 0 ? (
@@ -312,7 +329,7 @@ export function TaskEditor({
         value={values.description}
         onChange={(e) => {
           const description = e.target.value;
-          if (inCalendar.current) beforeCalendar.current = { ...beforeCalendar.current, description };
+          closeForField();
           setValues((v) => ({ ...v, description }));
         }}
       />

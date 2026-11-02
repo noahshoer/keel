@@ -87,6 +87,10 @@ export function Scheduler({
   const [touch] = useState(isTouch);
   const [start] = useState(weekStart);
   const timeStr = time ?? "";
+  // The grid with its X and check and nothing else: the task card's deadline.
+  const gridOnly = !withTime && actions !== undefined;
+  // It sits above the keyboard, where the full-size weeks don't fit.
+  const compact = gridOnly && touch;
 
   useEffect(() => {
     if (!choosing) return;
@@ -134,7 +138,7 @@ export function Scheduler({
     // biome-ignore lint/a11y/noStaticElementInteractions: Escape anywhere in the popover closes it, not the editor (the Dioxus markup).
     <div
       ref={ref}
-      className="popover scheduler"
+      className={cx("popover scheduler", compact && "scheduler-compact")}
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           e.stopPropagation();
@@ -281,7 +285,13 @@ export function Scheduler({
                 selected={selected}
                 rule={rule}
                 bucketFill={withTime}
+                compact={compact}
                 onDay={(date) => {
+                  // With no row to clear it, the chosen day clears itself.
+                  if (gridOnly && date === selected) {
+                    onPick(null, "");
+                    return;
+                  }
                   onPick(date, timeStr);
                   // A date still has its Time and Repeat rows to offer.
                   if (!withTime && actions === undefined) close();
@@ -331,7 +341,7 @@ export function Scheduler({
                 </button>
               ) : null}
             </div>
-          ) : (
+          ) : actions === undefined ? (
             <button
               type="button"
               className="menu-item sched-row"
@@ -342,7 +352,7 @@ export function Scheduler({
             >
               <span className="menu-label">{emptyText}</span>
             </button>
-          )}
+          ) : null}
           {withTime && repeat !== undefined ? (
             <button type="button" className="menu-item sched-row" onClick={() => setStep("repeat")}>
               <span className="menu-label">Repeat</span>

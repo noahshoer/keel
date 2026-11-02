@@ -718,6 +718,7 @@ describe("DatePicker", () => {
 describe("DeadlinePicker", () => {
   const openIt = () => fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
 
+  // The task view's, which has no X; the task card's is in editor.test.tsx.
   it("is a calendar and No deadline, with no Time or Repeat row", () => {
     render(<DeadlineHost />);
     openIt();

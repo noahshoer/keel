@@ -25,6 +25,7 @@ export function CalendarMonths({
   selected,
   rule,
   bucketFill,
+  compact = false,
   onDay,
 }: {
   /** The years it scrolls through, in order. */
@@ -42,11 +43,13 @@ export function CalendarMonths({
   rule: Recurrence | null;
   /** A date's fill follows its bucket; a deadline's stays the plain selected color. */
   bucketFill: boolean;
+  /** The smaller days on touch (`.scheduler-compact`). */
+  compact?: boolean;
   onDay: (date: string) => void;
 }) {
   const firstYear = years[0] ?? shown[0];
   const lastYear = years[years.length - 1] ?? shown[0];
-  const rowHeight = touch ? ROW_HEIGHT_TOUCH : ROW_HEIGHT;
+  const rowHeight = touch && !compact ? ROW_HEIGHT_TOUCH : ROW_HEIGHT;
   const firstWeeks = useMemo(() => monthFirstWeeks(firstYear, lastYear, start), [firstYear, lastYear, start]);
   const tops = useMemo(() => firstWeeks.map((w) => w * rowHeight), [firstWeeks, rowHeight]);
   // A last view's worth of weeks, so December can reach the top too.
