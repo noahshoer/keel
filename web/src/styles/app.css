@@ -711,6 +711,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   input:not([type="checkbox"]), textarea, select { font-size: 16px; }
   .project-input, .search-input, .time-input { min-height: 44px; }
   .project-input { padding: 10px 12px; }
+  /* The custom scrollbar draws nothing on iOS but still takes 10px from some of the drawer's rows. */
+  .sidebar { scrollbar-width: none; }
+  .sidebar::-webkit-scrollbar { display: none; }
   .project-form .project-input { height: 48px; padding: 0 16px; font-size: 16px; }
   .nav-card .project-form .project-input { height: 44px; border-radius: 16px; }
   .switch { width: 51px; height: 31px; }
