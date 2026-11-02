@@ -12,7 +12,7 @@ const report = () => {
   const title = document.querySelector('.cal-title');
   const head = document.querySelector('.sched-head').getBoundingClientRect();
   const size = getComputedStyle(title).fontSize;
-  check(`${title.textContent} top=${Math.round(s.scrollTop)} head=${Math.round(head.height)} title=${size} months=${document.querySelectorAll('.cal-month').length}`);
+  check(`${title.textContent} top=${Math.round(s.scrollTop)} head=${Math.round(head.height)} title=${size} weeks=${document.querySelectorAll('.cal-week').length} shown=${document.querySelectorAll('.cal-day:not(.other)').length}`);
 };
 for (let i = 0; i < 30; i += 1) {
   report();

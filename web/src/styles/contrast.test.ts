@@ -77,6 +77,16 @@ describe.each(THEMES)("label colors, %s", (_theme, tokens) => {
   });
 });
 
+describe.each(THEMES)("a day outside the shown month, %s", (_theme, tokens) => {
+  it("is readable on --bg", () => {
+    expect(contrast(tokens["--cal-other"] as string, tokens["--bg"] as string)).toBeGreaterThanOrEqual(4.5);
+  });
+  it("is grayer than a past day of the shown month", () => {
+    const toBg = (t: string) => contrast(tokens[t] as string, tokens["--bg"] as string);
+    expect(toBg("--cal-other")).toBeLessThan(toBg("--secondary"));
+  });
+});
+
 describe("the approved light values", () => {
   const light = block(":root {");
   it.each([

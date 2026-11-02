@@ -1,19 +1,9 @@
-// Where each month sits in the scrolling calendar. Heights come from the row
-// counts, so months far from the view aren't drawn and adding them never moves
-// the scroll (which would stop a flick on iOS).
+// Where the scrolling calendar is. All weeks are one height, so positions come
+// from week numbers, weeks far from the view aren't drawn, and adding them never
+// moves the scroll (which would stop a flick on iOS).
 
-/** Months drawn on each side of the shown one. */
-const RADIUS = 3;
-
-/** Each month's top, given its row count. */
-export function monthTops(rows: number[], rowHeight: number, gap: number): number[] {
-  let top = 0;
-  return rows.map((n) => {
-    const at = top;
-    top += n * rowHeight + gap;
-    return at;
-  });
-}
+/** The window moves in stretches this long, so most scrolling redraws nothing. */
+const STRETCH = 8;
 
 /** The month at the top of the view; snapping can settle a fraction of a pixel short. */
 export function monthAt(tops: number[], scrollTop: number): number {
@@ -28,7 +18,8 @@ export function monthAt(tops: number[], scrollTop: number): number {
   return lo;
 }
 
-/** The first and last month to draw around `index`, of `count`. */
-export function monthWindow(index: number, count: number): [number, number] {
-  return [Math.max(0, index - RADIUS), Math.min(count - 1, index + RADIUS)];
+/** The weeks to draw, `[from, to)`, with `topWeek` at the top of the view, of `total`. */
+export function weekWindow(topWeek: number, total: number): [number, number] {
+  const base = Math.floor(topWeek / STRETCH) * STRETCH;
+  return [Math.max(0, base - STRETCH), Math.min(total, base + STRETCH * 3)];
 }

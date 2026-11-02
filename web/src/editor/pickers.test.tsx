@@ -465,11 +465,43 @@ describe("DatePicker", () => {
     expect(document.querySelector(".sched-quick")).toBeNull();
   });
 
-  it("a month draws only its own days", () => {
+  const otherDays = (n: string) =>
+    [...document.querySelectorAll(".cal-day.other")].filter((d) => d.textContent === n);
+
+  it("days outside the shown month are grayed, and only they are", () => {
     render(<DateHost onChange={vi.fn()} />);
     openIt();
     calendar();
-    expect(document.querySelectorAll('[data-month="2026-10"] .cal-day')).toHaveLength(31);
+    expect(document.querySelectorAll(".cal-day:not(.other)")).toHaveLength(31);
+    expect(otherDays("1").length).toBeGreaterThan(0);
+  });
+
+  it("a week shared by two months is drawn once, in one run of weeks", () => {
+    render(<DateHost onChange={vi.fn()} />);
+    openIt();
+    calendar();
+    // October 2026 starts on a Thursday, so its first week opens with late September.
+    const week = document.querySelector('[data-month="2026-10"]') as HTMLElement;
+    const days = [...week.querySelectorAll(".cal-day")];
+    expect(days).toHaveLength(7);
+    expect(days[4]?.textContent).toBe("1");
+    expect(days[4]?.className).not.toContain("other");
+    expect(days[3]?.className).toContain("other");
+    expect(document.querySelector(".cal-month")).toBeNull();
+    const next = week.nextElementSibling as HTMLElement;
+    const rowHeight = Number.parseFloat(next.style.top) - Number.parseFloat(week.style.top);
+    expect(next.querySelector(".cal-day")?.textContent).toBe("4");
+    expect(rowHeight).toBeGreaterThan(0);
+  });
+
+  it("a grayed day can be picked", () => {
+    const onChange = vi.fn();
+    render(<DateHost onChange={onChange} />);
+    openIt();
+    calendar();
+    const week = document.querySelector('[data-month="2026-10"]') as HTMLElement;
+    fireEvent.click(week.querySelectorAll(".cal-day")[3] as HTMLElement);
+    expect(onChange).toHaveBeenLastCalledWith("2026-09-30", "");
   });
 
   it("a day picks and stays open, so a time or repeat can follow", () => {
@@ -477,7 +509,7 @@ describe("DatePicker", () => {
     render(<DateHost onChange={onChange} />);
     openIt();
     calendar();
-    fireEvent.click(screen.getByText("12", { selector: '[data-month="2026-10"] .cal-day' }));
+    fireEvent.click(screen.getByText("12", { selector: ".cal-day:not(.other)" }));
     expect(onChange).toHaveBeenLastCalledWith("2026-10-12", "");
     expect(document.querySelector(".scheduler")).not.toBeNull();
   });
@@ -531,6 +563,16 @@ describe("DatePicker", () => {
     expect(title()).toBe("November 2026");
     scrollTo("2026-12");
     expect(title()).toBe("December 2026");
+  });
+
+  it("the gray follows the month that's scrolled to", () => {
+    render(<DateHost onChange={vi.fn()} />);
+    openIt();
+    calendar();
+    scrollTo("2026-11");
+    expect(document.querySelectorAll(".cal-day:not(.other)")).toHaveLength(30);
+    const week = document.querySelector('[data-month="2026-11"]') as HTMLElement;
+    expect(week.querySelector(".cal-day")?.className).not.toContain("other");
   });
 
   it("opens scrolled to the selected month", () => {
@@ -683,7 +725,7 @@ describe("DeadlinePicker", () => {
   it("a day picks and closes", () => {
     render(<DeadlineHost />);
     openIt();
-    fireEvent.click(screen.getByText("12", { selector: '[data-month="2026-10"] .cal-day' }));
+    fireEvent.click(screen.getByText("12", { selector: ".cal-day:not(.other)" }));
     expect(document.querySelector(".scheduler")).toBeNull();
   });
 });

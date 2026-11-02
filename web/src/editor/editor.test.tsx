@@ -7,6 +7,7 @@ import type { EditorValues } from "../bindings";
 import { blankValues, valuesFromTask } from "../core";
 import * as fx from "../ipc/fixtures";
 import { mockPageScrollHeld } from "../ipc/mock";
+import { CheckSmallIcon } from "../shell/icons";
 import { loadCoreForTests } from "../test/wasm";
 import { TaskEditor } from "./TaskEditor";
 
@@ -224,7 +225,7 @@ describe("on touch", () => {
     });
 
     const openDeadline = () => fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
-    const day = (n: string) => screen.getByText(n, { selector: '[data-month="2026-10"] .cal-day' });
+    const day = (n: string) => screen.getByText(n, { selector: ".cal-day:not(.other)" });
 
     it("the calendar's X, month and check share one row", () => {
       adding();
@@ -233,6 +234,16 @@ describe("on touch", () => {
       expect(within(row).getByRole("button", { name: "Cancel" })).toBeTruthy();
       expect(row.querySelector(".cal-title")?.textContent).toBe("October 2026");
       expect(within(row).getByRole("button", { name: "Done" })).toBeTruthy();
+    });
+
+    it("the calendar's Done is the plain check, not the check-circle", () => {
+      adding();
+      openDeadline();
+      const done = screen.getByRole("button", { name: "Done" }).querySelector("svg")?.innerHTML;
+      const { container, unmount } = render(<CheckSmallIcon />);
+      const plain = container.querySelector("svg")?.innerHTML;
+      unmount();
+      expect(done).toBe(plain);
     });
 
     it("Deadline lowers it at once; a day selects and stays until the check", () => {
@@ -425,9 +436,7 @@ it("a repeat chosen in the date card with no date set uses today, and returns to
   fireEvent.click(screen.getByText("Every week on Friday"));
   expect(document.querySelector(".cal-grid")).not.toBeNull();
   expect(repeatRow().textContent).toContain("Every week on Friday");
-  const ringed = [...document.querySelectorAll('[data-month="2026-10"] .cal-day.repeat-day')].map(
-    (d) => d.textContent,
-  );
+  const ringed = [...document.querySelectorAll(".cal-day.repeat-day:not(.other)")].map((d) => d.textContent);
   expect(ringed).not.toContain("29");
   // A repeat always has a date: today, by default.
   expect(document.querySelector(".cal-day.selected")?.textContent).toBe("30");

@@ -5,7 +5,14 @@ import { useEffect, useRef, useState } from "react";
 import type { Recurrence } from "../bindings";
 import { dueBucket, monthNames, monthView, quickDates, timeLabel, typedTime, yearChoices } from "../core";
 import { BUCKET_CLASS } from "../lists/chips";
-import { CheckCircleIcon, ChevronDownSmallIcon, ChevronLeftIcon, XIcon, XSmallIcon } from "../shell/icons";
+import {
+  CheckCircleIcon,
+  CheckSmallIcon,
+  ChevronDownSmallIcon,
+  ChevronLeftIcon,
+  XIcon,
+  XSmallIcon,
+} from "../shell/icons";
 import { CalendarMonths } from "./CalendarMonths";
 import { isTouch, weekStart } from "./locale";
 import type { MenuItem } from "./Menu";
@@ -236,7 +243,7 @@ export function Scheduler({
                 aria-label="Done"
                 onClick={actions.onDone}
               >
-                <CheckCircleIcon />
+                <CheckSmallIcon />
               </button>
             ) : null}
           </div>

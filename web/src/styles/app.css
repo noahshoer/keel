@@ -19,6 +19,7 @@
   --text: #202020;
   --muted: #5a5a5a;
   --secondary: #5a5a5a;
+  --cal-other: #767676;
   --subtle: #5a5a5a;
   --icon: #3d3d3d;
   --divider: #efefef;
@@ -88,6 +89,7 @@
   --text: #e8e8e8;
   --muted: #a8a8a8;
   --secondary: #a8a8a8;
+  --cal-other: #8c8c8c;
   --subtle: #b8b8b8;
   --icon: #ffffff;
   --divider: #303030;
@@ -157,6 +159,7 @@
   --text: #e8e8e8;
   --muted: #a8a8a8;
   --secondary: #a8a8a8;
+  --cal-other: #8c8c8c;
   --subtle: #b8b8b8;
   --icon: #ffffff;
   --divider: #303030;
@@ -545,18 +548,20 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .q-weekend { color: var(--p3); } .q-next { color: var(--due-week); } .q-none { color: var(--muted); }
 .sched-cal { padding: 0; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); justify-items: center; gap: 0; }
-/* Months stacked in a scroll that settles on the start of one. CalendarMonths
-   sets --cal-row and places each month by its row count. */
+/* One run of weeks in a scroll that settles on the week of a month's 1st.
+   CalendarMonths sets --cal-row and places each week. */
 .cal-scroll { position: relative; height: calc(var(--cal-row) * 6); overflow-y: auto; scroll-snap-type: y mandatory;
   scrollbar-width: none; overscroll-behavior: contain; touch-action: pan-y; }
 .cal-scroll::-webkit-scrollbar { display: none; }
-.cal-months { position: relative; }
-.cal-month { position: absolute; left: 0; right: 0; grid-auto-rows: var(--cal-row); scroll-snap-align: start; }
+.cal-weeks { position: relative; }
+.cal-week { position: absolute; left: 0; right: 0; height: var(--cal-row); }
+.cal-month-start { scroll-snap-align: start; }
 .cal-dow { text-align: center; font-size: 12px; font-weight: 600; color: var(--muted); padding: 0 0 4px; }
 .cal-day { width: 36px; height: 36px; border: none; background: none; border-radius: 50%; cursor: pointer; font-size: 14px;
   color: var(--text); font-variant-numeric: tabular-nums; }
 @media (hover: hover) { .cal-day:hover { background: var(--hover); } }
 .cal-day.past { color: var(--secondary); }
+.cal-day.other { color: var(--cal-other); }
 .cal-day.is-today { color: var(--accent-text); font-weight: 700; }
 .cal-day.selected { background: var(--accent); color: var(--on-fill); font-weight: 600; opacity: 1; }
 .sched-time { display: flex; align-items: center; gap: 8px; padding: 8px 12px 10px; border-top: 1px solid var(--divider); color: var(--muted); }
