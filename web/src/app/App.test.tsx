@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeAll, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { mockPageScrollHeld } from "../ipc/mock";
 import { setWidth, touch } from "../test/touch";
 import { loadCoreForTests } from "../test/wasm";
@@ -131,4 +131,228 @@ it("on a phone, a swipe right opens the drawer and a swipe left closes it", asyn
   } finally {
     setWidth(1024);
   }
+});
+
+it("the page holds still while the drawer is open", async () => {
+  // WebKit would otherwise shift the whole page, drawer and all, to reveal a focused field.
+  render(<App />);
+  fireEvent.click(await screen.findByTitle("Open menu"));
+  await waitFor(() => expect(mockPageScrollHeld()).toBe(true));
+  fireEvent.click(document.querySelector(".drawer-scrim") as Element);
+  await waitFor(() => expect(mockPageScrollHeld()).toBe(false));
+});
+
+describe("the ••• on a project, label or filter page", () => {
+  const open = async (name: string) => {
+    const r = render(<App />);
+    await waitFor(() => expect(r.container.querySelector(".view-title")).not.toBeNull());
+    fireEvent.click(within(r.container.querySelector(".sidebar") as HTMLElement).getByText(name));
+    await waitFor(() => expect(r.container.querySelector(".view-title")?.textContent).toBe(name));
+    return r;
+  };
+  const more = (c: HTMLElement) => c.querySelector(".view-head .view-more") as HTMLElement;
+  const popup = () => document.querySelector(".row-menu") as HTMLElement;
+  const pick = (c: HTMLElement, item: string) => {
+    fireEvent.click(more(c));
+    fireEvent.click(within(popup()).getByText(item));
+  };
+
+  it.each(["Inbox", "Today", "Upcoming"])("%s has none", async (name) => {
+    const { container } = await open(name);
+    expect(more(container)).toBeNull();
+  });
+
+  const titleField = (c: HTMLElement) => c.querySelector(".view-head input") as HTMLInputElement;
+
+  it("Edit turns the title into the field, with no popup over it", async () => {
+    const { container } = await open("Home");
+    pick(container, "Edit");
+    expect(popup()).toBeNull();
+    const field = titleField(container);
+    expect(document.activeElement).toBe(field);
+    expect(field.value).toBe("Home");
+    expect(field.closest(".view-title")).not.toBeNull();
+    expect((container.querySelector("h1.view-title") as HTMLElement).hidden).toBe(true);
+  });
+
+  it("Enter renames a project, keeping the page's title in sync", async () => {
+    const { container } = await open("Home");
+    pick(container, "Edit");
+    const field = titleField(container);
+    fireEvent.change(field, { target: { value: "House" } });
+    fireEvent.submit(field);
+    await waitFor(() => expect(container.querySelector("h1.view-title")?.textContent).toBe("House"));
+    expect(titleField(container)).toBeNull();
+    expect((container.querySelector("h1.view-title") as HTMLElement).hidden).toBe(false);
+    expect(within(container.querySelector(".sidebar") as HTMLElement).getByText("House")).toBeTruthy();
+  });
+
+  it.each([
+    ["project", "Home", "House"],
+    ["label", "errand", "chores"],
+    ["filter", "Important", "Top"],
+  ])("a new %s name shows at once, with no fade", async (_kind, from, to) => {
+    const { container } = await open(from);
+    await act(async () => {});
+    const page = (container.querySelector(".content") as HTMLElement).className;
+    const heading = () => container.querySelector("h1.view-title")?.textContent;
+    pick(container, "Edit");
+    const field = titleField(container);
+    fireEvent.change(field, { target: { value: to } });
+    // A filter's Enter waits for its live check, which the field starts valid.
+    await act(async () => {});
+    fireEvent.submit(field);
+    expect(titleField(container)).toBeNull();
+    expect(heading()).toBe(to);
+    await waitFor(() =>
+      expect(within(container.querySelector(".sidebar") as HTMLElement).getByText(to)).toBeTruthy(),
+    );
+    await act(async () => {});
+    expect(heading()).toBe(to);
+    expect((container.querySelector(".content") as HTMLElement).className).toBe(page);
+  });
+
+  it("a page's new name reaches its sidebar row in the same frame", async () => {
+    const { container } = await open("Home");
+    pick(container, "Edit");
+    const field = titleField(container);
+    fireEvent.change(field, { target: { value: "House" } });
+    fireEvent.submit(field);
+    const sidebar = container.querySelector(".sidebar") as HTMLElement;
+    expect(within(sidebar).getByText("House")).toBeTruthy();
+    expect(within(sidebar).queryByText("Home")).toBeNull();
+  });
+
+  it("a filter's new query shows at once", async () => {
+    const { container } = await open("Important");
+    pick(container, "Edit");
+    const query = container.querySelector(".view-edit-query input") as HTMLInputElement;
+    fireEvent.change(query, { target: { value: "p2" } });
+    await waitFor(() => expect(container.querySelector(".view-edit-query .filter-problem")).toBeNull());
+    await act(async () => {});
+    fireEvent.submit(titleField(container));
+    expect(container.querySelector(".view-sub.mono")?.textContent).toBe("p2");
+  });
+
+  it("a name can go back to what it was", async () => {
+    const { container } = await open("Home");
+    const rename = async (to: string) => {
+      pick(container, "Edit");
+      const field = titleField(container);
+      fireEvent.change(field, { target: { value: to } });
+      fireEvent.submit(field);
+      await waitFor(() =>
+        expect(within(container.querySelector(".sidebar") as HTMLElement).getByText(to)).toBeTruthy(),
+      );
+      await act(async () => {});
+    };
+    await rename("House");
+    await rename("Home");
+    expect(container.querySelector("h1.view-title")?.textContent).toBe("Home");
+    await rename("House");
+    expect(container.querySelector("h1.view-title")?.textContent).toBe("House");
+  });
+
+  it("opening another page still fades", async () => {
+    const { container } = await open("Home");
+    await act(async () => {});
+    const page = (container.querySelector(".content") as HTMLElement).className;
+    fireEvent.click(within(container.querySelector(".sidebar") as HTMLElement).getByText("Trip"));
+    await waitFor(() => expect(container.querySelector("h1.view-title")?.textContent).toBe("Trip"));
+    await waitFor(() =>
+      expect((container.querySelector(".content") as HTMLElement).className).not.toBe(page),
+    );
+  });
+
+  it("renames a label from its page", async () => {
+    const { container } = await open("errand");
+    pick(container, "Edit");
+    const field = titleField(container);
+    fireEvent.change(field, { target: { value: "chores" } });
+    fireEvent.submit(field);
+    await waitFor(() => expect(container.querySelector("h1.view-title")?.textContent).toBe("chores"));
+  });
+
+  it.each([
+    ["a click outside", () => fireEvent.click(document.body)],
+    ["Escape", (f: HTMLElement) => fireEvent.keyDown(f, { key: "Escape" })],
+  ])("%s leaves the title as it was", async (_how, leave) => {
+    const { container } = await open("Home");
+    pick(container, "Edit");
+    const field = titleField(container);
+    fireEvent.change(field, { target: { value: "House" } });
+    leave(field);
+    expect(titleField(container)).toBeNull();
+    expect(container.querySelector("h1.view-title")?.textContent).toBe("Home");
+  });
+
+  it("an empty name changes nothing", async () => {
+    const { container } = await open("Home");
+    pick(container, "Edit");
+    const field = titleField(container);
+    fireEvent.change(field, { target: { value: "  " } });
+    fireEvent.submit(field);
+    expect(titleField(container)).toBeNull();
+    expect(container.querySelector("h1.view-title")?.textContent).toBe("Home");
+  });
+
+  it("a filter's name is its title and its query takes the line under it", async () => {
+    const { container } = await open("Important");
+    expect(container.querySelector(".view-sub.mono")).not.toBeNull();
+    pick(container, "Edit");
+    expect(popup()).toBeNull();
+    const name = titleField(container);
+    expect(document.activeElement).toBe(name);
+    expect(name.value).toBe("Important");
+    expect(container.querySelector(".view-sub.mono")).toBeNull();
+    const query = container.querySelector(".list-body .view-edit-query input") as HTMLInputElement;
+    // Moving between the two isn't leaving.
+    fireEvent.click(query);
+    expect(titleField(container)).not.toBeNull();
+    fireEvent.change(name, { target: { value: "Top" } });
+    fireEvent.change(query, { target: { value: "p1 &" } });
+    const save = within(container.querySelector(".view-edit-query") as HTMLElement).getByText(
+      "Save",
+    ) as HTMLButtonElement;
+    await waitFor(() => expect(container.querySelector(".view-edit-query .filter-problem")).not.toBeNull());
+    expect(save.disabled).toBe(true);
+    fireEvent.submit(name);
+    expect(titleField(container)).not.toBeNull();
+    fireEvent.change(query, { target: { value: "p1" } });
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
+    await waitFor(() => expect(container.querySelector("h1.view-title")?.textContent).toBe("Top"));
+    expect(container.querySelector(".view-sub.mono")?.textContent).toBe("p1");
+  });
+
+  it("leaving a filter's page closes its edit", async () => {
+    const { container } = await open("Important");
+    pick(container, "Edit");
+    fireEvent.click(within(container.querySelector(".view-edit-query") as HTMLElement).getByText("Cancel"));
+    expect(titleField(container)).toBeNull();
+    pick(container, "Edit");
+    fireEvent.click(within(container.querySelector(".sidebar") as HTMLElement).getByText("Inbox"));
+    await waitFor(() => expect(container.querySelector("h1.view-title")?.textContent).toBe("Inbox"));
+    expect(titleField(container)).toBeNull();
+    expect(container.querySelector(".view-edit-query")).toBeNull();
+  });
+
+  it("deletes after asking, then goes to the Inbox", async () => {
+    const { container } = await open("Home");
+    pick(container, "Delete");
+    expect(popup().querySelector(".confirm-text")?.textContent).toBe("Delete “Home” and all its tasks?");
+    fireEvent.click(within(popup()).getByText("Delete"));
+    await waitFor(() => expect(container.querySelector(".view-title")?.textContent).toBe("Inbox"));
+  });
+
+  it("••• closes it again, and so does a click outside", async () => {
+    const { container } = await open("Home");
+    fireEvent.click(more(container));
+    expect(popup()).not.toBeNull();
+    fireEvent.click(more(container));
+    expect(popup()).toBeNull();
+    fireEvent.click(more(container));
+    fireEvent.click(document.body);
+    expect(popup()).toBeNull();
+  });
 });

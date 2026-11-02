@@ -19,6 +19,7 @@ import { TaskNavProvider } from "../taskview/nav";
 import { useTaskNav } from "../taskview/nav-context";
 import { prune as pruned, top } from "../taskview/stack";
 import { TaskSheet } from "../taskview/TaskSheet";
+import { useHeldNames } from "./heldNames";
 import { type Loaded, useLoaded } from "./load";
 import { holdPage } from "./pageHold";
 import { isSearchShortcut, isTyping } from "./shortcuts";
@@ -102,7 +103,15 @@ export function App() {
     n: 0,
     motion: "fade",
   });
+  const held = useHeldNames(loaded);
+  const { holdName } = held;
   const landedView = useRef<View | null>(null);
+  // The open view under its new name is the same page: it doesn't fade in again.
+  const renamedTo = useRef<View | null>(null);
+  const renameView = (v: View) => {
+    renamedTo.current = v;
+    setView(v);
+  };
   useEffect(() => {
     const landed = loaded?.view ?? null;
     if (error !== null || landed !== null) {
@@ -115,6 +124,10 @@ export function App() {
     if (landed === null || (landedView.current !== null && sameView(landedView.current, landed))) return;
     const before = landedView.current;
     landedView.current = landed;
+    if (renamedTo.current !== null && sameView(renamedTo.current, landed)) {
+      renamedTo.current = null;
+      return;
+    }
     const motion = before === null ? "fade" : viewMotion(before, landed);
     setSwap((s) => ({ key: viewKey(landed), n: s.n + 1, motion }));
     // After the new page renders, the left-behind copy moves off.
@@ -142,7 +155,9 @@ export function App() {
         <Sidebar
           view={view}
           setView={setView}
-          loaded={loaded}
+          renameView={renameView}
+          holdName={holdName}
+          loaded={held.sidebar ?? loaded}
           theme={theme}
           setTheme={setTheme}
           icon={icon}
@@ -153,12 +168,15 @@ export function App() {
         />
         <TaskSheet loaded={loaded} onChanged={reload} />
         <MainPane
-          loaded={loaded}
+          loaded={held.page ?? loaded}
           showCompleted={showCompleted}
           onToggleCompleted={() => setShowCompleted((c) => !c)}
           onOpenDrawer={() => setDrawer(true)}
           onLeaveSearch={() => setView(beforeSearch.current)}
           onOpenSearch={openSearch}
+          setView={setView}
+          renameView={renameView}
+          holdName={holdName}
           motion={swap.motion}
           swap={swap.n}
           onChanged={reload}
@@ -219,6 +237,7 @@ function Frame({
   // pruned against this load (the same pass the sheet draws from).
   const viewOpen = loaded !== null && top(pruned(nav.stack, loaded.all)) !== null;
   useEffect(() => (viewOpen ? holdPage() : undefined), [viewOpen]);
+  useEffect(() => (drawer ? holdPage() : undefined), [drawer]);
   return (
     <div className={`app${drawer ? " drawer-open" : ""}${viewOpen ? " view-open" : ""}`}>
       {drawer ? (

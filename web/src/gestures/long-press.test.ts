@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { installLongPress } from "./long-press";
+import { installLongPress, ROW_PRESS } from "./long-press";
 
 let uninstall: () => void;
 
@@ -12,7 +12,8 @@ beforeEach(() => {
         <div class="task-actions"><button id="delete">Delete</button></div>
       </div>
     </div>
-    <div class="nav-item" id="nav">Home<span class="nav-actions"><button id="rename">Rename</button></span></div>
+    <div class="nav-item" id="nav">Home</div>
+    <div class="nav-item" id="fixed">Inbox</div>
     <div id="elsewhere">elsewhere</div>`;
   uninstall = installLongPress(document);
 });
@@ -94,4 +95,54 @@ it("the context menu is suppressed on rows only", () => {
   const off = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
   el("elsewhere").dispatchEvent(off);
   expect(off.defaultPrevented).toBe(false);
+});
+
+it("a sidebar row's highlight goes when the finger lifts; a task's stays", () => {
+  touch("touchstart", el("nav"));
+  vi.advanceTimersByTime(450);
+  expect(el("nav").classList.contains("pressed")).toBe(true);
+  touch("touchend", el("nav"));
+  expect(el("nav").classList.contains("pressed")).toBe(false);
+
+  touch("touchstart", el("fixed"));
+  vi.advanceTimersByTime(450);
+  touch("touchend", el("fixed"));
+  expect(el("fixed").classList.contains("pressed")).toBe(false);
+
+  touch("touchstart", el("body"));
+  vi.advanceTimersByTime(450);
+  touch("touchend", el("body"));
+  expect(el("task").classList.contains("pressed")).toBe(true);
+});
+
+it("a right click on a sidebar row asks for its menu; on a task it doesn't", () => {
+  const opened = vi.fn();
+  el("nav").addEventListener(ROW_PRESS, opened);
+  el("nav").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+  expect(opened).toHaveBeenCalledTimes(1);
+  const onTask = vi.fn();
+  el("row").addEventListener(ROW_PRESS, onTask);
+  el("body").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+  expect(onTask).not.toHaveBeenCalled();
+});
+
+it("a long press on a sidebar row asks for its menu, once", () => {
+  const opened = vi.fn();
+  el("nav").addEventListener(ROW_PRESS, opened);
+  touch("touchstart", el("nav"));
+  vi.advanceTimersByTime(449);
+  expect(opened).not.toHaveBeenCalled();
+  vi.advanceTimersByTime(1);
+  expect(opened).toHaveBeenCalledTimes(1);
+});
+
+it("the click after lifting a long held press is swallowed for every listener", () => {
+  touch("touchstart", el("nav"));
+  vi.advanceTimersByTime(3000);
+  touch("touchend", el("nav"));
+  const later = vi.fn();
+  document.addEventListener("click", later, true);
+  el("nav").click();
+  document.removeEventListener("click", later, true);
+  expect(later).not.toHaveBeenCalled();
 });

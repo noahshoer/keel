@@ -3,13 +3,14 @@
 // date groups, filters into their comma groups, projects into sections.
 // Each list ends with its "+ Add task" row, as in Dioxus.
 
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { Loaded } from "../app/load";
 import {
   canShowCompleted,
   emptyText,
   type Motion,
   showsProject,
+  type View,
   viewKey,
   viewMode,
   viewPlace,
@@ -23,11 +24,16 @@ import { AddTask } from "../editor/AddTask";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
+import { openAndFocus } from "../shell/focus";
 import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, SearchIcon } from "../shell/icons";
+import { type ListContext, type PageEditing, pageActions } from "../shell/listActions";
 import { currentPlatform, searchTooltip } from "../shell/platform";
 import { attachHeadScroll } from "./headScroll";
+import { useHeldText } from "./heldText";
+import { PageEdit } from "./PageEdit";
 import { AddSection, SectionBlock } from "./SectionBlock";
 import { useTitleFit } from "./titleFit";
+import { ViewMenu } from "./ViewMenu";
 
 const SEARCH = viewPlace({ kind: "search" });
 
@@ -44,6 +50,9 @@ export function MainPane({
   onOpenDrawer,
   onLeaveSearch,
   onOpenSearch,
+  setView,
+  renameView,
+  holdName,
   motion,
   swap,
   onChanged,
@@ -56,6 +65,9 @@ export function MainPane({
   /** The phone's Search screen goes back to the view before it. */
   onLeaveSearch: () => void;
   onOpenSearch: () => void;
+  setView: (v: View) => void;
+  renameView: (v: View) => void;
+  holdName: ListContext["holdName"];
   motion: Motion;
   /** Bumped when a different view lands; alternates the fade-in. */
   swap: number;
@@ -67,7 +79,8 @@ export function MainPane({
   const today = localToday();
   const mode = viewMode(view);
   const toggle = canShowCompleted(view);
-  const fullTitle = viewTitle(view);
+  const heldTitle = useHeldText(viewTitle(view));
+  const fullTitle = heldTitle.text;
   const title = useTitleFit(fullTitle);
   const head = useRef<HTMLDivElement>(null);
   const listScroll = useRef<HTMLDivElement>(null);
@@ -97,7 +110,41 @@ export function MainPane({
       detach();
     };
   }, [place]);
-  const subtitle = viewSubtitle(view, today);
+  const heldSubtitle = useHeldText(viewSubtitle(view, today));
+  const subtitle = heldSubtitle.text;
+  const actions = pageActions(loaded, {
+    view,
+    setView,
+    renameView,
+    holdName,
+    settle: (p) => p.then(onChanged, onChanged),
+  });
+  // By place, so it doesn't outlive the page it was opened on.
+  const [editingPlace, setEditingPlace] = useState<string | null>(null);
+  const edited = editingPlace === place && actions !== null ? actions.editing : null;
+  // What's saved shows at once, in the frame the field goes.
+  const editing: PageEditing | null =
+    edited?.kind === "name"
+      ? {
+          ...edited,
+          rename: (name) => {
+            heldTitle.hold(name);
+            edited.rename(name);
+          },
+        }
+      : edited?.kind === "filter"
+        ? {
+            ...edited,
+            save: (name, query) => {
+              heldTitle.hold(name);
+              heldSubtitle.hold(query);
+              edited.save(name, query);
+            },
+          }
+        : null;
+  const stopEditing = () => setEditingPlace(null);
+  const titleField = useRef<HTMLInputElement>(null);
+  const [querySlot, setQuerySlot] = useState<HTMLElement | null>(null);
   const locations = locationsOf([...loaded.all, ...loaded.completed], loaded.projects, loaded.sections);
   const namesProject = showsProject(view);
   const search = view.kind === "search";
@@ -228,10 +275,14 @@ export function MainPane({
           <h1
             ref={title.ref}
             className="view-title"
+            hidden={editing !== null}
             aria-label={title.text === fullTitle ? undefined : fullTitle}
           >
             {title.text}
           </h1>
+          {editing ? (
+            <PageEdit editing={editing} field={titleField} querySlot={querySlot} onClose={stopEditing} />
+          ) : null}
           {toggle ? (
             <button
               type="button"
@@ -244,6 +295,17 @@ export function MainPane({
               <CheckCircleIcon />
               <span className="view-toggle-label">{showCompleted ? "Hide completed" : "Show completed"}</span>
             </button>
+          ) : null}
+          {actions ? (
+            <ViewMenu
+              warning={actions.warning}
+              onEdit={() => {
+                // At the top, where the title is at its full size on the phone.
+                if (listScroll.current) listScroll.current.scrollTop = 0;
+                openAndFocus(() => setEditingPlace(place), titleField);
+              }}
+              onDelete={actions.remove}
+            />
           ) : null}
           {search ? null : (
             <button
@@ -259,7 +321,9 @@ export function MainPane({
         </div>
         <div ref={listScroll} className="list-scroll">
           <div className="list-body">
-            {subtitle ? (
+            {editing?.kind === "filter" ? (
+              <div ref={setQuerySlot} className="view-edit-query" />
+            ) : subtitle ? (
               <p className={view.kind === "filter" ? "view-sub mono" : "view-sub"}>{subtitle}</p>
             ) : null}
             {loaded.filterError !== null ? (
