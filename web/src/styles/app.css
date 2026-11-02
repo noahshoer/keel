@@ -291,6 +291,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .main { background: var(--page-wide); }
 }
 .content { max-width: 820px; margin: 0 auto; padding: 40px 48px 96px; }
+/* Touch: a short list still scrolls and bounces. One pixel over is enough, and
+   a mouse would get a scrollbar for it. */
+@media (pointer: coarse) { .main > .content { min-height: calc(100% + 1px); } }
 /* A view fades in when it lands; two identical animations alternate so a
    switch restarts it (main.rs `swap`). */
 @keyframes view-in-a { from { opacity: 0; } to { opacity: 1; } }

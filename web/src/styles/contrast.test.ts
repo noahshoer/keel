@@ -204,6 +204,12 @@ describe("phone tap targets", () => {
   });
 });
 
+describe("lists on touch", () => {
+  it("always scroll, however short, so they bounce like a full list", () => {
+    expect(css).toContain("@media (pointer: coarse) { .main > .content { min-height: calc(100% + 1px); } }");
+  });
+});
+
 describe("calendar days on the phone", () => {
   it("reach 44pt beyond their drawn 40", () => {
     expect(css).toMatch(/\.cal-day::after \{ content: ''; position: absolute; inset: -2px; \}/);
