@@ -212,6 +212,17 @@ describe("the ••• on a project, label or filter page", () => {
     expect((container.querySelector(".content") as HTMLElement).className).toBe(page);
   });
 
+  it("a page's new name reaches its sidebar row in the same frame", async () => {
+    const { container } = await open("Home");
+    pick(container, "Edit");
+    const field = titleField(container);
+    fireEvent.change(field, { target: { value: "House" } });
+    fireEvent.submit(field);
+    const sidebar = container.querySelector(".sidebar") as HTMLElement;
+    expect(within(sidebar).getByText("House")).toBeTruthy();
+    expect(within(sidebar).queryByText("Home")).toBeNull();
+  });
+
   it("a filter's new query shows at once", async () => {
     const { container } = await open("Important");
     pick(container, "Edit");

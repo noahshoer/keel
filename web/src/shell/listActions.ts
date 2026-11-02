@@ -1,7 +1,7 @@
 // What editing and deleting a project, label or filter does, from its sidebar
 // row or its page: the change itself, and keeping the open view in step with it.
 import type { View } from "../app/view";
-import type { Filter, Label, Project } from "../bindings";
+import type { Filter, Id, Label, Project } from "../bindings";
 import {
   deleteFilter,
   deleteLabel,
@@ -16,6 +16,8 @@ export type ListContext = {
   setView: (v: View) => void;
   /** The open view under its new name: the same page, so it doesn't fade in again. */
   renameView: (v: View) => void;
+  /** Shows a new name everywhere until the reload brings it, or `change` fails. */
+  holdName: (id: Id, name: string, change: Promise<unknown>) => void;
   /** Reloads once the change lands, whether or not it worked. */
   settle: (p: Promise<unknown>) => Promise<unknown>;
 };
@@ -27,12 +29,17 @@ export type FilterActions = {
   remove: () => void;
 };
 
-export function projectActions(p: Project, { view, setView, renameView, settle }: ListContext): NameActions {
+export function projectActions(
+  p: Project,
+  { view, setView, renameView, holdName, settle }: ListContext,
+): NameActions {
   const open = view.kind === "project" && view.id === p.id;
   return {
     warning: `Delete “${p.name}” and all its tasks?`,
     rename: (name) => {
-      void settle(renameProject(p.id, name));
+      const change = renameProject(p.id, name);
+      holdName(p.id, name, change);
+      void settle(change);
       // Keep the open view's title in sync with the new name.
       if (open) renameView({ kind: "project", id: p.id, name });
     },
@@ -43,12 +50,17 @@ export function projectActions(p: Project, { view, setView, renameView, settle }
   };
 }
 
-export function labelActions(l: Label, { view, setView, renameView, settle }: ListContext): NameActions {
+export function labelActions(
+  l: Label,
+  { view, setView, renameView, holdName, settle }: ListContext,
+): NameActions {
   const open = view.kind === "label" && view.name.toLowerCase() === l.name.toLowerCase();
   return {
     warning: `Delete label “${l.name}”? It’s removed from its tasks.`,
     rename: (name) => {
-      void settle(renameLabel(l.id, name));
+      const change = renameLabel(l.id, name);
+      holdName(l.id, name, change);
+      void settle(change);
       if (open) renameView({ kind: "label", name });
     },
     remove: () => {
@@ -58,12 +70,17 @@ export function labelActions(l: Label, { view, setView, renameView, settle }: Li
   };
 }
 
-export function filterActions(f: Filter, { view, setView, renameView, settle }: ListContext): FilterActions {
+export function filterActions(
+  f: Filter,
+  { view, setView, renameView, holdName, settle }: ListContext,
+): FilterActions {
   const open = view.kind === "filter" && view.id === f.id;
   return {
     warning: `Delete filter “${f.name}”? Your tasks aren’t affected.`,
     save: (name, query) => {
-      void settle(updateFilter(f.id, name, query));
+      const change = updateFilter(f.id, name, query);
+      holdName(f.id, name, change);
+      void settle(change);
       // Keep the open view in sync with the edited filter.
       if (open) renameView({ kind: "filter", id: f.id, name, query });
     },

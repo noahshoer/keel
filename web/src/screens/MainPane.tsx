@@ -26,7 +26,7 @@ import { CompletedRow } from "../lists/CompletedRow";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
 import { openAndFocus } from "../shell/focus";
 import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, SearchIcon } from "../shell/icons";
-import { type PageEditing, pageActions } from "../shell/listActions";
+import { type ListContext, type PageEditing, pageActions } from "../shell/listActions";
 import { currentPlatform, searchTooltip } from "../shell/platform";
 import { attachHeadScroll } from "./headScroll";
 import { useHeldText } from "./heldText";
@@ -52,6 +52,7 @@ export function MainPane({
   onOpenSearch,
   setView,
   renameView,
+  holdName,
   motion,
   swap,
   onChanged,
@@ -66,6 +67,7 @@ export function MainPane({
   onOpenSearch: () => void;
   setView: (v: View) => void;
   renameView: (v: View) => void;
+  holdName: ListContext["holdName"];
   motion: Motion;
   /** Bumped when a different view lands; alternates the fade-in. */
   swap: number;
@@ -114,6 +116,7 @@ export function MainPane({
     view,
     setView,
     renameView,
+    holdName,
     settle: (p) => p.then(onChanged, onChanged),
   });
   // By place, so it doesn't outlive the page it was opened on.

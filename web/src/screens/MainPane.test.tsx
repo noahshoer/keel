@@ -30,6 +30,7 @@ function Harness({ view, showCompleted = false }: { view: View; showCompleted?: 
         onLeaveSearch={() => {}}
         setView={() => {}}
         renameView={() => {}}
+        holdName={() => {}}
         onOpenSearch={() => {}}
         motion="fade"
         swap={0}

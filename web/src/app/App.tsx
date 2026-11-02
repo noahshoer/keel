@@ -19,6 +19,7 @@ import { TaskNavProvider } from "../taskview/nav";
 import { useTaskNav } from "../taskview/nav-context";
 import { prune as pruned, top } from "../taskview/stack";
 import { TaskSheet } from "../taskview/TaskSheet";
+import { useHeldNames } from "./heldNames";
 import { type Loaded, useLoaded } from "./load";
 import { holdPage } from "./pageHold";
 import { isSearchShortcut, isTyping } from "./shortcuts";
@@ -102,6 +103,8 @@ export function App() {
     n: 0,
     motion: "fade",
   });
+  const held = useHeldNames(loaded);
+  const { holdName } = held;
   const landedView = useRef<View | null>(null);
   // The open view under its new name is the same page: it doesn't fade in again.
   const renamedTo = useRef<View | null>(null);
@@ -153,7 +156,8 @@ export function App() {
           view={view}
           setView={setView}
           renameView={renameView}
-          loaded={loaded}
+          holdName={holdName}
+          loaded={held.sidebar ?? loaded}
           theme={theme}
           setTheme={setTheme}
           icon={icon}
@@ -164,7 +168,7 @@ export function App() {
         />
         <TaskSheet loaded={loaded} onChanged={reload} />
         <MainPane
-          loaded={loaded}
+          loaded={held.page ?? loaded}
           showCompleted={showCompleted}
           onToggleCompleted={() => setShowCompleted((c) => !c)}
           onOpenDrawer={() => setDrawer(true)}
@@ -172,6 +176,7 @@ export function App() {
           onOpenSearch={openSearch}
           setView={setView}
           renameView={renameView}
+          holdName={holdName}
           motion={swap.motion}
           swap={swap.n}
           onChanged={reload}

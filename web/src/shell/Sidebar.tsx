@@ -92,6 +92,7 @@ export function Sidebar({
   view,
   setView,
   renameView,
+  holdName,
   loaded,
   theme,
   setTheme,
@@ -104,6 +105,7 @@ export function Sidebar({
   view: View;
   setView: (v: View) => void;
   renameView: (v: View) => void;
+  holdName: ListContext["holdName"];
   loaded: Loaded;
   theme: Theme;
   /** Takes the next theme from the current one (App applies it). */
@@ -127,7 +129,7 @@ export function Sidebar({
     openAndFocus(() => setAdding((a) => (a === what ? null : what)), field);
   // Every change reloads; a failed one too (the backend's state is the truth).
   const then = (p: Promise<unknown>) => p.then(onChanged, onChanged);
-  const context: ListContext = { view, setView, renameView, settle: then };
+  const context: ListContext = { view, setView, renameView, holdName, settle: then };
   const day = new Date().getDate();
   // A wasm call serializes every task, and a desktop search re-renders this per keystroke.
   const today = localToday();

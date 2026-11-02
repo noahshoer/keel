@@ -464,3 +464,29 @@ it("a touch outside closes a row's menu, so a swipe can't leave it behind", asyn
   fireEvent.touchStart(document.body);
   expect(document.querySelector(".row-menu")).toBeNull();
 });
+
+it.each([
+  ["project", "Home", "House"],
+  ["label", "errand", "chores"],
+])("a %s row goes straight to its new name", async (_kind, from, to) => {
+  await start();
+  const row = within(sidebar()).getByText(from).closest(".nav-item") as HTMLElement;
+  pickFromMenu(row, "Edit");
+  const input = sidebar().querySelector<HTMLInputElement>(".project-form input") as HTMLInputElement;
+  fireEvent.change(input, { target: { value: to } });
+  fireEvent.submit(input);
+  expect(within(sidebar()).getByText(to)).toBeTruthy();
+  expect(within(sidebar()).queryByText(from)).toBeNull();
+});
+
+it("a filter row goes straight to its new name", async () => {
+  await start();
+  const row = within(sidebar()).getByText("Important").closest(".nav-item") as HTMLElement;
+  pickFromMenu(row, "Edit");
+  fireEvent.change(screen.getByPlaceholderText("Filter name"), { target: { value: "Top" } });
+  const save = screen.getByText("Save") as HTMLButtonElement;
+  await waitFor(() => expect(save.disabled).toBe(false));
+  fireEvent.click(save);
+  expect(within(sidebar()).getByText("Top")).toBeTruthy();
+  expect(within(sidebar()).queryByText("Important")).toBeNull();
+});
