@@ -110,6 +110,25 @@ describe("the description", () => {
     cleanup();
   });
 
+  it("hands the cursor to the title once the card is empty for the next task", () => {
+    const title = adding();
+    type(title, "Pack");
+    desc().focus();
+    fireEvent.submit(document.querySelector("form.editor") as HTMLFormElement);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(title);
+    cleanup();
+  });
+
+  it("keeps the cursor when there's nothing to save yet", () => {
+    adding();
+    desc().focus();
+    fireEvent.submit(document.querySelector("form.editor") as HTMLFormElement);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(desc());
+    cleanup();
+  });
+
   it("submits on Cmd or Ctrl+Enter", () => {
     const title = adding();
     type(title, "Pack");

@@ -164,6 +164,8 @@ export function TaskEditor({
       latest.current = initial;
       setValues(initial);
       setPop(null);
+      // The next task starts with its title, wherever this one ended.
+      title.current?.focus();
     } else {
       submitted.current = true;
     }
