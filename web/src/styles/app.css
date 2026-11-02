@@ -291,7 +291,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .icon-btn { border: none; background: none; cursor: pointer; color: var(--icon); padding: 5px; border-radius: var(--r-full);
   display: inline-flex; align-items: center; justify-content: center; }
 @media (hover: hover) { .icon-btn:hover { background: var(--icon-hover); color: var(--text); } }
-.icon-btn:active { transform: scale(.92); }
+/* Pressed, an icon grows with its highlight and settles back on release. */
+.icon-btn, .view-toggle, .tv-round { -webkit-tap-highlight-color: transparent; }
+.icon-btn:active, .view-toggle:active, .tv-round:active { transform: scale(1.18); }
 
 /* Main pane: a rounded card floating on the app background */
 .main { --page-bg: var(--page); flex: 1; min-width: 0; display: flex; overflow: hidden; background: var(--page-bg); margin: 8px 8px 8px 0;
@@ -1150,11 +1152,12 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+  .icon-btn:active, .view-toggle:active, .tv-round:active { transform: none; }
 }
 /* Touch: tapped controls keep WebKit's sticky :hover, so hover styles are
    mouse-only (above); a brief press state gives touch its feedback. */
 @media (hover: none) {
-  .icon-btn:active, .view-toggle:active { background: var(--icon-hover); }
+  .icon-btn:active, .view-toggle:active, .tv-round:active { background: var(--icon-hover); }
   .chip:active, .menu-item:active, .cal-day:active, .label-opt:active { background: var(--hover); }
 }
 /* Completing a task (completion.rs): the circle fills with the priority

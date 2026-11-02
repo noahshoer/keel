@@ -8,6 +8,17 @@ const OWN_MARKS = new Set(["Logo", "DoneMark"]);
 
 const iconExports = Object.entries(icons).filter(([name]) => name.endsWith("Icon") && !OWN_MARKS.has(name));
 
+// A stroke in the icon's own color makes these heavier than Phosphor's bold.
+const HEAVIER = new Set([
+  "MenuIcon",
+  "SearchIcon",
+  "SunIcon",
+  "MoonIcon",
+  "PlusIcon",
+  "MoreIcon",
+  "CheckCircleIcon",
+]);
+
 describe("icons", () => {
   it("has the row icons the task layout needs", () => {
     const names = iconExports.map(([name]) => name);
@@ -23,7 +34,7 @@ describe("icons", () => {
     }
   });
 
-  it.each(iconExports)("%s is one filled svg inside span.icon", (_name, icon) => {
+  it.each(iconExports)("%s is one filled svg inside span.icon", (name, icon) => {
     const props = { size: 18, day: 7 };
     const { container } = render(createElement(icon as FunctionComponent<typeof props>, props));
     const svgs = container.querySelectorAll("span.icon > svg");
@@ -31,7 +42,29 @@ describe("icons", () => {
     const svg = svgs[0] as SVGElement;
     expect(svg.getAttribute("fill")).toBe("currentColor");
     expect(svg.getAttribute("aria-hidden")).toBe("true");
-    expect(svg.getAttribute("stroke")).toBeNull();
+    expect(svg.getAttribute("stroke")).toBe(HEAVIER.has(name) ? "currentColor" : null);
+  });
+
+  // Keel's own drawings, rounder than Phosphor's: a 24 line with round corners inside and out.
+  const DRAWN = new Set([
+    "TagIcon",
+    "TagSmallIcon",
+    "InboxIcon",
+    "TodayIcon",
+    "UpcomingIcon",
+    "CalendarSmallIcon",
+  ]);
+  const drawnExports = iconExports.filter(([name]) => DRAWN.has(name));
+
+  it("draws all of them", () => {
+    expect(drawnExports).toHaveLength(DRAWN.size);
+  });
+
+  it.each(drawnExports)("%s is drawn with a round 24 line", (name, icon) => {
+    const { container } = render(createElement(icon as FunctionComponent<{ day: number }>, { day: 7 }));
+    const line = container.querySelector('svg [stroke-width="24"]');
+    expect(line?.getAttribute("stroke-linejoin")).toBe("round");
+    if (!name.startsWith("Tag")) expect(container.querySelector("svg rect")?.getAttribute("rx")).toBe("20");
   });
 
   it("shows the day inside Today's calendar", () => {
