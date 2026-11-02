@@ -1,16 +1,16 @@
-// The task view's sub-task card (crates/ui/src/task_view/view.rs, the
-// `tv-subtasks` card): the "x of y · Show completed" head and progress bar,
-// the direct sub-tasks, then "Add sub-task" or its quick-add editor, which
-// stays open after each add.
+// The task view's sub-tasks: a head with their progress and "Show completed",
+// then a card of the direct sub-tasks and "Add sub-task" or its quick-add
+// editor, which stays open after each add.
 import { useMemo, useRef } from "react";
 import { flushSync } from "react-dom";
 import type { Loaded } from "../app/load";
 import type { EditorValues, Id, TaskDetail } from "../bindings";
 import { localToday } from "../clock";
-import { allDone, blankValues, progressLong } from "../core";
+import { blankValues } from "../core";
 import { addFromEditor } from "../editor/save";
 import { TaskEditor } from "../editor/TaskEditor";
-import { CheckSmallIcon, PlusIcon } from "../shell/icons";
+import { SubtaskProgress } from "../lists/SubtaskProgress";
+import { PlusIcon } from "../shell/icons";
 import { useTaskNav } from "./nav-context";
 import { SubtaskRow } from "./SubtaskRow";
 import { settle } from "./view-rules";
@@ -41,12 +41,13 @@ export function SubtaskCard({
     [task.project_id, task.section_id, task.id],
   );
   return (
-    <div className="tv-card tv-subtasks">
-      {progress !== null ? (
-        <div className="tv-sub-head">
-          <b>Sub-tasks</b>
+    <div className="tv-section">
+      <div className="tv-sub-head">
+        <b>Sub-tasks</b>
+        {progress !== null ? (
           <span className="tv-sub-side">
-            {`${progressLong(progress)} · `}
+            <SubtaskProgress progress={progress} />
+            {" · "}
             <button
               type="button"
               className="tv-toggle"
@@ -54,20 +55,10 @@ export function SubtaskCard({
             >
               {nav.showCompleted ? "Hide completed" : "Show completed"}
             </button>
-            {allDone(progress) ? (
-              <span className="done-check" title="All sub-tasks done">
-                <CheckSmallIcon />
-              </span>
-            ) : null}
           </span>
-        </div>
-      ) : null}
-      <div className="tv-sub-list">
-        {progress !== null ? (
-          <div className="tv-progress">
-            <i style={{ width: `${Math.floor((progress.done * 100) / Math.max(progress.total, 1))}%` }} />
-          </div>
         ) : null}
+      </div>
+      <div className="tv-card tv-subtasks">
         {detail.visible.map((row) => (
           <SubtaskRow key={row.task.id} row={row} onOpen={onOpen} onChanged={onChanged} />
         ))}

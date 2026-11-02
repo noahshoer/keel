@@ -174,6 +174,7 @@ export const viewIds = {
 
 /** Search queries with their own results (anything else gets searchOpen / searchCompleted). */
 export const searchResults: Record<string, { open: string[]; completed: string[] }> = {
+  dentist: { open: ["t-inbox"], completed: [] },
   bins: { open: [], completed: ["t-done"] },
   nothing: { open: [], completed: [] },
 };

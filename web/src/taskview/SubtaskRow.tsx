@@ -4,7 +4,7 @@
 import type { CardRow, Id } from "../bindings";
 import { completeTask, uncompleteTask } from "../ipc/actions";
 import { CHECK_CLASS } from "../lists/chips";
-import { SubtaskCount } from "../lists/TaskRow";
+import { SubtaskProgress } from "../lists/SubtaskProgress";
 import { CheckIcon, ChevronRightIcon } from "../shell/icons";
 import { useTaskNav } from "./nav-context";
 
@@ -39,7 +39,7 @@ export function SubtaskRow({
       {/* biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI. */}
       <div className="tv-sub-body" title="Open task" onClick={() => onOpen(t.id)}>
         <span className="task-content">{t.content}</span>
-        {row.progress !== null ? <SubtaskCount progress={row.progress} /> : null}
+        {row.progress !== null ? <SubtaskProgress progress={row.progress} /> : null}
         <span className="card-chev">
           <ChevronRightIcon />
         </span>

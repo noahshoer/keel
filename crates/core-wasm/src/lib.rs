@@ -101,6 +101,60 @@ pub fn progress(
     output(&views::progress(&parent, &all))
 }
 
+/// `streak::streak_text`: a streak in words, in its repeat's unit.
+#[wasm_bindgen(js_name = streakText)]
+pub fn streak_text(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task")] task: JsValue,
+) -> Result<String, JsError> {
+    let task: Task = input("task", task)?;
+    Ok(keel_core::streak::streak_text(&task))
+}
+
+/// `views::sidebar_counts`: the numbers beside the sidebar's rows.
+#[wasm_bindgen(js_name = sidebarCounts, unchecked_return_type = "import('../../bindings').SidebarCounts")]
+pub fn sidebar_counts(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] all: JsValue,
+    today: &str,
+    upcoming_days: i32,
+) -> Result<JsValue, JsError> {
+    let all: Vec<Task> = input("all", all)?;
+    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    output(&views::sidebar_counts(&all, today, i64::from(upcoming_days)))
+}
+
+/// `views::label_choices`: the labels picker's rows.
+#[wasm_bindgen(js_name = labelChoices, unchecked_return_type = "import('../../bindings').LabelChoice[]")]
+pub fn label_choices(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Label[]")] labels: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "string[]")] selected: JsValue,
+    query: &str,
+) -> Result<JsValue, JsError> {
+    let labels: Vec<Label> = input("labels", labels)?;
+    let selected: Vec<String> = input("selected", selected)?;
+    output(&views::label_choices(&labels, &selected, query))
+}
+
+/// `views::label_chosen`: whether a name is among the chosen labels.
+#[wasm_bindgen(js_name = labelChosen)]
+pub fn label_chosen(
+    #[wasm_bindgen(unchecked_param_type = "string[]")] selected: JsValue,
+    name: &str,
+) -> Result<bool, JsError> {
+    let selected: Vec<String> = input("selected", selected)?;
+    Ok(views::label_chosen(&selected, name))
+}
+
+/// `views::label_groups`: a task's labels grouped by color, in added order.
+#[wasm_bindgen(js_name = labelGroups, unchecked_return_type = "import('../../bindings').LabelGroup[]")]
+pub fn label_groups(
+    #[wasm_bindgen(unchecked_param_type = "string[]")] task_labels: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Label[]")] labels: JsValue,
+) -> Result<JsValue, JsError> {
+    let task_labels: Vec<String> = input("task_labels", task_labels)?;
+    let labels: Vec<Label> = input("labels", labels)?;
+    output(&views::label_groups(&task_labels, &labels))
+}
+
 /// `views::cards`: groups a view's matched tasks into cards.
 #[wasm_bindgen(js_name = cards, unchecked_return_type = "import('../../bindings').Card[]")]
 pub fn cards(

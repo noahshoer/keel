@@ -1,5 +1,6 @@
 {
   "react": { "reason": "UI library for the app" },
+  "@phosphor-icons/react": { "reason": "The app's icon set (MIT), bold weight on every platform" },
   "react-dom": { "reason": "React renderer for the browser/webview" },
   "typescript": { "reason": "Type checker; strict TypeScript is required for app source" },
   "vite": { "reason": "Dev server and production bundler" },

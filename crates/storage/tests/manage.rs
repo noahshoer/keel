@@ -92,6 +92,41 @@ fn rename_label_updates_tasks() {
 }
 
 #[test]
+fn set_label_color_changes_only_that_labels_color() {
+    let mut h = H::new();
+    let a = h.label("a");
+    let b = h.label("b");
+    h.run(Action::LabelSetColor { id: a.clone(), color: "red".into() });
+    let labels = h.repo.list_labels().unwrap();
+    let of = |id: &Id| labels.iter().find(|l| l.id == *id).unwrap().clone();
+    assert_eq!(of(&a).color, "red");
+    assert_eq!(of(&a).name, "a");
+    assert_eq!(of(&b).color, "charcoal");
+}
+
+#[test]
+fn set_label_color_is_idempotent_by_uuid() {
+    let mut h = H::new();
+    let a = h.label("a");
+    let set = |color: &str| Command {
+        uuid: "same".into(),
+        temp_id: None,
+        action: Action::LabelSetColor { id: a.clone(), color: color.into() },
+    };
+    apply(&h.repo, set("red")).unwrap();
+    apply(&h.repo, set("blue")).unwrap();
+    assert_eq!(h.repo.list_labels().unwrap()[0].color, "red");
+}
+
+#[test]
+fn set_label_color_ignores_an_unknown_id() {
+    let mut h = H::new();
+    h.label("a");
+    h.run(Action::LabelSetColor { id: Id::from("nope"), color: "red".into() });
+    assert_eq!(h.repo.list_labels().unwrap()[0].color, "charcoal");
+}
+
+#[test]
 fn rename_label_onto_existing_merges() {
     let mut h = H::new();
     h.label("home");

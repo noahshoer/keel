@@ -18,7 +18,7 @@ export function weekStart(): number {
   }
 }
 
-/** True on touch screens (phones), where pickers use native controls. */
+/** True on touch screens (phones), where the task card sits on the keyboard and time is a wheel. */
 export function isTouch(): boolean {
   return typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 }

@@ -3,12 +3,14 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { Label, ReminderDraft } from "../bindings";
+import type { DueBucket, Label, ReminderDraft } from "../bindings";
 import { invoke } from "../ipc/invoke";
 import { loadCoreForTests } from "../test/wasm";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
+import { PRIORITY_ITEMS } from "./items";
 import { LabelPicker } from "./LabelPicker";
+import { LABEL_COLORS } from "./labelColors";
 import { Menu } from "./Menu";
 import type { Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
@@ -50,11 +52,19 @@ const labels: Label[] = [
   { id: "l1", name: "Home", color: "grey", item_order: 0, is_favorite: false, is_deleted: false },
 ];
 
-export function LabelHost({ onToggle, onChanged }: { onToggle: (n: string) => void; onChanged: () => void }) {
+export function LabelHost({
+  onToggle = () => {},
+  onChanged = () => {},
+  initial = labels,
+}: {
+  onToggle?: (n: string) => void;
+  onChanged?: () => void;
+  initial?: Label[];
+}) {
   const [open, setOpen] = usePop();
   return (
     <LabelPicker
-      labels={labels}
+      labels={initial}
       selected={["home"]}
       text="home"
       open={open}
@@ -87,10 +97,12 @@ export function DateHost({
   onChange,
   date = "",
   time = "",
+  bucket = null,
 }: {
   onChange: (d: string, t: string) => void;
   date?: string;
   time?: string;
+  bucket?: DueBucket | null;
 }) {
   const [open, setOpen] = usePop();
   return (
@@ -103,7 +115,7 @@ export function DateHost({
         date={date}
         time={time}
         text="Date"
-        bucket={null}
+        bucket={bucket}
         rule={null}
         today={TODAY}
         open={open}
@@ -113,11 +125,38 @@ export function DateHost({
     </form>
   );
 }
-export function DeadlineHost() {
+export function RepeatDateHost() {
+  const [open, setOpen] = usePop();
+  const [value, setValue] = useState("none");
+  const items = [
+    { value: "none", label: "Does not repeat" },
+    { value: "daily", label: "Every day" },
+  ];
+  return (
+    <DatePicker
+      date=""
+      time=""
+      text="Date"
+      bucket={null}
+      rule={null}
+      today={TODAY}
+      open={open}
+      setOpen={setOpen}
+      onChange={() => {}}
+      repeat={{
+        items,
+        selected: value,
+        text: items.find((i) => i.value === value)?.label ?? "",
+        onSelect: setValue,
+      }}
+    />
+  );
+}
+export function DeadlineHost({ deadline = "" }: { deadline?: string }) {
   const [open, setOpen] = usePop();
   return (
     <DeadlinePicker
-      deadline=""
+      deadline={deadline}
       text="Deadline"
       urgent={null}
       today={TODAY}
@@ -127,6 +166,27 @@ export function DeadlineHost() {
     />
   );
 }
+describe("Priority's menu", () => {
+  it("colors the chosen row, text and icon, by its priority", () => {
+    render(
+      <Menu
+        id="priority"
+        title="Priority"
+        icon={null}
+        text="P1"
+        items={PRIORITY_ITEMS}
+        selected="1"
+        open="priority"
+        setOpen={() => {}}
+        onSelect={() => {}}
+      />,
+    );
+    const row = (name: string) => screen.getByText(name).closest("button")?.className;
+    expect(row("Priority 1")).toContain("row-p1");
+    expect(row("Priority 2")).not.toContain("row-p2");
+  });
+});
+
 describe("Menu", () => {
   it("opens, ticks the selected item, and closes on a pick", () => {
     const onSelect = vi.fn();
@@ -141,6 +201,120 @@ describe("Menu", () => {
 });
 
 describe("LabelPicker", () => {
+  it("colors its pill by the last chosen label, open or closed", () => {
+    render(
+      <LabelPicker
+        labels={[
+          { ...labels[0], id: "a", name: "first", color: "red" } as Label,
+          { ...labels[0], id: "b", name: "last", color: "blue" } as Label,
+        ]}
+        selected={["first", "last"]}
+        text="2 labels"
+        open="labels"
+        setOpen={() => {}}
+        onToggle={() => {}}
+        onChanged={() => {}}
+      />,
+    );
+    const pill = screen.getByTitle("Labels");
+    expect(pill.style.color).toBe("var(--label-blue)");
+    expect(pill.className).toContain("pill-tinted");
+  });
+
+  it("a chosen label's row reads in its color; a label with none stays plain", () => {
+    render(
+      <LabelPicker
+        labels={[
+          { ...labels[0], id: "a", name: "red one", color: "red" } as Label,
+          { ...labels[0], id: "b", name: "plain one", color: "charcoal" } as Label,
+          { ...labels[0], id: "c", name: "unchosen", color: "blue" } as Label,
+        ]}
+        selected={["red one", "plain one"]}
+        text="2 labels"
+        open="labels"
+        setOpen={() => {}}
+        onToggle={() => {}}
+        onChanged={() => {}}
+      />,
+    );
+    const row = (name: string) => screen.getByText(name).closest(".label-row") as HTMLElement;
+    expect(row("red one").style.color).toBe("var(--label-red)");
+    expect(row("plain one").style.color).toBe("");
+    expect(row("unchosen").style.color).toBe("");
+  });
+
+  it("leaves its pill plain with nothing chosen", () => {
+    render(
+      <LabelPicker
+        labels={[{ ...labels[0], color: "red" } as Label]}
+        selected={[]}
+        text="Labels"
+        open={null}
+        setOpen={() => {}}
+        onToggle={() => {}}
+        onChanged={() => {}}
+      />,
+    );
+    expect(screen.getByTitle("Labels").style.color).toBe("");
+  });
+
+  it("has the find field first, and marks chosen labels", () => {
+    render(<LabelHost />);
+    fireEvent.click(screen.getByTitle("Labels"));
+    const pop = document.querySelector(".popover") as HTMLElement;
+    expect(pop.firstElementChild?.getAttribute("placeholder")).toBe("Find or add a label");
+    const row = document.querySelector(".label-row") as HTMLElement;
+    expect(row.className).toContain("on");
+    expect(row.querySelector(".menu-check")).not.toBeNull();
+  });
+
+  it("shows each label's tag in its color, unknown colors as the default", async () => {
+    const { container } = render(
+      <LabelHost
+        initial={[
+          { ...labels[0], id: "a", name: "red one", color: "red" } as Label,
+          { ...labels[0], id: "b", name: "odd one", color: "mystery" } as Label,
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByTitle("Labels"));
+    const tags = [...container.querySelectorAll<HTMLElement>(".label-tag-icon")];
+    expect(tags.map((t) => t.style.color)).toEqual(["var(--label-red)", "var(--label-charcoal)"]);
+    expect(tags.every((t) => t.querySelector("svg") !== null)).toBe(true);
+  });
+
+  it("finds labels as you type", () => {
+    const errand = { ...labels[0], id: "e", name: "errand" } as Label;
+    render(<LabelHost initial={[...labels, errand]} />);
+    fireEvent.click(screen.getByTitle("Labels"));
+    fireEvent.change(screen.getByPlaceholderText("Find or add a label"), { target: { value: "ERR" } });
+    expect(screen.queryByText("Home")).toBeNull();
+    expect(screen.getByText("errand")).toBeTruthy();
+  });
+
+  it("chooses a label's color from the twelve, with a way back", async () => {
+    const saved = (await invoke("list_labels", {}))[0];
+    if (!saved) throw new Error("no label");
+    const { container } = render(<LabelHost initial={[{ ...saved, color: "orange" }]} />);
+    fireEvent.click(screen.getByTitle("Labels"));
+    fireEvent.click(screen.getByRole("button", { name: `Color for ${saved.name}` }));
+    const swatches = [...container.querySelectorAll<HTMLButtonElement>(".label-swatch")];
+    expect(swatches).toHaveLength(12);
+    expect(swatches.map((b) => b.getAttribute("aria-label"))).toEqual(LABEL_COLORS.map((c) => c.name));
+    expect(container.querySelector(".label-swatch.selected")?.getAttribute("aria-label")).toBe("Orange");
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to labels" }));
+    expect(container.querySelector(".label-swatch")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: `Color for ${saved.name}` }));
+    fireEvent.click(screen.getByRole("button", { name: "Teal" }));
+    expect(container.querySelector(".label-swatch")).toBeNull();
+    await vi.waitFor(async () => {
+      const after = (await invoke("list_labels", {})).find((l) => l.id === saved.id);
+      expect(after?.color).toBe("teal");
+    });
+  });
+
   it("ticks case-insensitively, toggles, and adds a new label", async () => {
     const onToggle = vi.fn();
     const onChanged = vi.fn();
@@ -150,7 +324,7 @@ describe("LabelPicker", () => {
     expect(box.checked).toBe(true);
     fireEvent.click(box);
     expect(onToggle).toHaveBeenCalledWith("Home");
-    const field = screen.getByPlaceholderText("New label, then Enter");
+    const field = screen.getByPlaceholderText("Find or add a label");
     fireEvent.change(field, { target: { value: "Garden" } });
     await act(async () => {
       fireEvent.keyDown(field, { key: "Enter" });
@@ -171,43 +345,168 @@ describe("ReminderPicker", () => {
     expect((screen.getByText("At time of task").closest("button") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("adds a preset once, removes it, and parses a custom time", () => {
+  it("has the custom field first, then the presets", () => {
+    render(<ReminderHost hasDue />);
+    fireEvent.click(screen.getByTitle("Reminders"));
+    const pop = document.querySelector(".popover") as HTMLElement;
+    expect(pop.firstElementChild?.getAttribute("placeholder")).toBe("Custom, e.g. tomorrow 9am");
+  });
+
+  it("toggles presets and parses a custom time, which can be removed", () => {
     render(<ReminderHost hasDue />);
     fireEvent.click(screen.getByTitle("Reminders"));
     fireEvent.click(screen.getByText("30 min before"));
-    fireEvent.click(screen.getByText("30 min before"));
     expect(out()).toEqual([{ id: null, minuteOffset: 30, at: null }]);
-    fireEvent.click(screen.getByTitle("Remove reminder"));
+    expect(screen.getByText("30 min before").closest("button")?.className).toContain("checked");
+    fireEvent.click(screen.getByText("At time of task"));
+    expect(out()).toHaveLength(2);
+    fireEvent.click(screen.getByText("At time of task"));
+    fireEvent.click(screen.getByText("30 min before"));
     expect(out()).toEqual([]);
-    const field = screen.getByPlaceholderText("Custom, e.g. tomorrow 9am, then Enter");
+    const field = screen.getByPlaceholderText("Custom, e.g. tomorrow 9am");
     fireEvent.change(field, { target: { value: "tomorrow" } });
     fireEvent.keyDown(field, { key: "Enter" });
     expect(screen.getByText("Needs a time, like “friday 3pm” or “in 2 days at 9am”.")).toBeTruthy();
     fireEvent.change(field, { target: { value: "tomorrow 9am" } });
     fireEvent.keyDown(field, { key: "Enter" });
     expect(out()).toEqual([{ id: null, minuteOffset: null, at: "2026-10-31T09:00" }]);
+    fireEvent.click(screen.getByTitle("Remove reminder"));
+    expect(out()).toEqual([]);
   });
 });
 
 describe("DatePicker", () => {
   const openIt = () => fireEvent.click(screen.getByTitle("Date"));
 
-  it("quick dates and day cells pick and close", () => {
+  const calendar = () => fireEvent.click(screen.getByText("Pick a date and time"));
+
+  it("opens on the quick choices; each picks and closes", () => {
     const onChange = vi.fn();
     render(<DateHost onChange={onChange} />);
     openIt();
-    expect(document.querySelector(".sched-head")?.textContent).toBe("No date");
+    expect([...document.querySelectorAll(".scheduler .menu-label")].map((e) => e.textContent)).toEqual([
+      "Today",
+      "Tomorrow",
+      "This weekend",
+      "Next week",
+      "Pick a date and time",
+      "No date",
+    ]);
+    expect(document.querySelector(".cal-grid")).toBeNull();
     fireEvent.click(screen.getByText("Tomorrow"));
     expect(onChange).toHaveBeenLastCalledWith("2026-10-31", "");
     expect(document.querySelector(".scheduler")).toBeNull();
     openIt();
+    fireEvent.click(screen.getByText("No date"));
+    expect(onChange).toHaveBeenLastCalledWith("", "");
+    expect(document.querySelector(".scheduler")).toBeNull();
+  });
+
+  it("colors each quick choice by when it falls", () => {
+    render(<DateHost onChange={vi.fn()} />);
+    openIt();
+    const row = (name: string) => screen.getByText(name).closest("button")?.className;
+    // Friday 2026-10-30: today, tomorrow, and a Saturday and Monday this coming week.
+    expect(row("Today")).toContain("quick-today");
+    expect(row("Tomorrow")).toContain("quick-tomorrow");
+    expect(row("Next week")).toContain("quick-week");
+    expect(row("No date")).not.toContain("quick-");
+    expect(row("Pick a date and time")).not.toContain("quick-");
+  });
+
+  it("the open pill takes its date's color class", () => {
+    render(<DateHost onChange={vi.fn()} date="2026-10-31" bucket="Tomorrow" />);
+    openIt();
+    const pill = screen.getByTitle("Date").className;
+    expect(pill).toContain("chip-open");
+    expect(pill).toContain("tomorrow");
+  });
+
+  it("offers no No date while it repeats, since a repeat always has a date", () => {
+    render(
+      <DatePicker
+        date="2026-10-30"
+        time=""
+        text="Today"
+        bucket="Today"
+        rule="Daily"
+        today={TODAY}
+        open="date"
+        setOpen={() => {}}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.queryByText("No date")).toBeNull();
+    expect(screen.getByText("Pick a date and time")).toBeTruthy();
+  });
+
+  it("marks the quick choice that's set", () => {
+    render(<DateHost onChange={vi.fn()} date="2026-10-31" />);
+    openIt();
+    expect(document.querySelector(".menu-item.checked .menu-label")?.textContent).toBe("Tomorrow");
+  });
+
+  it("Pick a date and time shows the calendar, a Time row and the Repeat row", () => {
+    render(<RepeatDateHost />);
+    openIt();
+    calendar();
+    expect(document.querySelector(".cal-grid")).not.toBeNull();
+    expect(document.querySelector(".sched-time")?.textContent).toContain("Time");
+    expect(screen.getByRole("button", { name: /^Repeat/ }).textContent).toContain("Does not repeat");
+    expect(document.querySelector(".sched-quick")).toBeNull();
+  });
+
+  it("draws no week that's wholly in another month", () => {
+    render(<DateHost onChange={vi.fn()} />);
+    openIt();
+    calendar();
+    // October 2026 starts on a Thursday and ends on a Saturday: five weeks.
+    expect(document.querySelectorAll(".cal-day")).toHaveLength(35);
+  });
+
+  it("a day picks and stays open, so a time or repeat can follow", () => {
+    const onChange = vi.fn();
+    render(<DateHost onChange={onChange} />);
+    openIt();
+    calendar();
     fireEvent.click(screen.getByText("12", { selector: ".cal-day:not(.other)" }));
     expect(onChange).toHaveBeenLastCalledWith("2026-10-12", "");
+    expect(document.querySelector(".scheduler")).not.toBeNull();
+  });
+
+  it("Repeat opens its options with a way back", () => {
+    render(<RepeatDateHost />);
+    openIt();
+    calendar();
+    fireEvent.click(screen.getByRole("button", { name: /^Repeat/ }));
+    expect(document.querySelector(".cal-grid")).toBeNull();
+    expect(screen.getByText("Every day")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Back to date" }));
+    expect(document.querySelector(".cal-grid")).not.toBeNull();
+  });
+
+  it("choosing a repeat returns to the card with the new text, still open", () => {
+    render(<RepeatDateHost />);
+    openIt();
+    calendar();
+    fireEvent.click(screen.getByRole("button", { name: /^Repeat/ }));
+    fireEvent.click(screen.getByText("Every day"));
+    expect(document.querySelector(".scheduler")).not.toBeNull();
+    expect(document.querySelector(".cal-grid")).not.toBeNull();
+    expect(screen.getByRole("button", { name: /^Repeat/ }).textContent).toContain("Every day");
+  });
+
+  it("has no Repeat row when the caller gives no repeat", () => {
+    render(<DateHost onChange={vi.fn()} />);
+    openIt();
+    calendar();
+    expect(screen.queryByRole("button", { name: /^Repeat/ })).toBeNull();
   });
 
   it("month arrows move the calendar", () => {
     render(<DateHost onChange={vi.fn()} />);
     openIt();
+    calendar();
     expect(document.querySelector(".cal-title")?.textContent).toBe("October 2026");
     fireEvent.click(screen.getByTitle("Next month"));
     expect(document.querySelector(".cal-title")?.textContent).toBe("November 2026");
@@ -222,6 +521,7 @@ describe("DatePicker", () => {
     const onChange = vi.fn();
     render(<DateHost onChange={onChange} />);
     openIt();
+    calendar();
     const field = screen.getByPlaceholderText("Add time, e.g. 5pm or 17:30");
     fireEvent.change(field, { target: { value: "bad" } });
     fireEvent.keyDown(field, { key: "Enter" });
@@ -232,16 +532,70 @@ describe("DatePicker", () => {
     expect(document.querySelector(".scheduler")).toBeNull();
   });
 
-  it("uses the native time field on touch screens", () => {
-    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q === "(pointer: coarse)" }));
-    const onChange = vi.fn();
-    render(<DateHost onChange={onChange} date="2026-11-02" />);
-    openIt();
-    const field = document.querySelector("input.time-input.native") as HTMLInputElement;
-    expect(field.type).toBe("time");
-    expect(screen.getByText("Add time")).toBeTruthy();
-    fireEvent.change(field, { target: { value: "07:05" } });
-    expect(onChange).toHaveBeenLastCalledWith("2026-11-02", "07:05");
+  describe("on touch screens", () => {
+    const wheelOpen = (date: string, onChange: (d: string, t: string) => void, time = "") => {
+      vi.stubGlobal("matchMedia", (q: string) => ({ matches: q === "(pointer: coarse)" }));
+      render(<DateHost onChange={onChange} date={date} time={time} />);
+      openIt();
+      calendar();
+    };
+    const timeRow = () => screen.getByRole("button", { name: /^Time/ });
+
+    it("has no text field for the time, which would take focus from the title", () => {
+      wheelOpen("2026-11-02", vi.fn());
+      expect(document.querySelector("input.time-input")).toBeNull();
+      expect(timeRow().textContent).toContain("Add time");
+      expect(fireEvent.mouseDown(timeRow())).toBeTruthy();
+    });
+
+    it("opening the wheel saves nothing; it starts at now, and Set time takes it", () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 10, 2, 15, 34));
+      const onChange = vi.fn();
+      wheelOpen("2026-11-02", onChange);
+      fireEvent.click(timeRow());
+      vi.useRealTimers();
+      expect(onChange).not.toHaveBeenCalled();
+      expect(document.querySelectorAll(".time-wheel .wheel-col")).toHaveLength(3);
+      const minutes = document.querySelector('.time-wheel [data-col="minute"]') as HTMLElement;
+      expect(minutes.scrollTop).toBe(34 * 36);
+      expect(screen.queryByRole("button", { name: "Remove time" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Set time" }));
+      expect(onChange).toHaveBeenLastCalledWith("2026-11-02", "15:34");
+    });
+
+    it("scrolling from an empty time sets what the wheel shows", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 10, 2, 15, 34));
+      const onChange = vi.fn();
+      wheelOpen("2026-11-02", onChange);
+      fireEvent.click(timeRow());
+      vi.useRealTimers();
+      const minutes = document.querySelector('.time-wheel [data-col="minute"]') as HTMLElement;
+      minutes.scrollTop = 40 * 36;
+      fireEvent.scroll(minutes);
+      await vi.waitFor(() => expect(onChange).toHaveBeenLastCalledWith("2026-11-02", "15:40"));
+    });
+
+    it("scrolling a column changes the time", async () => {
+      const onChange = vi.fn();
+      wheelOpen("2026-11-02", onChange, "07:05");
+      fireEvent.click(timeRow());
+      const minutes = document.querySelector('.time-wheel [data-col="minute"]') as HTMLElement;
+      expect(minutes.scrollTop).toBe(5 * 36);
+      minutes.scrollTop = 20 * 36;
+      fireEvent.scroll(minutes);
+      await vi.waitFor(() => expect(onChange).toHaveBeenLastCalledWith("2026-11-02", "07:20"));
+    });
+
+    it("removes the time", () => {
+      const onChange = vi.fn();
+      wheelOpen("2026-11-02", onChange, "07:05");
+      expect(timeRow().textContent).toContain("7:05 AM");
+      fireEvent.click(timeRow());
+      fireEvent.click(screen.getByRole("button", { name: "Remove time" }));
+      expect(onChange).toHaveBeenLastCalledWith("2026-11-02", "");
+    });
   });
 
   it("Escape closes the scheduler without reaching the form", () => {
@@ -256,6 +610,7 @@ describe("DatePicker", () => {
   it("the chooser shows month and year wheels", () => {
     render(<DateHost onChange={vi.fn()} />);
     openIt();
+    calendar();
     fireEvent.click(screen.getByTitle("Choose month and year"));
     expect(document.querySelector(".cal-grid")).toBeNull();
     expect(document.querySelector(".wheel-col.loop .wheel-item.on")?.textContent).toBe("October");
@@ -264,11 +619,31 @@ describe("DatePicker", () => {
 });
 
 describe("DeadlinePicker", () => {
-  it("has no time row and its own empty header", () => {
+  const openIt = () => fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
+
+  it("is a calendar and No deadline, with no Time or Repeat row", () => {
     render(<DeadlineHost />);
-    fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
-    expect(document.querySelector(".sched-head")?.textContent).toBe("No deadline");
+    openIt();
+    expect(document.querySelector(".cal-grid")).not.toBeNull();
     expect(document.querySelector(".sched-time")).toBeNull();
+    expect(screen.queryByText("Pick a date and time")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Repeat/ })).toBeNull();
+    expect(screen.getByText("No deadline")).toBeTruthy();
+  });
+
+  it("marks its day in the plain selected color, not a date's bucket color", () => {
+    render(<DeadlineHost deadline="2026-12-25" />);
+    openIt();
+    const day = document.querySelector(".cal-day.selected") as HTMLElement;
+    expect(day.textContent).toBe("25");
+    expect(day.className).not.toContain("sel-");
+  });
+
+  it("a day picks and closes", () => {
+    render(<DeadlineHost />);
+    openIt();
+    fireEvent.click(screen.getByText("12", { selector: ".cal-day:not(.other)" }));
+    expect(document.querySelector(".scheduler")).toBeNull();
   });
 });
 

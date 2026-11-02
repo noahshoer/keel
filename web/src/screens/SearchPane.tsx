@@ -4,19 +4,13 @@
 // (crates/ui/src/search.rs).
 import { useEffect, useRef, useState } from "react";
 import type { Loaded } from "../app/load";
-import type { Project, SearchResults, Section, Task } from "../bindings";
+import type { SearchResults, Task } from "../bindings";
 import { invoke } from "../ipc/invoke";
 import { CompletedRow } from "../lists/CompletedRow";
+import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
 import { TaskRow } from "../lists/TaskRow";
 import { SearchIcon, XSmallIcon } from "../shell/icons";
-import { currentPlatform, searchHint } from "../shell/platform";
-
-/** "Project" or "Project / Section". */
-function locationOf(t: Task, projects: Project[], sections: Section[]): string {
-  const project = projects.find((p) => p.id === t.project_id)?.name ?? "";
-  const section = t.section_id === null ? undefined : sections.find((s) => s.id === t.section_id);
-  return section === undefined ? project : `${project} / ${section.name}`;
-}
+import { currentPlatform, searchHint, useWideLayout } from "../shell/platform";
 
 type Found = { query: string; results: SearchResults | null; error: string | null };
 
@@ -37,6 +31,7 @@ export function SearchPane({
   reloadKey: number;
   onChanged: () => void;
 }) {
+  const wide = useWideLayout();
   const [found, setFound] = useState<Found>({ query: "", results: null, error: null });
   const latest = useRef(0);
   useEffect(() => {
@@ -53,7 +48,21 @@ export function SearchPane({
     );
   }, [query, reloadKey]);
 
-  const where = (t: Task) => locationOf(t, loaded.projects, loaded.sections);
+  const locations = locationsOf(
+    [...(found.results?.open ?? []), ...(found.results?.completed ?? [])],
+    loaded.projects,
+    loaded.sections,
+  );
+  // Touch: scrolling the results closes the keyboard, as there's no bar to close it from.
+  useEffect(() => {
+    const onMove = (e: TouchEvent) => {
+      const field = document.querySelector<HTMLInputElement>(".search-input");
+      if (field !== null && document.activeElement === field && e.target !== field) field.blur();
+    };
+    document.addEventListener("touchmove", onMove, { passive: true });
+    return () => document.removeEventListener("touchmove", onMove);
+  }, []);
+  const where = (t: Task) => locations.get(t.id) ?? INBOX_LOCATION;
   // The last results stay up while a newer query loads (as Dioxus'
   // use_resource keeps its value); "Searching…" only before the first one.
   const current = found.results === null && found.error === null ? null : found;
@@ -84,33 +93,42 @@ export function SearchPane({
             )}
           </div>
         ) : (
-          <p className="view-sub">{r.open.length === 1 ? "1 task" : `${r.open.length} tasks`}</p>
+          <p className="view-sub">
+            {`${r.open.length === 1 ? "1 result" : `${r.open.length} results`}${wide ? ` for ${query}` : ""}`}
+          </p>
         )}
-        {r.open.map((task) => (
-          <TaskRow
-            key={task.id}
-            row={{ task, progress: null }}
-            today={today}
-            location={where(task)}
-            reminders={loaded.reminders}
-            onChanged={onChanged}
-          />
-        ))}
+        {r.open.length > 0 ? (
+          <div className="task-card">
+            {r.open.map((task) => (
+              <TaskRow
+                key={task.id}
+                row={{ task, progress: null }}
+                today={today}
+                location={where(task)}
+                labels={loaded.labels}
+                reminders={loaded.reminders}
+                onChanged={onChanged}
+              />
+            ))}
+          </div>
+        ) : null}
         {showCompleted && r.completed.length > 0 ? (
           <>
             <div className="section-title">
               Completed
               <span className="muted">{r.completed.length}</span>
             </div>
-            {r.completed.map((task) => (
-              <CompletedRow
-                key={`done-${task.id}`}
-                task={task}
-                today={today}
-                location={where(task)}
-                onChanged={onChanged}
-              />
-            ))}
+            <div className="task-card">
+              {r.completed.map((task) => (
+                <CompletedRow
+                  key={`done-${task.id}`}
+                  task={task}
+                  today={today}
+                  location={locationText(where(task))}
+                  onChanged={onChanged}
+                />
+              ))}
+            </div>
           </>
         ) : null}
       </>
@@ -119,37 +137,41 @@ export function SearchPane({
 
   return (
     <>
-      <div className="search-box">
-        <span className="search-icon">
-          <SearchIcon />
-        </span>
-        <input
-          className="search-input"
-          type="search"
-          placeholder="Search tasks, descriptions and labels"
-          // biome-ignore lint/a11y/noAutofocus: the Search view exists to type into (as in the Dioxus UI).
-          autoFocus
-          spellCheck={false}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setQuery("");
-          }}
-        />
-        {query ? (
-          <button
-            type="button"
-            className="search-clear"
-            title="Clear"
-            aria-label="Clear search"
-            // Keep focus (and the keyboard) in the field.
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setQuery("")}
-          >
-            <XSmallIcon />
-          </button>
-        ) : null}
-      </div>
+      {wide ? null : (
+        <div className="search-box">
+          <span className="search-icon">
+            <SearchIcon />
+          </span>
+          <input
+            className="search-input"
+            type="search"
+            placeholder="Search tasks, descriptions and labels"
+            // biome-ignore lint/a11y/noAutofocus: the Search view exists to type into (as in the Dioxus UI).
+            autoFocus
+            spellCheck={false}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setQuery("");
+              // The results stay; the keyboard stops covering them.
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+          />
+          {query ? (
+            <button
+              type="button"
+              className="search-clear"
+              title="Clear"
+              aria-label="Clear search"
+              // Keep focus (and the keyboard) in the field.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setQuery("")}
+            >
+              <XSmallIcon />
+            </button>
+          ) : null}
+        </div>
+      )}
       {results}
     </>
   );

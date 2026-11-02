@@ -9,7 +9,6 @@ import { installLongPress } from "../gestures/long-press";
 import { installSheet } from "../gestures/sheet";
 import { drawerSwipe } from "../gestures/sheet-rules";
 import { installSwipe } from "../gestures/swipe";
-import { invoke } from "../ipc/invoke";
 import { CompletionIconContext, savedIcon } from "../lists/completion";
 import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
@@ -21,6 +20,7 @@ import { useTaskNav } from "../taskview/nav-context";
 import { prune as pruned, top } from "../taskview/stack";
 import { TaskSheet } from "../taskview/TaskSheet";
 import { type Loaded, useLoaded } from "./load";
+import { holdPage } from "./pageHold";
 import { isSearchShortcut, isTyping } from "./shortcuts";
 import { type Motion, sameView, type View, viewKey, viewMotion } from "./view";
 
@@ -37,6 +37,9 @@ export function App() {
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   // Kept across visits to the Search view.
   const [searchQuery, setSearchQuery] = useState("");
+  // Where the Search screen's Back goes.
+  const beforeSearch = useRef(view);
+  if (view.kind !== "search") beforeSearch.current = view;
 
   // Touch: a long press shows a row's actions.
   useEffect(() => installLongPress(document), []);
@@ -53,17 +56,28 @@ export function App() {
     [],
   );
 
-  // "/" (when not typing) or Ctrl/Cmd+K opens Search and focuses the box.
+  // Opens Search and focuses the box: the screen's, or the sidebar's on
+  // desktop, where the screen has none.
+  const openSearch = useCallback(() => {
+    setView({ kind: "search" });
+    setTimeout(
+      () =>
+        document
+          .querySelector<HTMLInputElement>(".search-input, .sidebar-search-input:not([readonly])")
+          ?.focus(),
+      60,
+    );
+  }, []);
+  // "/" (when not typing) or Ctrl/Cmd+K does too.
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (!isSearchShortcut(ev, isTyping(document.activeElement))) return;
       ev.preventDefault();
-      setView({ kind: "search" });
-      setTimeout(() => document.querySelector<HTMLInputElement>(".search-input")?.focus(), 60);
+      openSearch();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [openSearch]);
 
   // Search slides in and out: a still copy of the page being left is taken
   // as soon as the view changes (before the new one loads).
@@ -133,6 +147,8 @@ export function App() {
           setTheme={setTheme}
           icon={icon}
           setIcon={setIcon}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
           onChanged={reload}
         />
         <TaskSheet loaded={loaded} onChanged={reload} />
@@ -141,6 +157,8 @@ export function App() {
           showCompleted={showCompleted}
           onToggleCompleted={() => setShowCompleted((c) => !c)}
           onOpenDrawer={() => setDrawer(true)}
+          onLeaveSearch={() => setView(beforeSearch.current)}
+          onOpenSearch={openSearch}
           motion={swap.motion}
           swap={swap.n}
           onChanged={reload}
@@ -200,15 +218,7 @@ function Frame({
   // Open while a task on the stack still exists, judged from the stack as
   // pruned against this load (the same pass the sheet draws from).
   const viewOpen = loaded !== null && top(pruned(nav.stack, loaded.all)) !== null;
-  // iOS: WebKit scrolls the whole page to reveal a field focused in the
-  // sheet, moving the list under it; Swift holds the page still while a view
-  // is open (keel-ios PageScroll). Sent only when it changes.
-  const held = useRef(false);
-  useEffect(() => {
-    if (held.current === viewOpen) return;
-    held.current = viewOpen;
-    invoke("hold_page_scroll", { on: viewOpen }).catch(() => {});
-  }, [viewOpen]);
+  useEffect(() => (viewOpen ? holdPage() : undefined), [viewOpen]);
   return (
     <div className={`app${drawer ? " drawer-open" : ""}${viewOpen ? " view-open" : ""}`}>
       {drawer ? (

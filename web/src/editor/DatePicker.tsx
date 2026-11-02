@@ -5,7 +5,7 @@ import type { DueBucket, Recurrence } from "../bindings";
 import { BUCKET_CLASS } from "../lists/chips";
 import { CalendarSmallIcon, RepeatSmallIcon } from "../shell/icons";
 import { cx, type Face, type PopProps } from "./pop";
-import { Scheduler } from "./Scheduler";
+import { type CalendarActions, type RepeatChoice, Scheduler } from "./Scheduler";
 
 export function DatePicker({
   date,
@@ -13,6 +13,9 @@ export function DatePicker({
   text,
   bucket,
   rule,
+  repeat,
+  onCalendar,
+  actions,
   today,
   open,
   setOpen,
@@ -29,6 +32,12 @@ export function DatePicker({
   bucket: DueBucket | null;
   /** The repeat rule: a ⟳ on the chip and ringed days in the calendar. */
   rule: Recurrence | null;
+  /** The date card's Repeat row and options. */
+  repeat?: RepeatChoice;
+  /** When the quick choices give way to the calendar. */
+  onCalendar?: () => void;
+  /** The calendar's check and X. */
+  actions?: CalendarActions;
   today: string;
   /** The date (`YYYY-MM-DD` or "") and time (`HH:MM` or ""). */
   onChange: (date: string, time: string) => void;
@@ -64,6 +73,9 @@ export function DatePicker({
           selected={date === "" ? null : date}
           time={time === "" ? null : time}
           rule={rule}
+          repeat={repeat}
+          onCalendar={onCalendar}
+          actions={actions}
           today={today}
           onPick={(d, t) => onChange(d ?? "", t)}
           close={() => setOpen(null)}

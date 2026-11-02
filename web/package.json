@@ -17,6 +17,7 @@
     "check": "pnpm run build:wasm && pnpm run typecheck && pnpm run lint && vitest run && pnpm run check:deps"
   },
   "dependencies": {
+    "@phosphor-icons/react": "2.1.10",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

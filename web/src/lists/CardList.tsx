@@ -1,10 +1,12 @@
 // Lists as cards (crates/ui/src/cards.rs): each top-level task is a card,
 // and in dated views the sub-tasks that match sit inside their parent's card.
-import type { Card, CardRow, Id, Reminder } from "../bindings";
+import type { Card, CardRow, Id, Label, Reminder } from "../bindings";
 import { ChevronRightIcon, FlagFilledIcon } from "../shell/icons";
 import { useTaskNav } from "../taskview/nav-context";
 import { dueChip, FLAG_CLASS } from "./chips";
-import { SubtaskCount, TaskRow } from "./TaskRow";
+import { INBOX_LOCATION, type RowLocation } from "./rowLayout";
+import { SubtaskProgress } from "./SubtaskProgress";
+import { TaskRow } from "./TaskRow";
 
 /** A card's header when its task doesn't match the view: context only, no circle. */
 function CardHead({ row, today }: { row: CardRow; today: string }) {
@@ -25,7 +27,7 @@ function CardHead({ row, today }: { row: CardRow; today: string }) {
       <span className="pname">{task.content}</span>
       <span className="card-head-side">
         {due !== null ? <span className={due.cls}>{due.label}</span> : null}
-        {progress !== null ? <SubtaskCount progress={progress} /> : null}
+        {progress !== null ? <SubtaskProgress progress={progress} /> : null}
         <span className="card-chev">
           <ChevronRightIcon />
         </span>
@@ -38,17 +40,19 @@ export function CardList({
   cards,
   today,
   locations,
+  labels,
   reminders,
   onChanged,
 }: {
   cards: Card[];
   today: string;
-  /** Each task's "Project / Section", or `null` in views that don't name it. */
-  locations: Map<Id, string> | null;
+  /** Each task's project and section. */
+  locations: Map<Id, RowLocation>;
+  labels: Label[];
   reminders: Reminder[];
   onChanged: () => void;
 }) {
-  const where = (id: Id) => (locations === null ? null : (locations.get(id) ?? ""));
+  const where = (id: Id) => locations.get(id) ?? INBOX_LOCATION;
   return cards.map((card) => (
     <div key={card.head.task.id} className="task-card">
       {card.head_matches ? (
@@ -56,6 +60,7 @@ export function CardList({
           row={card.head}
           today={today}
           location={where(card.head.task.id)}
+          labels={labels}
           reminders={reminders}
           onChanged={onChanged}
         />
@@ -68,6 +73,7 @@ export function CardList({
           row={r}
           today={today}
           location={where(r.task.id)}
+          labels={labels}
           reminders={reminders}
           onChanged={onChanged}
         />

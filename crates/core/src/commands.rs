@@ -139,6 +139,11 @@ pub enum Action {
         id: Id,
         name: String,
     },
+    /// Set a label's color. An unknown id does nothing.
+    LabelSetColor {
+        id: Id,
+        color: String,
+    },
     /// Soft-delete a label and strip its name from every task.
     LabelDelete {
         id: Id,
@@ -200,6 +205,7 @@ impl Action {
             Action::TaskSetStreak { .. } => "task_set_streak",
             Action::LabelAdd { .. } => "label_add",
             Action::LabelUpdate { .. } => "label_update",
+            Action::LabelSetColor { .. } => "label_set_color",
             Action::LabelDelete { .. } => "label_delete",
             Action::ProjectAdd { .. } => "project_add",
             Action::FilterAdd { .. } => "filter_add",
@@ -589,6 +595,12 @@ pub fn apply_at<R: Repository>(
                 task.completed_at = None;
                 task.updated_at = Utc::now();
                 repo.upsert_task(&task)?;
+            }
+        }
+        Action::LabelSetColor { id, color } => {
+            if let Some(mut label) = repo.list_labels()?.into_iter().find(|l| l.id == id) {
+                label.color = color;
+                repo.upsert_label(&label)?;
             }
         }
         Action::LabelUpdate { id, name } => {

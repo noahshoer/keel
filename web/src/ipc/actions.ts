@@ -28,6 +28,7 @@ export const deleteProject = (id: Id) => send({ type: "project_delete", id });
 
 export const addLabel = (name: string) => send({ type: "label_add", name }, true);
 export const renameLabel = (id: Id, name: string) => send({ type: "label_update", id, name });
+export const setLabelColor = (id: Id, color: string) => send({ type: "label_set_color", id, color });
 export const deleteLabel = (id: Id) => send({ type: "label_delete", id });
 
 export const addSection = (projectId: Id, name: string) =>

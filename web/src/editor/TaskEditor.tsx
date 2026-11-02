@@ -2,19 +2,41 @@
 // and editing (crates/ui/src/editor.rs `TaskEditor`). When adding, the title
 // is parsed as quick add with live highlighting and preview chips. Every
 // decision about the values is keel-core's (`editorView`, `applyPick`, …).
-import { type RefObject, useRef, useState } from "react";
+import { type MouseEvent, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { holdPage } from "../app/pageHold";
 import type { EditorPick, EditorValues, Label, Project, Recurrence, Section, SpanKind } from "../bindings";
 import { localToday } from "../clock";
-import { applyPick, editorView, locationPick, toggleLabel, unhighlightAt, withTitle } from "../core";
-import { FlagSmallIcon, HashSmallIcon, RepeatSmallIcon } from "../shell/icons";
+import {
+  applyPick,
+  editorView,
+  locationPick,
+  repeatText,
+  toggleLabel,
+  unhighlightAt,
+  withTitle,
+} from "../core";
+import { ArrowUpIcon, FlagFilledIcon, RepeatSmallIcon } from "../shell/icons";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
 import { HighlightedTitle } from "./HighlightedTitle";
-import { flagClass, locationItems, PRIORITY_ITEMS } from "./items";
+import { flagClass, locationFace, locationItems, PRIORITY_ITEMS } from "./items";
+import { useKeyboard } from "./keyboardAnchor";
 import { LabelPicker } from "./LabelPicker";
+import { isTouch } from "./locale";
 import { Menu, type MenuItem } from "./Menu";
-import type { Pop } from "./pop";
+import { usePillFade } from "./pillFade";
+import { cx, type Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
+
+/** The space between the task card and the keyboard. */
+const CARD_GAP = 8;
+
+/** Stops a press taking focus from the title, except in a field of its own. */
+function keepFocus(e: MouseEvent<HTMLElement>): void {
+  const target = e.target as HTMLElement;
+  if (!target.closest("input, textarea, select")) e.preventDefault();
+}
 
 const PREVIEW: Record<SpanKind, string> = {
   Date: "chip-date",
@@ -64,6 +86,46 @@ export function TaskEditor({
 }) {
   const [values, setValues] = useState(initial);
   const [open, setOpen] = useState<Pop>(null);
+  const [touch] = useState(isTouch);
+  const keyboard = useKeyboard(touch);
+  useEffect(() => (touch ? holdPage() : undefined), [touch]);
+  const ownTitle = useRef<HTMLTextAreaElement>(null);
+  const title = titleRef ?? ownTitle;
+  // A calendar needs more room than the keyboard leaves, so it lowers the
+  // keyboard; whatever replaces it brings the keyboard back, inside the tap.
+  const madeRoom = useRef(false);
+  const beforeCalendar = useRef(initial);
+  // While a calendar is open, text typed still counts when its X undoes the rest.
+  const inCalendar = useRef(false);
+  const roomFrom = useRef<HTMLElement | null>(null);
+  const makeRoom = () => {
+    // What the calendar's X goes back to.
+    beforeCalendar.current = latest.current;
+    inCalendar.current = true;
+    if (!touch) return;
+    madeRoom.current = true;
+    // The field the keyboard is up for, unless it's inside the picker being replaced.
+    const focused = document.activeElement as HTMLElement | null;
+    roomFrom.current =
+      focused?.closest(".on-keyboard") && !focused.closest(".popover") ? focused : title.current;
+    focused?.blur();
+  };
+  const setPop = (p: Pop) => {
+    setOpen(p);
+    if (p === "deadline" && open !== "deadline") {
+      makeRoom();
+      return;
+    }
+    inCalendar.current = false;
+    if (madeRoom.current) {
+      madeRoom.current = false;
+      (roomFrom.current ?? title.current)?.focus();
+    } else if (touch && document.activeElement?.closest(".popover")) {
+      // The picker's own field is going away; the keyboard stays for the title.
+      title.current?.focus();
+    }
+  };
+  const pillRow = usePillFade(values);
   // Submits once: a fast second Enter (before the editor closes) is ignored.
   // In keep-open mode the form resets to blank instead (an empty title can't
   // be submitted, so a second Enter is a no-op there too). Refs, so two
@@ -85,7 +147,7 @@ export function TaskEditor({
     if (keepOpen) {
       latest.current = initial;
       setValues(initial);
-      setOpen(null);
+      setPop(null);
     } else {
       submitted.current = true;
     }
@@ -94,9 +156,120 @@ export function TaskEditor({
 
   const repeatItems: MenuItem[] = view.repeat_options.map(([value, label]) => ({ value, label }));
 
-  return (
+  const calendarActions = {
+    onDone: () => setPop(null),
+    onCancel: () => {
+      latest.current = beforeCalendar.current;
+      setValues(beforeCalendar.current);
+      setPop(null);
+    },
+  };
+
+  const pills: ReactNode = (
+    <div ref={pillRow.ref} className="chips" onScroll={pillRow.onScroll}>
+      <DatePicker
+        date={values.date}
+        time={values.time}
+        text={view.date_chip[0]}
+        bucket={view.date_chip[1]}
+        rule={view.repeat_rule}
+        repeat={{
+          items: repeatItems,
+          selected: values.repeat,
+          // A repeat typed in the title isn't one of the menu's choices.
+          text:
+            values.repeat === "none" && view.repeat_rule !== null
+              ? repeatText(view.repeat_rule)
+              : (repeatItems.find((i) => i.value === values.repeat)?.label ?? view.repeat_chip_text),
+          onSelect: (value) => pick({ type: "repeat", value }),
+        }}
+        today={today}
+        open={open}
+        setOpen={setPop}
+        onChange={(date, time) => pick({ type: "date", date, time })}
+        onCalendar={makeRoom}
+        actions={calendarActions}
+      />
+      <DeadlinePicker
+        deadline={values.deadline}
+        text={view.deadline_text}
+        urgent={view.deadline_urgent}
+        today={today}
+        open={open}
+        setOpen={setPop}
+        onChange={(date) => pick({ type: "deadline", date })}
+        actions={calendarActions}
+      />
+      <Menu
+        id="priority"
+        title="Priority"
+        icon={<FlagFilledIcon />}
+        iconClass={flagClass(values.priority)}
+        text={view.priority_text}
+        items={PRIORITY_ITEMS}
+        selected={values.priority}
+        open={open}
+        setOpen={setPop}
+        chipClass={["1", "2", "3"].includes(values.priority) ? `pill-p${values.priority} pill-tinted` : ""}
+        onSelect={(value) => pick({ type: "priority", value })}
+      />
+      <Menu
+        id="location"
+        title="Project / section"
+        icon={locationFace(view.locations, view.location).icon}
+        iconClass={locationFace(view.locations, view.location).iconClass}
+        text={view.location_text}
+        items={locationItems(view.locations)}
+        selected={view.location}
+        open={open}
+        setOpen={setPop}
+        onSelect={(value) => pick(locationPick(value))}
+      />
+      <LabelPicker
+        labels={labels}
+        selected={view.shown_labels}
+        text={view.labels_text}
+        open={open}
+        setOpen={setPop}
+        onToggle={(name) => setValues((v) => toggleLabel(v, name, quickAdd, projects, sections, today))}
+        onChanged={onChanged}
+      />
+      <ReminderPicker
+        reminders={values.reminders}
+        labels={view.reminder_labels}
+        text={view.reminders_text}
+        hasDue={view.has_due}
+        today={today}
+        open={open}
+        setOpen={setPop}
+        onChange={(drafts) => pick({ type: "reminders", drafts })}
+      />
+      <Menu
+        id="repeat"
+        title="Repeat"
+        icon={<RepeatSmallIcon />}
+        text={view.repeat_chip_text}
+        items={repeatItems}
+        selected={values.repeat}
+        open={open}
+        setOpen={setPop}
+        onSelect={(value) => pick({ type: "repeat", value })}
+      />
+    </div>
+  );
+
+  const clickAway = (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes the popover from the form; this is the click-away.
+    // biome-ignore lint/a11y/noStaticElementInteractions: a click-away layer, as in the Dioxus editor.
+    <div className="pop-backdrop" onClick={() => setPop(null)} onWheel={() => setPop(null)} />
+  );
+
+  const form = (
     <form
-      className="editor"
+      className={cx("editor", touch && "on-keyboard", touch && !keyboard.up && "keyboard-down")}
+      style={touch ? { bottom: keyboard.inset + CARD_GAP } : undefined}
+      // Pressing anything but a text field keeps the title focused, so the keyboard stays up.
+      onMouseDown={touch ? keepFocus : undefined}
       onSubmit={(e) => {
         e.preventDefault();
         submit();
@@ -104,25 +277,24 @@ export function TaskEditor({
       onKeyDown={(e) => {
         if (e.key !== "Escape") return;
         e.preventDefault();
-        if (open !== null) setOpen(null);
+        if (open !== null) setPop(null);
         else onCancel();
       }}
     >
-      {open !== null ? (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes the popover from the form; this is the click-away.
-        // biome-ignore lint/a11y/noStaticElementInteractions: a transparent click-away layer, as in the Dioxus editor.
-        <div className="pop-backdrop" onClick={() => setOpen(null)} onWheel={() => setOpen(null)} />
-      ) : null}
+      {!touch && open !== null ? clickAway : null}
       <HighlightedTitle
         segments={view.segments}
         value={values.content}
         placeholder={quickAdd ? "Task name — try “Call mom tomorrow 5pm p1 #Home @phone”" : "Task name"}
-        onInput={(text) => setValues((v) => withTitle(v, text))}
+        onInput={(text) => {
+          if (inCalendar.current) beforeCalendar.current = withTitle(beforeCalendar.current, text);
+          setValues((v) => withTitle(v, text));
+        }}
         onEnter={submit}
         onUnhighlight={(caret) =>
           setValues((v) => (quickAdd ? (unhighlightAt(v, projects, sections, today, caret) ?? v) : v))
         }
-        inputRef={titleRef}
+        inputRef={title}
       />
       {view.preview.length > 0 ? (
         <div className="quick-preview">
@@ -140,92 +312,48 @@ export function TaskEditor({
         value={values.description}
         onChange={(e) => {
           const description = e.target.value;
+          if (inCalendar.current) beforeCalendar.current = { ...beforeCalendar.current, description };
           setValues((v) => ({ ...v, description }));
         }}
       />
-      <div className="chips">
-        <DatePicker
-          date={values.date}
-          time={values.time}
-          text={view.date_chip[0]}
-          bucket={view.date_chip[1]}
-          rule={view.repeat_rule}
-          today={today}
-          open={open}
-          setOpen={setOpen}
-          onChange={(date, time) => pick({ type: "date", date, time })}
-        />
-        <DeadlinePicker
-          deadline={values.deadline}
-          text={view.deadline_text}
-          urgent={view.deadline_urgent}
-          today={today}
-          open={open}
-          setOpen={setOpen}
-          onChange={(date) => pick({ type: "deadline", date })}
-        />
-        <ReminderPicker
-          reminders={values.reminders}
-          labels={view.reminder_labels}
-          text={view.reminders_text}
-          hasDue={view.has_due}
-          today={today}
-          open={open}
-          setOpen={setOpen}
-          onChange={(drafts) => pick({ type: "reminders", drafts })}
-        />
-        <Menu
-          id="priority"
-          title="Priority"
-          icon={<FlagSmallIcon />}
-          iconClass={flagClass(values.priority)}
-          text={view.priority_text}
-          items={PRIORITY_ITEMS}
-          selected={values.priority}
-          open={open}
-          setOpen={setOpen}
-          onSelect={(value) => pick({ type: "priority", value })}
-        />
-        <Menu
-          id="repeat"
-          title="Repeat"
-          icon={<RepeatSmallIcon />}
-          text={view.repeat_chip_text}
-          items={repeatItems}
-          selected={values.repeat}
-          open={open}
-          setOpen={setOpen}
-          onSelect={(value) => pick({ type: "repeat", value })}
-        />
-        <Menu
-          id="location"
-          title="Project / section"
-          icon={<HashSmallIcon />}
-          text={view.location_text}
-          items={locationItems(view.locations)}
-          selected={view.location}
-          open={open}
-          setOpen={setOpen}
-          onSelect={(value) => pick(locationPick(value))}
-        />
-        <LabelPicker
-          labels={labels}
-          selected={view.shown_labels}
-          text={view.labels_text}
-          open={open}
-          setOpen={setOpen}
-          onToggle={(name) => setValues((v) => toggleLabel(v, name, quickAdd, projects, sections, today))}
-          onChanged={onChanged}
-        />
-      </div>
-      <div className="editor-footer">
-        <button type="button" className="btn btn-cancel" onClick={onCancel}>
-          Cancel
-        </button>
-        <button type="submit" className="btn btn-add" disabled={!view.can_submit}>
-          {submitText}
-        </button>
-      </div>
+      {touch ? (
+        <div className={cx("editor-actions", pillRow.fadeClass)}>
+          {pills}
+          <button type="submit" className="btn-save" aria-label={submitText} disabled={!view.can_submit}>
+            <ArrowUpIcon />
+          </button>
+        </div>
+      ) : (
+        pills
+      )}
+      {touch ? null : (
+        <div className="editor-footer">
+          <button type="button" className="btn btn-cancel" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-add" disabled={!view.can_submit}>
+            {submitText}
+          </button>
+        </div>
+      )}
     </form>
+  );
+  // On touch it leaves the page: a moving sheet or pane above it would carry a fixed card along.
+  if (!touch) return form;
+  // The dim layer sits beside the card: inside it, it would dim the card's own
+  // color. One element throughout, so a picker closing doesn't restart its fade.
+  return createPortal(
+    <>
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: Escape acts from the form; this is the tap outside. */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: a dimmed tap-away layer behind the card. */}
+      <div
+        className={open !== null ? "editor-scrim pop-backdrop" : "editor-scrim"}
+        onClick={open !== null ? () => setPop(null) : onCancel}
+        onWheel={open !== null ? () => setPop(null) : undefined}
+        onMouseDown={keepFocus}
+      />
+      {form}
+    </>,
+    document.body,
   );
 }

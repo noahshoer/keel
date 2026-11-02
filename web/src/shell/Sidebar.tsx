@@ -1,9 +1,13 @@
 // The sidebar, with the markup and class names of crates/ui/src/sidebar.rs
 // so app.css applies unchanged: the fixed views, then projects, labels and
 // filters, each with its add form and row actions. The gear opens Settings.
-import { useRef, useState } from "react";
+import { Children, useMemo, useRef, useState } from "react";
 import type { Loaded } from "../app/load";
-import type { View } from "../app/view";
+import { UPCOMING_DAYS, type View } from "../app/view";
+import type { Id } from "../bindings";
+import { localToday } from "../clock";
+import { sidebarCounts } from "../core";
+import { labelTagColor } from "../editor/labelColors";
 import {
   addFilter,
   addLabel,
@@ -21,6 +25,7 @@ import { FilterForm, FilterRow } from "./FilterForm";
 import { openAndFocus } from "./focus";
 import {
   GearIcon,
+  HashSmallIcon,
   InboxIcon,
   Logo,
   MonitorIcon,
@@ -33,7 +38,7 @@ import {
   UpcomingIcon,
 } from "./icons";
 import { ManagedRow } from "./ManagedRow";
-import { currentPlatform, searchTooltip } from "./platform";
+import { currentPlatform, searchTooltip, useWideLayout } from "./platform";
 import { nextTheme, type Theme, themeLabel } from "./theme";
 
 const navClass = (active: boolean) => (active ? "nav-item active" : "nav-item");
@@ -47,6 +52,11 @@ function SectionHead({ title, add, onAdd }: { title: string; add: string; onAdd:
       </button>
     </div>
   );
+}
+
+/** A rounded card of sidebar rows; an empty list draws none. */
+function NavCard({ children }: { children: React.ReactNode }) {
+  return Children.toArray(children).length > 0 ? <div className="nav-card">{children}</div> : null;
 }
 
 /** "Name, then Enter": the add-project and add-label forms. */
@@ -88,6 +98,8 @@ export function Sidebar({
   setTheme,
   icon,
   setIcon,
+  searchQuery,
+  setSearchQuery,
   onChanged,
 }: {
   view: View;
@@ -99,8 +111,11 @@ export function Sidebar({
   /** The completion mark, chosen in Settings. */
   icon: CompletionIcon;
   setIcon: (i: CompletionIcon) => void;
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
   onChanged: () => void;
 }) {
+  const wide = useWideLayout();
   const [showSettings, setShowSettings] = useState(false);
   const [adding, setAdding] = useState<"project" | "label" | "filter" | null>(null);
   const projectField = useRef<HTMLInputElement>(null);
@@ -111,20 +126,20 @@ export function Sidebar({
   // Every change reloads; a failed one too (the backend's state is the truth).
   const then = (p: Promise<unknown>) => p.then(onChanged, onChanged);
   const day = new Date().getDate();
-  const count = loaded.todayCount > 0 ? String(loaded.todayCount) : "";
+  // A wasm call serializes every task, and a desktop search re-renders this per keystroke.
+  const today = localToday();
+  const counts = useMemo(() => sidebarCounts(loaded.all, today, UPCOMING_DAYS), [loaded.all, today]);
+  const ofProject = (id: Id) => counts.projects.find((c) => c.project_id === id)?.count ?? 0;
+  const countOf = { inbox: ofProject(loaded.inbox.id), today: counts.today, upcoming: counts.upcoming };
   const themeIcon = theme === "light" ? <SunIcon /> : theme === "dark" ? <MoonIcon /> : <MonitorIcon />;
 
-  const fixed = (kind: "search" | "inbox" | "today" | "upcoming", icon: React.ReactNode, label: string) => (
+  const fixed = (kind: "inbox" | "today" | "upcoming", icon: React.ReactNode, label: string) => (
     // biome-ignore lint/a11y/useKeyWithClickEvents: same markup as the Dioxus sidebar (div rows); "/" and Cmd+K open Search.
     // biome-ignore lint/a11y/noStaticElementInteractions: see above.
-    <div
-      className={navClass(view.kind === kind)}
-      title={kind === "search" ? searchTooltip(currentPlatform()) : undefined}
-      onClick={() => setView({ kind })}
-    >
+    <div className={navClass(view.kind === kind)} onClick={() => setView({ kind })}>
       <span className={`nav-icon ${kind}`}>{icon}</span>
       {label}
-      {kind === "today" ? <span className="count">{count}</span> : null}
+      {countOf[kind] > 0 ? <span className="count">{countOf[kind]}</span> : null}
     </div>
   );
 
@@ -132,9 +147,9 @@ export function Sidebar({
     <aside className="sidebar">
       <div className="brand">
         <div className="brand-mark" title="Keel">
-          <Logo size={28} />
+          <Logo size={36} />
         </div>
-        Keel
+        <span className="brand-name">Keel</span>
         <button
           type="button"
           className="icon-btn theme-toggle"
@@ -160,10 +175,32 @@ export function Sidebar({
           setIcon={setIcon}
         />
       ) : null}
-      {fixed("search", <SearchIcon />, "Search")}
-      {fixed("inbox", <InboxIcon />, "Inbox")}
-      {fixed("today", <TodayIcon day={day} />, "Today")}
-      {fixed("upcoming", <UpcomingIcon />, "Upcoming")}
+      <div className="sidebar-search">
+        <span className="sidebar-search-icon">
+          <SearchIcon />
+        </span>
+        {/* On a phone it's a door to the Search screen; on desktop results fill the main area. */}
+        <input
+          className="sidebar-search-input"
+          type="search"
+          placeholder="Search"
+          title={searchTooltip(currentPlatform())}
+          spellCheck={false}
+          readOnly={!wide}
+          value={wide ? searchQuery : ""}
+          onClick={wide ? undefined : () => setView({ kind: "search" })}
+          onFocus={wide && view.kind !== "search" ? () => setView({ kind: "search" }) : undefined}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setSearchQuery("");
+          }}
+        />
+      </div>
+      <div className="nav-card">
+        {fixed("inbox", <InboxIcon />, "Inbox")}
+        {fixed("today", <TodayIcon day={day} />, "Today")}
+        {fixed("upcoming", <UpcomingIcon />, "Upcoming")}
+      </div>
 
       <SectionHead title="My Projects" add="Add project" onAdd={() => toggle("project", projectField)} />
       {adding === "project" ? (
@@ -173,29 +210,32 @@ export function Sidebar({
           onAdd={(n) => then(addProject(n)).then(() => setAdding(null))}
         />
       ) : null}
-      {loaded.projects
-        .filter((p) => !p.is_inbox)
-        .map((p) => (
-          <ManagedRow
-            key={p.id}
-            name={p.name}
-            icon="#"
-            iconClass="hash"
-            active={view.kind === "project" && view.id === p.id}
-            kind="project"
-            menuId={`project:${p.id}`}
-            onOpen={() => setView({ kind: "project", id: p.id, name: p.name })}
-            onRename={(name) => {
-              void then(renameProject(p.id, name));
-              // Keep the open view's title in sync with the new name.
-              if (view.kind === "project" && view.id === p.id) setView({ kind: "project", id: p.id, name });
-            }}
-            onDelete={() => {
-              void then(deleteProject(p.id));
-              if (view.kind === "project" && view.id === p.id) setView({ kind: "inbox" });
-            }}
-          />
-        ))}
+      <NavCard>
+        {loaded.projects
+          .filter((p) => !p.is_inbox)
+          .map((p) => (
+            <ManagedRow
+              key={p.id}
+              name={p.name}
+              count={ofProject(p.id)}
+              icon={<HashSmallIcon />}
+              iconClass="hash"
+              active={view.kind === "project" && view.id === p.id}
+              kind="project"
+              menuId={`project:${p.id}`}
+              onOpen={() => setView({ kind: "project", id: p.id, name: p.name })}
+              onRename={(name) => {
+                void then(renameProject(p.id, name));
+                // Keep the open view's title in sync with the new name.
+                if (view.kind === "project" && view.id === p.id) setView({ kind: "project", id: p.id, name });
+              }}
+              onDelete={() => {
+                void then(deleteProject(p.id));
+                if (view.kind === "project" && view.id === p.id) setView({ kind: "inbox" });
+              }}
+            />
+          ))}
+      </NavCard>
 
       <SectionHead title="Labels" add="Add label" onAdd={() => toggle("label", labelField)} />
       {adding === "label" ? (
@@ -205,29 +245,35 @@ export function Sidebar({
           onAdd={(n) => then(addLabel(n)).then(() => setAdding(null))}
         />
       ) : null}
-      {loaded.labels.map((l) => {
-        const open = view.kind === "label" && view.name.toLowerCase() === l.name.toLowerCase();
-        return (
-          <ManagedRow
-            key={l.id}
-            name={l.name}
-            icon={<TagIcon />}
-            iconClass="label"
-            active={view.kind === "label" && view.name === l.name}
-            kind="label"
-            menuId={`label:${l.id}`}
-            onOpen={() => setView({ kind: "label", name: l.name })}
-            onRename={(name) => {
-              void then(renameLabel(l.id, name));
-              if (open) setView({ kind: "label", name });
-            }}
-            onDelete={() => {
-              void then(deleteLabel(l.id));
-              if (open) setView({ kind: "inbox" });
-            }}
-          />
-        );
-      })}
+      <NavCard>
+        {loaded.labels.map((l) => {
+          const open = view.kind === "label" && view.name.toLowerCase() === l.name.toLowerCase();
+          return (
+            <ManagedRow
+              key={l.id}
+              name={l.name}
+              icon={
+                <span className="nav-tag" style={{ color: labelTagColor(l.color) }}>
+                  <TagIcon />
+                </span>
+              }
+              iconClass="label"
+              active={view.kind === "label" && view.name === l.name}
+              kind="label"
+              menuId={`label:${l.id}`}
+              onOpen={() => setView({ kind: "label", name: l.name })}
+              onRename={(name) => {
+                void then(renameLabel(l.id, name));
+                if (open) setView({ kind: "label", name });
+              }}
+              onDelete={() => {
+                void then(deleteLabel(l.id));
+                if (open) setView({ kind: "inbox" });
+              }}
+            />
+          );
+        })}
+      </NavCard>
 
       <SectionHead title="Filters" add="Add filter" onAdd={() => toggle("filter", filterField)} />
       {adding === "filter" ? (
@@ -247,24 +293,26 @@ export function Sidebar({
           onCancel={() => setAdding(null)}
         />
       ) : null}
-      {loaded.filters.map((f) => (
-        <FilterRow
-          key={f.id}
-          filter={f}
-          active={view.kind === "filter" && view.id === f.id}
-          onOpen={() => setView({ kind: "filter", id: f.id, name: f.name, query: f.query })}
-          onSave={(name, query) => {
-            void then(updateFilter(f.id, name, query));
-            // Keep the open view in sync with the edited filter.
-            if (view.kind === "filter" && view.id === f.id)
-              setView({ kind: "filter", id: f.id, name, query });
-          }}
-          onDelete={() => {
-            void then(deleteFilter(f.id));
-            if (view.kind === "filter" && view.id === f.id) setView({ kind: "inbox" });
-          }}
-        />
-      ))}
+      <NavCard>
+        {loaded.filters.map((f) => (
+          <FilterRow
+            key={f.id}
+            filter={f}
+            active={view.kind === "filter" && view.id === f.id}
+            onOpen={() => setView({ kind: "filter", id: f.id, name: f.name, query: f.query })}
+            onSave={(name, query) => {
+              void then(updateFilter(f.id, name, query));
+              // Keep the open view in sync with the edited filter.
+              if (view.kind === "filter" && view.id === f.id)
+                setView({ kind: "filter", id: f.id, name, query });
+            }}
+            onDelete={() => {
+              void then(deleteFilter(f.id));
+              if (view.kind === "filter" && view.id === f.id) setView({ kind: "inbox" });
+            }}
+          />
+        ))}
+      </NavCard>
     </aside>
   );
 }

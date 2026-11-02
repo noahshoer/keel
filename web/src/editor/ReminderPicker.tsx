@@ -1,10 +1,10 @@
-// The reminders chip and popover: current reminders (removable), presets
-// relative to the due time, and a custom time typed in plain words
+// The reminders chip and popover: a custom time typed in plain words, presets
+// relative to the due time (choose several), and any custom ones, removable
 // (crates/ui/src/pickers.rs `ReminderPicker`).
 import { useRef, useState } from "react";
 import type { ReminderDraft } from "../bindings";
 import { customReminderAt, reminderPresets } from "../core";
-import { BellSmallIcon, PlusIcon } from "../shell/icons";
+import { BellSmallIcon, CheckSmallIcon, XSmallIcon } from "../shell/icons";
 import { cx, type Face, type PopProps } from "./pop";
 import { usePlacedPopover } from "./popover";
 
@@ -25,49 +25,16 @@ function ReminderMenu({
   usePlacedPopover(ref);
   const [custom, setCustom] = useState("");
   const [bad, setBad] = useState(false);
+  const presets = reminderPresets();
   const add = (draft: ReminderDraft) => {
     const dup = reminders.some((r) => r.minuteOffset === draft.minuteOffset && r.at === draft.at);
     onChange(dup ? reminders : [...reminders, draft]);
   };
   return (
     <div ref={ref} className="popover menu reminder-pop">
-      {reminders.length === 0 ? <div className="label-empty">No reminders yet</div> : null}
-      {reminders.map((_, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: new drafts have no id; the list is positional, as in Dioxus.
-        <div key={i} className="reminder-item">
-          <span className="menu-icon">
-            <BellSmallIcon />
-          </span>
-          <span className="menu-label">{labels[i] ?? ""}</span>
-          <button
-            type="button"
-            className="icon-btn"
-            title="Remove reminder"
-            onClick={() => onChange(reminders.filter((_, j) => j !== i))}
-          >
-            ×
-          </button>
-        </div>
-      ))}
-      <div className="menu-divider" />
-      {!hasDue ? <div className="label-empty">Give the task a date to use these:</div> : null}
-      {reminderPresets().map(([m, text]) => (
-        <button
-          key={`p${m}`}
-          type="button"
-          className="menu-item"
-          disabled={!hasDue}
-          onClick={() => add({ id: null, minuteOffset: m, at: null })}
-        >
-          <span className="menu-icon">
-            <PlusIcon size={14} />
-          </span>
-          <span className="menu-label">{text}</span>
-        </button>
-      ))}
       <input
         className={bad ? "label-new bad" : "label-new"}
-        placeholder="Custom, e.g. tomorrow 9am, then Enter"
+        placeholder="Custom, e.g. tomorrow 9am"
         value={custom}
         onChange={(e) => {
           setBad(false);
@@ -90,6 +57,49 @@ function ReminderMenu({
       {bad ? (
         <div className="filter-problem">Needs a time, like “friday 3pm” or “in 2 days at 9am”.</div>
       ) : null}
+      {!hasDue ? <div className="label-empty">Give the task a date to use these:</div> : null}
+      {presets.map(([m, text]) => {
+        const on = reminders.some((r) => r.minuteOffset === m);
+        return (
+          <button
+            key={`p${m}`}
+            type="button"
+            className={cx("menu-item", on && "checked")}
+            disabled={!hasDue}
+            onClick={() =>
+              on
+                ? onChange(reminders.filter((r) => r.minuteOffset !== m))
+                : add({ id: null, minuteOffset: m, at: null })
+            }
+          >
+            <span className="menu-label">{text}</span>
+            {on ? (
+              <span className="menu-check">
+                <CheckSmallIcon />
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+      {reminders.map((r, i) =>
+        presets.some(([m]) => m === r.minuteOffset) ? null : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: new drafts have no id; the list is positional, as in Dioxus.
+          <div key={i} className="reminder-item">
+            <span className="menu-icon">
+              <BellSmallIcon />
+            </span>
+            <span className="menu-label">{labels[i] ?? ""}</span>
+            <button
+              type="button"
+              className="icon-btn"
+              title="Remove reminder"
+              onClick={() => onChange(reminders.filter((_, j) => j !== i))}
+            >
+              <XSmallIcon />
+            </button>
+          </div>
+        ),
+      )}
     </div>
   );
 }

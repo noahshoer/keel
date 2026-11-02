@@ -1,8 +1,17 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeAll, expect, it } from "vitest";
+import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import { App } from "../app/App";
+import { UPCOMING_DAYS } from "../app/view";
+import { localToday } from "../clock";
+import { sidebarCounts } from "../core";
+import { addLabel } from "../ipc/actions";
 import { invoke } from "../ipc/invoke";
 import { loadCoreForTests } from "../test/wasm";
+
+vi.mock("../core", async (original) => {
+  const actual = await original<typeof import("../core")>();
+  return { ...actual, sidebarCounts: vi.fn(actual.sidebarCounts) };
+});
 
 beforeAll(() => {
   loadCoreForTests();
@@ -23,11 +32,134 @@ async function start() {
   return r;
 }
 
+it("the brand row has the logo first and the theme and settings buttons last", async () => {
+  await start();
+  const kids = [...(sidebar().querySelector(".brand") as HTMLElement).children].map((c) => c.className);
+  expect(kids[0]).toContain("brand-mark");
+  expect(kids.slice(-2).map((c) => c.split(" ")[1])).toEqual(["theme-toggle", "settings-btn"]);
+  expect(sidebar().querySelector(".brand")?.textContent).toBe("Keel");
+  expect(kids[1]).toContain("brand-name");
+});
+
+it("a search field sits under the brand row, and opens Search on a phone", async () => {
+  await start();
+  const field = sidebar().querySelector(".sidebar-search-input") as HTMLInputElement;
+  const brand = sidebar().querySelector(".brand") as HTMLElement;
+  expect(brand.nextElementSibling?.contains(field)).toBe(true);
+  expect(field.readOnly).toBe(true);
+  fireEvent.click(field);
+  await waitFor(() => expect(title()).toBe("Search"));
+  expect(await screen.findByPlaceholderText("Search tasks, descriptions and labels")).toBeTruthy();
+  expect(within(sidebar()).queryByText("Search", { selector: ".nav-item" })).toBeNull();
+});
+
+it("on desktop the field types the search, and results fill the main area", async () => {
+  vi.stubGlobal("matchMedia", (q: string) => ({
+    matches: q.includes("min-width"),
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+  await start();
+  const field = sidebar().querySelector(".sidebar-search-input") as HTMLInputElement;
+  expect(field.readOnly).toBe(false);
+  fireEvent.focus(field);
+  await waitFor(() => expect(title()).toBe("Search"));
+  expect(document.querySelector(".search-input")).toBeNull();
+  fireEvent.change(field, { target: { value: "laundry" } });
+  await waitFor(() =>
+    expect(document.querySelector(".content > .view-sub")?.textContent).toBe("2 results for laundry"),
+  );
+  expect(document.querySelector("main.main .task-card .task-row")).not.toBeNull();
+  vi.unstubAllGlobals();
+});
+
+it("/ focuses the search on desktop", async () => {
+  vi.stubGlobal("matchMedia", (q: string) => ({
+    matches: q.includes("min-width"),
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+  await start();
+  fireEvent.keyDown(document, { key: "/" });
+  await waitFor(() => expect(title()).toBe("Search"));
+  await waitFor(() => expect(document.activeElement?.className).toBe("sidebar-search-input"));
+  vi.unstubAllGlobals();
+});
+
+it("the fixed views, projects, labels and filters each sit in a card", async () => {
+  await start();
+  const cards = [...sidebar().querySelectorAll(".nav-card")];
+  expect(cards.length).toBeGreaterThanOrEqual(4);
+  expect(cards[0]?.textContent).toContain("Inbox");
+  expect(cards[0]?.textContent).toContain("Upcoming");
+  expect([...sidebar().querySelectorAll(".section-head")].map((h) => h.textContent)).toEqual([
+    "My Projects",
+    "Labels",
+    "Filters",
+  ]);
+});
+
+it("rows show how many tasks each view lists", async () => {
+  await start();
+  const count = (name: string) =>
+    within(sidebar()).getByText(name).closest(".nav-item")?.querySelector(".count")?.textContent;
+  // From the mock's tasks, through keel-core's rule (its own tests cover the rule).
+  const all = await invoke("all_tasks", {});
+  const counts = sidebarCounts(all, localToday(), UPCOMING_DAYS);
+  const ofProject = (id: string) => String(counts.projects.find((c) => c.project_id === id)?.count ?? "");
+  expect(count("Today")).toBe(String(counts.today));
+  expect(count("Upcoming")).toBe(String(counts.upcoming));
+  expect(count("Inbox")).toBe(ofProject("p-inbox"));
+  expect(count("Home")).toBe(ofProject("p-home"));
+  expect(count("Home")).not.toBe("");
+});
+
+it("typing a desktop search doesn't count the sidebar's tasks again", async () => {
+  vi.stubGlobal("matchMedia", (q: string) => ({
+    matches: q.includes("min-width"),
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+  await start();
+  const field = sidebar().querySelector(".sidebar-search-input") as HTMLInputElement;
+  fireEvent.focus(field);
+  await waitFor(() => expect(title()).toBe("Search"));
+  await act(async () => {});
+  const before = vi.mocked(sidebarCounts).mock.calls.length;
+  fireEvent.change(field, { target: { value: "l" } });
+  fireEvent.change(field, { target: { value: "la" } });
+  expect(vi.mocked(sidebarCounts).mock.calls.length).toBe(before);
+  vi.unstubAllGlobals();
+});
+
+it("a project's icon is a bold Phosphor icon, not a typed #", async () => {
+  await start();
+  const icon = within(sidebar()).getByText("Home").closest(".nav-item")?.querySelector(".nav-icon");
+  expect(icon?.textContent).toBe("");
+  expect(icon?.querySelector("svg")).not.toBeNull();
+});
+
+it("labels show tags in their color", async () => {
+  await start();
+  const row = within(sidebar()).getByText("errand").closest(".nav-item") as HTMLElement;
+  const tag = row.querySelector<HTMLElement>(".nav-icon.label [style]");
+  expect(tag?.style.color).toMatch(/^var\(--label-/);
+  expect(tag?.querySelector("svg")).not.toBeNull();
+});
+
+it("a label with no color has a plain tag, like the other nav icons", async () => {
+  await addLabel("plain");
+  await start();
+  const row = within(sidebar()).getByText("plain").closest(".nav-item") as HTMLElement;
+  const tag = row.querySelector<HTMLElement>(".nav-icon.label .nav-tag");
+  expect(tag?.style.color).toBe("");
+});
+
 it("nav rows switch the view and mark it active", async () => {
   await start();
   fireEvent.click(within(sidebar()).getByText("Upcoming"));
   await waitFor(() => expect(title()).toBe("Upcoming"));
-  expect(active()).toBe("Upcoming");
+  expect(active()).toContain("Upcoming");
   fireEvent.click(within(sidebar()).getByText("Home"));
   await waitFor(() => expect(title()).toBe("Home"));
   expect(active()).toContain("Home");
@@ -206,7 +338,7 @@ it("the gear opens Settings and × closes it", async () => {
   expect(document.querySelector(".modal")).toBeNull();
   fireEvent.click(sidebar().querySelector(".settings-btn") as HTMLElement);
   await screen.findByText("Task reminders");
-  expect(document.querySelector(".modal-head h2")?.textContent).toBe("Settings");
+  expect(document.querySelector(".modal-title")?.textContent).toBe("Settings");
   fireEvent.click(within(document.querySelector(".modal-head") as HTMLElement).getByTitle("Close"));
   expect(document.querySelector(".modal")).toBeNull();
 });

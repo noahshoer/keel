@@ -17,6 +17,8 @@ import type {
   Id,
   ImportSummary,
   Label,
+  LabelChoice,
+  LabelGroup,
   MenuKind,
   MonthView,
   Progress,
@@ -27,6 +29,7 @@ import type {
   ReminderMenus,
   ReminderSettings,
   Section,
+  SidebarCounts,
   Task,
   TaskDetail,
 } from "../bindings";
@@ -95,6 +98,36 @@ export function cards(matched: Task[], all: Task[], mode: CardMode): Card[] {
 export function dueBucket(due: string, today: string): DueBucket {
   ready();
   return core.dueBucket(due, today);
+}
+
+/** A streak in words, in its repeat's unit: "4 day streak" or "Streak of 4". */
+export function streakText(task: Task): string {
+  ready();
+  return core.streakText(task);
+}
+
+/** The numbers beside the sidebar's rows: how many tasks each view lists. */
+export function sidebarCounts(all: Task[], today: string, upcomingDays: number): SidebarCounts {
+  ready();
+  return core.sidebarCounts(all, today, upcomingDays);
+}
+
+/** The labels picker's rows: those matching `query`, each marked if chosen. */
+export function labelChoices(labels: Label[], selected: string[], query: string): LabelChoice[] {
+  ready();
+  return core.labelChoices(labels, selected, query);
+}
+
+/** Whether `name` is among the chosen labels. */
+export function labelChosen(selected: string[], name: string): boolean {
+  ready();
+  return core.labelChosen(selected, name);
+}
+
+/** A task's labels grouped by color, in added order. */
+export function labelGroups(taskLabels: string[], labels: Label[]): LabelGroup[] {
+  ready();
+  return core.labelGroups(taskLabels, labels);
 }
 
 /** True when there is at least one counted sub-task and all are checked. */

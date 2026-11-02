@@ -1,7 +1,7 @@
-// The Settings window (the sidebar's gear), with the markup and class names
-// of crates/ui/src/settings.rs so app.css applies unchanged: notification
-// preferences, the completion mark, diagnostics logging and the Todoist
-// import. Notifications are per device, so these never sync.
+// The Settings window (the sidebar's gear): grouped cards of notification
+// preferences, the completion mark, the Todoist import and diagnostics
+// logging. A full screen on the phone, a dialog on desktop. Notifications are
+// per device, so these never sync.
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { MenuKind, PlannedReminder, ReminderSettings, SettingMenu } from "../bindings";
 import { localToday } from "../clock";
@@ -15,11 +15,13 @@ import {
   BellSmallIcon,
   CalendarSmallIcon,
   CheckSmallIcon,
+  ChevronLeftIcon,
   ClockSmallIcon,
   DoneMark,
   MonitorIcon,
   NoDateIcon,
   SunIcon,
+  XIcon,
 } from "../shell/icons";
 import { deliveryNote, permissionHint, projectNameOf, turnOn } from "./rules";
 
@@ -268,105 +270,118 @@ export function Settings({
           <div className="pop-backdrop" onClick={() => setOpen(null)} />
         ) : null}
         <div className="modal-head">
-          <h2>Settings</h2>
-          <button type="button" className="icon-btn" title="Close" onClick={onClose}>
-            ×
+          <button type="button" className="icon-btn back-btn" aria-label="Back" onClick={onClose}>
+            <ChevronLeftIcon />
+          </button>
+          <button type="button" className="icon-btn modal-close" title="Close" onClick={onClose}>
+            <XIcon />
           </button>
         </div>
+        <h2 className="modal-title">Settings</h2>
         <h3 className="modal-section">Notifications</h3>
-        <div className="setting-row">
-          <div className="setting-text">
-            <div className="setting-name">Task reminders</div>
-            <div className="setting-hint">{permissionHint(permission, enabled)}</div>
-          </div>
-          <Switch on={enabled} title="Task reminders" onClick={toggle} />
-        </div>
-        {message !== null ? <div className="setting-warning">{message}</div> : null}
-        <div className={enabled ? "setting-group" : "setting-group disabled"}>
-          <div className="setting-row">
-            <div className="setting-name">Remind me</div>
-            {menu("offset", "Offset", "Remind me", menus.offset, <ClockSmallIcon />)}
-          </div>
-          <div className="setting-row">
-            <div className="setting-name">Tasks without a time</div>
-            {menu("allday", "AllDay", "Tasks without a time", menus.all_day, <CalendarSmallIcon />)}
-          </div>
+        <div className="settings-card">
           <div className="setting-row">
             <div className="setting-text">
-              <div className="setting-name">Daily summary</div>
-              <div className="setting-hint">How many tasks are due that day</div>
+              <div className="setting-name">Task reminders</div>
+              <div className="setting-hint">{permissionHint(permission, enabled)}</div>
             </div>
-            {menu("summary", "Summary", "Daily summary", menus.summary, <SunIcon />)}
+            <Switch on={enabled} title="Task reminders" onClick={toggle} />
           </div>
+          {message !== null ? <div className="setting-warning">{message}</div> : null}
+          <div className={enabled ? "setting-group" : "setting-group disabled"}>
+            <div className="setting-row">
+              <div className="setting-name">Remind me</div>
+              {menu("offset", "Offset", "Remind me", menus.offset, <ClockSmallIcon />)}
+            </div>
+            <div className="setting-row">
+              <div className="setting-name">Tasks without a time</div>
+              {menu("allday", "AllDay", "Tasks without a time", menus.all_day, <CalendarSmallIcon />)}
+            </div>
+            <div className="setting-row">
+              <div className="setting-text">
+                <div className="setting-name">Daily summary</div>
+                <div className="setting-hint">How many tasks are due that day</div>
+              </div>
+              {menu("summary", "Summary", "Daily summary", menus.summary, <SunIcon />)}
+            </div>
+            <div className="setting-row">
+              <div className="setting-name">Coming up</div>
+              <button
+                type="button"
+                className="btn btn-cancel"
+                onClick={() => {
+                  invoke("test_notification", {}).catch((e: unknown) => setMessage(String(e)));
+                }}
+              >
+                Send test notification
+              </button>
+            </div>
+            {upcoming.length === 0 ? (
+              <div className="setting-hint upcoming-empty">
+                {enabled
+                  ? "No reminders in the next two weeks."
+                  : "Turn on reminders to see what's coming up."}
+              </div>
+            ) : (
+              <ul className="upcoming-list">
+                {upcoming.map((r) => (
+                  <li key={r.id}>
+                    <span className="upcoming-when">{upcomingWhen(r.at, localToday())}</span>
+                    <span className="upcoming-title">
+                      {r.task_id !== null ? r.title : `Daily summary · ${r.body}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+        <h3 className="modal-section">Appearance</h3>
+        <div className="settings-card">
+          <CompletionSetting icon={icon} setIcon={setIcon} />
+        </div>
+        <h3 className="modal-section">Import</h3>
+        <div className="settings-card">
           <div className="setting-row">
-            <div className="setting-name">Coming up</div>
-            <button
-              type="button"
-              className="btn btn-cancel"
-              onClick={() => {
-                invoke("test_notification", {}).catch((e: unknown) => setMessage(String(e)));
-              }}
-            >
-              Send test notification
-            </button>
-          </div>
-          {upcoming.length === 0 ? (
-            <div className="setting-hint upcoming-empty">
-              {enabled ? "No reminders in the next two weeks." : "Turn on reminders to see what's coming up."}
+            <div className="setting-text">
+              <div className="setting-name">From Todoist</div>
+              <div className="setting-hint">
+                In Todoist, open a project → ⋯ → Manage data → Export as CSV. Each file becomes a new project.
+              </div>
             </div>
-          ) : (
-            <ul className="upcoming-list">
-              {upcoming.map((r) => (
-                <li key={r.id}>
-                  <span className="upcoming-when">{upcomingWhen(r.at, localToday())}</span>
-                  <span className="upcoming-title">
-                    {r.task_id !== null ? r.title : `Daily summary · ${r.body}`}
-                  </span>
+            <label className={importing ? "btn btn-cancel file-btn busy" : "btn btn-cancel file-btn"}>
+              {importing ? "Importing…" : "Choose CSV files"}
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                multiple
+                disabled={importing}
+                onChange={(e) => importFiles([...(e.currentTarget.files ?? [])])}
+              />
+            </label>
+          </div>
+          {imports.length > 0 ? (
+            <ul className="import-results">
+              {imports.map((l, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: lines are only ever appended.
+                <li key={i} className={l.ok ? "ok" : "bad"}>
+                  {l.ok ? <CheckSmallIcon /> : <NoDateIcon />}
+                  <span>{l.text}</span>
                 </li>
               ))}
             </ul>
-          )}
+          ) : null}
         </div>
-        <h3 className="modal-section">Appearance</h3>
-        <CompletionSetting icon={icon} setIcon={setIcon} />
         <h3 className="modal-section">Diagnostics</h3>
-        <div className="setting-row">
-          <div className="setting-text">
-            <div className="setting-name">Diagnostics logging</div>
-            <div className="setting-hint">Writes a log for bug reports. Off by default.</div>
-          </div>
-          <Switch on={diagOn} title="Diagnostics logging" onClick={toggleDiag} />
-        </div>
-        <h3 className="modal-section">Import</h3>
-        <div className="setting-row">
-          <div className="setting-text">
-            <div className="setting-name">From Todoist</div>
-            <div className="setting-hint">
-              In Todoist, open a project → ⋯ → Manage data → Export as CSV. Each file becomes a new project.
+        <div className="settings-card">
+          <div className="setting-row">
+            <div className="setting-text">
+              <div className="setting-name">Diagnostics logging</div>
+              <div className="setting-hint">Writes a log for bug reports. Off by default.</div>
             </div>
+            <Switch on={diagOn} title="Diagnostics logging" onClick={toggleDiag} />
           </div>
-          <label className={importing ? "btn btn-cancel file-btn busy" : "btn btn-cancel file-btn"}>
-            {importing ? "Importing…" : "Choose CSV files"}
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              multiple
-              disabled={importing}
-              onChange={(e) => importFiles([...(e.currentTarget.files ?? [])])}
-            />
-          </label>
         </div>
-        {imports.length > 0 ? (
-          <ul className="import-results">
-            {imports.map((l, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: lines are only ever appended.
-              <li key={i} className={l.ok ? "ok" : "bad"}>
-                {l.ok ? <CheckSmallIcon /> : <NoDateIcon />}
-                <span>{l.text}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
         {whenClosed !== null ? (
           <p className="modal-foot">
             {whenClosed ? <BellSmallIcon /> : <MonitorIcon />}

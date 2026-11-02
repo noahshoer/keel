@@ -22,7 +22,7 @@ pub enum Field {
 }
 
 const ORDER: [Field; 7] =
-    [Field::Description, Field::Date, Field::Deadline, Field::Priority, Field::Labels, Field::Reminders, Field::Location];
+    [Field::Description, Field::Date, Field::Reminders, Field::Deadline, Field::Priority, Field::Location, Field::Labels];
 
 /// A dotted pill for something without a value.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
@@ -43,7 +43,7 @@ impl Missing {
             Missing::Field(Field::Priority) => "+ Priority",
             Missing::Field(Field::Labels) => "+ Labels",
             Missing::Field(Field::Reminders) => "+ Reminders",
-            Missing::Field(Field::Location) => "+ Location",
+            Missing::Field(Field::Location) => "+ Project",
             Missing::Repeat => "+ Repeat",
         }
     }
@@ -161,11 +161,31 @@ mod tests {
             kinds(&missing),
             vec![
                 Missing::Repeat,
-                Missing::Field(Field::Deadline),
                 Missing::Field(Field::Reminders),
+                Missing::Field(Field::Deadline),
                 Missing::Field(Field::Location),
             ]
         );
+    }
+
+    #[test]
+    fn layout_runs_date_reminders_deadline_priority_project_labels() {
+        let mut v = EditorValues::blank(Id::from("P"), None, "2026-11-01".into(), vec!["a".into()]);
+        v.deadline = "2026-11-02".into();
+        v.priority = "1".into();
+        v.reminders = vec![crate::editor::ReminderDraft { id: None, minute_offset: Some(0), at: None }];
+        assert_eq!(
+            field_layout(&v, &inbox()).fields,
+            vec![Field::Date, Field::Reminders, Field::Deadline, Field::Priority, Field::Location, Field::Labels]
+        );
+    }
+
+    #[test]
+    fn an_inbox_tasks_pill_says_project() {
+        let v = EditorValues::blank(inbox(), None, String::new(), vec![]);
+        let layout = field_layout(&v, &inbox());
+        let pill = layout.missing.iter().find(|p| p.missing == Missing::Field(Field::Location)).unwrap();
+        assert_eq!(pill.label, "+ Project");
     }
 
     #[test]
@@ -173,7 +193,7 @@ mod tests {
         let mut v = fixture();
         v.project_id = Id::from("X");
         let FieldLayout { fields, missing } = field_layout(&v, &inbox());
-        assert_eq!(fields.last(), Some(&Field::Location));
+        assert!(fields.contains(&Field::Location));
         assert!(!kinds(&missing).contains(&Missing::Field(Field::Location)));
         // A section in the Inbox counts too.
         let mut s = fixture();
@@ -229,7 +249,7 @@ mod tests {
             (Missing::Field(Field::Labels), "+ Labels"),
             (Missing::Field(Field::Reminders), "+ Reminders"),
             (Missing::Repeat, "+ Repeat"),
-            (Missing::Field(Field::Location), "+ Location"),
+            (Missing::Field(Field::Location), "+ Project"),
         ];
         for (m, text) in all {
             assert!(m.label().starts_with("+ "));

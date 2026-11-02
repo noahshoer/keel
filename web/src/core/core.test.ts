@@ -15,6 +15,9 @@ import {
   dueTime,
   fieldLayout,
   importLine,
+  labelChoices,
+  labelChosen,
+  labelGroups,
   pickSetting,
   progress,
   progressLong,
@@ -200,7 +203,7 @@ describe("keel-core over wasm", () => {
     });
     const out = fieldLayout(valuesFromTask(t), "p-inbox");
     expect(out.fields).toEqual(["Description", "Date", "Priority", "Labels"]);
-    expect(out.missing.map((m) => m.label)).toEqual(["+ Repeat", "+ Deadline", "+ Reminders", "+ Location"]);
+    expect(out.missing.map((m) => m.label)).toEqual(["+ Repeat", "+ Reminders", "+ Deadline", "+ Project"]);
   });
 
   it("task detail hides checked sub-tasks unless asked", () => {
@@ -268,5 +271,35 @@ describe("settings", () => {
       kept_as_text: 0,
     });
     expect(line).toBe("Travel: 2 tasks, 1 section");
+  });
+});
+
+describe("labelChoices", () => {
+  it("finds labels and marks the chosen ones", () => {
+    const label = {
+      id: "l",
+      name: "Home",
+      color: "red",
+      item_order: 0,
+      is_favorite: false,
+      is_deleted: false,
+    };
+    const other = { ...label, id: "m", name: "Work" };
+    expect(labelChoices([label, other], ["home"], "o").map((c) => [c.label.name, c.on])).toEqual([
+      ["Home", true],
+      ["Work", false],
+    ]);
+    expect(labelChoices([label, other], ["home"], "wo").map((c) => c.label.name)).toEqual(["Work"]);
+    expect(labelChosen(["home"], "HOME")).toBe(true);
+  });
+});
+
+describe("labelGroups", () => {
+  it("groups a task's labels by color, unknown names as the default", () => {
+    const label = { id: "l", name: "a", color: "red", item_order: 0, is_favorite: false, is_deleted: false };
+    expect(labelGroups(["zzz", "A"], [label])).toEqual([
+      { color: "charcoal", names: ["zzz"] },
+      { color: "red", names: ["A"] },
+    ]);
   });
 });

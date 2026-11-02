@@ -11,7 +11,7 @@ async function openSearch() {
   const r = render(<App />);
   await screen.findByText("Do laundry");
   const nav = r.container.querySelector(".sidebar") as HTMLElement;
-  fireEvent.click(within(nav).getByText("Search"));
+  fireEvent.click(nav.querySelector(".sidebar-search-input") as HTMLElement);
   const input = await screen.findByPlaceholderText("Search tasks, descriptions and labels");
   return { ...r, nav, input: input as HTMLInputElement };
 }
@@ -25,13 +25,61 @@ it("an empty query invites a search, with this platform's hint", async () => {
 it("typing shows the open results with their project", async () => {
   const { container, input } = await openSearch();
   fireEvent.change(input, { target: { value: "laundry" } });
-  await waitFor(() => expect(container.querySelector(".content > .view-sub")?.textContent).toBe("2 tasks"));
+  await waitFor(() => expect(container.querySelector(".content > .view-sub")?.textContent).toBe("2 results"));
   // Scoped to the live pane: the push leaves a still copy of Today (.view-ghost) for a moment.
   expect([...container.querySelectorAll("main.main .task-content")].map((e) => e.textContent)).toEqual([
     "Do laundry",
     "Wash the sheets",
   ]);
   expect(container.querySelector("main.main .task-project")?.textContent).toBe("Home / Chores");
+});
+
+it("counts the results above one card of the list's own rows", async () => {
+  const { container, input } = await openSearch();
+  fireEvent.change(input, { target: { value: "laundry" } });
+  await waitFor(() => expect(container.querySelector(".content > .view-sub")?.textContent).toBe("2 results"));
+  const card = container.querySelector("main.main .task-card") as HTMLElement;
+  expect(card.querySelectorAll(".task-row")).toHaveLength(2);
+});
+
+it("shows Inbox on a result from the Inbox", async () => {
+  const { container, input } = await openSearch();
+  fireEvent.change(input, { target: { value: "dentist" } });
+  await waitFor(() => expect(container.querySelector("main.main .task-project")?.textContent).toBe("Inbox"));
+});
+
+it("Return closes the keyboard, keeping the results", async () => {
+  const { input } = await openSearch();
+  fireEvent.change(input, { target: { value: "laundry" } });
+  input.focus();
+  fireEvent.keyDown(input, { key: "Enter" });
+  expect(document.activeElement).not.toBe(input);
+  expect(input.value).toBe("laundry");
+});
+
+it("scrolling the results closes the keyboard", async () => {
+  const { container, input } = await openSearch();
+  input.focus();
+  fireEvent.touchMove(container.querySelector("main.main") as HTMLElement);
+  expect(document.activeElement).not.toBe(input);
+});
+
+it("the magnifying glass on the main page opens Search", async () => {
+  const r = render(<App />);
+  await screen.findByText("Do laundry");
+  const main = r.container.querySelector("main.main") as HTMLElement;
+  fireEvent.click(within(main).getByRole("button", { name: "Search" }));
+  expect(await screen.findByPlaceholderText("Search tasks, descriptions and labels")).toBeTruthy();
+  const live = r.container.querySelector("main.main") as HTMLElement;
+  expect(within(live).queryByRole("button", { name: "Search" })).toBeNull();
+});
+
+it("on a phone Back leaves Search for the view before it", async () => {
+  const { container } = await openSearch();
+  fireEvent.click(
+    within(container.querySelector("main.main") as HTMLElement).getByRole("button", { name: "Back" }),
+  );
+  await waitFor(() => expect(container.querySelector("main.main .view-title")?.textContent).toBe("Today"));
 });
 
 it("no open match but completed ones: points at Show completed", async () => {
@@ -71,7 +119,7 @@ it("the query survives leaving Search and coming back", async () => {
   fireEvent.change(input, { target: { value: "laundry" } });
   fireEvent.click(within(nav).getByText("Today"));
   await waitFor(() => expect(document.querySelector(".view-title")?.textContent).toBe("Today"));
-  fireEvent.click(within(nav).getByText("Search"));
+  fireEvent.click(nav.querySelector(".sidebar-search-input") as HTMLElement);
   const again = (await screen.findByPlaceholderText(
     "Search tasks, descriptions and labels",
   )) as HTMLInputElement;
@@ -110,12 +158,14 @@ it("a slow earlier search never replaces newer results", async () => {
     fireEvent.change(input, { target: { value: "bins" } });
     fireEvent.change(input, { target: { value: "laundry" } });
     await act(async () => pending["laundry"]?.());
-    await waitFor(() => expect(container.querySelector(".content > .view-sub")?.textContent).toBe("2 tasks"));
+    await waitFor(() =>
+      expect(container.querySelector(".content > .view-sub")?.textContent).toBe("2 results"),
+    );
     await act(async () => pending["bins"]?.());
-    expect(container.querySelector(".content > .view-sub")?.textContent).toBe("2 tasks");
+    expect(container.querySelector(".content > .view-sub")?.textContent).toBe("2 results");
     // While a newer query loads, the last results stay up (no "Searching…" flash).
     fireEvent.change(input, { target: { value: "laundryx" } });
-    expect(container.querySelector("main.main .content > .view-sub")?.textContent).toBe("2 tasks");
+    expect(container.querySelector("main.main .content > .view-sub")?.textContent).toBe("2 results");
     expect(container.querySelectorAll("main.main .task-row")).toHaveLength(2);
   } finally {
     delete window.__TAURI__;

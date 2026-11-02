@@ -183,6 +183,10 @@ function apply(a: Action): string | null {
       label.name = a.name;
       return null;
     }
+    case "label_set_color": {
+      find(state.labels, a.id).color = a.color;
+      return null;
+    }
     case "label_delete": {
       const label = find(state.labels, a.id);
       label.is_deleted = true;

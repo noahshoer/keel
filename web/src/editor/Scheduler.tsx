@@ -1,14 +1,12 @@
-// The date popover: quick picks, a month grid (or month / year wheels), and
-// the time (crates/ui/src/pickers.rs `Scheduler`). keel-core builds the
-// grid and reads typed times; this draws them.
-import { type ReactNode, useEffect, useRef, useState } from "react";
+// The date popover, in steps: quick choices, then a month grid (or month / year
+// wheels) with Time and Repeat rows, then the repeat options. A deadline is the
+// grid alone. keel-core builds the grid and reads typed times; this draws them.
+import { useEffect, useRef, useState } from "react";
 import type { Recurrence } from "../bindings";
 import {
   dueBucket,
-  dueLabel,
   monthNames,
   monthView,
-  nativeTime,
   quickDates,
   shiftMonth,
   timeLabel,
@@ -17,26 +15,30 @@ import {
 } from "../core";
 import { BUCKET_CLASS } from "../lists/chips";
 import {
-  ArrowRightIcon,
-  CalendarSmallIcon,
+  CheckSmallIcon,
   ChevronDownSmallIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  ClockSmallIcon,
-  NoDateIcon,
-  SofaIcon,
-  SunIcon,
+  XIcon,
+  XSmallIcon,
 } from "../shell/icons";
 import { isTouch, weekStart } from "./locale";
+import type { MenuItem } from "./Menu";
+import { cx } from "./pop";
 import { usePlacedPopover } from "./popover";
+import { TimeWheel } from "./TimeWheel";
 import { installMonthWheel, installYearWheel } from "./wheel";
 
-const QUICK: Array<[ReactNode, string]> = [
-  [<CalendarSmallIcon key="i" />, "q-today"],
-  [<SunIcon key="i" />, "q-tomorrow"],
-  [<SofaIcon key="i" />, "q-weekend"],
-  [<ArrowRightIcon key="i" />, "q-next"],
-];
+export type CalendarActions = { onDone: () => void; onCancel: () => void };
+
+/** The repeat choices the date card offers: the same ones as the Repeat pill. */
+export type RepeatChoice = {
+  items: MenuItem[];
+  selected: string;
+  /** The Repeat row's text. */
+  text: string;
+  onSelect: (value: string) => void;
+};
 
 /** `[year, month]` (1-based) of a `YYYY-MM-DD` date. */
 function yearMonth(date: string): [number, number] {
@@ -49,27 +51,37 @@ export function Scheduler({
   withTime = true,
   emptyText = "No date",
   rule,
+  repeat,
   today,
   onPick,
   close,
+  onCalendar,
+  actions,
 }: {
   /** `YYYY-MM-DD` or `null`. */
   selected: string | null;
   /** `HH:MM` or `null`. */
   time: string | null;
-  /** Show the time row (off for deadlines). */
+  /** A date with its steps and Time row (off for deadlines, which are the grid alone). */
   withTime?: boolean;
-  /** The header when nothing is picked. */
+  /** The choice that clears it. */
   emptyText?: string;
   /** The repeat rule whose days are ringed. */
   rule: Recurrence | null;
+  /** Adds the Repeat row and its options. */
+  repeat?: RepeatChoice | undefined;
   today: string;
   /** A date (`null` for none) and a time (`HH:MM` or ""). */
   onPick: (date: string | null, time: string) => void;
   close: () => void;
+  /** When the quick choices give way to the calendar. */
+  onCalendar?: (() => void) | undefined;
+  /** The calendar's check and X; with them a day selects and stays open. */
+  actions?: CalendarActions | undefined;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   usePlacedPopover(ref);
+  const [step, setStep] = useState<"quick" | "card" | "repeat">(withTime ? "quick" : "card");
   const [month, setMonth] = useState<[number, number]>(() => yearMonth(selected ?? today));
   const monthRef = useRef(month);
   monthRef.current = month;
@@ -113,7 +125,6 @@ export function Scheduler({
 
   const [y, mo] = month;
   const view = monthView(y, mo, start, today, selected, rule);
-  const header = selected === null ? emptyText : dueLabel(selected, today);
 
   const commitTime = (): boolean => {
     if (!timeText.trim()) {
@@ -145,183 +156,257 @@ export function Scheduler({
         }
       }}
     >
-      <div className="sched-head">{header}</div>
-      <div className="sched-quick">
-        {quickDates(today).map(([label, hint, d], i) => {
-          const [icon, cls] = QUICK[i] ?? [null, ""];
-          return (
+      {step === "quick" ? (
+        <div className="sched-quick">
+          {quickDates(today).map(([label, hint, d]) => (
             <button
               key={label}
               type="button"
-              className="menu-item"
+              className={cx(
+                "menu-item",
+                `quick-${BUCKET_CLASS[dueBucket(d, today)]}`,
+                d === selected && "checked",
+              )}
               onClick={() => {
                 onPick(d, timeStr);
                 close();
               }}
             >
-              <span className={`menu-icon ${cls}`}>{icon}</span>
               <span className="menu-label">{label}</span>
               <span className="menu-hint">{hint}</span>
+              {d === selected ? (
+                <span className="menu-check">
+                  <CheckSmallIcon />
+                </span>
+              ) : null}
             </button>
-          );
-        })}
-        <button
-          type="button"
-          className="menu-item"
-          onClick={() => {
-            setTimeText("");
-            onPick(null, "");
-            close();
-          }}
-        >
-          <span className="menu-icon q-none">
-            <NoDateIcon />
-          </span>
-          <span className="menu-label">No date</span>
-        </button>
-      </div>
-      <div className="sched-cal">
-        <div className="cal-nav">
+          ))}
           <button
             type="button"
-            className={choosing ? "cal-title chooser open" : "cal-title chooser"}
-            title="Choose month and year"
-            onClick={() => setChoosing((c) => !c)}
+            className="menu-item"
+            onClick={() => {
+              setStep("card");
+              onCalendar?.();
+            }}
           >
-            {view.title}
-            <ChevronDownSmallIcon />
+            <span className="menu-label">Pick a date and time</span>
           </button>
-          <button
-            type="button"
-            className="icon-btn"
-            title="Previous month"
-            onClick={() => setMonth(shiftMonth(y, mo, -1))}
-          >
-            <ChevronLeftIcon />
-          </button>
-          <button type="button" className="icon-btn" title="Today" onClick={() => setMonth(yearMonth(today))}>
-            <span className="cal-dot" />
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            title="Next month"
-            onClick={() => setMonth(shiftMonth(y, mo, 1))}
-          >
-            <ChevronRightIcon />
-          </button>
-        </div>
-        {choosing ? (
-          // Month and year wheels, like iOS Calendar's; they stand in for
-          // the day grid while open.
-          <div ref={wheel} className="wheel">
-            <div className="wheel-band" />
-            {/* The twelve months, looping: wheel.ts places each row around the band. */}
-            <div className="wheel-col loop" data-col="0">
-              {monthNames().map((name, i) => (
-                <div key={name} className={i + 1 === mo ? "wheel-item on" : "wheel-item"} data-i={i}>
-                  {name}
-                </div>
-              ))}
-            </div>
-            <div className="wheel-col" data-col="1">
-              {wheelYears.map((year, i) => (
-                <div key={year} className={year === y ? "wheel-item on" : "wheel-item"} data-i={i}>
-                  {year}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="cal-grid">
-            {view.weekdays.map((d, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: weekday letters repeat (T, S); their column is the key.
-              <span key={`h${i}`} className="cal-dow">
-                {d}
-              </span>
-            ))}
-            {view.weeks.flat().map((cell) => {
-              const cls = ["cal-day"];
-              if (!cell.inMonth) cls.push("other");
-              if (cell.past) cls.push("past");
-              if (cell.today) cls.push("is-today");
-              if (cell.selected) cls.push("selected", `sel-${BUCKET_CLASS[dueBucket(cell.date, today)]}`);
-              if (cell.repeat) cls.push("repeat-day");
-              return (
-                <button
-                  key={cell.date}
-                  type="button"
-                  className={cls.join(" ")}
-                  onClick={() => {
-                    onPick(cell.date, timeStr);
-                    close();
-                  }}
-                >
-                  {cell.day}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-      {withTime ? (
-        <div className="sched-time">
-          <ClockSmallIcon />
-          {touch ? (
-            // Phones: the OS time wheel instead of typing. iOS shows no
-            // placeholder, so an empty field gets a hint.
-            <span className="time-native">
-              {timeStr === "" ? <span className="time-hint">Add time</span> : null}
-              <input
-                type="time"
-                className="time-input native"
-                value={timeStr}
-                onChange={(e) => {
-                  const t = nativeTime(e.target.value);
-                  if (t === undefined) return;
-                  if (t === null) {
-                    setTimeText("");
-                    onPick(selected, "");
-                  } else {
-                    setTimeText(timeLabel(t));
-                    // A time without a date means today.
-                    onPick(selected ?? today, t);
-                  }
-                }}
-              />
-            </span>
-          ) : (
-            <input
-              className={timeBad ? "time-input bad" : "time-input"}
-              placeholder="Add time, e.g. 5pm or 17:30"
-              value={timeText}
-              onChange={(e) => {
-                setTimeBad(false);
-                setTimeText(e.target.value);
-              }}
-              onBlur={commitTime}
-              onKeyDown={(e) => {
-                if (e.key !== "Enter") return;
-                e.preventDefault();
-                e.stopPropagation();
-                if (commitTime()) close();
-              }}
-            />
-          )}
-          {time !== null ? (
+          {/* A repeat always has a date. */}
+          {rule === null ? (
             <button
               type="button"
-              className="icon-btn"
-              title="Remove time"
+              className="menu-item"
               onClick={() => {
                 setTimeText("");
-                onPick(selected, "");
+                onPick(null, "");
+                close();
               }}
             >
-              ×
+              <span className="menu-label">{emptyText}</span>
             </button>
           ) : null}
         </div>
+      ) : null}
+      {step === "repeat" && repeat !== undefined ? (
+        <div className="sched-quick">
+          <button type="button" className="menu-item sched-back" onClick={() => setStep("card")}>
+            <ChevronLeftIcon />
+            <span className="menu-label">Back to date</span>
+          </button>
+          {repeat.items.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              className={cx("menu-item", item.value === repeat.selected && "checked")}
+              onClick={() => {
+                repeat.onSelect(item.value);
+                setStep("card");
+              }}
+            >
+              <span className="menu-label">{item.label}</span>
+              {item.value === repeat.selected ? (
+                <span className="menu-check">
+                  <CheckSmallIcon />
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {step === "card" ? (
+        <>
+          {actions !== undefined ? (
+            <div className="sched-actions">
+              <button type="button" className="icon-btn" aria-label="Cancel" onClick={actions.onCancel}>
+                <XIcon />
+              </button>
+              <button
+                type="button"
+                className="icon-btn sched-done"
+                aria-label="Done"
+                onClick={actions.onDone}
+              >
+                <CheckSmallIcon />
+              </button>
+            </div>
+          ) : null}
+          <div className="sched-cal">
+            <div className="cal-nav">
+              <button
+                type="button"
+                className={choosing ? "cal-title chooser open" : "cal-title chooser"}
+                title="Choose month and year"
+                onClick={() => setChoosing((c) => !c)}
+              >
+                {view.title}
+                <ChevronDownSmallIcon />
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                title="Previous month"
+                onClick={() => setMonth(shiftMonth(y, mo, -1))}
+              >
+                <ChevronLeftIcon />
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                title="Today"
+                onClick={() => setMonth(yearMonth(today))}
+              >
+                <span className="cal-dot" />
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                title="Next month"
+                onClick={() => setMonth(shiftMonth(y, mo, 1))}
+              >
+                <ChevronRightIcon />
+              </button>
+            </div>
+            {choosing ? (
+              // Month and year wheels, like iOS Calendar's; they stand in for
+              // the day grid while open.
+              <div ref={wheel} className="wheel">
+                <div className="wheel-band" />
+                {/* The twelve months, looping: wheel.ts places each row around the band. */}
+                <div className="wheel-col loop" data-col="0">
+                  {monthNames().map((name, i) => (
+                    <div key={name} className={i + 1 === mo ? "wheel-item on" : "wheel-item"} data-i={i}>
+                      {name}
+                    </div>
+                  ))}
+                </div>
+                <div className="wheel-col" data-col="1">
+                  {wheelYears.map((year, i) => (
+                    <div key={year} className={year === y ? "wheel-item on" : "wheel-item"} data-i={i}>
+                      {year}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="cal-grid">
+                {view.weekdays.map((d, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: weekday letters repeat (T, S); their column is the key.
+                  <span key={`h${i}`} className="cal-dow">
+                    {d}
+                  </span>
+                ))}
+                {view.weeks
+                  .filter((week) => week.some((cell) => cell.inMonth))
+                  .flat()
+                  .map((cell) => {
+                    const cls = ["cal-day"];
+                    if (!cell.inMonth) cls.push("other");
+                    if (cell.past) cls.push("past");
+                    if (cell.today) cls.push("is-today");
+                    // A date's fill follows its bucket; a deadline's stays the plain selected color.
+                    if (cell.selected) cls.push("selected");
+                    if (cell.selected && withTime)
+                      cls.push(`sel-${BUCKET_CLASS[dueBucket(cell.date, today)]}`);
+                    if (cell.repeat) cls.push("repeat-day");
+                    return (
+                      <button
+                        key={cell.date}
+                        type="button"
+                        className={cls.join(" ")}
+                        onClick={() => {
+                          onPick(cell.date, timeStr);
+                          // A date still has its Time and Repeat rows to offer.
+                          if (!withTime && actions === undefined) close();
+                        }}
+                      >
+                        {cell.day}
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+          {withTime && touch ? (
+            <TimeWheel
+              time={timeStr}
+              onChange={(t) => {
+                setTimeText(t === "" ? "" : timeLabel(t));
+                // A time without a date means today.
+                onPick(t === "" ? selected : (selected ?? today), t);
+              }}
+            />
+          ) : withTime ? (
+            <div className="sched-time">
+              <span className="sched-row-label">Time</span>
+              <input
+                className={timeBad ? "time-input bad" : "time-input"}
+                placeholder="Add time, e.g. 5pm or 17:30"
+                value={timeText}
+                onChange={(e) => {
+                  setTimeBad(false);
+                  setTimeText(e.target.value);
+                }}
+                onBlur={commitTime}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (commitTime()) close();
+                }}
+              />
+              {time !== null ? (
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="Remove time"
+                  onClick={() => {
+                    setTimeText("");
+                    onPick(selected, "");
+                  }}
+                >
+                  <XSmallIcon />
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="menu-item sched-row"
+              onClick={() => {
+                onPick(null, "");
+                close();
+              }}
+            >
+              <span className="menu-label">{emptyText}</span>
+            </button>
+          )}
+          {withTime && repeat !== undefined ? (
+            <button type="button" className="menu-item sched-row" onClick={() => setStep("repeat")}>
+              <span className="menu-label">Repeat</span>
+              <span className="menu-hint">{repeat.text}</span>
+            </button>
+          ) : null}
+        </>
       ) : null}
     </div>
   );

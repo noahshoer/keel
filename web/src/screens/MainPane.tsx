@@ -14,27 +14,16 @@ import {
   viewSubtitle,
   viewTitle,
 } from "../app/view";
-import type { Id, Section, Task } from "../bindings";
+import type { Section, Task } from "../bindings";
 import { localToday } from "../clock";
 import { blankValues, cards, dateGroups } from "../core";
 import { AddTask } from "../editor/AddTask";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
-import { CheckCircleIcon, MenuIcon } from "../shell/icons";
+import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
+import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, SearchIcon } from "../shell/icons";
+import { currentPlatform, searchTooltip } from "../shell/platform";
 import { AddSection, SectionBlock } from "./SectionBlock";
-
-/** "Project" or "Project / Section" for each task the pane lists. */
-function locationNames(loaded: Loaded): Map<Id, string> {
-  const projects = new Map(loaded.projects.map((p) => [p.id, p.name]));
-  const sections = new Map(loaded.sections.map((s) => [s.id, s.name]));
-  const out = new Map<Id, string>();
-  for (const t of [...loaded.tasks, ...loaded.completed]) {
-    const project = projects.get(t.project_id) ?? "";
-    const section = t.section_id === null ? undefined : sections.get(t.section_id);
-    out.set(t.id, section === undefined ? project : `${project} / ${section}`);
-  }
-  return out;
-}
 
 function contentClass(motion: Motion, swap: number): string {
   if (motion === "pop") return "content view-pop";
@@ -47,6 +36,8 @@ export function MainPane({
   showCompleted,
   onToggleCompleted,
   onOpenDrawer,
+  onLeaveSearch,
+  onOpenSearch,
   motion,
   swap,
   onChanged,
@@ -56,6 +47,9 @@ export function MainPane({
   showCompleted: boolean;
   onToggleCompleted: () => void;
   onOpenDrawer: () => void;
+  /** The phone's Search screen goes back to the view before it. */
+  onLeaveSearch: () => void;
+  onOpenSearch: () => void;
   motion: Motion;
   /** Bumped when a different view lands; alternates the fade-in. */
   swap: number;
@@ -68,7 +62,8 @@ export function MainPane({
   const mode = viewMode(view);
   const toggle = canShowCompleted(view);
   const subtitle = viewSubtitle(view, today);
-  const locations = showsProject(view) ? locationNames(loaded) : null;
+  const locations = locationsOf([...loaded.all, ...loaded.completed], loaded.projects, loaded.sections);
+  const namesProject = showsProject(view);
   const search = view.kind === "search";
   const projectId = view.kind === "project" ? view.id : view.kind === "inbox" ? loaded.inbox.id : null;
   const projectSections: Section[] =
@@ -101,6 +96,7 @@ export function MainPane({
       cards={cards(tasks, loaded.all, mode)}
       today={today}
       locations={locations}
+      labels={loaded.labels}
       reminders={loaded.reminders}
       onChanged={onChanged}
     />
@@ -178,15 +174,21 @@ export function MainPane({
     <main className={motion === "push" ? "main view-push" : "main"}>
       <div className={contentClass(motion, swap)}>
         <div className="view-head">
-          <button
-            type="button"
-            className="icon-btn menu-btn"
-            title="Open menu"
-            aria-label="Open menu"
-            onClick={onOpenDrawer}
-          >
-            <MenuIcon />
-          </button>
+          {search ? (
+            <button type="button" className="icon-btn back-btn" aria-label="Back" onClick={onLeaveSearch}>
+              <ChevronLeftIcon />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="icon-btn menu-btn"
+              title="Open menu"
+              aria-label="Open menu"
+              onClick={onOpenDrawer}
+            >
+              <MenuIcon />
+            </button>
+          )}
           <h1 className="view-title">{viewTitle(view)}</h1>
           {toggle ? (
             <button
@@ -199,6 +201,17 @@ export function MainPane({
               {showCompleted ? "Hide completed" : "Show completed"}
             </button>
           ) : null}
+          {search ? null : (
+            <button
+              type="button"
+              className="icon-btn search-btn"
+              title={searchTooltip(currentPlatform())}
+              aria-label="Search"
+              onClick={onOpenSearch}
+            >
+              <SearchIcon />
+            </button>
+          )}
         </div>
         {subtitle ? (
           <p className={view.kind === "filter" ? "view-sub mono" : "view-sub"}>{subtitle}</p>
@@ -224,7 +237,7 @@ export function MainPane({
                 <CompletedRow
                   task={task}
                   today={today}
-                  location={locations === null ? null : (locations.get(task.id) ?? "")}
+                  location={namesProject ? locationText(locations.get(task.id) ?? INBOX_LOCATION) : null}
                   onChanged={onChanged}
                 />
               </div>

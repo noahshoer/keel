@@ -27,6 +27,8 @@ function Harness({ view, showCompleted = false }: { view: View; showCompleted?: 
         showCompleted={completed}
         onToggleCompleted={() => setCompleted((c) => !c)}
         onOpenDrawer={() => {}}
+        onLeaveSearch={() => {}}
+        onOpenSearch={() => {}}
         motion="fade"
         swap={0}
         onChanged={() => setReloadKey((k) => k + 1)}
@@ -52,7 +54,7 @@ it("today splits overdue from today, rows name their project", async () => {
   // Classes Demo.swift and the sim checks query.
   expect(container.querySelectorAll(".task-row")).toHaveLength(3);
   const laundry = screen.getByText("Do laundry").closest(".task-row");
-  expect(laundry?.querySelector(".task-count")?.textContent).toBe("0/1");
+  expect(laundry?.querySelector(".task-count")?.textContent).toBe("0 of 1");
   expect(laundry?.querySelector(".task-project")?.textContent).toBe("Home / Chores");
 });
 
@@ -74,7 +76,7 @@ it("a project shows unsectioned tasks, then its sections with counts", async () 
   // Top-level tasks only: the laundry card (its sub-task is counted, not listed).
   expect(head?.querySelector(".muted")?.textContent).toBe("1");
   expect(contents(container)).toEqual(["Buy groceries", "Do laundry"]);
-  expect(container.querySelector(".task-project")).toBeNull();
+  expect(container.querySelector(".task-project")?.textContent).toContain("Home");
   expect(container.querySelector(".add-section-row")).not.toBeNull();
 });
 

@@ -19,7 +19,6 @@ it("upcoming puts the overdue task first", async () => {
 
 it("today counts today's tasks and lists the inbox", async () => {
   const loaded = await loadView({ kind: "today" }, false, today);
-  expect(loaded.todayCount).toBe(loaded.tasks.length);
   expect(loaded.inbox.is_inbox).toBe(true);
   expect(loaded.reminders.length).toBeGreaterThan(0);
   expect(loaded.completed).toEqual([]);

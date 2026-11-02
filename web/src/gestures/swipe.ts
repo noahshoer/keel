@@ -2,7 +2,8 @@
 // (crates/ui/src/gestures.rs `SWIPE_JS`); `drawerSwipe` decides what it does.
 import type { Swipe } from "./sheet-rules";
 
-const BLOCK = "input, textarea, select, [contenteditable], .editor, .popover, .menu, .modal-scrim";
+const BLOCK =
+  "input, textarea, select, [contenteditable], .editor, .editor-scrim, .pop-backdrop, .popover, .menu, .modal-scrim";
 /** A touch on the scrim counts as in the sheet, so a swipe there doesn't open the drawer over it. */
 const SHEET = ".tv-sheet, .tv-scrim";
 

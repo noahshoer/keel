@@ -5,7 +5,7 @@ use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
-use crate::model::Task;
+use crate::model::{Label, Task};
 
 /// Which colored due chip a date gets, relative to today.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -186,6 +186,102 @@ pub fn children<'a>(parent: &Id, all: &'a [Task]) -> Vec<&'a Task> {
 pub struct CardRow {
     pub task: Task,
     pub progress: Option<Progress>,
+}
+
+/// One project's row count in the sidebar.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct ProjectCount {
+    pub project_id: Id,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub count: usize,
+}
+
+/// The numbers beside the sidebar's rows: how many tasks each view lists.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct SidebarCounts {
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub today: usize,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub upcoming: usize,
+    /// The Inbox is a project, so it's here too. A project with none is absent.
+    pub projects: Vec<ProjectCount>,
+}
+
+/// Counts what each view lists: Today has what's due or overdue, Upcoming also
+/// has the next `upcoming_days` days (both with matching sub-tasks, which they
+/// show), and a project has its open top-level tasks (its sub-tasks are hidden
+/// under their parents).
+pub fn sidebar_counts(all: &[Task], today: NaiveDate, upcoming_days: i64) -> SidebarCounts {
+    let end = today + chrono::Duration::days(upcoming_days);
+    let mut counts = SidebarCounts { today: 0, upcoming: 0, projects: Vec::new() };
+    for t in all.iter().filter(|t| !t.checked && !t.is_deleted) {
+        if let Some(d) = due_date_of(t) {
+            counts.today += usize::from(d <= today);
+            counts.upcoming += usize::from(d < end);
+        }
+        if t.parent_id.is_some() {
+            continue;
+        }
+        match counts.projects.iter_mut().find(|c| c.project_id == t.project_id) {
+            Some(c) => c.count += 1,
+            None => counts.projects.push(ProjectCount { project_id: t.project_id.clone(), count: 1 }),
+        }
+    }
+    counts
+}
+
+/// A row of the labels picker.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct LabelChoice {
+    pub label: Label,
+    pub on: bool,
+}
+
+/// Whether `name` is among the chosen labels, matching as `label_groups` does.
+pub fn label_chosen(selected: &[String], name: &str) -> bool {
+    let name = name.trim();
+    selected.iter().any(|s| s.eq_ignore_ascii_case(name))
+}
+
+/// The labels whose names contain `query` (any case), each marked if chosen.
+pub fn label_choices(labels: &[Label], selected: &[String], query: &str) -> Vec<LabelChoice> {
+    let query = query.trim().to_lowercase();
+    labels
+        .iter()
+        .filter(|l| l.name.to_lowercase().contains(&query))
+        .map(|l| LabelChoice { label: l.clone(), on: label_chosen(selected, &l.name) })
+        .collect()
+}
+
+/// A task's labels of one color, for the row's one tag per color.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct LabelGroup {
+    pub color: String,
+    pub names: Vec<String>,
+}
+
+/// The color of a label with no record (deleted, or never created).
+const DEFAULT_LABEL_COLOR: &str = "charcoal";
+
+/// A task's labels grouped by color. Groups come in the order their first
+/// label was added, and names keep their added order and the task's spelling.
+pub fn label_groups(task_labels: &[String], labels: &[Label]) -> Vec<LabelGroup> {
+    let mut groups: Vec<LabelGroup> = Vec::new();
+    for name in task_labels {
+        let color = labels
+            .iter()
+            .find(|l| !l.is_deleted && l.name.eq_ignore_ascii_case(name))
+            .map_or(DEFAULT_LABEL_COLOR, |l| l.color.as_str());
+        match groups.iter_mut().find(|g| g.color == color) {
+            Some(group) => group.names.push(name.clone()),
+            None => groups.push(LabelGroup { color: color.to_string(), names: vec![name.clone()] }),
+        }
+    }
+    groups
 }
 
 /// A head task and the matched rows grouped under it. `head_matches == false`
@@ -1018,5 +1114,203 @@ mod chain_tests {
         let c = chain(&id("A"), &all);
         assert_eq!(c.last(), Some(&id("A")));
         assert!(c.len() <= 2);
+    }
+}
+
+#[cfg(test)]
+mod label_group_tests {
+    use super::{label_groups, LabelGroup};
+    use crate::ids::Id;
+    use crate::model::Label;
+
+    fn label(name: &str, color: &str) -> Label {
+        Label {
+            id: Id::from(name),
+            name: name.to_string(),
+            color: color.to_string(),
+            item_order: 0,
+            is_favorite: false,
+            is_deleted: false,
+        }
+    }
+
+    fn all() -> Vec<Label> {
+        vec![label("a", "red"), label("b", "red"), label("c", "blue"), label("d", "charcoal")]
+    }
+
+    fn groups(names: &[&str], labels: &[Label]) -> Vec<(String, Vec<String>)> {
+        let names: Vec<String> = names.iter().map(|n| n.to_string()).collect();
+        label_groups(&names, labels).into_iter().map(|LabelGroup { color, names }| (color, names)).collect()
+    }
+
+    fn g(color: &str, names: &[&str]) -> (String, Vec<String>) {
+        (color.to_string(), names.iter().map(|n| n.to_string()).collect())
+    }
+
+    #[test]
+    fn groups_in_the_order_their_first_label_was_added() {
+        assert_eq!(
+            groups(&["c", "a", "d", "b"], &all()),
+            vec![g("blue", &["c"]), g("red", &["a", "b"]), g("charcoal", &["d"])]
+        );
+    }
+
+    #[test]
+    fn removing_a_groups_first_label_keeps_added_order() {
+        assert_eq!(groups(&["a", "d", "b"], &all()), vec![g("red", &["a", "b"]), g("charcoal", &["d"])]);
+        assert_eq!(groups(&["d", "b", "a"], &all()), vec![g("charcoal", &["d"]), g("red", &["b", "a"])]);
+    }
+
+    #[test]
+    fn an_unknown_name_groups_as_the_default_keeping_its_spelling() {
+        assert_eq!(groups(&["zzz"], &all()), vec![g("charcoal", &["zzz"])]);
+        assert_eq!(groups(&["zzz", "d"], &all()), vec![g("charcoal", &["zzz", "d"])]);
+    }
+
+    #[test]
+    fn a_deleted_label_counts_as_unknown() {
+        let mut labels = all();
+        labels[0].is_deleted = true;
+        assert_eq!(groups(&["a"], &labels), vec![g("charcoal", &["a"])]);
+    }
+
+    #[test]
+    fn names_match_case_insensitively_keeping_the_tasks_spelling() {
+        assert_eq!(groups(&["A"], &all()), vec![g("red", &["A"])]);
+    }
+
+    #[test]
+    fn no_labels_no_groups() {
+        assert_eq!(groups(&[], &all()), vec![]);
+    }
+}
+
+#[cfg(test)]
+mod sidebar_count_tests {
+    use super::{sidebar_counts, ProjectCount};
+    use crate::ids::Id;
+    use crate::model::{Due, Task};
+    use chrono::NaiveDate;
+
+    const TODAY: &str = "2026-11-01";
+
+    fn today() -> NaiveDate {
+        NaiveDate::parse_from_str(TODAY, "%Y-%m-%d").unwrap()
+    }
+
+    fn task(name: &str, project: &str, due: Option<&str>) -> Task {
+        let mut t = Task::new(name, Id::from(project));
+        t.id = Id::from(name);
+        t.due = due.map(|d| Due {
+            date: d.to_string(),
+            is_recurring: false,
+            string: d.to_string(),
+            lang: "en".to_string(),
+            timezone: None,
+            recurrence: None,
+        });
+        t
+    }
+
+    fn of(counts: &[ProjectCount], project: &str) -> usize {
+        counts.iter().find(|c| c.project_id == Id::from(project)).map_or(0, |c| c.count)
+    }
+
+    #[test]
+    fn today_counts_what_is_due_or_overdue() {
+        let all = [
+            task("old", "a", Some("2026-10-30")),
+            task("now", "a", Some(TODAY)),
+            task("next", "a", Some("2026-11-02")),
+            task("none", "a", None),
+        ];
+        assert_eq!(sidebar_counts(&all, today(), 7).today, 2);
+    }
+
+    #[test]
+    fn upcoming_counts_overdue_and_its_window() {
+        let all = [
+            task("old", "a", Some("2026-10-30")),
+            task("now", "a", Some(TODAY)),
+            task("last", "a", Some("2026-11-07")),
+            task("past_window", "a", Some("2026-11-08")),
+            task("none", "a", None),
+        ];
+        assert_eq!(sidebar_counts(&all, today(), 7).upcoming, 3);
+    }
+
+    #[test]
+    fn a_projects_count_is_its_open_top_level_tasks_as_its_list_shows() {
+        let parent = task("parent", "a", None);
+        let mut sub = task("sub", "a", None);
+        sub.parent_id = Some(parent.id.clone());
+        let mut done = task("done", "a", None);
+        done.checked = true;
+        let other = task("other", "b", None);
+        let counts = sidebar_counts(&[parent, sub, done, other], today(), 7);
+        assert_eq!(of(&counts.projects, "a"), 1);
+        assert_eq!(of(&counts.projects, "b"), 1);
+        assert_eq!(of(&counts.projects, "none"), 0);
+    }
+
+    #[test]
+    fn dated_counts_include_matching_sub_tasks_and_skip_checked_and_deleted() {
+        let parent = task("parent", "a", Some(TODAY));
+        let mut sub = task("sub", "a", Some(TODAY));
+        sub.parent_id = Some(parent.id.clone());
+        let mut done = task("done", "a", Some(TODAY));
+        done.checked = true;
+        let mut gone = task("gone", "a", Some(TODAY));
+        gone.is_deleted = true;
+        let counts = sidebar_counts(&[parent, sub, done, gone], today(), 7);
+        assert_eq!(counts.today, 2);
+        assert_eq!(counts.upcoming, 2);
+        assert_eq!(of(&counts.projects, "a"), 1);
+    }
+}
+
+#[cfg(test)]
+mod label_choice_tests {
+    use super::{label_choices, label_chosen};
+    use crate::ids::Id;
+    use crate::model::Label;
+
+    fn label(name: &str) -> Label {
+        Label {
+            id: Id::from(name),
+            name: name.to_string(),
+            color: "red".to_string(),
+            item_order: 0,
+            is_favorite: false,
+            is_deleted: false,
+        }
+    }
+
+    fn names(selected: &[&str]) -> Vec<String> {
+        selected.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn finds_by_any_part_of_the_name_ignoring_case() {
+        let all = [label("Errand"), label("Home"), label("Paper")];
+        let found: Vec<String> =
+            label_choices(&all, &[], " ER ").into_iter().map(|c| c.label.name).collect();
+        assert_eq!(found, vec!["Errand", "Paper"]);
+        assert_eq!(label_choices(&all, &[], "").len(), 3);
+    }
+
+    #[test]
+    fn marks_the_chosen_ones_as_labels_match_everywhere() {
+        let all = [label("Home"), label("Work"), label("\u{c9}t\u{e9}")];
+        let on: Vec<bool> =
+            label_choices(&all, &names(&["home", "\u{e9}t\u{e9}"]), "").into_iter().map(|c| c.on).collect();
+        // Case-insensitive for ASCII only, as `label_groups` and renames are.
+        assert_eq!(on, vec![true, false, false]);
+    }
+
+    #[test]
+    fn says_whether_a_name_is_chosen() {
+        assert!(label_chosen(&names(&["Home"]), " home "));
+        assert!(!label_chosen(&names(&["Home"]), "Work"));
     }
 }

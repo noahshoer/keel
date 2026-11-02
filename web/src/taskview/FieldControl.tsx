@@ -12,7 +12,7 @@ import { Menu, type MenuItem } from "../editor/Menu";
 import type { Face, PopProps } from "../editor/pop";
 import { ReminderPicker } from "../editor/ReminderPicker";
 import { BUCKET_CLASS } from "../lists/chips";
-import { CalendarFilledIcon, FlagFilledIcon, HashSmallIcon, RepeatSmallIcon } from "../shell/icons";
+import { CalendarSmallIcon, FlagFilledIcon, HashSmallIcon, RepeatSmallIcon } from "../shell/icons";
 
 const rowFace = (cls: string, text: string): Face => ({
   className: cls === "" ? "tv-field-btn" : `tv-field-btn ${cls}`,
@@ -36,8 +36,8 @@ export function FieldControl({
   onLabelsChanged,
   onOpenDescription,
 }: PopProps & {
-  /** A set field's row (`missing` is null), or… */
-  field: Field | null;
+  /** A set field's row, or the repeat's own row (`missing` is null), or… */
+  field: Field | "Repeat" | null;
   /** …a missing one's pill (`field` is null). */
   missing: MissingPill | null;
   values: EditorValues;
@@ -51,8 +51,8 @@ export function FieldControl({
   /** "+ Description": opens an empty description row. */
   onOpenDescription: () => void;
 }) {
-  const row = field !== null;
-  const which = field ?? (missing?.missing.kind === "Field" ? missing.missing.field : null);
+  const which =
+    field === "Repeat" ? null : (field ?? (missing?.missing.kind === "Field" ? missing.missing.field : null));
   const face = (cls: string, text: string) => (missing !== null ? pillFace(missing) : rowFace(cls, text));
   const pop = { open, setOpen };
   const repeatItems: MenuItem[] = view.repeat_options.map(([value, label]) => ({ value, label }));
@@ -70,6 +70,7 @@ export function FieldControl({
     />
   );
 
+  if (field === "Repeat") return repeat(rowFace("", view.repeat_chip_text));
   if (missing?.missing.kind === "Repeat") return repeat(pillFace(missing));
   switch (which) {
     case "Description":
@@ -82,24 +83,24 @@ export function FieldControl({
     case "Date": {
       const [text, bucket] = view.date_chip;
       return (
-        <>
-          <DatePicker
-            date={v.date}
-            time={v.time}
-            text={text}
-            bucket={bucket}
-            rule={view.repeat_rule}
-            today={today}
-            {...pop}
-            face={face(`due-chip ${bucket !== null ? BUCKET_CLASS[bucket] : ""}`.trim(), text)}
-            icon={<CalendarFilledIcon />}
-            onChange={(date, time) => onPick({ type: "date", date, time })}
-          />
-          {/* A rule shows in the date's row; without one it's a pill. */}
-          {row && v.repeat !== "none"
-            ? repeat({ className: "tv-field-btn tv-repeat", text: view.repeat_chip_text, icon: true })
-            : null}
-        </>
+        <DatePicker
+          date={v.date}
+          time={v.time}
+          text={text}
+          bucket={bucket}
+          rule={view.repeat_rule}
+          repeat={{
+            items: repeatItems,
+            selected: v.repeat,
+            text: repeatItems.find((i) => i.value === v.repeat)?.label ?? view.repeat_chip_text,
+            onSelect: (value) => onPick({ type: "repeat", value }),
+          }}
+          today={today}
+          {...pop}
+          face={face(`due-chip ${bucket !== null ? BUCKET_CLASS[bucket] : ""}`.trim(), text)}
+          icon={<CalendarSmallIcon />}
+          onChange={(date, time) => onPick({ type: "date", date, time })}
+        />
       );
     }
     case "Deadline":

@@ -25,6 +25,7 @@ class KeelIosPlugin: Plugin {
     DispatchQueue.main.async {
       Diag.attach(webview)
       KeyboardPace.attach(webview)
+      KeyboardBar.hide(in: webview)
       PageScroll.attach(webview)
       Script.run(webview)
     }

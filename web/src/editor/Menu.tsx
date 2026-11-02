@@ -11,6 +11,8 @@ export type MenuItem = {
   icon?: ReactNode;
   iconClass?: string;
   indent?: boolean;
+  /** Added to the row while it's the chosen one. */
+  checkedClass?: string | undefined;
 };
 
 function MenuList({
@@ -32,7 +34,12 @@ function MenuList({
           <button
             key={item.value}
             type="button"
-            className={cx("menu-item", item.indent && "indent", checked && "checked")}
+            className={cx(
+              "menu-item",
+              item.indent && "indent",
+              checked && "checked",
+              checked && item.checkedClass,
+            )}
             onClick={() => onPick(item.value)}
           >
             {item.icon !== undefined ? (
@@ -56,6 +63,7 @@ export function Menu({
   title,
   icon,
   iconClass,
+  chipClass,
   text,
   items,
   selected,
@@ -68,6 +76,8 @@ export function Menu({
   title: string;
   icon: ReactNode;
   iconClass?: string;
+  /** Added to the chip's own classes. */
+  chipClass?: string;
   text: string;
   items: MenuItem[];
   selected: string;
@@ -80,7 +90,7 @@ export function Menu({
     <div className="chip-wrap">
       <button
         type="button"
-        className={cx(face?.className ?? "chip chip-btn", isOpen && "chip-open")}
+        className={cx(face?.className ?? cx("chip chip-btn", chipClass), isOpen && "chip-open")}
         title={title}
         onClick={() => setOpen(isOpen ? null : id)}
       >
