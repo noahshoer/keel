@@ -24,6 +24,7 @@ import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
 import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, SearchIcon } from "../shell/icons";
 import { currentPlatform, searchTooltip } from "../shell/platform";
 import { AddSection, SectionBlock } from "./SectionBlock";
+import { useTitleFit } from "./titleFit";
 
 function contentClass(motion: Motion, swap: number): string {
   if (motion === "pop") return "content view-pop";
@@ -61,6 +62,8 @@ export function MainPane({
   const today = localToday();
   const mode = viewMode(view);
   const toggle = canShowCompleted(view);
+  const fullTitle = viewTitle(view);
+  const title = useTitleFit(fullTitle);
   const subtitle = viewSubtitle(view, today);
   const locations = locationsOf([...loaded.all, ...loaded.completed], loaded.projects, loaded.sections);
   const namesProject = showsProject(view);
@@ -189,7 +192,14 @@ export function MainPane({
               <MenuIcon />
             </button>
           )}
-          <h1 className="view-title">{viewTitle(view)}</h1>
+          <h1
+            ref={title.ref}
+            className="view-title"
+            aria-label={title.text === fullTitle ? undefined : fullTitle}
+            style={title.style}
+          >
+            {title.text}
+          </h1>
           {toggle ? (
             <button
               type="button"
