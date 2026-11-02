@@ -3,6 +3,7 @@
 // is parsed as quick add with live highlighting and preview chips. Every
 // decision about the values is keel-core's (`editorView`, `applyPick`, …).
 import {
+  type CSSProperties,
   type MouseEvent,
   type PointerEvent,
   type ReactNode,
@@ -281,8 +282,17 @@ export function TaskEditor({
 
   const form = (
     <form
-      className={cx("editor", touch && "on-keyboard", touch && !keyboard.up && "keyboard-down")}
-      style={touch ? { bottom: keyboard.inset + CARD_GAP } : undefined}
+      className={cx(
+        "editor",
+        touch && "on-keyboard",
+        touch && !keyboard.up && "keyboard-down",
+        touch && open !== null && "picking",
+      )}
+      style={
+        touch
+          ? ({ bottom: keyboard.inset + CARD_GAP, "--card-room": `${keyboard.room}px` } as CSSProperties)
+          : undefined
+      }
       // Pressing anything but a text field keeps the title focused, so the keyboard stays up.
       onMouseDown={touch ? keepFocus : undefined}
       onPointerUp={tapField}
@@ -298,41 +308,57 @@ export function TaskEditor({
       }}
     >
       {!touch && open !== null ? clickAway : null}
-      <HighlightedTitle
-        segments={view.segments}
-        value={values.content}
-        placeholder={quickAdd ? "Task name — try “Call mom tomorrow 5pm p1 #Home @phone”" : "Task name"}
-        onInput={(text) => {
-          closeForField();
-          setValues((v) => withTitle(v, text));
-        }}
-        onEnter={submit}
-        onUnhighlight={(caret) => {
-          closeForField();
-          setValues((v) => (quickAdd ? (unhighlightAt(v, projects, sections, today, caret) ?? v) : v));
-        }}
-        inputRef={title}
-      />
-      {view.preview.length > 0 ? (
-        <div className="quick-preview">
-          {view.preview.map((c, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: the chips follow the parse's order.
-            <span key={i} className={`quick-chip ${PREVIEW[c.kind]}`}>
-              {c.text}
-            </span>
-          ))}
+      {/* The part that scrolls once the card fills the room above the keyboard. */}
+      <div className="editor-text">
+        <HighlightedTitle
+          segments={view.segments}
+          value={values.content}
+          placeholder={quickAdd ? "Task name — try “Call mom tomorrow 5pm p1 #Home @phone”" : "Task name"}
+          onInput={(text) => {
+            closeForField();
+            setValues((v) => withTitle(v, text));
+          }}
+          onEnter={submit}
+          onUnhighlight={(caret) => {
+            closeForField();
+            setValues((v) => (quickAdd ? (unhighlightAt(v, projects, sections, today, caret) ?? v) : v));
+          }}
+          inputRef={title}
+        />
+        {view.preview.length > 0 ? (
+          <div className="quick-preview">
+            {view.preview.map((c, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: the chips follow the parse's order.
+              <span key={i} className={`quick-chip ${PREVIEW[c.kind]}`}>
+                {c.text}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        <div className="desc-wrap">
+          <div className="desc-mirror" aria-hidden="true">
+            {`${values.description}\u200b`}
+          </div>
+          <textarea
+            className="desc"
+            rows={1}
+            placeholder="Description"
+            value={values.description}
+            onChange={(e) => {
+              const description = e.target.value;
+              closeForField();
+              setValues((v) => ({ ...v, description }));
+            }}
+            onKeyDown={(e) => {
+              // Enter is a new line here; the modifier is the keyboard's way to save.
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+          />
         </div>
-      ) : null}
-      <input
-        className="desc"
-        placeholder="Description"
-        value={values.description}
-        onChange={(e) => {
-          const description = e.target.value;
-          closeForField();
-          setValues((v) => ({ ...v, description }));
-        }}
-      />
+      </div>
       {touch ? (
         <div className={cx("editor-actions", pillRow.fadeClass)}>
           {pills}

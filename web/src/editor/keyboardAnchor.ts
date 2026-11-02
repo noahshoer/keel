@@ -28,7 +28,8 @@ export function placeAboveCard(
   };
 }
 
-export type KeyboardState = { inset: number; up: boolean };
+/** `room` is the height of what's visible, which the task card has to fit in. */
+export type KeyboardState = { inset: number; up: boolean; room: number };
 
 /** Whether the visible area is shorter than the page: the keyboard is up. */
 export function keyboardUp(v: VisualViewport): boolean {
@@ -37,14 +38,14 @@ export function keyboardUp(v: VisualViewport): boolean {
 
 function read(): KeyboardState {
   const v = window.visualViewport;
-  if (!v) return { inset: 0, up: false };
+  if (!v) return { inset: 0, up: false, room: innerHeight };
   const clientH = document.documentElement.clientHeight;
-  return { inset: keyboardInset(clientH, v.offsetTop, v.height, null), up: keyboardUp(v) };
+  return { inset: keyboardInset(clientH, v.offsetTop, v.height, null), up: keyboardUp(v), room: v.height };
 }
 
 /** The keyboard's reach while `enabled`, updated as the visual viewport moves. */
 export function useKeyboard(enabled: boolean): KeyboardState {
-  const [state, setState] = useState<KeyboardState>({ inset: 0, up: false });
+  const [state, setState] = useState<KeyboardState>(read);
   useEffect(() => {
     const v = window.visualViewport;
     if (!enabled || !v) return;

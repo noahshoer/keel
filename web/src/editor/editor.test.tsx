@@ -81,6 +81,76 @@ it("with a mouse too, clicking the title or description closes a picker", () => 
   cleanup();
 });
 
+describe("the description", () => {
+  const desc = () => screen.getByPlaceholderText("Description") as HTMLTextAreaElement;
+
+  it("grows with its text, as the title does", () => {
+    adding();
+    expect(desc().tagName).toBe("TEXTAREA");
+    fireEvent.change(desc(), { target: { value: "Passport,\ncharger" } });
+    expect(document.querySelector(".desc-mirror")?.textContent).toContain("Passport,\ncharger");
+    cleanup();
+  });
+
+  it("takes Enter as a new line, and saves it", () => {
+    const title = adding();
+    type(title, "Pack");
+    fireEvent.change(desc(), { target: { value: "Passport,\ncharger" } });
+    expect(fireEvent.keyDown(desc(), { key: "Enter" })).toBe(true);
+    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.submit(document.querySelector("form.editor") as HTMLFormElement);
+    expect(onSubmit.mock.calls[0]?.[0].description).toBe("Passport,\ncharger");
+    cleanup();
+  });
+
+  it("submits on Cmd or Ctrl+Enter", () => {
+    const title = adding();
+    type(title, "Pack");
+    expect(fireEvent.keyDown(desc(), { key: "Enter", metaKey: true })).toBe(false);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    type(title, "Pack again");
+    fireEvent.keyDown(desc(), { key: "Enter", ctrlKey: true });
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+    cleanup();
+  });
+});
+
+describe("a card too long for the screen", () => {
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+    vi.stubGlobal("visualViewport", Object.assign(new EventTarget(), { offsetTop: 0, height: 478 }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  const form = () => document.querySelector<HTMLFormElement>("form.editor");
+  const text = () => document.querySelector<HTMLElement>(".editor-text");
+
+  it("scrolls the title and description together, and not the pills or save button", () => {
+    const title = adding();
+    type(title, "Call mom tomorrow");
+    expect(text()?.contains(title)).toBe(true);
+    expect(text()?.contains(screen.getByPlaceholderText("Description"))).toBe(true);
+    expect(text()?.querySelector(".quick-preview")).not.toBeNull();
+    expect(text()?.querySelector(".chips")).toBeNull();
+    expect(text()?.contains(screen.getByRole("button", { name: "Add task" }))).toBe(false);
+  });
+
+  it("knows the room it has above the keyboard", () => {
+    adding();
+    expect(form()?.style.getPropertyValue("--card-room")).toBe("478px");
+  });
+
+  it("makes way for an open picker", () => {
+    adding();
+    expect(form()?.className).not.toContain("picking");
+    fireEvent.click(screen.getByTitle("Priority"));
+    expect(form()?.className).toContain("picking");
+  });
+});
+
 describe("on touch", () => {
   beforeEach(() => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
@@ -152,9 +222,10 @@ describe("on touch", () => {
     expect(onCancel).not.toHaveBeenCalled();
   });
 
-  it("caps a very long title's height, so the card stays on screen", () => {
+  it("fits the card in the room above the keyboard, so long text scrolls and it stays on screen", () => {
     const css = readFileSync(resolve(process.cwd(), "src/styles/app.css"), "utf8");
-    expect(css).toMatch(/\.on-keyboard \.title-wrap \{ max-height: \d+px; overflow-y: auto; \}/);
+    expect(css).toMatch(/\.editor\.on-keyboard \{[^}]*max-height: calc\(var\(--card-room/);
+    expect(css).toMatch(/\.on-keyboard \.editor-text \{[^}]*overflow-y: auto/);
   });
 
   it("floats a small gap above the keyboard", () => {
@@ -329,7 +400,7 @@ describe("on touch", () => {
       expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
     });
 
-    const desc = () => screen.getByPlaceholderText("Description") as HTMLInputElement;
+    const desc = () => screen.getByPlaceholderText("Description") as HTMLTextAreaElement;
 
     it("lowers the keyboard from the description too, and goes back to it", () => {
       adding();
