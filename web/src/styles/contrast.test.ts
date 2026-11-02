@@ -157,7 +157,9 @@ describe.each(THEMES)("a chosen label's color on its tint, %s", (_theme, tokens)
 
 describe("text that used to miss the rule", () => {
   it("every quick choice has its color, later dates in Keel green", () => {
-    expect(css).toMatch(/\.quick-later \.menu-label \{ color: var\(--accent-text\); \}/);
+    expect(css).toMatch(
+      /\.quick-later \.menu-label, \.quick-later \.menu-hint \{ color: var\(--accent-text\); \}/,
+    );
   });
   it("quick-add chips use the text colors", () => {
     expect(css).toMatch(/\.quick-chip\.chip-project \{ color: var\(--p3-text\); \}/);
@@ -165,6 +167,20 @@ describe("text that used to miss the rule", () => {
   });
   it("past and other-month days aren't faded below it", () => {
     expect(css).not.toMatch(/\.cal-day\.(past|other) \{[^}]*opacity/);
+  });
+});
+
+describe("quick date choices", () => {
+  it.each([
+    ["overdue", "--due-overdue"],
+    ["today", "--due-today"],
+    ["tomorrow", "--due-tomorrow"],
+    ["week", "--due-week"],
+    ["later", "--accent-text"],
+  ])("%s colors its name and its day alike", (bucket, token) => {
+    expect(css).toContain(
+      `.quick-${bucket} .menu-label, .quick-${bucket} .menu-hint { color: var(${token}); }`,
+    );
   });
 });
 
@@ -177,7 +193,7 @@ describe("phone tap targets", () => {
 
 describe("calendar days on the phone", () => {
   it("reach 44pt beyond their drawn 40", () => {
-    expect(css).toMatch(/\.on-keyboard \.cal-day::after \{ content: ''; position: absolute; inset: -2px; \}/);
+    expect(css).toMatch(/\.cal-day::after \{ content: ''; position: absolute; inset: -2px; \}/);
   });
 });
 

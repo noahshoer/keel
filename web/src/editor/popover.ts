@@ -3,7 +3,8 @@
 // edge. Fixed positioning, so scrolling containers never clip it (the
 // Dioxus `PLACE_JS` in crates/ui/src/pickers.rs).
 import { type RefObject, useLayoutEffect } from "react";
-import { placeAboveCard } from "./keyboardAnchor";
+import { keyboardUp, placeAboveCard } from "./keyboardAnchor";
+import { isTouch } from "./locale";
 
 export type Rect = { top: number; bottom: number; left: number; width: number; height: number };
 
@@ -73,7 +74,8 @@ function followCard(pop: HTMLElement, card: Element): () => void {
 
 /**
  * Places the popover when it opens: above the task card when that sits on the
- * keyboard, otherwise against the element before it (its chip).
+ * keyboard, otherwise against the element before it (its chip). A text field in
+ * it can raise the keyboard, which it then sits above.
  */
 export function usePlacedPopover(ref: RefObject<HTMLElement | null>): void {
   useLayoutEffect(() => {
@@ -82,8 +84,23 @@ export function usePlacedPopover(ref: RefObject<HTMLElement | null>): void {
     if (pop && card) return followCard(pop, card);
     const chip = pop?.previousElementSibling;
     if (!pop || !chip) return;
+    const touch = isTouch();
+    const v = touch ? window.visualViewport : null;
     const place = () => {
       const scrolled = pop.scrollTop;
+      if (v && keyboardUp(v)) {
+        Object.assign(pop.style, { position: "fixed", right: "auto", margin: "0", maxHeight: "" });
+        const keyboard = { top: v.height, bottom: v.height, left: 0, width: innerWidth, height: 0 };
+        const at = placeAboveCard(keyboard, pop.getBoundingClientRect(), innerWidth, visibleTop());
+        Object.assign(pop.style, {
+          top: `${at.top + v.offsetTop}px`,
+          left: `${at.left}px`,
+          maxHeight: `${at.maxHeight}px`,
+          overflowY: "auto",
+        });
+        pop.scrollTop = scrolled;
+        return;
+      }
       Object.assign(pop.style, { maxHeight: "" });
       const { top, left } = placePopover(
         chip.getBoundingClientRect(),
@@ -106,6 +123,16 @@ export function usePlacedPopover(ref: RefObject<HTMLElement | null>): void {
     // A step inside the picker swaps its content.
     const changed = new MutationObserver(place);
     changed.observe(pop, { childList: true, subtree: true });
-    return () => changed.disconnect();
+    // The sheet settles after the viewport does, taking the chip with it.
+    const sheet = touch ? chip.closest(".tv-sheet") : null;
+    v?.addEventListener("resize", place);
+    v?.addEventListener("scroll", place);
+    sheet?.addEventListener("transitionend", place);
+    return () => {
+      changed.disconnect();
+      v?.removeEventListener("resize", place);
+      v?.removeEventListener("scroll", place);
+      sheet?.removeEventListener("transitionend", place);
+    };
   }, [ref]);
 }

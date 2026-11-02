@@ -35,9 +35,15 @@ export function StreakPanel({ task, onChanged }: { task: Task; onChanged: () => 
           <label>
             Goal{" "}
             <input
-              type="number"
-              min="1"
+              type="text"
+              inputMode="numeric"
+              // With this pattern iOS opens the 0-9 pad, not the symbols keyboard.
+              pattern="[0-9]*"
               defaultValue={goal === null ? "" : String(goal)}
+              // A number field still lets WebKit type letters and pastes.
+              onChange={(e) => {
+                e.target.value = e.target.value.replace(/\D/g, "");
+              }}
               // Saved when the field is left or on Enter (the DOM change
               // event, as in Dioxus), not on every keystroke.
               onBlur={(e) => saveGoal(e.target.value)}

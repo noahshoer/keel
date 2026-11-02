@@ -30,11 +30,16 @@ export function placeAboveCard(
 
 export type KeyboardState = { inset: number; up: boolean };
 
+/** Whether the visible area is shorter than the page: the keyboard is up. */
+export function keyboardUp(v: VisualViewport): boolean {
+  return v.height < document.documentElement.clientHeight - 0.5;
+}
+
 function read(): KeyboardState {
   const v = window.visualViewport;
   if (!v) return { inset: 0, up: false };
   const clientH = document.documentElement.clientHeight;
-  return { inset: keyboardInset(clientH, v.offsetTop, v.height, null), up: v.height < clientH - 0.5 };
+  return { inset: keyboardInset(clientH, v.offsetTop, v.height, null), up: keyboardUp(v) };
 }
 
 /** The keyboard's reach while `enabled`, updated as the visual viewport moves. */

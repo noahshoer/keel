@@ -117,14 +117,16 @@ A repeat always has a date: today, by default. While a task repeats, the Date pi
 
 - **The bar above the keyboard is hidden everywhere**, since its check mark only closed the keyboard. That leaves about 324pt above the task card on an iPhone 17, below the Dynamic Island.
 - **Calendars (Date and Deadline):** they need more room, so opening one lowers the keyboard. An X and a check at the top of the calendar go back to typing: the check keeps the choice and the X undoes what changed since the calendar opened. Another pill or a tap outside also brings the keyboard back, keeping the choice.
+- **The gap above the keyboard is intended** (Noah, 2026-11-01), including the strip of the task list that shows between the task view's sheet and the keyboard.
 - **Time:** a Keel wheel inside the date card on touch, starting at the current time. Nothing saves until it's moved or Set time is tapped. The iOS picker would take focus from the title. Desktop types a time.
 - **Quick choices and other tall lists:** the keyboard stays up and the list scrolls inside the room above the card.
 - **Colors:** the quick choices' text and the open Date pill follow the date's color, like the selected day (later dates in green). A deadline's selected day, open pill and set pill text are Keel green.
 
+**On desktop** (Noah, 2026-11-01). The same pickers at desktop spacing: 20px corners, 8px padding, 36px rows with 12px corners, 14px text, 36px calendar days. They open next to their pill, with no dim.
+
 **Still open:**
 
 - The label color palette, which is a placeholder. Colors must pass the contrast rule.
-- How pickers look on desktop.
 
 ## Other screens
 
@@ -135,6 +137,7 @@ Approved in the mockups' iPhone and desktop screens boards (version 25). Desktop
 - Title and description, then one rounded card of the filled-in fields, each with its icon: streak, date and time, repeat, reminders, deadline, priority, project, labels.
 - The header has the X and the ••• menu, with Back inside a sub-task. The circle beside the title stays, as the way to complete a task from its view (Noah, 2026-11-01).
 - **Streak row:** repeating tasks with a streak show the fire icon, the current streak in its repeat's unit ("3 week streak", or "Streak of 3" when one occurrence isn't one day, week, month or year; `keel_core::streak::streak_text`) and the best (`streak_best`). It opens the existing streak panel. Enabling streaks and deleting the task stay in the ••• menu.
+- **Pickers:** the same as the task card's: same sizes, corners, spacing and checked tint, with the same dim behind them on touch. They open next to their row or pill, the ••• menu stays compact beside its button, and when a field in one raises the keyboard, the picker sits 8pt above it.
 - **Unset options:** one sideways-scrolling row of dotted "+ Field" pills, below the filled-in fields and above sub-tasks.
 - **Inbox:** an Inbox task has no project row and shows a "+ Project" pill. Task lists still show "Inbox".
 - **Sub-tasks:** a card under a header with the same progress icon as the list and "X of Y". With no sub-tasks, the count is hidden and only "Add sub-task" shows.

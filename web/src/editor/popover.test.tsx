@@ -71,6 +71,48 @@ describe("usePlacedPopover by its chip", () => {
   });
 });
 
+describe("usePlacedPopover by its chip, when the keyboard comes up", () => {
+  const setup = (coarse: boolean) => {
+    const viewport = Object.assign(new EventTarget(), { offsetTop: 0, height: 874, scale: 1 });
+    vi.stubGlobal("visualViewport", viewport);
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: coarse && q.includes("coarse") }));
+    vi.spyOn(document.documentElement, "clientHeight", "get").mockReturnValue(874);
+    const { container } = render(<ChipPicker />);
+    const chip = container.querySelector("button") as HTMLElement;
+    const pop = container.querySelector(".popover") as HTMLElement;
+    chip.getBoundingClientRect = () => rect(20, 400, 80, 30) as DOMRect;
+    pop.getBoundingClientRect = () => rect(0, 0, 386, 200) as DOMRect;
+    const move = (h: number) => {
+      viewport.height = h;
+      act(() => {
+        viewport.dispatchEvent(new Event("resize"));
+      });
+    };
+    return { pop, move };
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("sits just above the keyboard, and goes back to its chip when it leaves", () => {
+    const { pop, move } = setup(true);
+    move(560);
+    expect(pop.style.top).toBe("352px");
+    expect(pop.style.maxHeight).toBe("544px");
+    move(874);
+    expect(pop.style.top).toBe("436px");
+  });
+
+  it("stays by its chip with a mouse, whatever the viewport does", () => {
+    const { pop, move } = setup(false);
+    const before = pop.style.top;
+    move(560);
+    expect(pop.style.top).toBe(before);
+  });
+});
+
 describe("usePlacedPopover on the keyboard", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
