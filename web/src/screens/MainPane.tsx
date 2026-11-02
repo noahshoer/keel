@@ -3,6 +3,7 @@
 // date groups, filters into their comma groups, projects into sections.
 // Each list ends with its "+ Add task" row, as in Dioxus.
 
+import { useLayoutEffect, useRef } from "react";
 import type { Loaded } from "../app/load";
 import {
   canShowCompleted,
@@ -11,6 +12,7 @@ import {
   showsProject,
   viewKey,
   viewMode,
+  viewPlace,
   viewSubtitle,
   viewTitle,
 } from "../app/view";
@@ -23,8 +25,11 @@ import { CompletedRow } from "../lists/CompletedRow";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
 import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, SearchIcon } from "../shell/icons";
 import { currentPlatform, searchTooltip } from "../shell/platform";
+import { attachHeadScroll } from "./headScroll";
 import { AddSection, SectionBlock } from "./SectionBlock";
 import { useTitleFit } from "./titleFit";
+
+const SEARCH = viewPlace({ kind: "search" });
 
 function contentClass(motion: Motion, swap: number): string {
   if (motion === "pop") return "content view-pop";
@@ -64,6 +69,34 @@ export function MainPane({
   const toggle = canShowCompleted(view);
   const fullTitle = viewTitle(view);
   const title = useTitleFit(fullTitle);
+  const head = useRef<HTMLDivElement>(null);
+  const listScroll = useRef<HTMLDivElement>(null);
+  const place = viewPlace(view);
+  const previous = useRef<string | null>(null);
+  const left = useRef({ place, top: 0 });
+  // A different view opens at the top with the full title; coming back from
+  // Search returns to where the list was. Attaching draws the header from the
+  // scroll position at once, so it doesn't animate into place.
+  useLayoutEffect(() => {
+    const list = listScroll.current;
+    if (!list || !head.current) return;
+    const back = previous.current === SEARCH && left.current.place === place;
+    list.scrollTop = back ? left.current.top : 0;
+    previous.current = place;
+    const detach = attachHeadScroll(list, head.current);
+    if (place === SEARCH) return detach;
+    // Recorded as it scrolls: by the time a change of view lands, the new content
+    // may already have clamped the position.
+    const record = () => {
+      left.current = { place, top: list.scrollTop };
+    };
+    record();
+    list.addEventListener("scroll", record, { passive: true });
+    return () => {
+      list.removeEventListener("scroll", record);
+      detach();
+    };
+  }, [place]);
   const subtitle = viewSubtitle(view, today);
   const locations = locationsOf([...loaded.all, ...loaded.completed], loaded.projects, loaded.sections);
   const namesProject = showsProject(view);
@@ -176,7 +209,7 @@ export function MainPane({
   return (
     <main className={motion === "push" ? "main view-push" : "main"}>
       <div className={contentClass(motion, swap)}>
-        <div className="view-head">
+        <div ref={head} className="view-head">
           {search ? (
             <button type="button" className="icon-btn back-btn" aria-label="Back" onClick={onLeaveSearch}>
               <ChevronLeftIcon />
@@ -224,7 +257,7 @@ export function MainPane({
             </button>
           )}
         </div>
-        <div className="list-scroll">
+        <div ref={listScroll} className="list-scroll">
           <div className="list-body">
             {subtitle ? (
               <p className={view.kind === "filter" ? "view-sub mono" : "view-sub"}>{subtitle}</p>

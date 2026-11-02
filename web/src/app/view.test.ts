@@ -1,4 +1,4 @@
-import { beforeAll, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { loadCoreForTests } from "../test/wasm";
 import {
   canShowCompleted,
@@ -8,6 +8,7 @@ import {
   type View,
   viewMode,
   viewMotion,
+  viewPlace,
   viewSubtitle,
   viewTitle,
 } from "./view";
@@ -76,4 +77,26 @@ it("views compare by content", () => {
   expect(sameView({ kind: "project", id: "p", name: "Home" }, project)).toBe(true);
   expect(sameView(project, { kind: "project", id: "q", name: "Home" })).toBe(false);
   expect(sameView(today, inbox)).toBe(false);
+});
+
+describe("viewPlace", () => {
+  const home = { kind: "project", id: "p1", name: "Home" } as const;
+
+  it("is the same across a rename", () => {
+    expect(viewPlace({ ...home, name: "House" })).toBe(viewPlace(home));
+    const filter = { kind: "filter", id: "f1", name: "Soon", query: "today" } as const;
+    expect(viewPlace({ ...filter, name: "Next", query: "tomorrow" })).toBe(viewPlace(filter));
+  });
+
+  it("differs between views", () => {
+    const places = [
+      home,
+      { kind: "project", id: "p2", name: "Home" },
+      { kind: "filter", id: "p1", name: "Home", query: "" },
+      { kind: "label", name: "Home" },
+      { kind: "today" },
+      { kind: "search" },
+    ].map((v) => viewPlace(v as View));
+    expect(new Set(places).size).toBe(places.length);
+  });
 });

@@ -159,6 +159,64 @@ it("the completed toggle names itself and its state when only its icon shows", a
   expect(toggle.getAttribute("aria-label")).toBe("Hide completed");
 });
 
+it("a different view opens at the top with the full title", async () => {
+  const { container, rerender } = await show({ kind: "today" });
+  const list = container.querySelector(".list-scroll") as HTMLElement;
+  const head = container.querySelector(".view-head") as HTMLElement;
+  list.scrollTop = 400;
+  head.style.setProperty("--list-fade", "1");
+  rerender(<Harness view={{ kind: "inbox" }} />);
+  await waitFor(() => expect(container.querySelector(".view-title")?.textContent).toBe("Inbox"));
+  expect(list.scrollTop).toBe(0);
+  expect(head.style.getPropertyValue("--list-fade")).toBe("0");
+});
+
+it("the same view reloading keeps its place", async () => {
+  const { container } = await show({ kind: "today" });
+  const list = container.querySelector(".list-scroll") as HTMLElement;
+  list.scrollTop = 400;
+  fireEvent.click(container.querySelector(".view-toggle") as HTMLElement);
+  await waitFor(() => expect(titles(container)).toContain("Completed"));
+  expect(list.scrollTop).toBe(400);
+});
+
+const scrollTo = (list: HTMLElement, top: number) => {
+  list.scrollTop = top;
+  fireEvent.scroll(list);
+};
+
+it("coming back from Search keeps the list's place", async () => {
+  const { container, rerender } = await show({ kind: "today" });
+  const list = container.querySelector(".list-scroll") as HTMLElement;
+  scrollTo(list, 400);
+  rerender(<Harness view={{ kind: "search" }} />);
+  await waitFor(() => expect(container.querySelector(".view-title")?.textContent).toBe("Search"));
+  expect(list.scrollTop).toBe(0);
+  rerender(<Harness view={{ kind: "today" }} />);
+  await waitFor(() => expect(container.querySelector(".view-title")?.textContent).toBe("Today"));
+  expect(list.scrollTop).toBe(400);
+});
+
+it("going from Search to a different view opens it at the top", async () => {
+  const { container, rerender } = await show({ kind: "today" });
+  const list = container.querySelector(".list-scroll") as HTMLElement;
+  scrollTo(list, 400);
+  rerender(<Harness view={{ kind: "search" }} />);
+  await waitFor(() => expect(container.querySelector(".view-title")?.textContent).toBe("Search"));
+  rerender(<Harness view={{ kind: "inbox" }} />);
+  await waitFor(() => expect(container.querySelector(".view-title")?.textContent).toBe("Inbox"));
+  expect(list.scrollTop).toBe(0);
+});
+
+it("renaming the project being viewed keeps its place", async () => {
+  const { container, rerender } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const list = container.querySelector(".list-scroll") as HTMLElement;
+  scrollTo(list, 400);
+  rerender(<Harness view={{ kind: "project", id: "p-home", name: "House" }} />);
+  await waitFor(() => expect(container.querySelector(".view-title")?.textContent).toBe("House"));
+  expect(list.scrollTop).toBe(400);
+});
+
 it("an empty inbox says so", async () => {
   await invoke("dispatch", { cmd: { uuid: "u", action: { type: "task_delete", id: "t-inbox" } } });
   await invoke("dispatch", { cmd: { uuid: "v", action: { type: "task_delete", id: "t-taxes" } } });

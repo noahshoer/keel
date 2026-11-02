@@ -33,6 +33,11 @@ export function viewKey(v: View): string {
   }
 }
 
+/** Which view this is across a rename or an edit, unlike `viewKey`: what keeps its scroll. */
+export function viewPlace(v: View): string {
+  return v.kind === "project" || v.kind === "filter" ? `${v.kind}:${v.id}` : viewKey(v);
+}
+
 export function sameView(a: View, b: View): boolean {
   return viewKey(a) === viewKey(b);
 }

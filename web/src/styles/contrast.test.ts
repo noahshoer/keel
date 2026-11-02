@@ -205,16 +205,31 @@ describe("phone tap targets", () => {
 });
 
 describe("the view header", () => {
-  it("fades over what's under it only once the list has scrolled", () => {
-    expect(css).toMatch(/\.list-scroll::before \{[^}]*linear-gradient\(\s*var\(--page-bg\),/);
-    expect(css).toMatch(/\.list-scroll::before \{[^}]*animation-timeline: scroll\(\)/);
+  it("has a fade below it that grows with the list's scroll", () => {
+    expect(css).toMatch(/\.view-head::after \{[^}]*linear-gradient\(\s*var\(--page-bg\) 14%,/);
+    expect(css).toMatch(
+      /\.view-head::after \{[^}]*transform-origin: top; transform: scaleY\(var\(--list-fade, 0\)\)/,
+    );
   });
 
-  it("is never partly see-through at the header's edge, so a task is never cut off there", () => {
-    expect(css).toMatch(
-      /@keyframes view-head-fade \{ from \{ transform: scaleY\(0\); \} to \{ transform: none; \} \}/,
+  it("is moved frame by frame from script, on its own layer, with no transitions to restart", () => {
+    const phone = css.slice(css.indexOf("@media (max-width: 700px) and (pointer: coarse)"));
+    expect(phone).toMatch(/\.view-head \.view-title \{[^}]*will-change: translate, scale;/);
+    expect(phone).not.toMatch(/\.view-head[^{]*\{[^}]*transition:/);
+    expect(css).not.toMatch(/\.view-head::after \{[^}]*transition:/);
+  });
+
+  it("doesn't use a scroll-linked animation, which iOS doesn't draw at rest", () => {
+    expect(css).not.toContain("animation-timeline");
+  });
+
+  it("on the phone, shrinks over the list instead of resizing it", () => {
+    const phone = css.slice(css.indexOf("@media (max-width: 700px) and (pointer: coarse)"));
+    expect(phone).toMatch(/\.view-head \{[^}]*position: absolute;/);
+    expect(phone).toMatch(/\.list-body \{ padding-top: var\(--head-h\); \}/);
+    expect(phone).toMatch(
+      /\.view-head \.view-title \{[^}]*scale: calc\(1 - var\(--title-move, 0\) \* 0\.412\)/,
     );
-    expect(css).toMatch(/\.list-scroll::before \{[^}]*transform-origin: top/);
   });
 });
 
