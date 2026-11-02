@@ -42,6 +42,16 @@ it("a touch on the scrim counts as in the sheet", () => {
   expect(swipes[1]?.inSheet).toBe(true);
 });
 
+it.each(["editor-scrim", "pop-backdrop"])("a touch on the task card's %s is blocked", (name) => {
+  const dim = document.createElement("div");
+  dim.id = name;
+  dim.className = name;
+  document.body.appendChild(dim);
+  swipe(name, 120);
+  dim.remove();
+  expect(swipes[0]?.blocked).toBe(true);
+});
+
 it("a touch starting in a field is blocked", () => {
   swipe("field", 120);
   expect(swipes[0]?.blocked).toBe(true);

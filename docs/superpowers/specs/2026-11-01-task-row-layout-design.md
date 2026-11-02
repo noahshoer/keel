@@ -1,6 +1,6 @@
 # UI refresh: task rows and visual rules
 
-Decided by Noah, 2026-11-01. Not built yet. This records the task row, icons, contrast, corners and spacing, for all platforms, and the task creation pickers on iPhone.
+Decided by Noah, 2026-11-01. Built on the `ui-refresh` branch. This records the task row, icons, contrast, corners and spacing, for all platforms, and the task creation pickers on iPhone.
 
 Mockups: https://claude.ai/artifact/Jmd7n1csJfHq2bsRj1SSsN (private). The approved "When and what rows: all scenarios" board was version 19; later versions hold only the picker work.
 

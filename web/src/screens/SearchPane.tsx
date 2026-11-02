@@ -53,6 +53,15 @@ export function SearchPane({
     loaded.projects,
     loaded.sections,
   );
+  // Touch: scrolling the results closes the keyboard, as there's no bar to close it from.
+  useEffect(() => {
+    const onMove = (e: TouchEvent) => {
+      const field = document.querySelector<HTMLInputElement>(".search-input");
+      if (field !== null && document.activeElement === field && e.target !== field) field.blur();
+    };
+    document.addEventListener("touchmove", onMove, { passive: true });
+    return () => document.removeEventListener("touchmove", onMove);
+  }, []);
   const where = (t: Task) => locations.get(t.id) ?? INBOX_LOCATION;
   // The last results stay up while a newer query loads (as Dioxus'
   // use_resource keeps its value); "Searching…" only before the first one.
@@ -144,6 +153,8 @@ export function SearchPane({
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Escape") setQuery("");
+              // The results stay; the keyboard stops covering them.
+              if (e.key === "Enter") e.currentTarget.blur();
             }}
           />
           {query ? (

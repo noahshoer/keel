@@ -48,6 +48,22 @@ it("shows Inbox on a result from the Inbox", async () => {
   await waitFor(() => expect(container.querySelector("main.main .task-project")?.textContent).toBe("Inbox"));
 });
 
+it("Return closes the keyboard, keeping the results", async () => {
+  const { input } = await openSearch();
+  fireEvent.change(input, { target: { value: "laundry" } });
+  input.focus();
+  fireEvent.keyDown(input, { key: "Enter" });
+  expect(document.activeElement).not.toBe(input);
+  expect(input.value).toBe("laundry");
+});
+
+it("scrolling the results closes the keyboard", async () => {
+  const { container, input } = await openSearch();
+  input.focus();
+  fireEvent.touchMove(container.querySelector("main.main") as HTMLElement);
+  expect(document.activeElement).not.toBe(input);
+});
+
 it("the magnifying glass on the main page opens Search", async () => {
   const r = render(<App />);
   await screen.findByText("Do laundry");

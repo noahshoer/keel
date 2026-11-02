@@ -112,6 +112,48 @@ describe("due date colors", () => {
   });
 });
 
+function blend(fg: string, bg: string, share: number): string {
+  const part = (h: string, i: number) => Number.parseInt(h.slice(1 + i * 2, 3 + i * 2), 16);
+  const mix = (i: number) => Math.round(part(fg, i) * share + part(bg, i) * (1 - share));
+  return `#${[0, 1, 2].map((i) => mix(i).toString(16).padStart(2, "0")).join("")}`;
+}
+
+describe.each(THEMES)("an open pill's tint, %s", (_theme, tokens) => {
+  const share =
+    Number(
+      css.match(
+        /\.pill-tinted\.chip-btn\.chip-open \{ background: color-mix\(in srgb, currentColor (\d+)%, var\(--bg\)\)/,
+      )?.[1],
+    ) / 100;
+  it("is a share of the color over the card", () => {
+    expect(share).toBeGreaterThan(0);
+  });
+  it.each(["--p1", "--p2-text", "--p3-text"])("keeps %s at least 4.5:1", (t) => {
+    const fg = tokens[t] as string;
+    expect(contrast(fg, blend(fg, tokens["--bg"] as string, share))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("text that used to miss the rule", () => {
+  it("every quick choice has its color, later dates in Keel green", () => {
+    expect(css).toMatch(/\.quick-later \.menu-label \{ color: var\(--accent-text\); \}/);
+  });
+  it("quick-add chips use the text colors", () => {
+    expect(css).toMatch(/\.quick-chip\.chip-project \{ color: var\(--p3-text\); \}/);
+    expect(css).toMatch(/\.quick-chip\.chip-label \{ color: var\(--p2-text\); \}/);
+  });
+  it("past and other-month days aren't faded below it", () => {
+    expect(css).not.toMatch(/\.cal-day\.(past|other) \{[^}]*opacity/);
+  });
+});
+
+describe("phone tap targets", () => {
+  it.each([".search-clear", ".view-toggle", ".tv-toggle", ".btn"])("%s reaches 44pt", (sel) => {
+    const touch = css.slice(css.indexOf("/* Tap targets reach 44pt"));
+    expect(touch).toContain(`${sel}::after`);
+  });
+});
+
 describe("radii", () => {
   it("has the card, panel and item radii", () => {
     expect(css).toMatch(/--r-card:\s*20px/);

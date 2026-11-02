@@ -87,18 +87,33 @@ export function TaskEditor({
   // keyboard; whatever replaces it brings the keyboard back, inside the tap.
   const madeRoom = useRef(false);
   const beforeCalendar = useRef(initial);
+  // While a calendar is open, text typed still counts when its X undoes the rest.
+  const inCalendar = useRef(false);
+  const roomFrom = useRef<HTMLElement | null>(null);
   const makeRoom = () => {
     // What the calendar's X goes back to.
     beforeCalendar.current = latest.current;
+    inCalendar.current = true;
     if (!touch) return;
     madeRoom.current = true;
-    title.current?.blur();
+    // The field the keyboard is up for, unless it's inside the picker being replaced.
+    const focused = document.activeElement as HTMLElement | null;
+    roomFrom.current =
+      focused?.closest(".on-keyboard") && !focused.closest(".popover") ? focused : title.current;
+    focused?.blur();
   };
   const setPop = (p: Pop) => {
     setOpen(p);
-    if (p === "deadline" && open !== "deadline") makeRoom();
-    else if (madeRoom.current) {
+    if (p === "deadline" && open !== "deadline") {
+      makeRoom();
+      return;
+    }
+    inCalendar.current = false;
+    if (madeRoom.current) {
       madeRoom.current = false;
+      (roomFrom.current ?? title.current)?.focus();
+    } else if (touch && document.activeElement?.closest(".popover")) {
+      // The picker's own field is going away; the keyboard stays for the title.
       title.current?.focus();
     }
   };
@@ -264,7 +279,10 @@ export function TaskEditor({
         segments={view.segments}
         value={values.content}
         placeholder={quickAdd ? "Task name — try “Call mom tomorrow 5pm p1 #Home @phone”" : "Task name"}
-        onInput={(text) => setValues((v) => withTitle(v, text))}
+        onInput={(text) => {
+          if (inCalendar.current) beforeCalendar.current = withTitle(beforeCalendar.current, text);
+          setValues((v) => withTitle(v, text));
+        }}
         onEnter={submit}
         onUnhighlight={(caret) =>
           setValues((v) => (quickAdd ? (unhighlightAt(v, projects, sections, today, caret) ?? v) : v))
@@ -287,6 +305,7 @@ export function TaskEditor({
         value={values.description}
         onChange={(e) => {
           const description = e.target.value;
+          if (inCalendar.current) beforeCalendar.current = { ...beforeCalendar.current, description };
           setValues((v) => ({ ...v, description }));
         }}
       />

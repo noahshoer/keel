@@ -328,6 +328,19 @@ it("the delete button deletes the task", async () => {
   expect(onChanged).toHaveBeenCalled();
 });
 
+it("a completed row's long project can shorten", () => {
+  const { container } = render(
+    <CompletedRow
+      task={fixture("t-laundry")}
+      today={today}
+      location="A long project / A long section"
+      onChanged={() => {}}
+    />,
+    { wrapper },
+  );
+  expect(container.querySelector(".task-project")?.className).toContain("row-shrink");
+});
+
 it("a completed row reopens from its filled check", async () => {
   const onChanged = vi.fn();
   const { container } = render(

@@ -54,7 +54,7 @@ export function CompletedRow({
             <TrashIcon />
           </button>
         </div>
-        {location !== null ? <span className="task-project">{location}</span> : null}
+        {location !== null ? <span className="task-project row-shrink">{location}</span> : null}
       </div>
     </div>
   );

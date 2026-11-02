@@ -254,6 +254,41 @@ describe("on touch", () => {
       expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
     });
 
+    const desc = () => screen.getByPlaceholderText("Description") as HTMLInputElement;
+    const openDeadlinePill = () =>
+      fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
+
+    it("lowers the keyboard from the description too, and goes back to it", () => {
+      adding();
+      desc().focus();
+      openDeadlinePill();
+      expect(document.activeElement).not.toBe(desc());
+      fireEvent.click(screen.getByRole("button", { name: "Done" }));
+      expect(document.activeElement).toBe(desc());
+    });
+
+    it("the X keeps text typed while the calendar was open", () => {
+      adding();
+      title().focus();
+      openDeadlinePill();
+      fireEvent.click(day("12"));
+      fireEvent.change(title(), { target: { value: "Typed meanwhile" } });
+      fireEvent.change(desc(), { target: { value: "Notes meanwhile" } });
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(title().value).toBe("Typed meanwhile");
+      expect(desc().value).toBe("Notes meanwhile");
+      expect(screen.getByTitle("Deadline: the date it must be done by").textContent).not.toContain("12");
+    });
+
+    it("closing a picker from its own field goes back to the title", () => {
+      adding();
+      fireEvent.click(screen.getByTitle("Labels"));
+      const find = screen.getByPlaceholderText("Find or add a label") as HTMLInputElement;
+      find.focus();
+      fireEvent.click(document.querySelector(".pop-backdrop") as Element);
+      expect(focused()).toBe(true);
+    });
+
     it("another pill or a tap outside brings it back", () => {
       adding();
       title().focus();

@@ -367,6 +367,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .task-project-name, .task-project-section { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
 .task-project-name { flex: 0 1 auto; }
 .task-project-section { flex: 0 100 auto; }
+.task-row > .task-project { display: block; flex: 0 1 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
 .task-project { display: flex; margin-left: auto; font-size: 13px; line-height: 18px; color: var(--secondary); white-space: nowrap; }
 .task-actions { position: absolute; top: 4px; right: 4px; padding: 2px; border-radius: var(--r-full); background: var(--row-hover);
   box-shadow: var(--shadow-sm); pointer-events: none; display: flex; gap: 2px; opacity: 0; transform: translateX(4px); }
@@ -416,7 +417,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   color-mix(in srgb, var(--pill-fade) 82%, transparent) 75%, var(--pill-fade)); }
 .editor-actions.pills-run-on::after { top: 12px; right: 29px; }
 .editor-actions.pills-run-back::before { top: 12px; left: -12px; width: 48px; z-index: 1; }
-.on-keyboard .pill-tinted.chip-btn.chip-open { background: color-mix(in srgb, currentColor 18%, var(--field-fill)); font-weight: 600; }
+.on-keyboard .pill-tinted.chip-btn.chip-open { background: color-mix(in srgb, currentColor 12%, var(--bg)); font-weight: 600; }
 .on-keyboard .pill-tinted.pill-p1.chip-btn.chip-open { color: var(--p1); }
 .on-keyboard .pill-tinted.pill-p2.chip-btn.chip-open { color: var(--p2-text); }
 .on-keyboard .pill-tinted.pill-p3.chip-btn.chip-open { color: var(--p3-text); }
@@ -482,8 +483,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .quick-chip.chip-date { color: var(--due-today); }
 .quick-chip.chip-repeat { color: var(--due-week); }
 .quick-chip.chip-priority { color: var(--p1); }
-.quick-chip.chip-project { color: var(--p3); }
-.quick-chip.chip-label { color: var(--p2); }
+.quick-chip.chip-project { color: var(--p3-text); }
+.quick-chip.chip-label { color: var(--p2-text); }
 .chip select option { background: var(--chip-bg); color: var(--chip-text); }
 .editor-footer { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--divider); padding: 10px 0 12px; }
 .btn { border: none; border-radius: var(--r-full); padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
@@ -552,6 +553,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .quick-today .menu-label { color: var(--due-today); }
 .quick-tomorrow .menu-label { color: var(--due-tomorrow); }
 .quick-week .menu-label { color: var(--due-week); }
+.quick-later .menu-label { color: var(--accent-text); }
 .chip.due-chip.chip-open.overdue { background: var(--due-overdue); color: var(--on-fill); }
 .chip.due-chip.chip-open.today { background: var(--due-today); color: var(--on-fill); }
 .chip.due-chip.chip-open.tomorrow { background: var(--due-tomorrow); color: var(--on-fill); }
@@ -570,8 +572,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .cal-day { height: 32px; border: none; background: none; border-radius: 50%; cursor: pointer; font-size: 12.5px;
   color: var(--text); font-variant-numeric: tabular-nums; }
 @media (hover: hover) { .cal-day:hover { background: var(--hover); } }
-.cal-day.other { color: var(--muted); opacity: .6; }
-.cal-day.past { color: var(--muted); opacity: .45; }
+.cal-day.other { color: var(--secondary); }
+.cal-day.past { color: var(--secondary); }
 .cal-day.is-today { color: var(--accent-text); font-weight: 700; }
 .cal-day.selected { background: var(--accent); color: var(--on-fill); font-weight: 600; opacity: 1; }
 .sched-time { display: flex; align-items: center; gap: 8px; padding: 8px 12px 10px; border-top: 1px solid var(--divider); color: var(--muted); }
@@ -649,8 +651,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .check { position: relative; width: 26px; height: 26px; min-width: 26px; margin-top: 0; border-width: 1.75px; }
   .check::after { content: ''; position: absolute; inset: -9px; }
   /* Tap targets reach 44pt whatever the visible size. */
-  .icon-btn { position: relative; }
-  .icon-btn::after { content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+  .icon-btn, .view-toggle, .tv-toggle, .btn { position: relative; }
+  .icon-btn::after, .search-clear::after, .view-toggle::after, .tv-toggle::after, .btn::after { content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+  .view-toggle::after, .tv-toggle::after, .btn::after { width: max(100%, 44px); }
   .chip-btn, .tv-pill, .menu-item, .label-opt, .label-color-btn { min-height: 44px; }
   .label-swatch { width: 44px; height: 44px; }
   .label-swatch span { width: 26px; height: 26px; }
