@@ -1228,6 +1228,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .popover.row-menu.editing { width: min(340px, calc(100vw - 16px)); padding: 0; }
   .row-menu .confirm-text { font-size: 15px; }
   .row-menu .menu-item { min-height: 44px; font-size: 16px; }
+  /* Delete and Cancel are full tap targets, here and in the forms and section rows that share them. */
+  .confirm-actions { gap: 8px; }
+  .confirm-actions .btn { min-height: 44px; padding: 0 18px; font-size: 15px; }
+  .row-menu .confirm-text { margin-bottom: 12px; }
+  .row-menu .confirm-actions .btn { flex: 1; }
   .task-view > .pop-backdrop { background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
   .scheduler { padding: 12px; }
   .sched-head .icon-btn { width: 44px; height: 44px; }
