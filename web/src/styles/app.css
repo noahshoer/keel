@@ -707,6 +707,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .nav-icon svg { width: 20px; height: 20px; }
   .nav-icon.hash { font-size: 18px; }
   .nav-item .count { font-size: 15px; }
+  /* Full tap targets side by side, without making the row taller. */
+  .nav-actions { margin: -8px -12px -8px 0; }
+  .nav-actions .icon-btn { width: 44px; height: 44px; }
   .section-head { font-size: 14px; line-height: 19px; padding: 16px 0 6px; }
   .section-head .icon-btn { width: 44px; }
   .section-head .icon-btn svg { width: 20px; height: 20px; }
@@ -760,12 +763,14 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .done-when { color: var(--muted); }
 .nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-actions { display: none; gap: 0; }
-/* Mouse: hover shows a row's rename/delete. Touch: a long press opens a menu
-   (gestures.rs); a hover reveal would cost every tap an extra tap. */
+/* Mouse: hover shows a row's rename/delete. Touch: a long press does
+   (gestures/long-press.ts); a hover reveal would cost every tap an extra tap. */
 @media (hover: hover) { .nav-item:hover .nav-actions { display: inline-flex; } }
+.nav-item.pressed .nav-actions { display: inline-flex; }
 .nav-actions .icon-btn { padding: 3px; }
-/* Mouse: a row's actions take the count's place while hovered. */
+/* A row's actions take the count's place while they show. */
 @media (hover: hover) { .nav-item:hover > .count:has(+ .nav-actions) { display: none; } }
+.nav-item.pressed > .count:has(+ .nav-actions) { display: none; }
 .nav-item > .count:has(+ .nav-actions) { margin-left: 0; }
 .confirm-box { margin: 4px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md);
   background: var(--bg); box-shadow: var(--shadow-md); animation: pop-in .16s var(--ease); }

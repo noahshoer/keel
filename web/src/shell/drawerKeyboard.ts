@@ -8,6 +8,11 @@ import { isTouch } from "../editor/locale";
 
 /** Keeps the form clear of the keyboard's top edge. */
 const MARGIN = 12;
+/**
+ * Scroll room past the form, so it can shrink (the filter hint giving way to a
+ * shorter error) without the drawer's scroll limit pulling everything down.
+ */
+const SPARE = 80;
 
 type Span = { top: number; bottom: number };
 
@@ -19,7 +24,7 @@ export function revealedScrollTop(scrollTop: number, form: Span, room: Span): nu
   return scrollTop + Math.min(under, form.top - room.top);
 }
 
-/** How far up the keyboard reaches over the drawer (0 when it's down). */
+/** The room the drawer needs below its rows for the keyboard (0 when it's down). */
 export function useDrawerKeyboard(sidebar: RefObject<HTMLElement | null>): number {
   const [touch] = useState(isTouch);
   const { up, inset, room } = useKeyboard(touch);
@@ -47,5 +52,5 @@ export function useDrawerKeyboard(sidebar: RefObject<HTMLElement | null>): numbe
       drawer.removeEventListener("input", onInput);
     };
   }, [sidebar, up, room]);
-  return up ? inset : 0;
+  return up ? inset + SPARE : 0;
 }
