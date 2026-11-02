@@ -171,10 +171,6 @@ describe("text that used to miss the rule", () => {
       /\.quick-later \.menu-label, \.quick-later \.menu-hint \{ color: var\(--accent-text\); \}/,
     );
   });
-  it("quick-add chips use the text colors", () => {
-    expect(css).toMatch(/\.quick-chip\.chip-project \{ color: var\(--p3-text\); \}/);
-    expect(css).toMatch(/\.quick-chip\.chip-label \{ color: var\(--p2-text\); \}/);
-  });
   it("other-month days aren't faded below it", () => {
     expect(css).not.toMatch(/\.cal-day\.other \{[^}]*opacity/);
   });

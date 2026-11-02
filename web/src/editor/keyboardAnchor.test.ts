@@ -30,7 +30,7 @@ describe("textRoomUnderPicker", () => {
   // A card ending at 538 with 84 of pills and padding, under a status bar ending at 70.
   const room = (picker: number) => textRoomUnderPicker(538, 70, picker, 84);
 
-  it("is a usual card's when the picker fits above that", () => {
+  it("is its most when the picker fits above that", () => {
     expect(room(206)).toBe(84);
   });
 

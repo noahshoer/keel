@@ -1,6 +1,6 @@
 // The task card with long text: it stops at the top of what's visible, the text
 // scrolls and the pills stay, and an open picker gets its room back. A usual card
-// (title, chips, one line of description) doesn't change when a picker opens.
+// (title, one line of description) doesn't change when a picker opens.
 const set = (el, value) => {
   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(el, value);
   el.dispatchEvent(new Event("input", { bubbles: true }));

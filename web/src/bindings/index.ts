@@ -47,7 +47,6 @@ export type * from "./MissingPill";
 export type * from "./MonthView";
 export type * from "./NoArgs";
 export type * from "./PlannedReminder";
-export type * from "./PreviewChip";
 export type * from "./Priority";
 export type * from "./Progress";
 export type * from "./Project";

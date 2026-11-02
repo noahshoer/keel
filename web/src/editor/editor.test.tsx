@@ -159,7 +159,6 @@ describe("a card too long for the screen", () => {
     type(title, "Call mom tomorrow");
     expect(text()?.contains(title)).toBe(true);
     expect(text()?.contains(screen.getByPlaceholderText("Description"))).toBe(true);
-    expect(text()?.querySelector(".quick-preview")).not.toBeNull();
     expect(text()?.querySelector(".chips")).toBeNull();
     expect(text()?.contains(screen.getByRole("button", { name: "Add task" }))).toBe(false);
   });
@@ -547,14 +546,26 @@ describe("on touch", () => {
   });
 });
 
-it("highlights what quick add understood and previews it", () => {
+it("highlights what quick add understood and fills its pills, with no row of its own", () => {
   const title = adding();
   type(title, "Call mom tomorrow p1");
   expect(marks()).toEqual(["hl hl-date:tomorrow", "hl hl-p1:p1"]);
-  const chips = [...document.querySelectorAll(".quick-preview .quick-chip")].map(
-    (c) => `${c.className}:${c.textContent}`,
-  );
-  expect(chips).toEqual(["quick-chip chip-date:Tomorrow", "quick-chip chip-priority:P1"]);
+  expect(screen.getByTitle("Date").textContent).toBe("Tomorrow");
+  expect(screen.getByTitle("Priority").textContent).toBe("P1");
+  expect(screen.getByTitle("Priority").className).toContain("pill-p1");
+  expect(document.querySelector(".quick-preview")).toBeNull();
+  type(title, "Call mom");
+  expect(screen.getByTitle("Priority").textContent).toBe("Priority");
+});
+
+it("picking on a pill that a phrase filled replaces the phrase", () => {
+  const title = adding();
+  type(title, "Call mom p1");
+  fireEvent.click(screen.getByTitle("Priority"));
+  fireEvent.click(screen.getByText("Priority 2"));
+  expect(title.value).toBe("Call mom");
+  expect(screen.getByTitle("Priority").textContent).toBe("P2");
+  cleanup();
 });
 
 it("can't add a phrase on its own", () => {
@@ -702,7 +713,6 @@ it("edit mode never highlights and saves once", async () => {
   );
   const title = screen.getByPlaceholderText("Task name") as HTMLTextAreaElement;
   expect(marks()).toEqual([]);
-  expect(document.querySelector(".quick-preview")).toBeNull();
   await act(async () => {
     fireEvent.keyDown(title, { key: "Enter" });
     fireEvent.keyDown(title, { key: "Enter" });

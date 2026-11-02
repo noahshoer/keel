@@ -1,6 +1,6 @@
 // The Todoist-style task editor card, shared by "+ Add task", "Add sub-task"
 // and editing (crates/ui/src/editor.rs `TaskEditor`). When adding, the title
-// is parsed as quick add with live highlighting and preview chips. Every
+// is parsed as quick add with live highlighting, and what it says fills the pills. Every
 // decision about the values is keel-core's (`editorView`, `applyPick`, …).
 import {
   type CSSProperties,
@@ -14,7 +14,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { holdPage } from "../app/pageHold";
-import type { EditorPick, EditorValues, Label, Project, Recurrence, Section, SpanKind } from "../bindings";
+import type { EditorPick, EditorValues, Label, Project, Recurrence, Section } from "../bindings";
 import { localToday } from "../clock";
 import {
   applyPick,
@@ -47,17 +47,6 @@ function keepFocus(e: MouseEvent<HTMLElement>): void {
   if (!target.closest("input, textarea, select")) e.preventDefault();
 }
 
-const PREVIEW: Record<SpanKind, string> = {
-  Date: "chip-date",
-  Time: "chip-date",
-  Repeat: "chip-repeat",
-  Priority: "chip-priority",
-  Project: "chip-project",
-  Section: "chip-project",
-  Label: "chip-label",
-  Deadline: "chip-deadline",
-};
-
 export function TaskEditor({
   initial,
   projects,
@@ -82,7 +71,7 @@ export function TaskEditor({
   /** The edited task's recurrence (what "keep" repeats by). */
   existing: Recurrence | null;
   submitText: string;
-  /** Parse the title as quick add (adding) and preview it. */
+  /** Parse the title as quick add (adding), filling the pills from it. */
   quickAdd: boolean;
   /** Stay open after submitting, reset to `initial` (Todoist's add flow). */
   keepOpen: boolean;
@@ -186,8 +175,8 @@ export function TaskEditor({
   const pills: ReactNode = (
     <div ref={pillRow.ref} className="chips" onScroll={pillRow.onScroll}>
       <DatePicker
-        date={values.date}
-        time={values.time}
+        date={view.shown.date}
+        time={view.shown.time}
         text={view.date_chip[0]}
         bucket={view.date_chip[1]}
         rule={view.repeat_rule}
@@ -209,7 +198,7 @@ export function TaskEditor({
         actions={calendarActions}
       />
       <DeadlinePicker
-        deadline={values.deadline}
+        deadline={view.shown.deadline}
         text={view.deadline_text}
         urgent={view.deadline_urgent}
         today={today}
@@ -222,13 +211,15 @@ export function TaskEditor({
         id="priority"
         title="Priority"
         icon={<FlagFilledIcon />}
-        iconClass={flagClass(values.priority)}
+        iconClass={flagClass(view.shown.priority)}
         text={view.priority_text}
         items={PRIORITY_ITEMS}
-        selected={values.priority}
+        selected={view.shown.priority}
         open={open}
         setOpen={setPop}
-        chipClass={["1", "2", "3"].includes(values.priority) ? `pill-p${values.priority} pill-tinted` : ""}
+        chipClass={
+          ["1", "2", "3"].includes(view.shown.priority) ? `pill-p${view.shown.priority} pill-tinted` : ""
+        }
         onSelect={(value) => pick({ type: "priority", value })}
       />
       <Menu
@@ -245,7 +236,7 @@ export function TaskEditor({
       />
       <LabelPicker
         labels={labels}
-        selected={view.shown_labels}
+        selected={view.shown.labels}
         text={view.labels_text}
         open={open}
         setOpen={setPop}
@@ -327,16 +318,6 @@ export function TaskEditor({
           }}
           inputRef={title}
         />
-        {view.preview.length > 0 ? (
-          <div className="quick-preview">
-            {view.preview.map((c, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: the chips follow the parse's order.
-              <span key={i} className={`quick-chip ${PREVIEW[c.kind]}`}>
-                {c.text}
-              </span>
-            ))}
-          </div>
-        ) : null}
         <div className="desc-wrap">
           <div className="desc-mirror" aria-hidden="true">
             {`${values.description}\u200b`}

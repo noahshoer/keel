@@ -28,14 +28,14 @@ export function placeAboveCard(
   };
 }
 
-/** A usual card's text (title, chips, one line of description), under a picker. */
-const USUAL_TEXT = 84;
+/** The most of the card's text that stays in view under a picker. */
+const MAX_TEXT = 84;
 /** Two lines of title: what's left of the text above the tallest picker. */
 const MIN_TEXT = 48;
 
 /**
- * How tall the card's text may be while a picker is open: a usual card's,
- * less whatever the picker needs to fit between the card and `minTop`. `chrome`
+ * How tall the card's text may be while a picker is open: `MAX_TEXT`, less
+ * whatever the picker needs to fit between the card and `minTop`. `chrome`
  * is the card's height without its text.
  */
 export function textRoomUnderPicker(
@@ -45,7 +45,7 @@ export function textRoomUnderPicker(
   chrome: number,
 ): number {
   const left = cardBottom - minTop - MARGIN - picker - chrome;
-  return Math.max(MIN_TEXT, Math.min(USUAL_TEXT, left));
+  return Math.max(MIN_TEXT, Math.min(MAX_TEXT, left));
 }
 
 /** `room` is the height of what's visible, which the task card has to fit in. */
