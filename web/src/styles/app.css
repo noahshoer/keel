@@ -283,14 +283,20 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .icon-btn:active { transform: scale(.92); }
 
 /* Main pane: a rounded card floating on the app background */
-.main { flex: 1; overflow-y: auto; background: var(--page); margin: 8px 8px 8px 0;
+.main { --page-bg: var(--page); flex: 1; min-width: 0; display: flex; overflow: hidden; background: var(--page-bg); margin: 8px 8px 8px 0;
   border-radius: var(--r-panel); box-shadow: var(--shadow-md); }
 /* Desktop: a tinted sidebar beside a raised main panel. */
 @media (min-width: 900px) {
   .app { background: var(--chrome); }
-  .main { background: var(--page-wide); }
+  .main { --page-bg: var(--page-wide); }
 }
-.content { max-width: 820px; margin: 0 auto; padding: 40px 48px 96px; }
+.content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* Both edges: a scrollbar that takes up room leaves the list centered under the header. */
+.list-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable both-edges; }
+.list-body { max-width: 820px; margin: 0 auto; padding: 0 48px 96px; }
+/* Touch: a short list still scrolls and bounces. One pixel over is enough, and
+   a mouse would get a scrollbar for it. */
+@media (pointer: coarse) { .list-scroll > .list-body { min-height: calc(100% + 1px); } }
 /* A view fades in when it lands; two identical animations alternate so a
    switch restarts it (main.rs `swap`). */
 @keyframes view-in-a { from { opacity: 0; } to { opacity: 1; } }
@@ -605,7 +611,22 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .label-new:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
 
 /* Completed tasks + sidebar management */
-.view-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* The header stays put, even while the list bounces, because it sits outside
+   the scroller. The list slides under it into a fade that grows with the scroll:
+   solid at the header's edge from the first pixel, so nothing is cut off there,
+   and gone at the top, where it would wash out what sits below. */
+.view-head { flex: none; width: 100%; max-width: 820px; margin: 0 auto; padding: 40px 48px 0;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.list-scroll::before { content: ''; display: block; position: sticky; top: 0; z-index: 5; height: 72px; margin-bottom: -72px;
+  pointer-events: none; transform-origin: top;
+  background: linear-gradient(
+    var(--page-bg),
+    color-mix(in srgb, var(--page-bg) 80%, transparent) 22%,
+    color-mix(in srgb, var(--page-bg) 45%, transparent) 48%,
+    color-mix(in srgb, var(--page-bg) 16%, transparent) 74%,
+    transparent);
+  animation: view-head-fade linear both; animation-timeline: scroll(); animation-range: 0 72px; }
+@keyframes view-head-fade { from { transform: scaleY(0); } to { transform: none; } }
 /* iPhone: native glass buttons float over the header (menu left, search
    right) and the list (+ bottom right); keep their spots clear. */
 .native-glass .menu-btn { display: none; }
@@ -690,7 +711,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 }
 /* Touch: a long press shows a task's actions; no text selection or callout. */
 @media (hover: none) { .task-row, .nav-item { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
-.view-head .view-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* One line: titleFit.ts cuts between words, the ellipsis is for one huge word. */
+.view-head .view-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .view-head .view-toggle { flex-shrink: 0; }
 .view-toggle .icon { color: var(--icon); }
 .view-toggle[aria-pressed="true"] .icon { color: var(--accent); }
@@ -1062,13 +1084,17 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .menu-btn, .back-btn { display: inline-flex; }
   .view-head:has(.back-btn) .view-title { display: none; }
   .main { margin: 0; border-radius: 0; box-shadow: none; }
-  .content { padding: calc(10px + env(safe-area-inset-top)) 16px 80px; }
-  /* The header's room goes to the title: the toggle is its icon alone, sized
-     like the search beside it, and a long title wraps, ending in … only past three lines. */
+  .list-body { padding: 0 16px 80px; }
+  .view-head { padding: calc(10px + env(safe-area-inset-top)) 16px 0; }
+  /* The icons get a row, menu to the left and the rest to the right, and the
+     title gets the full width beneath. The toggle is its icon alone, sized
+     like the search beside it. */
+  .view-head { flex-wrap: wrap; row-gap: 0; }
+  .view-head .view-title { order: 1; flex-basis: 100%; }
+  .menu-btn, .back-btn { margin-right: auto; }
   .view-toggle { justify-content: center; width: 44px; height: 44px; padding: 0; margin-right: -12px; }
   .view-toggle svg { width: 24px; height: 24px; }
   .view-toggle-label { display: none; }
-  .view-head .view-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: break-word; }
   .section-title { padding-left: 8px; padding-right: 8px; }
   .streak-panel { margin-left: 0; gap: 12px; }
   /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */

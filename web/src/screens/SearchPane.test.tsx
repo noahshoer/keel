@@ -25,7 +25,9 @@ it("an empty query invites a search, with this platform's hint", async () => {
 it("typing shows the open results with their project", async () => {
   const { container, input } = await openSearch();
   fireEvent.change(input, { target: { value: "laundry" } });
-  await waitFor(() => expect(container.querySelector(".content > .view-sub")?.textContent).toBe("2 results"));
+  await waitFor(() =>
+    expect(container.querySelector(".list-body > .view-sub")?.textContent).toBe("2 results"),
+  );
   // Scoped to the live pane: the push leaves a still copy of Today (.view-ghost) for a moment.
   expect([...container.querySelectorAll("main.main .task-content")].map((e) => e.textContent)).toEqual([
     "Do laundry",
@@ -37,7 +39,9 @@ it("typing shows the open results with their project", async () => {
 it("counts the results above one card of the list's own rows", async () => {
   const { container, input } = await openSearch();
   fireEvent.change(input, { target: { value: "laundry" } });
-  await waitFor(() => expect(container.querySelector(".content > .view-sub")?.textContent).toBe("2 results"));
+  await waitFor(() =>
+    expect(container.querySelector(".list-body > .view-sub")?.textContent).toBe("2 results"),
+  );
   const card = container.querySelector("main.main .task-card") as HTMLElement;
   expect(card.querySelectorAll(".task-row")).toHaveLength(2);
 });
@@ -159,13 +163,13 @@ it("a slow earlier search never replaces newer results", async () => {
     fireEvent.change(input, { target: { value: "laundry" } });
     await act(async () => pending["laundry"]?.());
     await waitFor(() =>
-      expect(container.querySelector(".content > .view-sub")?.textContent).toBe("2 results"),
+      expect(container.querySelector(".list-body > .view-sub")?.textContent).toBe("2 results"),
     );
     await act(async () => pending["bins"]?.());
-    expect(container.querySelector(".content > .view-sub")?.textContent).toBe("2 results");
+    expect(container.querySelector(".list-body > .view-sub")?.textContent).toBe("2 results");
     // While a newer query loads, the last results stay up (no "Searching…" flash).
     fireEvent.change(input, { target: { value: "laundryx" } });
-    expect(container.querySelector("main.main .content > .view-sub")?.textContent).toBe("2 results");
+    expect(container.querySelector("main.main .list-body > .view-sub")?.textContent).toBe("2 results");
     expect(container.querySelectorAll("main.main .task-row")).toHaveLength(2);
   } finally {
     delete window.__TAURI__;

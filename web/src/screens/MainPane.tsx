@@ -24,6 +24,7 @@ import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
 import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, SearchIcon } from "../shell/icons";
 import { currentPlatform, searchTooltip } from "../shell/platform";
 import { AddSection, SectionBlock } from "./SectionBlock";
+import { useTitleFit } from "./titleFit";
 
 function contentClass(motion: Motion, swap: number): string {
   if (motion === "pop") return "content view-pop";
@@ -61,6 +62,8 @@ export function MainPane({
   const today = localToday();
   const mode = viewMode(view);
   const toggle = canShowCompleted(view);
+  const fullTitle = viewTitle(view);
+  const title = useTitleFit(fullTitle);
   const subtitle = viewSubtitle(view, today);
   const locations = locationsOf([...loaded.all, ...loaded.completed], loaded.projects, loaded.sections);
   const namesProject = showsProject(view);
@@ -189,7 +192,13 @@ export function MainPane({
               <MenuIcon />
             </button>
           )}
-          <h1 className="view-title">{viewTitle(view)}</h1>
+          <h1
+            ref={title.ref}
+            className="view-title"
+            aria-label={title.text === fullTitle ? undefined : fullTitle}
+          >
+            {title.text}
+          </h1>
           {toggle ? (
             <button
               type="button"
@@ -215,37 +224,43 @@ export function MainPane({
             </button>
           )}
         </div>
-        {subtitle ? (
-          <p className={view.kind === "filter" ? "view-sub mono" : "view-sub"}>{subtitle}</p>
-        ) : null}
-        {loaded.filterError !== null ? (
-          <div className="filter-problem big-problem">{`This filter can’t run: ${loaded.filterError}`}</div>
-        ) : empty && projectSections.length === 0 && !search ? (
-          <div className="empty">
-            <div className="big">{big}</div>
-            <div>{small}</div>
-          </div>
-        ) : null}
-        {body}
-        {showCompleted && toggle && !search ? (
-          <>
-            <div className="section-title">
-              Completed
-              <span className="muted">{loaded.completed.length}</span>
-            </div>
-            {loaded.completed.length === 0 ? <p className="view-sub">No completed tasks here yet.</p> : null}
-            {loaded.completed.map((task) => (
-              <div key={`done-${task.id}`} className="task-card">
-                <CompletedRow
-                  task={task}
-                  today={today}
-                  location={namesProject ? locationText(locations.get(task.id) ?? INBOX_LOCATION) : null}
-                  onChanged={onChanged}
-                />
+        <div className="list-scroll">
+          <div className="list-body">
+            {subtitle ? (
+              <p className={view.kind === "filter" ? "view-sub mono" : "view-sub"}>{subtitle}</p>
+            ) : null}
+            {loaded.filterError !== null ? (
+              <div className="filter-problem big-problem">{`This filter can’t run: ${loaded.filterError}`}</div>
+            ) : empty && projectSections.length === 0 && !search ? (
+              <div className="empty">
+                <div className="big">{big}</div>
+                <div>{small}</div>
               </div>
-            ))}
-          </>
-        ) : null}
+            ) : null}
+            {body}
+            {showCompleted && toggle && !search ? (
+              <>
+                <div className="section-title">
+                  Completed
+                  <span className="muted">{loaded.completed.length}</span>
+                </div>
+                {loaded.completed.length === 0 ? (
+                  <p className="view-sub">No completed tasks here yet.</p>
+                ) : null}
+                {loaded.completed.map((task) => (
+                  <div key={`done-${task.id}`} className="task-card">
+                    <CompletedRow
+                      task={task}
+                      today={today}
+                      location={namesProject ? locationText(locations.get(task.id) ?? INBOX_LOCATION) : null}
+                      onChanged={onChanged}
+                    />
+                  </div>
+                ))}
+              </>
+            ) : null}
+          </div>
+        </div>
       </div>
     </main>
   );

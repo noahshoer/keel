@@ -204,6 +204,28 @@ describe("phone tap targets", () => {
   });
 });
 
+describe("the view header", () => {
+  it("fades over what's under it only once the list has scrolled", () => {
+    expect(css).toMatch(/\.list-scroll::before \{[^}]*linear-gradient\(\s*var\(--page-bg\),/);
+    expect(css).toMatch(/\.list-scroll::before \{[^}]*animation-timeline: scroll\(\)/);
+  });
+
+  it("is never partly see-through at the header's edge, so a task is never cut off there", () => {
+    expect(css).toMatch(
+      /@keyframes view-head-fade \{ from \{ transform: scaleY\(0\); \} to \{ transform: none; \} \}/,
+    );
+    expect(css).toMatch(/\.list-scroll::before \{[^}]*transform-origin: top/);
+  });
+});
+
+describe("lists on touch", () => {
+  it("always scroll, however short, so they bounce like a full list", () => {
+    expect(css).toContain(
+      "@media (pointer: coarse) { .list-scroll > .list-body { min-height: calc(100% + 1px); } }",
+    );
+  });
+});
+
 describe("calendar days on the phone", () => {
   it("reach 44pt beyond their drawn 40", () => {
     expect(css).toMatch(/\.cal-day::after \{ content: ''; position: absolute; inset: -2px; \}/);
