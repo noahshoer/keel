@@ -148,6 +148,17 @@ it("show completed lists the view's completed tasks", async () => {
   expect(done && within(done as HTMLElement).getByText("Take out the bins")).toBeTruthy();
 });
 
+it("the completed toggle names itself and its state when only its icon shows", async () => {
+  const { container } = await show({ kind: "today" });
+  const toggle = container.querySelector<HTMLButtonElement>(".view-toggle") as HTMLButtonElement;
+  expect(toggle.querySelector(".view-toggle-label")?.textContent).toBe("Show completed");
+  expect(toggle.getAttribute("aria-label")).toBe("Show completed");
+  expect(toggle.getAttribute("aria-pressed")).toBe("false");
+  fireEvent.click(toggle);
+  await waitFor(() => expect(toggle.getAttribute("aria-pressed")).toBe("true"));
+  expect(toggle.getAttribute("aria-label")).toBe("Hide completed");
+});
+
 it("an empty inbox says so", async () => {
   await invoke("dispatch", { cmd: { uuid: "u", action: { type: "task_delete", id: "t-inbox" } } });
   await invoke("dispatch", { cmd: { uuid: "v", action: { type: "task_delete", id: "t-taxes" } } });
