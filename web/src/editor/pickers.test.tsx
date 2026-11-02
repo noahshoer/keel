@@ -422,6 +422,24 @@ describe("DatePicker", () => {
     expect(pill).toContain("tomorrow");
   });
 
+  it("offers no No date while it repeats, since a repeat always has a date", () => {
+    render(
+      <DatePicker
+        date="2026-10-30"
+        time=""
+        text="Today"
+        bucket="Today"
+        rule="Daily"
+        today={TODAY}
+        open="date"
+        setOpen={() => {}}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.queryByText("No date")).toBeNull();
+    expect(screen.getByText("Pick a date and time")).toBeTruthy();
+  });
+
   it("marks the quick choice that's set", () => {
     render(<DateHost onChange={vi.fn()} date="2026-10-31" />);
     openIt();

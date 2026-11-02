@@ -27,12 +27,24 @@ export function usePillFade(content: unknown) {
   }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `content` changes the pills' widths.
   useLayoutEffect(onScroll, [onScroll, content]);
+  // `content` too: the row can appear after the first draw.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see above.
   useLayoutEffect(() => {
     const row = ref.current;
     if (!row || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(onScroll);
     observer.observe(row);
     return () => observer.disconnect();
+  }, [onScroll, content]);
+  // Pills change width once the app's font has loaded.
+  useLayoutEffect(() => {
+    let live = true;
+    void document.fonts?.ready.then(() => {
+      if (live) onScroll();
+    });
+    return () => {
+      live = false;
+    };
   }, [onScroll]);
   const fadeClass = [on && "pills-run-on", back && "pills-run-back"].filter(Boolean).join(" ");
   return { ref, onScroll, fadeClass };

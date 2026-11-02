@@ -18,10 +18,17 @@ export function useHiddenCount(ref: RefObject<HTMLElement | null>, key: string):
       setCount(hiddenCount(lefts, box.width));
     };
     measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
+    // Labels change width once the app's font has loaded.
+    let live = true;
+    void document.fonts?.ready.then(() => {
+      if (live) measure();
+    });
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(el);
+    return () => {
+      live = false;
+      observer?.disconnect();
+    };
   }, [ref, key]);
   return count;
 }

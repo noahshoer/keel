@@ -99,6 +99,12 @@ export function dueBucket(due: string, today: string): DueBucket {
   return core.dueBucket(due, today);
 }
 
+/** A streak in words, in its repeat's unit: "4 day streak" or "Streak of 4". */
+export function streakText(task: Task): string {
+  ready();
+  return core.streakText(task);
+}
+
 /** The numbers beside the sidebar's rows: how many tasks each view lists. */
 export function sidebarCounts(all: Task[], today: string, upcomingDays: number): SidebarCounts {
   ready();

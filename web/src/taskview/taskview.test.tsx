@@ -222,7 +222,8 @@ it("a tracked streak's row shows current and best, and opens the streak panel", 
   await setStreak("t-trip", true, null);
   await show(["t-trip"]);
   const row = top().querySelector(".tv-fields > .tv-row button.tv-streak") as HTMLElement;
-  expect(row.textContent).toBe("0 day streakBest 0");
+  // keel-core's wording; this task doesn't repeat, so it's the generic one.
+  expect(row.textContent).toBe("Streak of 0Best 0");
   expect(row.querySelector("svg")).not.toBeNull();
   await setStreak("t-trip", false, null);
 });

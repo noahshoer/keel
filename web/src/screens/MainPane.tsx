@@ -25,7 +25,6 @@ import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, SearchIcon } from "../shell
 import { currentPlatform, searchTooltip } from "../shell/platform";
 import { AddSection, SectionBlock } from "./SectionBlock";
 
-/** "Project" or "Project / Section" for each task the pane lists. */
 function contentClass(motion: Motion, swap: number): string {
   if (motion === "pop") return "content view-pop";
   if (motion === "push") return "content";

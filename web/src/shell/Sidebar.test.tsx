@@ -8,6 +8,11 @@ import { addLabel } from "../ipc/actions";
 import { invoke } from "../ipc/invoke";
 import { loadCoreForTests } from "../test/wasm";
 
+vi.mock("../core", async (original) => {
+  const actual = await original<typeof import("../core")>();
+  return { ...actual, sidebarCounts: vi.fn(actual.sidebarCounts) };
+});
+
 beforeAll(() => {
   loadCoreForTests();
 });
@@ -107,6 +112,24 @@ it("rows show how many tasks each view lists", async () => {
   expect(count("Inbox")).toBe(ofProject("p-inbox"));
   expect(count("Home")).toBe(ofProject("p-home"));
   expect(count("Home")).not.toBe("");
+});
+
+it("typing a desktop search doesn't count the sidebar's tasks again", async () => {
+  vi.stubGlobal("matchMedia", (q: string) => ({
+    matches: q.includes("min-width"),
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+  await start();
+  const field = sidebar().querySelector(".sidebar-search-input") as HTMLInputElement;
+  fireEvent.focus(field);
+  await waitFor(() => expect(title()).toBe("Search"));
+  await act(async () => {});
+  const before = vi.mocked(sidebarCounts).mock.calls.length;
+  fireEvent.change(field, { target: { value: "l" } });
+  fireEvent.change(field, { target: { value: "la" } });
+  expect(vi.mocked(sidebarCounts).mock.calls.length).toBe(before);
+  vi.unstubAllGlobals();
 });
 
 it("a project's icon is a bold Phosphor icon, not a typed #", async () => {

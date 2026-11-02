@@ -29,9 +29,9 @@ import { usePlacedPopover } from "./popover";
 import { TimeWheel } from "./TimeWheel";
 import { installMonthWheel, installYearWheel } from "./wheel";
 
-/** The repeat choices the date card offers: the same ones as the Repeat pill. */
 export type CalendarActions = { onDone: () => void; onCancel: () => void };
 
+/** The repeat choices the date card offers: the same ones as the Repeat pill. */
 export type RepeatChoice = {
   items: MenuItem[];
   selected: string;
@@ -191,17 +191,20 @@ export function Scheduler({
           >
             <span className="menu-label">Pick a date and time</span>
           </button>
-          <button
-            type="button"
-            className="menu-item"
-            onClick={() => {
-              setTimeText("");
-              onPick(null, "");
-              close();
-            }}
-          >
-            <span className="menu-label">{emptyText}</span>
-          </button>
+          {/* A repeat always has a date. */}
+          {rule === null ? (
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => {
+                setTimeText("");
+                onPick(null, "");
+                close();
+              }}
+            >
+              <span className="menu-label">{emptyText}</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
       {step === "repeat" && repeat !== undefined ? (

@@ -101,6 +101,8 @@ Why: pickers placed on the page feel disconnected from the task being typed. On 
 
 **Pickers.** Each opens as a rounded card just above the task card.
 
+A repeat always has a date: today, by default. While a task repeats, the Date picker offers no "No date".
+
 - **Date:** quick choices (Today, Tomorrow, This weekend, Next week, Pick a date and time, No date).
 - **Pick a date and time:** a calendar, then a Time row and a Repeat row. Time is a wheel in the card on touch.
 - **Repeat in the date card:** the row shows the current choice. Tapping it opens the repeat options with a way back, and choosing an option returns to the date card.
@@ -132,7 +134,7 @@ Approved in the mockups' iPhone and desktop screens boards (version 25). Desktop
 
 - Title and description, then one rounded card of the filled-in fields, each with its icon: streak, date and time, repeat, reminders, deadline, priority, project, labels.
 - The header has the X and the ••• menu, with Back inside a sub-task. The circle beside the title stays, as the way to complete a task from its view (Noah, 2026-11-01).
-- **Streak row:** repeating tasks with a streak show the fire icon, the current streak and the best (`streak_best`). It opens the existing streak panel. Enabling streaks and deleting the task stay in the ••• menu.
+- **Streak row:** repeating tasks with a streak show the fire icon, the current streak in its repeat's unit ("3 week streak", or "Streak of 3" when one occurrence isn't one day, week, month or year; `keel_core::streak::streak_text`) and the best (`streak_best`). It opens the existing streak panel. Enabling streaks and deleting the task stay in the ••• menu.
 - **Unset options:** one sideways-scrolling row of dotted "+ Field" pills, below the filled-in fields and above sub-tasks.
 - **Inbox:** an Inbox task has no project row and shows a "+ Project" pill. Task lists still show "Inbox".
 - **Sub-tasks:** a card under a header with the same progress icon as the list and "X of Y". With no sub-tasks, the count is hidden and only "Add sub-task" shows.

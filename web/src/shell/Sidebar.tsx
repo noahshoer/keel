@@ -1,7 +1,7 @@
 // The sidebar, with the markup and class names of crates/ui/src/sidebar.rs
 // so app.css applies unchanged: the fixed views, then projects, labels and
 // filters, each with its add form and row actions. The gear opens Settings.
-import { Children, useRef, useState } from "react";
+import { Children, useMemo, useRef, useState } from "react";
 import type { Loaded } from "../app/load";
 import { UPCOMING_DAYS, type View } from "../app/view";
 import type { Id } from "../bindings";
@@ -126,7 +126,9 @@ export function Sidebar({
   // Every change reloads; a failed one too (the backend's state is the truth).
   const then = (p: Promise<unknown>) => p.then(onChanged, onChanged);
   const day = new Date().getDate();
-  const counts = sidebarCounts(loaded.all, localToday(), UPCOMING_DAYS);
+  // A wasm call serializes every task, and a desktop search re-renders this per keystroke.
+  const today = localToday();
+  const counts = useMemo(() => sidebarCounts(loaded.all, today, UPCOMING_DAYS), [loaded.all, today]);
   const ofProject = (id: Id) => counts.projects.find((c) => c.project_id === id)?.count ?? 0;
   const countOf = { inbox: ofProject(loaded.inbox.id), today: counts.today, upcoming: counts.upcoming };
   const themeIcon = theme === "light" ? <SunIcon /> : theme === "dark" ? <MoonIcon /> : <MonitorIcon />;

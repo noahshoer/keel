@@ -125,11 +125,6 @@ export function CalendarSmallIcon() {
   return <Ph icon={CalendarBlank} size={12} />;
 }
 
-/** The task view's date row. Bold like the rest; only flags are filled. */
-export function CalendarFilledIcon() {
-  return <Ph icon={CalendarBlank} size={12} />;
-}
-
 export function MoreIcon() {
   return <Ph icon={DotsThree} size={18} />;
 }

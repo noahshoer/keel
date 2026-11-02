@@ -398,8 +398,10 @@ it("a repeat chosen in the date card with no date set uses today, and returns to
   expect(document.querySelector(".cal-grid")).not.toBeNull();
   expect(repeatRow().textContent).toContain("Every week on Friday");
   const ringed = [...document.querySelectorAll(".cal-day.repeat-day:not(.other)")].map((d) => d.textContent);
-  expect(ringed).toContain("30");
   expect(ringed).not.toContain("29");
+  // A repeat always has a date: today, by default.
+  expect(document.querySelector(".cal-day.selected")?.textContent).toBe("30");
+  expect(screen.getByTitle("Date").textContent).toContain("Today");
 });
 
 it("the Repeat pill still works on its own", () => {

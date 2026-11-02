@@ -2,7 +2,7 @@
 // `TaskRow` without its glass parts (Liquid Glass is parked). Tapping the
 // circle completes the task after the fill and switch-off; the body opens
 // the task view, and Add sub-task opens it adding.
-import { type CSSProperties, Fragment, useContext, useEffect, useRef, useState } from "react";
+import { type CSSProperties, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { CardRow, Label, LabelGroup, Reminder } from "../bindings";
 import { deadlineUrgent, dueLabel, labelGroups, reminderLabel } from "../core";
 import { labelColorVar } from "../editor/labelColors";
@@ -139,7 +139,11 @@ export function TaskRow({
     : null;
   const due = dueChip(task, today);
   const recurring = task.due?.is_recurring ?? false;
-  const groups = labelGroups(task.labels, labels);
+  // A wasm call serializes both lists, so only when there's something to group.
+  const groups = useMemo(
+    () => (task.labels.length > 0 ? labelGroups(task.labels, labels) : []),
+    [task.labels, labels],
+  );
   const hasWhen = progress !== null || due !== null || mine.length > 0;
   const whenGroup = hasWhen ? (
     <div className="task-when task-badges">

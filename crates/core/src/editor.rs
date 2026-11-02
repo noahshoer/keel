@@ -484,6 +484,10 @@ pub fn apply_pick(
         Pick::Repeat { value } => v.repeat = value.clone(),
         Pick::Location { project_id, section_id } => (v.project_id, v.section_id) = (project_id.clone(), section_id.clone()),
     }
+    // A repeat always has a date: today, by default.
+    if v.repeat != "none" && v.date.is_empty() {
+        v.date = today.format("%Y-%m-%d").to_string();
+    }
 }
 
 /// Toggles one label from the labels menu: the typed @labels count as picked
@@ -1131,6 +1135,25 @@ mod tests {
         }
         let blank = add_plan(&typed("x"), &[], &[], &[], day30());
         assert!(matches!(blank.task, Action::TaskAdd { description: None, due: None, .. }));
+    }
+
+    #[test]
+    fn a_repeat_always_has_a_date_today_by_default() {
+        let today = NaiveDate::from_ymd_opt(2026, 10, 30).unwrap();
+        let mut v = EditorValues::blank(Id::from("P"), None, String::new(), vec![]);
+        apply_pick(&mut v, &Pick::Repeat { value: "weekly".into() }, false, &[], &[], today);
+        assert_eq!(v.date, "2026-10-30");
+        // Clearing the date while it repeats goes back to today.
+        v.date = "2026-11-05".into();
+        apply_pick(&mut v, &Pick::Date { date: String::new(), time: String::new() }, false, &[], &[], today);
+        assert_eq!((v.date.as_str(), v.repeat.as_str()), ("2026-10-30", "weekly"));
+        // An existing date stays, and no repeat means no date is fine.
+        v.date = "2026-11-05".into();
+        apply_pick(&mut v, &Pick::Repeat { value: "daily".into() }, false, &[], &[], today);
+        assert_eq!(v.date, "2026-11-05");
+        apply_pick(&mut v, &Pick::Repeat { value: "none".into() }, false, &[], &[], today);
+        apply_pick(&mut v, &Pick::Date { date: String::new(), time: String::new() }, false, &[], &[], today);
+        assert_eq!(v.date, "");
     }
 
     #[test]

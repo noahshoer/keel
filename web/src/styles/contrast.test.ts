@@ -57,7 +57,7 @@ const TEXT = [
   "--accent-text",
   "--streak",
 ];
-const SURFACES = ["--bg", "--app-bg", "--page", "--chrome", "--panel"];
+const SURFACES = ["--bg", "--app-bg", "--page", "--page-wide", "--chrome", "--panel"];
 
 describe.each(THEMES)("contrast, %s", (_theme, tokens) => {
   it.each(TEXT.flatMap((t) => SURFACES.map((s) => [t, s] as const)))("%s on %s is at least 4.5:1", (t, s) => {
@@ -131,6 +131,27 @@ describe.each(THEMES)("an open pill's tint, %s", (_theme, tokens) => {
   it.each(["--p1", "--p2-text", "--p3-text"])("keeps %s at least 4.5:1", (t) => {
     const fg = tokens[t] as string;
     expect(contrast(fg, blend(fg, tokens["--bg"] as string, share))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe.each(THEMES)("a chosen label's color on its tint, %s", (_theme, tokens) => {
+  const bg = tokens["--bg"] as string;
+  const row =
+    Number(
+      css.match(
+        /\.label-row\.on\[style\*="color"\] \{ background: color-mix\(in srgb, currentColor (\d+)%/,
+      )?.[1],
+    ) / 100;
+  const pill =
+    Number(
+      css.match(
+        /\.pill-tinted\.chip-btn\.chip-open \{ background: color-mix\(in srgb, currentColor (\d+)%/,
+      )?.[1],
+    ) / 100;
+  it.each(LABEL_COLORS.map((c) => c.id))("--label-%s is at least 4.5:1 on a row and a pill", (id) => {
+    const fg = tokens[`--label-${id}`] as string;
+    expect(contrast(fg, blend(fg, bg, row))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(fg, blend(fg, bg, pill))).toBeGreaterThanOrEqual(4.5);
   });
 });
 

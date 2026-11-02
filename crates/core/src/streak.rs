@@ -17,6 +17,29 @@ fn last_period(task: &Task) -> Option<NaiveDate> {
         .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
 }
 
+/// A streak in words, in the unit its repeat counts: "4 day streak", or "Streak
+/// of 4" when one occurrence isn't one day, week, month or year.
+pub fn streak_text(task: &Task) -> String {
+    let unit = match rule(task) {
+        Some(Recurrence::Daily) => Some("day"),
+        Some(Recurrence::Weekly(days)) if days.len() == 1 => Some("week"),
+        // Every weekday: each occurrence is the next working day.
+        Some(Recurrence::Weekly(days)) if days == [0, 1, 2, 3, 4] => Some("day"),
+        Some(
+            Recurrence::MonthlyDay(_)
+            | Recurrence::MonthlyLastDay
+            | Recurrence::MonthlyWorkday { .. }
+            | Recurrence::MonthlyNthWeekday { .. },
+        ) => Some("month"),
+        Some(Recurrence::Yearly { .. }) => Some("year"),
+        _ => None,
+    };
+    match unit {
+        Some(unit) => format!("{} {unit} streak", task.streak_current),
+        None => format!("Streak of {}", task.streak_current),
+    }
+}
+
 /// Credit a completion on `today`. Consecutive with the previous occurrence →
 /// +1; same period again → no change; any gap → restart at 1.
 pub fn credit_completion(task: &mut Task, today: NaiveDate) {
@@ -135,5 +158,54 @@ mod tests {
         t.streak_enabled = false;
         credit_completion(&mut t, d(2026, 1, 5));
         assert_eq!(t.streak_current, 0);
+    }
+}
+
+#[cfg(test)]
+mod streak_text_tests {
+    use super::streak_text;
+    use crate::ids::Id;
+    use crate::model::{Due, Task};
+    use crate::recurrence::Recurrence;
+    use chrono::NaiveDate;
+
+    fn task(rule: Option<Recurrence>, current: i64) -> Task {
+        let mut t = Task::new("t", Id::from("p"));
+        t.streak_current = current as _;
+        t.due = rule.map(|r| Due {
+            date: "2026-11-01".into(),
+            is_recurring: true,
+            string: String::new(),
+            lang: "en".into(),
+            timezone: None,
+            recurrence: Some(r),
+        });
+        t
+    }
+
+    fn anchor() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 11, 1).unwrap()
+    }
+
+    #[test]
+    fn names_the_unit_a_repeat_counts_in() {
+        assert_eq!(streak_text(&task(Some(Recurrence::Daily), 4)), "4 day streak");
+        assert_eq!(streak_text(&task(Some(Recurrence::Weekly(vec![0, 1, 2, 3, 4])), 4)), "4 day streak");
+        assert_eq!(streak_text(&task(Some(Recurrence::Weekly(vec![2])), 3)), "3 week streak");
+        assert_eq!(streak_text(&task(Some(Recurrence::MonthlyDay(1)), 2)), "2 month streak");
+        assert_eq!(streak_text(&task(Some(Recurrence::MonthlyLastDay), 2)), "2 month streak");
+        assert_eq!(streak_text(&task(Some(Recurrence::MonthlyWorkday { nth: 1 }), 2)), "2 month streak");
+        assert_eq!(streak_text(&task(Some(Recurrence::MonthlyNthWeekday { nth: 1, weekday: 0 }), 2)), "2 month streak");
+        assert_eq!(streak_text(&task(Some(Recurrence::Yearly { month: 1, day: 1 }), 5)), "5 year streak");
+    }
+
+    #[test]
+    fn is_generic_when_a_repeat_has_no_single_unit() {
+        let generic = "Streak of 3";
+        assert_eq!(streak_text(&task(Some(Recurrence::Weekly(vec![0, 2])), 3)), generic);
+        assert_eq!(streak_text(&task(Some(Recurrence::EveryNDays { n: 3, anchor: anchor() }), 3)), generic);
+        assert_eq!(streak_text(&task(Some(Recurrence::EveryNWeeks { n: 2, days: vec![1], anchor: anchor() }), 3)), generic);
+        assert_eq!(streak_text(&task(Some(Recurrence::EveryNMonths { n: 2, day: 1, anchor: anchor() }), 3)), generic);
+        assert_eq!(streak_text(&task(None, 3)), generic);
     }
 }

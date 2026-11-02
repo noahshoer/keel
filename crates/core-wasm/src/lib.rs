@@ -101,6 +101,15 @@ pub fn progress(
     output(&views::progress(&parent, &all))
 }
 
+/// `streak::streak_text`: a streak in words, in its repeat's unit.
+#[wasm_bindgen(js_name = streakText)]
+pub fn streak_text(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task")] task: JsValue,
+) -> Result<String, JsError> {
+    let task: Task = input("task", task)?;
+    Ok(keel_core::streak::streak_text(&task))
+}
+
 /// `views::sidebar_counts`: the numbers beside the sidebar's rows.
 #[wasm_bindgen(js_name = sidebarCounts, unchecked_return_type = "import('../../bindings').SidebarCounts")]
 pub fn sidebar_counts(

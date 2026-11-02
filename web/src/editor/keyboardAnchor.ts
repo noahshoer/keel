@@ -52,8 +52,3 @@ export function useKeyboard(enabled: boolean): KeyboardState {
   }, [enabled]);
   return state;
 }
-
-/** The task card's distance from the bottom of the layout viewport. */
-export function useKeyboardInset(): number {
-  return useKeyboard(true).inset;
-}

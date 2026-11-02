@@ -12,7 +12,7 @@ import { Menu, type MenuItem } from "../editor/Menu";
 import type { Face, PopProps } from "../editor/pop";
 import { ReminderPicker } from "../editor/ReminderPicker";
 import { BUCKET_CLASS } from "../lists/chips";
-import { CalendarFilledIcon, FlagFilledIcon, HashSmallIcon, RepeatSmallIcon } from "../shell/icons";
+import { CalendarSmallIcon, FlagFilledIcon, HashSmallIcon, RepeatSmallIcon } from "../shell/icons";
 
 const rowFace = (cls: string, text: string): Face => ({
   className: cls === "" ? "tv-field-btn" : `tv-field-btn ${cls}`,
@@ -98,7 +98,7 @@ export function FieldControl({
           today={today}
           {...pop}
           face={face(`due-chip ${bucket !== null ? BUCKET_CLASS[bucket] : ""}`.trim(), text)}
-          icon={<CalendarFilledIcon />}
+          icon={<CalendarSmallIcon />}
           onChange={(date, time) => onPick({ type: "date", date, time })}
         />
       );

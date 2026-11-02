@@ -14,6 +14,7 @@ import {
   fieldLayout,
   reminderDraftOf,
   repeatText,
+  streakText,
   toggleLabel,
   valuesFromTask,
 } from "../core";
@@ -312,7 +313,7 @@ export function TaskView({
                     onClick={() => setStreak((s) => !s)}
                   >
                     <FireIcon />
-                    {`${task.streak_current} day streak`}
+                    {streakText(task)}
                     <span className="tv-streak-best">{`Best ${task.streak_best}`}</span>
                   </button>
                 </div>
