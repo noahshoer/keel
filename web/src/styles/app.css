@@ -427,11 +427,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .menu-item.row-p1, .menu-item.row-p1 .menu-check { color: var(--p1); }
 .menu-item.row-p2, .menu-item.row-p2 .menu-check { color: var(--p2-text); }
 .menu-item.row-p3, .menu-item.row-p3 .menu-check { color: var(--p3-text); }
-.on-keyboard .menu-item.checked.row-p1 { background: var(--p1-bg); }
-.on-keyboard .menu-item.checked.row-p2 { background: var(--p2-bg); }
-.on-keyboard .menu-item.checked.row-p3 { background: var(--p3-bg); }
 .label-row[style*="color"] .label-opt, .label-row[style*="color"] .label-color-btn, .label-row[style*="color"] .menu-check { color: inherit; }
-.on-keyboard .label-row.on[style*="color"] { background: color-mix(in srgb, currentColor 16%, transparent); }
 .on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; margin: 0 -23px 0 -12px; padding: 0 31px 0 12px; overflow-x: auto; scrollbar-width: none; }
 .on-keyboard .chips::-webkit-scrollbar { display: none; }
 .on-keyboard .chip-btn { height: 44px; max-width: none; padding: 0 14px; border: none; background: var(--field-fill); color: var(--text); font-size: 15px; white-space: nowrap; }
@@ -444,31 +440,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .on-keyboard .chip-btn.chip-open .chip-icon { color: inherit; }
 .on-keyboard .chip-btn.chip-open { background: var(--accent); color: var(--on-fill); font-weight: 600; }
 .on-keyboard .chip-wrap { position: static; flex: none; }
-.on-keyboard .popover { width: calc(100vw - 16px); max-width: none; min-width: 0; padding: 12px; border: none; border-radius: 24px; box-shadow: var(--shadow-lg); animation: fade-in .16s var(--ease); }
-.on-keyboard .menu-item.checked, .on-keyboard .label-row.on { background: var(--active-tint); }
 .time-wheel .wheel { margin: 0 12px 4px; }
-.on-keyboard .scheduler { padding: 12px; }
-.on-keyboard .sched-actions { padding: 0 4px 4px; }
-.on-keyboard .sched-actions .icon-btn { width: 44px; height: 44px; }
-.on-keyboard .sched-quick, .on-keyboard .menu { display: flex; flex-direction: column; gap: 2px; }
-.on-keyboard .menu-icon svg { width: 18px; height: 18px; }
-.on-keyboard .scheduler .menu-item { font-size: 17px; }
-.on-keyboard .scheduler .menu-hint { font-size: 15px; }
-.on-keyboard .cal-nav { padding: 4px 8px 8px; }
-.on-keyboard .cal-title { font-size: 18px; font-weight: 600; }
 .cal-title .icon { color: var(--icon); }
-.on-keyboard .cal-grid { gap: 0; }
-.on-keyboard .cal-dow { font-size: 14px; font-weight: 600; padding: 0 0 4px; }
-.on-keyboard .wheel-item { font-size: 17px; }
-.on-keyboard .sched-quick, .on-keyboard .sched-cal { padding: 0; }
-.on-keyboard .menu-item { font-size: 16px; border-radius: 14px; padding: 0 12px; min-height: 44px; }
-.on-keyboard .menu-hint { font-size: 14px; }
-.on-keyboard .label-color-name { font-size: 16px; min-height: 44px; padding: 0 12px; }
-.on-keyboard .cal-grid { justify-items: center; }
-.on-keyboard .cal-day { position: relative; width: 40px; height: 40px; font-size: 16px; }
-.on-keyboard .cal-day::after { content: ''; position: absolute; inset: -2px; }
-.on-keyboard .sched-time { min-height: 44px; padding: 0 12px; border-top: none; }
-.on-keyboard .sched-row-label { font-size: 16px; }
 .btn-save { position: relative; z-index: 1; flex: none; width: 44px; height: 44px; border: none; border-radius: 50%; padding: 0; background: var(--accent); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 /* Solid even when disabled: pills pass under it. */
 .btn-save:disabled { background: color-mix(in srgb, var(--accent) 45%, var(--bg)); color: color-mix(in srgb, #fff 60%, var(--bg)); }
@@ -506,15 +479,14 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chip-hash { color: var(--muted); font-weight: 600; }
 .chip-btn { cursor: pointer; font-family: inherit; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip-wrap { position: relative; }
-.label-pop { min-width: 230px; }
-.label-row { display: flex; align-items: center; gap: 4px; border-radius: var(--r); padding-right: 8px; }
+.label-row { display: flex; align-items: center; flex: none; gap: 4px; border-radius: var(--r-item); padding-right: 8px; }
 .label-opt input { position: absolute; opacity: 0; width: 0; height: 0; }
 .label-row .label-opt { flex: 1; min-width: 0; }
 .label-tag-icon { display: inline-flex; flex: none; }
 .label-color-btn { flex: none; border: none; background: none; cursor: pointer; font: inherit; font-size: 12px; color: var(--secondary); padding: 6px 8px; border-radius: var(--r-full); }
 @media (hover: hover) { .label-color-btn:hover { background: var(--hover); } }
 .label-back { font-weight: 600; }
-.label-color-name { display: flex; align-items: center; gap: 8px; padding: 7px 8px; font-size: 13px; }
+.label-color-name { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; font-size: 14px; }
 .label-swatches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); justify-items: center; padding: 4px 0; }
 .label-swatch { width: 36px; height: 36px; border: 2px solid transparent; border-radius: 50%; background: none; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .label-swatch span { width: 22px; height: 22px; border-radius: 50%; }
@@ -523,18 +495,23 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Popovers (scheduler, menus, labels): one open per editor; a transparent
    backdrop behind them closes on click. */
 .pop-backdrop { position: fixed; inset: 0; z-index: 19; }
-.popover { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; padding: 6px;
-  background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-lg);
+.popover { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; padding: 8px;
+  background: var(--bg); border-radius: 20px;
   box-shadow: var(--shadow-lg); animation: pop-in .16s var(--ease); transform-origin: top left; }
-.menu { min-width: 210px; max-height: 320px; overflow-y: auto; }
-.menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: none;
-  background: none; border-radius: var(--r); cursor: pointer; font-size: 13px; text-align: left; color: var(--text); }
+.menu { display: flex; flex-direction: column; gap: 2px; min-width: 260px; max-height: 360px; overflow-y: auto; }
+.menu-item { display: flex; align-items: center; gap: 10px; flex: none; width: 100%; min-height: 36px; padding: 0 12px; border: none;
+  background: none; border-radius: var(--r-item); cursor: pointer; font-size: 14px; text-align: left; color: var(--text); }
 @media (hover: hover) { .menu-item:hover { background: var(--hover); } }
 .menu-item.indent { padding-left: 30px; }
+.menu-item.checked, .label-row.on { background: var(--active-tint); }
 .menu-item.checked { font-weight: 600; }
+.menu-item.checked.row-p1 { background: var(--p1-bg); }
+.menu-item.checked.row-p2 { background: var(--p2-bg); }
+.menu-item.checked.row-p3 { background: var(--p3-bg); }
+.label-row.on[style*="color"] { background: color-mix(in srgb, currentColor 16%, transparent); }
 .menu-icon { display: inline-flex; color: var(--icon); }
 .menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.menu-hint { color: var(--muted); font-size: 12px; }
+.menu-hint { color: var(--muted); font-size: 13px; }
 .menu-check { display: inline-flex; color: var(--accent); }
 .chip-open { border-color: var(--border-strong); background: var(--chip-hover); }
 .chip-icon { display: inline-flex; }
@@ -546,10 +523,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .due-chip.later { color: var(--due-later); }
 
 /* Scheduler */
-.scheduler { width: 280px; padding: 0; overflow: hidden; }
-.sched-quick { padding: 6px; }
+.scheduler { width: 304px; overflow: hidden; }
+.sched-quick { display: flex; flex-direction: column; gap: 2px; }
 .sched-back { font-weight: 600; }
-.sched-actions { display: flex; justify-content: space-between; padding: 6px 6px 0; }
+.sched-actions { display: flex; justify-content: space-between; padding: 0 4px 4px; }
 .sched-actions svg { width: 22px; height: 22px; }
 .sched-done { color: var(--accent-text); }
 /* The quick choices read in their dates' colors; the open pill fills like its selected day. */
@@ -563,17 +540,17 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chip.due-chip.chip-open.tomorrow { background: var(--due-tomorrow); color: var(--on-fill); }
 .chip.due-chip.chip-open.week { background: var(--due-week); color: var(--on-fill); }
 .sched-row { padding: 8px 12px; border-radius: var(--r); }
-.sched-row-label { flex: none; font-size: 13px; color: var(--text); }
+.sched-row-label { flex: none; font-size: 14px; color: var(--text); }
 .q-today { color: var(--due-today); } .q-tomorrow { color: var(--due-tomorrow); }
 .q-weekend { color: var(--p3); } .q-next { color: var(--due-week); } .q-none { color: var(--muted); }
-.sched-cal { padding: 8px 10px 6px; }
-.cal-nav { display: flex; align-items: center; gap: 2px; padding: 0 2px 6px; }
-.cal-title { flex: 1; font-weight: 600; font-size: 13px; }
+.sched-cal { padding: 0; }
+.cal-nav { display: flex; align-items: center; gap: 2px; padding: 4px 4px 8px 8px; }
+.cal-title { flex: 1; font-weight: 600; font-size: 15px; }
 .cal-nav .icon-btn:disabled { opacity: .3; cursor: default; background: none; }
 .cal-dot { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid currentColor; }
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-.cal-dow { text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0 4px; }
-.cal-day { height: 32px; border: none; background: none; border-radius: 50%; cursor: pointer; font-size: 12.5px;
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); justify-items: center; gap: 0; }
+.cal-dow { text-align: center; font-size: 12px; font-weight: 600; color: var(--muted); padding: 0 0 4px; }
+.cal-day { width: 36px; height: 36px; border: none; background: none; border-radius: 50%; cursor: pointer; font-size: 14px;
   color: var(--text); font-variant-numeric: tabular-nums; }
 @media (hover: hover) { .cal-day:hover { background: var(--hover); } }
 .cal-day.other { color: var(--secondary); }
@@ -581,8 +558,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .cal-day.is-today { color: var(--accent-text); font-weight: 700; }
 .cal-day.selected { background: var(--accent); color: var(--on-fill); font-weight: 600; opacity: 1; }
 .sched-time { display: flex; align-items: center; gap: 8px; padding: 8px 12px 10px; border-top: 1px solid var(--divider); color: var(--muted); }
-.time-input { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--r); padding: 6px 8px;
-  font-size: 12.5px; outline: none; background: var(--bg); color: var(--text); }
+.time-input { flex: 1; min-width: 0; min-height: 36px; border: 1px solid transparent; border-radius: var(--r-item); padding: 0 12px;
+  font-size: 14px; outline: none; background: var(--field-fill); color: var(--text); }
 .time-input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
 .time-native { position: relative; flex: 1; min-width: 0; display: flex; }
 .time-input.native { -webkit-appearance: none; appearance: none; min-height: 36px; background: var(--bg); text-align: left; }
@@ -612,11 +589,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .hl-p4 { --hl-rgb: var(--hl-p4); }
 .hl-project { --hl-rgb: var(--hl-project); }
 .hl-label { --hl-rgb: var(--hl-label); }
-.label-opt { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: var(--r); cursor: pointer; font-size: 13px; }
+.label-opt { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border-radius: var(--r-item); cursor: pointer; font-size: 14px; }
 @media (hover: hover) { .label-opt:hover { background: var(--hover); } }
 .label-empty { color: var(--muted); font-size: 12px; padding: 6px 8px; }
-.label-new { width: 100%; margin-top: 6px; padding: 7px 8px; font-size: 12px; border: 1px solid var(--border);
-  border-radius: var(--r); outline: none; background: var(--bg); }
+.label-new { flex: none; width: 100%; min-height: 36px; margin: 0 0 4px; padding: 0 12px; font-size: 14px; border: 1px solid transparent;
+  border-radius: var(--r-item); outline: none; background: var(--field-fill); }
 .label-new:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
 
 /* Completed tasks + sidebar management */
@@ -691,7 +668,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .switch { width: 51px; height: 31px; }
   .switch .knob { width: 27px; height: 27px; top: 2px; left: 2px; }
   .switch.on .knob { transform: translateX(20px); }
-  .label-new { min-height: 44px; margin: 0 0 4px; padding: 0 12px; border: none; border-radius: 14px; background: var(--field-fill); }
+  .label-new { min-height: 44px; }
   .label-new.bad { border: 1px solid var(--due-overdue); }
   .label-row { border-radius: 14px; }
   .label-opt { font-size: 16px; }
@@ -967,8 +944,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .reminder-chip { color: var(--accent-text); }
 .quick-chip.chip-deadline { color: var(--due-week); }
 .hl-deadline { --hl-rgb: var(--hl-repeat); }
-.reminder-pop { min-width: 250px; }
-.reminder-item { display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 8px; font-size: 13px; }
+.reminder-item { display: flex; align-items: center; flex: none; gap: 10px; min-height: 36px; padding: 0 4px 0 12px; font-size: 14px; }
 .reminder-item .icon-btn { font-size: 16px; line-height: 1; width: 26px; height: 26px; }
 .menu-divider { height: 1px; background: var(--divider); margin: 6px 2px; }
 .menu-item:disabled { opacity: .4; cursor: default; background: none; }
@@ -1170,3 +1146,27 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* The looping month wheel: twelve rows that WHEEL_JS moves around the band. */
 .wheel-col.loop { overflow: hidden; padding: 0; touch-action: none; cursor: grab; user-select: none; }
 .wheel-col.loop .wheel-item { position: absolute; left: 0; right: 0; top: 72px; will-change: transform; }
+
+/* Pickers on touch: the desktop look above at the phone's sizes (spec "Task
+   creation pickers"). Last in the file so these win over the rules above. */
+@media (pointer: coarse) {
+  .popover { width: calc(100vw - 16px); max-width: none; min-width: 0; padding: 12px; border-radius: 24px; animation: fade-in .16s var(--ease); }
+  .tv-head-actions .popover { width: auto; min-width: 210px; }
+  .task-view > .pop-backdrop { background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
+  .scheduler { padding: 12px; }
+  .sched-actions .icon-btn { width: 44px; height: 44px; }
+  .menu-icon svg { width: 18px; height: 18px; }
+  .scheduler .menu-item { font-size: 17px; }
+  .scheduler .menu-hint { font-size: 15px; }
+  .cal-nav { padding: 4px 8px 8px; }
+  .cal-title { font-size: 18px; font-weight: 600; }
+  .cal-dow { font-size: 14px; font-weight: 600; padding: 0 0 4px; }
+  .wheel-item { font-size: 17px; }
+  .menu-item { font-size: 16px; border-radius: 14px; padding: 0 12px; min-height: 44px; }
+  .menu-hint { font-size: 14px; }
+  .label-color-name { font-size: 16px; min-height: 44px; padding: 0 12px; }
+  .cal-day { position: relative; width: 40px; height: 40px; font-size: 16px; }
+  .cal-day::after { content: ''; position: absolute; inset: -2px; }
+  .sched-time { min-height: 44px; padding: 0 12px; border-top: none; }
+  .sched-row-label { font-size: 16px; }
+}

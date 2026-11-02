@@ -177,7 +177,7 @@ describe("phone tap targets", () => {
 
 describe("calendar days on the phone", () => {
   it("reach 44pt beyond their drawn 40", () => {
-    expect(css).toMatch(/\.on-keyboard \.cal-day::after \{ content: ''; position: absolute; inset: -2px; \}/);
+    expect(css).toMatch(/\.cal-day::after \{ content: ''; position: absolute; inset: -2px; \}/);
   });
 });
 
