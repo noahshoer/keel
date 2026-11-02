@@ -29,7 +29,7 @@ for (const chip of document.querySelectorAll('.editor .chips .chip-btn')) {
   await sleep(150);
 }
 title.focus();
-title.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }));
+title.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 await sleep(1200);
 check(`title cleared: ${document.querySelector('.title-input')?.value === ''}`);
 document.querySelector('.editor-scrim')?.click();

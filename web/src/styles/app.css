@@ -343,7 +343,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .check.p2 { border: 2px solid var(--p2); background: var(--p2-bg); color: var(--p2); }
 .check.p3 { border: 2px solid var(--p3); background: var(--p3-bg); color: var(--p3); }
 .task-body { flex: 1; min-width: 0; }
-.task-content { font-size: 15px; line-height: 21px; font-weight: 500; word-wrap: break-word; white-space: pre-line; }
+.task-content { font-size: 15px; line-height: 21px; font-weight: 500; word-wrap: break-word; }
 .task-desc { color: var(--secondary); font-size: 13px; line-height: 18px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 5px; font-size: 13px; line-height: 18px; }
 .due { display: inline-flex; align-items: center; gap: 4px; }

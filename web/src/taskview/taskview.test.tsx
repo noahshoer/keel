@@ -294,15 +294,13 @@ it("an emptied title goes back to the saved one and sends nothing", async () => 
   expect(sent).toEqual([]);
 });
 
-it("Enter in the title adds a line, and leaving it saves both", async () => {
+it("Enter in the title leaves it, which saves", async () => {
   await show(["t-trip"]);
   titleField().focus();
-  fireEvent.change(titleField(), { target: { value: "Pack\nfor Rome" } });
-  expect(fireEvent.keyDown(titleField(), { key: "Enter" })).toBe(true);
-  expect(document.activeElement).toBe(titleField());
-  expect(titleField().value).toBe("Pack\nfor Rome");
-  titleField().blur();
-  await waitFor(async () => expect((await task("t-trip"))?.content).toBe("Pack\nfor Rome"));
+  fireEvent.change(titleField(), { target: { value: "Pack for Rome" } });
+  fireEvent.keyDown(titleField(), { key: "Enter" });
+  expect(document.activeElement).not.toBe(titleField());
+  await waitFor(async () => expect((await task("t-trip"))?.content).toBe("Pack for Rome"));
 });
 
 it("a double tap on the title circle completes once and goes back", async () => {
@@ -356,7 +354,7 @@ it("Delete task in ••• deletes, and the view closes after the reload", asy
   expect((await allTasks()).some((t) => t.id === "t-trip")).toBe(false);
 });
 
-it("Add sub-task opens the editor; Cmd+Enter adds under this task and it stays open", async () => {
+it("Add sub-task opens the editor; Enter adds under this task and it stays open", async () => {
   await show(["t-trip"]);
   fireEvent.click(top().querySelector(".tv-add-sub") as HTMLElement);
   const title = top().querySelector(".tv-add-editor .editor textarea") as HTMLTextAreaElement;
@@ -364,7 +362,7 @@ it("Add sub-task opens the editor; Cmd+Enter adds under this task and it stays o
   expect(within(top()).getByText("Add sub-task", { selector: "button" })).toBeTruthy();
   fireEvent.change(title, { target: { value: "Buy adapters" } });
   await act(async () => {
-    fireEvent.keyDown(title, { key: "Enter", metaKey: true });
+    fireEvent.keyDown(title, { key: "Enter" });
   });
   await waitFor(async () => {
     const added = (await allTasks()).find((t) => t.content === "Buy adapters");

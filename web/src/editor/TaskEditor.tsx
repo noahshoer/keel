@@ -318,7 +318,7 @@ export function TaskEditor({
             closeForField();
             setValues((v) => withTitle(v, text));
           }}
-          onSubmit={submit}
+          onEnter={submit}
           onUnhighlight={(caret) => {
             closeForField();
             setValues((v) => (quickAdd ? (unhighlightAt(v, projects, sections, today, caret) ?? v) : v));
@@ -350,7 +350,7 @@ export function TaskEditor({
               setValues((v) => ({ ...v, description }));
             }}
             onKeyDown={(e) => {
-              // As in the title: Enter is a new line.
+              // Enter is a new line here; the modifier is the keyboard's way to save.
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
                 submit();

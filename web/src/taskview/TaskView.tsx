@@ -293,6 +293,7 @@ export function TaskView({
                 className="tv-desc"
                 value={desc}
                 placeholder="Description"
+                multiline
                 autoFocus={descOpen && baseRef.current.description.trim() === ""}
                 onInput={setDesc}
                 onCommit={() => {

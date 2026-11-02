@@ -81,23 +81,11 @@ it("with a mouse too, clicking the title or description closes a picker", () => 
   cleanup();
 });
 
-describe("the title", () => {
-  it("takes Enter as a new line, and saves it", () => {
-    const title = adding();
-    type(title, "Pack\nthe bags tomorrow");
-    expect(title.value).toBe("Pack\nthe bags tomorrow");
-    expect(fireEvent.keyDown(title, { key: "Enter" })).toBe(true);
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(document.querySelector(".title-mirror")?.textContent).toContain("Pack\nthe bags");
-    fireEvent.keyDown(title, { key: "Enter", ctrlKey: true });
-    expect(onSubmit.mock.calls[0]?.[0].content).toBe("Pack\nthe bags tomorrow");
-    cleanup();
-  });
-});
-
-it("shows a title's line breaks in the list", () => {
-  const css = readFileSync(resolve(process.cwd(), "src/styles/app.css"), "utf8");
-  expect(css).toMatch(/\.task-content \{[^}]*white-space: pre-line/);
+it("keeps the title on one line: pasted line breaks become spaces", () => {
+  const title = adding();
+  type(title, "Pack\nthe bags");
+  expect(title.value).toBe("Pack the bags");
+  cleanup();
 });
 
 describe("the description", () => {
@@ -554,16 +542,16 @@ it("can't add a phrase on its own", () => {
   const title = adding();
   type(title, "tomorrow");
   expect((screen.getByText("Add task", { selector: "button" }) as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.keyDown(title, { key: "Enter", metaKey: true });
+  fireEvent.keyDown(title, { key: "Enter" });
   expect(onSubmit).not.toHaveBeenCalled();
 });
 
-it("Cmd+Enter adds once, resets, and keeps the title focused", () => {
+it("Enter adds once, resets, and keeps the title focused", () => {
   const title = adding();
   title.focus();
   type(title, "Water plants");
-  fireEvent.keyDown(title, { key: "Enter", metaKey: true });
-  fireEvent.keyDown(title, { key: "Enter", metaKey: true });
+  fireEvent.keyDown(title, { key: "Enter" });
+  fireEvent.keyDown(title, { key: "Enter" });
   expect(onSubmit).toHaveBeenCalledTimes(1);
   expect(onSubmit.mock.calls[0]?.[0].content).toBe("Water plants");
   expect(title.value).toBe("");
@@ -595,7 +583,7 @@ it("a picked date replaces the typed one", () => {
   fireEvent.click(screen.getByText("Next week"));
   expect(title.value).toBe("call mom");
   expect(screen.getByTitle("Date").textContent).toBe("Monday");
-  fireEvent.keyDown(title, { key: "Enter", metaKey: true });
+  fireEvent.keyDown(title, { key: "Enter" });
   expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ content: "call mom", date: "2026-11-02" });
 });
 
@@ -666,7 +654,7 @@ it("picks a priority and a project from the menus", () => {
   fireEvent.click(screen.getByTitle("Project / section"));
   fireEvent.click(screen.getByText("Chores"));
   expect(screen.getByTitle("Project / section").textContent).toBe("Home / Chores");
-  fireEvent.keyDown(title, { key: "Enter", metaKey: true });
+  fireEvent.keyDown(title, { key: "Enter" });
   expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
     priority: "1",
     project_id: "p-home",
@@ -697,8 +685,8 @@ it("edit mode never highlights and saves once", async () => {
   expect(marks()).toEqual([]);
   expect(document.querySelector(".quick-preview")).toBeNull();
   await act(async () => {
-    fireEvent.keyDown(title, { key: "Enter", metaKey: true });
-    fireEvent.keyDown(title, { key: "Enter", metaKey: true });
+    fireEvent.keyDown(title, { key: "Enter" });
+    fireEvent.keyDown(title, { key: "Enter" });
   });
   expect(onSubmit).toHaveBeenCalledTimes(1);
 });

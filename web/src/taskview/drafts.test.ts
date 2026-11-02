@@ -32,9 +32,16 @@ describe("draft rules", () => {
     expect(takesStoredText("Old", "Old", "Old")).toBe(false);
   });
 
-  it("typed_text_keeps_its_line_breaks", () => {
-    expect(typedText("Eggs\nMilk\n")).toBe("Eggs\nMilk\n");
-    expect(typedText("Eggs\r\nMilk")).toBe("Eggs\nMilk");
+  it("a_newline_in_the_text_is_an_enter", () => {
+    // iOS can deliver Enter as an inserted newline the keydown missed.
+    expect(typedText("Buy milk\n", false)).toEqual({ text: "Buy milk", enter: true });
+    expect(typedText("Buy\r\nmilk", false)).toEqual({ text: "Buy milk", enter: true });
+    expect(typedText("Buy milk ", false)).toEqual({ text: "Buy milk ", enter: false });
+  });
+
+  it("a_multiline_field_keeps_its_line_breaks", () => {
+    expect(typedText("Eggs\nMilk\n", true)).toEqual({ text: "Eggs\nMilk\n", enter: false });
+    expect(typedText("Eggs\r\nMilk", true)).toEqual({ text: "Eggs\nMilk", enter: false });
   });
 
   it("commitDrafts trims the title and saves the change", () => {

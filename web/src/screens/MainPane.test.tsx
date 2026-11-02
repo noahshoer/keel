@@ -252,7 +252,7 @@ it("+ Add task opens the editor focused; Enter adds a task due today and stays o
   expect(document.activeElement).toBe(title);
   fireEvent.change(title, { target: { value: "Water plants" } });
   await act(async () => {
-    fireEvent.keyDown(title, { key: "Enter", metaKey: true });
+    fireEvent.keyDown(title, { key: "Enter" });
   });
   await waitFor(async () => expect((await allTasks()).some((t) => t.content === "Water plants")).toBe(true));
   const added = (await allTasks()).find((t) => t.content === "Water plants");
@@ -269,7 +269,7 @@ it("a project's add row puts the task in it and lists it", async () => {
   fireEvent.click(rows[0] as HTMLElement);
   fireEvent.change(titleField(), { target: { value: "Fix the gate" } });
   await act(async () => {
-    fireEvent.keyDown(titleField(), { key: "Enter", metaKey: true });
+    fireEvent.keyDown(titleField(), { key: "Enter" });
   });
   await waitFor(() => expect(contents(container)).toContain("Fix the gate"));
   expect((await allTasks()).find((t) => t.content === "Fix the gate")?.project_id).toBe("p-home");
@@ -281,7 +281,7 @@ it("a section's add row adds into the section", async () => {
   fireEvent.click(within(block).getByText("Add task"));
   fireEvent.change(titleField(), { target: { value: "Iron shirts" } });
   await act(async () => {
-    fireEvent.keyDown(titleField(), { key: "Enter", metaKey: true });
+    fireEvent.keyDown(titleField(), { key: "Enter" });
   });
   await waitFor(async () => {
     const t = (await allTasks()).find((x) => x.content === "Iron shirts");
@@ -294,7 +294,7 @@ it("a label view's add carries the label", async () => {
   fireEvent.click(container.querySelector(".add-task-row") as HTMLElement);
   fireEvent.change(titleField(), { target: { value: "Post the letter" } });
   await act(async () => {
-    fireEvent.keyDown(titleField(), { key: "Enter", metaKey: true });
+    fireEvent.keyDown(titleField(), { key: "Enter" });
   });
   await waitFor(async () =>
     expect((await allTasks()).find((t) => t.content === "Post the letter")?.labels).toEqual(["errand"]),

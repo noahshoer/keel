@@ -78,9 +78,6 @@ impl QuickAdd {
     }
 }
 
-/// A token of its own, so no phrase matches across it and the title keeps it.
-const LINE_BREAK: &str = "\n";
-
 struct Token {
     raw: String,
     /// Lower-cased with trailing punctuation removed.
@@ -91,13 +88,17 @@ struct Token {
 }
 
 /// `input` without the recognized phrases of the given kinds, with the
-/// leftover spaces collapsed and its line breaks kept. Used when a value is
-/// picked by hand: the pick replaces whatever was typed for it.
+/// leftover whitespace collapsed. Used when a value is picked by hand: the
+/// pick replaces whatever was typed for it.
 pub fn strip_spans(input: &str, spans: &[Span], kinds: &[SpanKind]) -> String {
-    let t = tokens(input);
-    let picked = |tok: &Token| spans.iter().any(|s| kinds.contains(&s.kind) && tok.start < s.end && s.start < tok.end);
-    let used: Vec<bool> = t.iter().map(picked).collect();
-    unused_words(&t, &used)
+    let mut out = String::with_capacity(input.len());
+    let mut at = 0;
+    for s in spans.iter().filter(|s| kinds.contains(&s.kind)) {
+        out.push_str(&input[at..s.start]);
+        at = s.end;
+    }
+    out.push_str(&input[at..]);
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// [`parse`], leaving the `plain` byte ranges alone: phrases the user
@@ -128,29 +129,9 @@ pub fn parse_keeping(
     q
 }
 
-/// The title left after parsing: the unused words, single-spaced, on the
-/// lines they were typed on. A line the parser used up goes with its phrase.
+/// The title left after parsing: the unused words, single-spaced.
 fn unused_words(tokens: &[Token], used: &[bool]) -> String {
-    let mut lines: Vec<String> = Vec::new();
-    let mut line: Vec<&str> = Vec::new();
-    let mut used_up = false;
-    for (tok, used) in tokens.iter().zip(used) {
-        if tok.raw == LINE_BREAK {
-            if !(used_up && line.is_empty()) {
-                lines.push(line.join(" "));
-            }
-            line.clear();
-            used_up = false;
-        } else if *used {
-            used_up = true;
-        } else {
-            line.push(&tok.raw);
-        }
-    }
-    if !(used_up && line.is_empty()) {
-        lines.push(line.join(" "));
-    }
-    lines.join(LINE_BREAK)
+    tokens.iter().zip(used).filter(|(_, used)| !**used).map(|(tok, _)| tok.raw.as_str()).collect::<Vec<_>>().join(" ")
 }
 
 /// Moves `plain` ranges through an edit from `old` to `new`: ranges before
@@ -201,9 +182,6 @@ fn tokens(input: &str) -> Vec<Token> {
             }
             (false, None) => start = Some(i),
             _ => {}
-        }
-        if c == '\n' {
-            push(i, i + 1);
         }
     }
     if let Some(s) = start {
@@ -1157,39 +1135,6 @@ mod tests {
         assert_eq!(q.project_id, Some(Id::from("P-WORK")));
         assert_eq!(q.section_id, Some(Id::from("S-NEXT")));
         assert_eq!(q.labels, vec!["phone".to_string()]);
-    }
-
-    #[test]
-    fn a_title_keeps_its_line_breaks() {
-        let q = p("Call mom\nbuy milk tomorrow");
-        assert_eq!(q.content, "Call mom\nbuy milk");
-        assert_eq!(q.date, Some(d(2026, 10, 20)));
-        assert_eq!(p("a\n\nb").content, "a\n\nb", "a blank line stays");
-    }
-
-    #[test]
-    fn a_line_with_only_a_phrase_goes_with_it() {
-        assert_eq!(p("a\ntomorrow\nb").content, "a\nb");
-    }
-
-    #[test]
-    fn a_phrase_does_not_run_across_a_line_break() {
-        let q = p("x next\nweek");
-        assert_eq!((q.date, q.content.as_str()), (None, "x next\nweek"));
-    }
-
-    #[test]
-    fn a_highlight_ends_where_its_line_does() {
-        let input = "call tomorrow\nmom";
-        let q = p(input);
-        assert_eq!(q.spans.len(), 1);
-        assert_eq!(&input[q.spans[0].start..q.spans[0].end], "tomorrow");
-    }
-
-    #[test]
-    fn strip_spans_keeps_line_breaks() {
-        let input = "call mom tomorrow\nbuy milk";
-        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Date]), "call mom\nbuy milk");
     }
 
     #[test]
