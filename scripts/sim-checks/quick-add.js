@@ -1,5 +1,5 @@
 // Quick add from Today's "+ Add task": the typed phrases are highlighted
-// and previewed, Enter adds the task, every picker fits the screen, and the
+// and fill their pills, Enter adds the task, every picker fits the screen, and the
 // new row shows up. Adds a task named "Quick add check" to the simulator's
 // data.
 const vw = innerWidth, vh = innerHeight;
@@ -17,7 +17,7 @@ setter.call(title, 'Quick add check tomorrow 5pm p1');
 title.dispatchEvent(new Event('input', { bubbles: true }));
 await sleep(300);
 check(`marks: ${[...document.querySelectorAll('.title-mirror mark')].map((m) => `${m.className}=${m.textContent}`).join(', ')}`);
-check(`preview: ${[...document.querySelectorAll('.quick-chip')].map((c) => c.textContent).join(', ')}`);
+check(`pills: ${[...document.querySelectorAll('.chips .chip-btn')].map((c) => c.textContent).join(', ')}`);
 for (const chip of document.querySelectorAll('.editor .chips .chip-btn')) {
   chip.click();
   await sleep(250);

@@ -52,7 +52,8 @@ export function DatePicker({
       <button
         type="button"
         className={cx(
-          face?.className ?? cx("chip chip-btn due-chip", bucket !== null ? BUCKET_CLASS[bucket] : ""),
+          face?.className ??
+            cx("chip chip-btn due-chip", bucket !== null && cx(BUCKET_CLASS[bucket], "pill-set")),
           isOpen && "chip-open",
         )}
         title="Date"

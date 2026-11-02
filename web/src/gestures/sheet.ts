@@ -64,6 +64,8 @@ type Drag = Heights & {
   mode: SheetDrag;
   samples: Array<[number, number]>;
   start: DragStart;
+  /** The sheet's scroll area, under the touch. */
+  scroller: HTMLElement | null;
   dy0: number;
   from: number;
   yNow: number;
@@ -153,6 +155,7 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
     const scroller = closest(ev.target, ".tv-scroll");
     g = {
       sheet,
+      scroller: scroller instanceof HTMLElement ? scroller : null,
       x: t.clientX,
       y: t.clientY,
       mode: "pending",
@@ -169,6 +172,7 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
         blocked: closest(ev.target, BLOCK) !== null,
         inField: field !== null,
         fieldFocused: field?.contains(doc.activeElement) ?? false,
+        inPills: closest(ev.target, ".tv-pills") !== null,
         width: win.innerWidth,
         detent: detentOf(sheet),
       },
@@ -196,6 +200,12 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
       sheet.classList.add("tv-large");
     }
     ev.preventDefault();
+    // Nothing held the first move of a touch on the pills (`holdsScroll`), so iOS
+    // may have begun to scroll the content too. It stays where it was.
+    if (g.start.inPills && g.scroller) {
+      g.scroller.style.overflowY = "hidden";
+      g.scroller.scrollTop = g.start.scrollTop;
+    }
     g.yNow = dragOffset(g.from, dy - g.dy0);
     g.samples.push([ev.timeStamp, dy]);
     if (g.samples.length > 6) g.samples.shift();
@@ -205,6 +215,7 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
     const d = g;
     g = null;
     if (d?.mode !== "drag") return;
+    if (d.start.inPills && d.scroller) d.scroller.style.overflowY = "";
     const from = d.start.detent;
     const to = cancelled ? from : sheetSettle(from, d.yNow, d.M, velocity(d.samples));
     const secs = reduce() ? 0 : SETTLE_S;

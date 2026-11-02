@@ -81,6 +81,101 @@ it("with a mouse too, clicking the title or description closes a picker", () => 
   cleanup();
 });
 
+it("keeps the title on one line: pasted line breaks become spaces", () => {
+  const title = adding();
+  type(title, "Pack\nthe bags");
+  expect(title.value).toBe("Pack the bags");
+  cleanup();
+});
+
+describe("the description", () => {
+  const desc = () => screen.getByPlaceholderText("Description") as HTMLTextAreaElement;
+
+  it("grows with its text, as the title does", () => {
+    adding();
+    expect(desc().tagName).toBe("TEXTAREA");
+    fireEvent.change(desc(), { target: { value: "Passport,\ncharger" } });
+    expect(document.querySelector(".desc-mirror")?.textContent).toContain("Passport,\ncharger");
+    cleanup();
+  });
+
+  it("takes Enter as a new line, and saves it", () => {
+    const title = adding();
+    type(title, "Pack");
+    fireEvent.change(desc(), { target: { value: "Passport,\ncharger" } });
+    expect(fireEvent.keyDown(desc(), { key: "Enter" })).toBe(true);
+    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.submit(document.querySelector("form.editor") as HTMLFormElement);
+    expect(onSubmit.mock.calls[0]?.[0].description).toBe("Passport,\ncharger");
+    cleanup();
+  });
+
+  it("hands the cursor to the title once the card is empty for the next task", () => {
+    const title = adding();
+    type(title, "Pack");
+    desc().focus();
+    fireEvent.submit(document.querySelector("form.editor") as HTMLFormElement);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(title);
+    cleanup();
+  });
+
+  it("keeps the cursor when there's nothing to save yet", () => {
+    adding();
+    desc().focus();
+    fireEvent.submit(document.querySelector("form.editor") as HTMLFormElement);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(desc());
+    cleanup();
+  });
+
+  it("submits on Cmd or Ctrl+Enter", () => {
+    const title = adding();
+    type(title, "Pack");
+    expect(fireEvent.keyDown(desc(), { key: "Enter", metaKey: true })).toBe(false);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    type(title, "Pack again");
+    fireEvent.keyDown(desc(), { key: "Enter", ctrlKey: true });
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+    cleanup();
+  });
+});
+
+describe("a card too long for the screen", () => {
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+    vi.stubGlobal("visualViewport", Object.assign(new EventTarget(), { offsetTop: 0, height: 478 }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  const form = () => document.querySelector<HTMLFormElement>("form.editor");
+  const text = () => document.querySelector<HTMLElement>(".editor-text");
+
+  it("scrolls the title and description together, and not the pills or save button", () => {
+    const title = adding();
+    type(title, "Call mom tomorrow");
+    expect(text()?.contains(title)).toBe(true);
+    expect(text()?.contains(screen.getByPlaceholderText("Description"))).toBe(true);
+    expect(text()?.querySelector(".chips")).toBeNull();
+    expect(text()?.contains(screen.getByRole("button", { name: "Add task" }))).toBe(false);
+  });
+
+  it("knows the room it has above the keyboard", () => {
+    adding();
+    expect(form()?.style.getPropertyValue("--card-room")).toBe("478px");
+  });
+
+  it("makes way for an open picker", () => {
+    adding();
+    expect(form()?.className).not.toContain("picking");
+    fireEvent.click(screen.getByTitle("Priority"));
+    expect(form()?.className).toContain("picking");
+  });
+});
+
 describe("on touch", () => {
   beforeEach(() => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
@@ -98,6 +193,58 @@ describe("on touch", () => {
     expect(form()?.className).toContain("on-keyboard");
     expect(form()?.parentElement).toBe(document.body);
     expect(container.querySelector("form")).toBeNull();
+  });
+
+  describe("when a phrase fills a pill out of view", () => {
+    const rect = (left: number, right: number) => ({ left, right }) as DOMRect;
+    const row = () => document.querySelector<HTMLElement>(".chips") as HTMLElement;
+    /** Lays the row out with the Labels pill past the save button. */
+    const layOut = () => {
+      row().getBoundingClientRect = () => rect(12, 380);
+      (document.querySelector(".btn-save") as HTMLElement).getBoundingClientRect = () => rect(340, 384);
+      screen.getByTitle("Labels").getBoundingClientRect = () => rect(300, 420);
+      screen.getByTitle("Priority").getBoundingClientRect = () => rect(100, 200);
+    };
+
+    it("scrolls the row to it, clear of the save button", () => {
+      const title = adding();
+      layOut();
+      type(title, "Call mom @phone");
+      expect(row().scrollLeft).toBe(88);
+    });
+
+    it("leaves the row alone for a pill already in view", () => {
+      const title = adding();
+      layOut();
+      type(title, "Call mom p1");
+      expect(row().scrollLeft).toBe(0);
+    });
+
+    it("leaves the row alone when the phrase goes", () => {
+      const title = adding();
+      layOut();
+      type(title, "Call mom @phone");
+      row().scrollLeft = 0;
+      type(title, "Call mom");
+      expect(row().scrollLeft).toBe(0);
+    });
+
+    it("leaves the row alone for plain typing", () => {
+      const title = adding();
+      layOut();
+      type(title, "Call mom @phone");
+      row().scrollLeft = 0;
+      type(title, "Call mom @phone soon");
+      expect(row().scrollLeft).toBe(0);
+    });
+
+    it("leaves the row alone for a pick on the pills", () => {
+      adding();
+      layOut();
+      fireEvent.click(screen.getByTitle("Labels"));
+      fireEvent.click(screen.getByText("errand"));
+      expect(row().scrollLeft).toBe(0);
+    });
   });
 
   it("scrolls its pills in the approved order, with a fixed save button and no Cancel", () => {
@@ -152,9 +299,10 @@ describe("on touch", () => {
     expect(onCancel).not.toHaveBeenCalled();
   });
 
-  it("caps a very long title's height, so the card stays on screen", () => {
+  it("fits the card in the room above the keyboard, so long text scrolls and it stays on screen", () => {
     const css = readFileSync(resolve(process.cwd(), "src/styles/app.css"), "utf8");
-    expect(css).toMatch(/\.on-keyboard \.title-wrap \{ max-height: \d+px; overflow-y: auto; \}/);
+    expect(css).toMatch(/\.editor\.on-keyboard \{[^}]*max-height: calc\(var\(--card-room/);
+    expect(css).toMatch(/\.on-keyboard \.editor-text \{[^}]*overflow-y: auto/);
   });
 
   it("floats a small gap above the keyboard", () => {
@@ -196,6 +344,50 @@ describe("on touch", () => {
     expect(pill().className).toContain("chip-open");
     expect(pill().className).toContain("pill-p1");
     expect(pill().className).toContain("pill-tinted");
+  });
+
+  describe("a pill that's been filled out", () => {
+    const filled = () =>
+      [...document.querySelectorAll<HTMLElement>(".chips .chip-btn.pill-set")].map((b) => b.title);
+
+    it("none are on an empty card", () => {
+      adding();
+      expect(filled()).toEqual([]);
+    });
+
+    it("shows on every pill a phrase fills", () => {
+      const title = adding();
+      type(title, "Call mom tomorrow p1 #Home @errand {nov 9} every day");
+      expect(filled()).toEqual([
+        "Date",
+        "Deadline: the date it must be done by",
+        "Priority",
+        "Project / section",
+        "Labels",
+        "Repeat",
+      ]);
+      type(title, "Call mom");
+      expect(filled()).toEqual([]);
+    });
+
+    it("shows on a pill picked by hand, and the reminders too", () => {
+      const title = adding();
+      type(title, "Call mom tomorrow");
+      fireEvent.click(screen.getByTitle("Priority"));
+      fireEvent.click(screen.getByText("Priority 2"));
+      expect(filled()).toEqual(["Date", "Priority"]);
+      fireEvent.click(screen.getByTitle("Reminders"));
+      fireEvent.click(screen.getByText("30 min before"));
+      expect(filled()).toContain("Reminders");
+    });
+
+    it("the Inbox doesn't count: it's where a task goes unless told otherwise", () => {
+      const title = adding();
+      type(title, "Call mom #Home");
+      expect(filled()).toContain("Project / section");
+      type(title, "Call mom");
+      expect(filled()).not.toContain("Project / section");
+    });
   });
 
   it("the Priority pill shows a flag, in its color once one is set", () => {
@@ -329,7 +521,7 @@ describe("on touch", () => {
       expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
     });
 
-    const desc = () => screen.getByPlaceholderText("Description") as HTMLInputElement;
+    const desc = () => screen.getByPlaceholderText("Description") as HTMLTextAreaElement;
 
     it("lowers the keyboard from the description too, and goes back to it", () => {
       adding();
@@ -450,14 +642,26 @@ describe("on touch", () => {
   });
 });
 
-it("highlights what quick add understood and previews it", () => {
+it("highlights what quick add understood and fills its pills, with no row of its own", () => {
   const title = adding();
   type(title, "Call mom tomorrow p1");
   expect(marks()).toEqual(["hl hl-date:tomorrow", "hl hl-p1:p1"]);
-  const chips = [...document.querySelectorAll(".quick-preview .quick-chip")].map(
-    (c) => `${c.className}:${c.textContent}`,
-  );
-  expect(chips).toEqual(["quick-chip chip-date:Tomorrow", "quick-chip chip-priority:P1"]);
+  expect(screen.getByTitle("Date").textContent).toBe("Tomorrow");
+  expect(screen.getByTitle("Priority").textContent).toBe("P1");
+  expect(screen.getByTitle("Priority").className).toContain("pill-p1");
+  expect(document.querySelector(".quick-preview")).toBeNull();
+  type(title, "Call mom");
+  expect(screen.getByTitle("Priority").textContent).toBe("Priority");
+});
+
+it("picking on a pill that a phrase filled replaces the phrase", () => {
+  const title = adding();
+  type(title, "Call mom p1");
+  fireEvent.click(screen.getByTitle("Priority"));
+  fireEvent.click(screen.getByText("Priority 2"));
+  expect(title.value).toBe("Call mom");
+  expect(screen.getByTitle("Priority").textContent).toBe("P2");
+  cleanup();
 });
 
 it("can't add a phrase on its own", () => {
@@ -605,7 +809,6 @@ it("edit mode never highlights and saves once", async () => {
   );
   const title = screen.getByPlaceholderText("Task name") as HTMLTextAreaElement;
   expect(marks()).toEqual([]);
-  expect(document.querySelector(".quick-preview")).toBeNull();
   await act(async () => {
     fireEvent.keyDown(title, { key: "Enter" });
     fireEvent.keyDown(title, { key: "Enter" });

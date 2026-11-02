@@ -3,7 +3,7 @@
 // edge. Fixed positioning, so scrolling containers never clip it (the
 // Dioxus `PLACE_JS` in crates/ui/src/pickers.rs).
 import { type RefObject, useLayoutEffect } from "react";
-import { keyboardUp, placeAboveCard } from "./keyboardAnchor";
+import { keyboardUp, placeAboveCard, textRoomUnderPicker } from "./keyboardAnchor";
 import { isTouch } from "./locale";
 
 export type Rect = { top: number; bottom: number; left: number; width: number; height: number };
@@ -26,22 +26,28 @@ function visibleTop(): number {
   return (Number.isNaN(safe) ? 0 : safe) + MARGIN;
 }
 
+/** Shrinks the card's text as far as the open picker needs. Set only on a change: observers watch the card. */
+function fitText(card: HTMLElement, picker: number, minTop: number): void {
+  const text = card.querySelector(".editor-text");
+  if (!text) return;
+  const box = card.getBoundingClientRect();
+  const room = `${textRoomUnderPicker(box.bottom, minTop, picker, box.height - text.clientHeight)}px`;
+  if (card.style.getPropertyValue("--picker-text") !== room) card.style.setProperty("--picker-text", room);
+}
+
 /**
  * Keeps a picker above the task card as the keyboard moves or its content
  * changes. Rects are relative to what's visible; a fixed `top` is relative to
  * the layout viewport, which starts `offsetTop` higher once WebKit scrolls.
  */
-function followCard(pop: HTMLElement, card: Element): () => void {
+function followCard(pop: HTMLElement, card: HTMLElement): () => void {
   const place = () => {
     // Clearing the limit to measure would lose the picker's scroll.
     const scrolled = pop.scrollTop;
     Object.assign(pop.style, { position: "fixed", right: "auto", margin: "0", maxHeight: "" });
-    const at = placeAboveCard(
-      card.getBoundingClientRect(),
-      pop.getBoundingClientRect(),
-      innerWidth,
-      visibleTop(),
-    );
+    const minTop = visibleTop();
+    fitText(card, pop.getBoundingClientRect().height, minTop);
+    const at = placeAboveCard(card.getBoundingClientRect(), pop.getBoundingClientRect(), innerWidth, minTop);
     const offset = window.visualViewport?.offsetTop ?? 0;
     Object.assign(pop.style, {
       top: `${at.top + offset}px`,
@@ -80,7 +86,7 @@ function followCard(pop: HTMLElement, card: Element): () => void {
 export function usePlacedPopover(ref: RefObject<HTMLElement | null>): void {
   useLayoutEffect(() => {
     const pop = ref.current;
-    const card = pop?.closest(".on-keyboard");
+    const card = pop?.closest<HTMLElement>(".on-keyboard");
     if (pop && card) return followCard(pop, card);
     const chip = pop?.previousElementSibling;
     if (!pop || !chip) return;

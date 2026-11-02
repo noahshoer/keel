@@ -40,7 +40,7 @@ describe("editor over wasm", () => {
     expect(view.segments.map((s) => s.kind)).toEqual([null, "Date", null, "Priority"]);
     expect(view.segments[3]?.level).toBe(1);
     expect(view.can_submit).toBe(true);
-    expect(view.preview.map((c) => c.text)).toEqual(["Tomorrow", "P1"]);
+    expect([view.date_chip[0], view.priority_text]).toEqual(["Tomorrow", "P1"]);
   });
 
   it("a date pick strips the typed date", () => {

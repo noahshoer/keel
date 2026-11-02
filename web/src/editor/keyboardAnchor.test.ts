@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { keyboardInset } from "../gestures/sheet-rules";
-import { placeAboveCard } from "./keyboardAnchor";
+import { placeAboveCard, textRoomUnderPicker } from "./keyboardAnchor";
 import type { Rect } from "./popover";
 
 const rect = (left: number, top: number, width: number, height: number): Rect => ({
@@ -23,6 +23,24 @@ describe("the task card's inset", () => {
   it("allows for a scrolled viewport, and is zero when WebKit scrolled the whole way", () => {
     expect(keyboardInset(844, 20, 544, null)).toBe(280);
     expect(keyboardInset(874, 396, 478, null)).toBe(0);
+  });
+});
+
+describe("textRoomUnderPicker", () => {
+  // A card ending at 538 with 84 of pills and padding, under a status bar ending at 70.
+  const room = (picker: number) => textRoomUnderPicker(538, 70, picker, 84);
+
+  it("is its most when the picker fits above that", () => {
+    expect(room(206)).toBe(84);
+  });
+
+  it("shrinks for a taller picker, so it fits without scrolling", () => {
+    expect(room(298)).toBe(78);
+    expect(538 - room(298) - 84 - 8 - 298).toBe(70);
+  });
+
+  it("keeps two lines of text, whatever the picker's height", () => {
+    expect(room(900)).toBe(48);
   });
 });
 

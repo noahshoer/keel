@@ -59,6 +59,44 @@ const TEXT = [
 ];
 const SURFACES = ["--bg", "--app-bg", "--page", "--page-wide", "--chrome", "--panel"];
 
+/** `fg` at `share` over `bg`, as `color-mix(in srgb, fg share, bg)`. */
+function mix(fg: string, share: number, bg: string): string {
+  const channel = (hex: string, i: number) => Number.parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  const part = (i: number) =>
+    Math.round(channel(fg, i) * share + channel(bg, i) * (1 - share))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${part(0)}${part(1)}${part(2)}`;
+}
+
+/** The colors a filled pill's text can be: the tint behind it is the same color. */
+const PILL_TEXT = [
+  "--accent-text",
+  "--due-overdue",
+  "--due-today",
+  "--due-tomorrow",
+  "--due-week",
+  "--due-later",
+  "--p1",
+  "--p2-text",
+  "--p3-text",
+  ...LABEL_COLORS.map((c) => `--label-${c.id}`),
+];
+
+describe.each(THEMES)("a filled pill, %s", (_theme, tokens) => {
+  it.each(PILL_TEXT)("%s on its own tint is at least 4.5:1", (t) => {
+    const fg = tokens[t] as string;
+    expect(fg, t).toBeDefined();
+    expect(contrast(fg, mix(fg, 0.16, tokens["--bg"] as string))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+it("a filled pill's tint is that 16%", () => {
+  expect(css).toMatch(
+    /\.chip-btn\.pill-set[^{]*\{[^}]*background: color-mix\(in srgb, currentColor 16%, var\(--bg\)\)/,
+  );
+});
+
 describe.each(THEMES)("contrast, %s", (_theme, tokens) => {
   it.each(TEXT.flatMap((t) => SURFACES.map((s) => [t, s] as const)))("%s on %s is at least 4.5:1", (t, s) => {
     const fg = tokens[t];
@@ -170,10 +208,6 @@ describe("text that used to miss the rule", () => {
     expect(css).toMatch(
       /\.quick-later \.menu-label, \.quick-later \.menu-hint \{ color: var\(--accent-text\); \}/,
     );
-  });
-  it("quick-add chips use the text colors", () => {
-    expect(css).toMatch(/\.quick-chip\.chip-project \{ color: var\(--p3-text\); \}/);
-    expect(css).toMatch(/\.quick-chip\.chip-label \{ color: var\(--p2-text\); \}/);
   });
   it("other-month days aren't faded below it", () => {
     expect(css).not.toMatch(/\.cal-day\.other \{[^}]*opacity/);

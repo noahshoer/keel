@@ -33,3 +33,6 @@ export type Face = {
   /** Shows the picker's icon before the text. */
   icon: boolean;
 };
+
+/** The Deadline pill's tooltip, which also names it. */
+export const DEADLINE_TITLE = "Deadline: the date it must be done by";

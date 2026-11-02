@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use keel_core::calendar::{DayCell, MonthView};
 use keel_core::commands::{Action, ApplyResult, Command, DueEdit};
 use keel_core::editor::{
-    AddPlan, EditPlan, EditorValues, EditorView, LocationChoice, LocationKind, Pick, PreviewChip, ReminderDraft, TaskPatch,
+    AddPlan, EditPlan, EditorValues, EditorView, LocationChoice, LocationKind, Pick, ReminderDraft, TaskPatch,
     TitleSegment,
 };
 use keel_core::filter::FilterGroup;
@@ -67,7 +67,7 @@ fn bindings_cover_ipc_types() {
         // views / quick add / calendar (the wasm boundary)
         CardRow, Card, CardMode, LabelChoice, LabelGroup, ProjectCount, SidebarCounts, DateGroup, DateGroupMode, Progress, DueBucket, QuickAdd, Span, SpanKind, MonthView, DayCell,
         // the editor (the wasm boundary)
-        EditorValues, EditorView, ReminderDraft, Pick, TaskPatch, LocationChoice, LocationKind, TitleSegment, PreviewChip,
+        EditorValues, EditorView, ReminderDraft, Pick, TaskPatch, LocationChoice, LocationKind, TitleSegment,
         AddPlan, EditPlan,
         // the task view (the wasm boundary)
         Field, Missing, MissingPill, FieldLayout, TaskDetail,

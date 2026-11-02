@@ -680,48 +680,29 @@ pub fn title_segments(value: &str, spans: &[Span]) -> Vec<TitleSegment> {
     segments
 }
 
-/// A chip under the title previewing what quick add understood.
-#[derive(Clone, Debug, PartialEq, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
-pub struct PreviewChip {
-    /// `Date` for the date (and its time).
-    pub kind: SpanKind,
-    pub text: String,
-}
-
-/// The preview chips for a parse: date and time, repeat, priority, project
-/// (with section), each label, deadline.
-pub fn preview_chips(qa: &QuickAdd, projects: &[Project], sections: &[Section], today: NaiveDate) -> Vec<PreviewChip> {
-    let chip = |kind, text| PreviewChip { kind, text };
-    let mut chips = Vec::new();
-    if let Some(d) = qa.date {
-        let mut text = views::due_label(d, today);
-        if let Some(t) = qa.time {
-            text = format!("{text} {}", views::time_label(t));
-        }
-        chips.push(chip(SpanKind::Date, text));
-    }
-    if let Some(r) = &qa.recurrence {
-        chips.push(chip(SpanKind::Repeat, repeat_text(r)));
-    }
-    if let Some(p) = qa.priority {
-        chips.push(chip(SpanKind::Priority, format!("P{}", 5 - p.to_api())));
-    }
-    if let Some(pid) = &qa.project_id {
-        let project = projects.iter().find(|p| &p.id == pid).map(|p| p.name.clone()).unwrap_or_default();
-        let text = match qa.section_id.as_ref().and_then(|s| sections.iter().find(|x| &x.id == s)) {
-            Some(section) => format!("#{project} / {}", section.name),
-            None => format!("#{project}"),
-        };
-        chips.push(chip(SpanKind::Project, text));
-    }
+/// `v` with the parse applied on top, as saving does (see [`new_task_from`]):
+/// what the editor's pills show. Text wins for the fields it mentions.
+fn shown_values(v: &EditorValues, qa: &QuickAdd) -> EditorValues {
+    let mut labels = v.labels.clone();
     for l in &qa.labels {
-        chips.push(chip(SpanKind::Label, format!("@{l}")));
+        if !labels.iter().any(|n| n.eq_ignore_ascii_case(l)) {
+            labels.push(l.clone());
+        }
     }
-    if let Some(d) = qa.deadline {
-        chips.push(chip(SpanKind::Deadline, format!("Deadline {}", views::due_label(d, today))));
+    let (project_id, section_id) = match (&qa.project_id, &qa.section_id) {
+        (Some(p), s) => (p.clone(), s.clone()),
+        (None, _) => (v.project_id.clone(), v.section_id.clone()),
+    };
+    EditorValues {
+        date: qa.date.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| v.date.clone()),
+        time: qa.time.map(|t| t.format("%H:%M").to_string()).unwrap_or_else(|| v.time.clone()),
+        priority: qa.priority.map(|p| (5 - p.to_api()).to_string()).unwrap_or_else(|| v.priority.clone()),
+        deadline: qa.deadline.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| v.deadline.clone()),
+        labels,
+        project_id,
+        section_id,
+        ..v.clone()
     }
-    chips
 }
 
 /// Everything the editor draws for its values, from one parse of the title.
@@ -731,9 +712,8 @@ pub struct EditorView {
     /// The title has a name to save (see [`has_name`]).
     pub can_submit: bool,
     pub segments: Vec<TitleSegment>,
-    pub preview: Vec<PreviewChip>,
-    /// Picked plus typed labels (the labels menu ticks both).
-    pub shown_labels: Vec<String>,
+    /// The values with what the title says applied: what the pills show.
+    pub shown: EditorValues,
     /// The days it will repeat on: the typed rule, or the Repeat menu's.
     pub repeat_rule: Option<Recurrence>,
     /// Relative reminders count back from a due date (typed or picked).
@@ -773,40 +753,32 @@ pub fn editor_view(
         None => !v.content.trim().is_empty(),
     };
     let spans = qa.as_ref().map(|q| q.spans.as_slice()).unwrap_or(&[]);
-    let mut shown_labels = v.labels.clone();
-    for l in qa.iter().flat_map(|q| q.labels.iter()) {
-        if !shown_labels.iter().any(|n| n.eq_ignore_ascii_case(l)) {
-            shown_labels.push(l.clone());
-        }
-    }
-    let repeat_rule = qa
-        .as_ref()
-        .and_then(|q| q.recurrence.clone())
-        .or_else(|| recurrence_for(&v.repeat, &v.date, existing, today));
-    let has_due = !v.date.is_empty() || !v.time.is_empty() || qa.as_ref().is_some_and(|q| q.date.is_some());
-    let opts = repeat_options(&v.date, keep_label, today);
-    let date = NaiveDate::parse_from_str(&v.date, "%Y-%m-%d").ok();
-    let time = NaiveTime::parse_from_str(&v.time, "%H:%M").ok();
-    let deadline = NaiveDate::parse_from_str(&v.deadline, "%Y-%m-%d").ok();
+    let shown = qa.as_ref().map(|q| shown_values(v, q)).unwrap_or_else(|| v.clone());
+    let typed_repeat = qa.as_ref().and_then(|q| q.recurrence.clone());
+    let repeat_rule = typed_repeat.clone().or_else(|| recurrence_for(&v.repeat, &shown.date, existing, today));
+    let has_due = !shown.date.is_empty() || !shown.time.is_empty();
+    let opts = repeat_options(&shown.date, keep_label, today);
+    let date = NaiveDate::parse_from_str(&shown.date, "%Y-%m-%d").ok();
+    let time = NaiveTime::parse_from_str(&shown.time, "%H:%M").ok();
+    let deadline = NaiveDate::parse_from_str(&shown.deadline, "%Y-%m-%d").ok();
     EditorView {
         can_submit,
         segments: title_segments(&v.content, spans),
-        preview: qa.as_ref().map(|q| preview_chips(q, projects, sections, today)).unwrap_or_default(),
-        shown_labels,
         repeat_rule,
         has_due,
-        location: v.location(),
-        location_text: location_text(&v.project_id, v.section_id.as_ref(), projects, sections),
+        location: shown.location(),
+        location_text: location_text(&shown.project_id, shown.section_id.as_ref(), projects, sections),
         locations: location_choices(projects, sections),
-        priority_text: priority_text(&v.priority),
-        labels_text: labels_text(&v.labels),
-        repeat_chip_text: repeat_chip_text(&v.repeat, &opts),
+        priority_text: priority_text(&shown.priority),
+        labels_text: labels_text(&shown.labels),
+        repeat_chip_text: typed_repeat.as_ref().map(repeat_text).unwrap_or_else(|| repeat_chip_text(&v.repeat, &opts)),
         repeat_options: opts,
         date_chip: date_chip(date, time, today),
         deadline_text: deadline_text(deadline, today),
         deadline_urgent: deadline.map(|d| views::deadline_urgent(d, today)),
         reminders_text: reminders_text(&v.reminders, today),
         reminder_labels: v.reminders.iter().map(|r| r.label(today)).collect(),
+        shown,
     }
 }
 
@@ -1031,23 +1003,61 @@ mod tests {
     }
 
     #[test]
-    fn preview_lists_what_was_typed() {
+    fn pills_show_what_was_typed() {
         let mut home = Project::new("Home");
         home.id = Id::from("P-HOME");
         let v = typed("x tomorrow 5pm every day p1 #Home @phone {nov 2}");
         let view = editor_view(&v, true, None, None, &[home], &[], day30());
-        let chips: Vec<(SpanKind, &str)> = view.preview.iter().map(|c| (c.kind, c.text.as_str())).collect();
-        assert_eq!(
-            chips,
-            [
-                (SpanKind::Date, "Tomorrow 5 PM"),
-                (SpanKind::Repeat, "Every day"),
-                (SpanKind::Priority, "P1"),
-                (SpanKind::Project, "#Home"),
-                (SpanKind::Label, "@phone"),
-                (SpanKind::Deadline, "Deadline Monday"),
-            ]
-        );
+        assert_eq!(view.date_chip.0, "Tomorrow 5 PM");
+        assert_eq!(view.repeat_chip_text, "Every day");
+        assert_eq!(view.priority_text, "P1");
+        assert_eq!(view.location_text, "Home");
+        assert_eq!(view.labels_text, "phone");
+        assert_eq!(view.deadline_text, "Monday");
+        assert_eq!(view.deadline_urgent, Some(false));
+        assert_eq!(view.location, "P-HOME");
+        assert_eq!(view.shown.priority, "1");
+        assert_eq!((view.shown.date.as_str(), view.shown.time.as_str()), ("2026-10-31", "17:00"));
+        assert_eq!(view.shown.deadline, "2026-11-02");
+    }
+
+    #[test]
+    fn typed_text_wins_over_a_pick_on_the_pills_as_it_does_when_saving() {
+        let mut v = typed("x p2 tomorrow");
+        v.priority = "3".into();
+        v.date = "2026-11-06".into();
+        v.time = "09:00".into();
+        let view = editor_view(&v, true, None, None, &[], &[], day30());
+        assert_eq!(view.priority_text, "P2");
+        assert_eq!(view.shown.date, "2026-10-31");
+        assert_eq!(view.shown.time, "09:00", "a picked time goes with a typed date");
+        let saved = new_task_from(&v, &parse_title(&v, &[], &[], day30()), day30());
+        assert_eq!(saved.priority.to_api(), 3);
+        assert_eq!(saved.date, "2026-10-31T09:00:00");
+    }
+
+    #[test]
+    fn picks_show_when_nothing_is_typed_and_come_back_when_the_phrase_goes() {
+        let mut v = typed("x p2");
+        v.priority = "3".into();
+        assert_eq!(editor_view(&v, true, None, None, &[], &[], day30()).priority_text, "P2");
+        v.content = "x".into();
+        assert_eq!(editor_view(&v, true, None, None, &[], &[], day30()).priority_text, "P3");
+    }
+
+    #[test]
+    fn editing_never_reads_the_title_for_the_pills() {
+        let v = typed("x p2 tomorrow");
+        let view = editor_view(&v, false, None, None, &[], &[], day30());
+        assert_eq!(view.priority_text, "Priority");
+        assert_eq!(view.shown.date, v.date);
+    }
+
+    #[test]
+    fn a_phrase_turned_back_into_text_leaves_the_pill() {
+        let mut v = typed("x p2");
+        assert!(unhighlight(&mut v, &[], &[], day30(), 4));
+        assert_eq!(editor_view(&v, true, None, None, &[], &[], day30()).priority_text, "Priority");
     }
 
     #[test]
@@ -1082,8 +1092,8 @@ mod tests {
         let mut v = typed("x @Home @work");
         v.labels = vec!["home".into(), "errands".into()];
         let view = view_of(&v, true);
-        assert_eq!(view.shown_labels, ["home", "errands", "work"]);
-        assert_eq!(view.labels_text, "home, errands");
+        assert_eq!(view.shown.labels, ["home", "errands", "work"]);
+        assert_eq!(view.labels_text, "home, errands, work");
     }
 
     #[test]

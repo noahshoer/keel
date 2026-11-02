@@ -1,8 +1,9 @@
 // The Todoist-style task editor card, shared by "+ Add task", "Add sub-task"
 // and editing (crates/ui/src/editor.rs `TaskEditor`). When adding, the title
-// is parsed as quick add with live highlighting and preview chips. Every
+// is parsed as quick add with live highlighting, and what it says fills the pills. Every
 // decision about the values is keel-core's (`editorView`, `applyPick`, …).
 import {
+  type CSSProperties,
   type MouseEvent,
   type PointerEvent,
   type ReactNode,
@@ -13,7 +14,16 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { holdPage } from "../app/pageHold";
-import type { EditorPick, EditorValues, Label, Project, Recurrence, Section, SpanKind } from "../bindings";
+import type {
+  EditorPick,
+  EditorValues,
+  EditorView,
+  Label,
+  Project,
+  Recurrence,
+  Section,
+  SpanKind,
+} from "../bindings";
 import { localToday } from "../clock";
 import {
   applyPick,
@@ -28,13 +38,13 @@ import { ArrowUpIcon, FlagFilledIcon, RepeatSmallIcon } from "../shell/icons";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
 import { HighlightedTitle } from "./HighlightedTitle";
-import { flagClass, locationFace, locationItems, PRIORITY_ITEMS } from "./items";
+import { flagClass, locationChosen, locationFace, locationItems, PRIORITY_ITEMS } from "./items";
 import { useKeyboard } from "./keyboardAnchor";
 import { LabelPicker } from "./LabelPicker";
 import { isTouch } from "./locale";
 import { Menu, type MenuItem } from "./Menu";
-import { usePillFade } from "./pillFade";
-import { cx, type Pop } from "./pop";
+import { type TypedPills, usePillFade, useRevealFilled } from "./pillFade";
+import { cx, DEADLINE_TITLE, type Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
 
 /** The space between the task card and the keyboard. */
@@ -46,16 +56,27 @@ function keepFocus(e: MouseEvent<HTMLElement>): void {
   if (!target.closest("input, textarea, select")) e.preventDefault();
 }
 
-const PREVIEW: Record<SpanKind, string> = {
-  Date: "chip-date",
-  Time: "chip-date",
-  Repeat: "chip-repeat",
-  Priority: "chip-priority",
-  Project: "chip-project",
-  Section: "chip-project",
-  Label: "chip-label",
-  Deadline: "chip-deadline",
-};
+/** What each pill with a phrase in the title says, by the pill's `title`. */
+function typedPills(view: EditorView): TypedPills {
+  const pills: Record<SpanKind, [string, string]> = {
+    Date: ["Date", view.date_chip[0]],
+    Time: ["Date", view.date_chip[0]],
+    Deadline: [DEADLINE_TITLE, view.deadline_text],
+    Priority: ["Priority", view.priority_text],
+    Project: ["Project / section", view.location_text],
+    Section: ["Project / section", view.location_text],
+    Label: ["Labels", view.labels_text],
+    Repeat: ["Repeat", view.repeat_chip_text],
+  };
+  const typed: TypedPills = {};
+  for (const { kind } of view.segments) {
+    if (kind !== null) {
+      const [title, text] = pills[kind];
+      typed[title] = text;
+    }
+  }
+  return typed;
+}
 
 export function TaskEditor({
   initial,
@@ -81,7 +102,7 @@ export function TaskEditor({
   /** The edited task's recurrence (what "keep" repeats by). */
   existing: Recurrence | null;
   submitText: string;
-  /** Parse the title as quick add (adding) and preview it. */
+  /** Parse the title as quick add (adding), filling the pills from it. */
   quickAdd: boolean;
   /** Stay open after submitting, reset to `initial` (Todoist's add flow). */
   keepOpen: boolean;
@@ -163,11 +184,15 @@ export function TaskEditor({
       latest.current = initial;
       setValues(initial);
       setPop(null);
+      // The next task starts with its title, wherever this one ended.
+      title.current?.focus();
     } else {
       submitted.current = true;
     }
     onSubmit(v);
   };
+
+  useRevealFilled(pillRow.ref, typedPills(view));
 
   const repeatItems: MenuItem[] = view.repeat_options.map(([value, label]) => ({ value, label }));
 
@@ -183,8 +208,8 @@ export function TaskEditor({
   const pills: ReactNode = (
     <div ref={pillRow.ref} className="chips" onScroll={pillRow.onScroll}>
       <DatePicker
-        date={values.date}
-        time={values.time}
+        date={view.shown.date}
+        time={view.shown.time}
         text={view.date_chip[0]}
         bucket={view.date_chip[1]}
         rule={view.repeat_rule}
@@ -206,7 +231,7 @@ export function TaskEditor({
         actions={calendarActions}
       />
       <DeadlinePicker
-        deadline={values.deadline}
+        deadline={view.shown.deadline}
         text={view.deadline_text}
         urgent={view.deadline_urgent}
         today={today}
@@ -219,13 +244,17 @@ export function TaskEditor({
         id="priority"
         title="Priority"
         icon={<FlagFilledIcon />}
-        iconClass={flagClass(values.priority)}
+        iconClass={flagClass(view.shown.priority)}
         text={view.priority_text}
         items={PRIORITY_ITEMS}
-        selected={values.priority}
+        selected={view.shown.priority}
         open={open}
         setOpen={setPop}
-        chipClass={["1", "2", "3"].includes(values.priority) ? `pill-p${values.priority} pill-tinted` : ""}
+        chipClass={
+          ["1", "2", "3"].includes(view.shown.priority)
+            ? `pill-p${view.shown.priority} pill-tinted pill-set`
+            : ""
+        }
         onSelect={(value) => pick({ type: "priority", value })}
       />
       <Menu
@@ -238,11 +267,12 @@ export function TaskEditor({
         selected={view.location}
         open={open}
         setOpen={setPop}
+        chipClass={locationChosen(view.locations, view.location) ? "pill-set" : ""}
         onSelect={(value) => pick(locationPick(value))}
       />
       <LabelPicker
         labels={labels}
-        selected={view.shown_labels}
+        selected={view.shown.labels}
         text={view.labels_text}
         open={open}
         setOpen={setPop}
@@ -268,6 +298,7 @@ export function TaskEditor({
         selected={values.repeat}
         open={open}
         setOpen={setPop}
+        chipClass={view.repeat_rule !== null ? "pill-set" : ""}
         onSelect={(value) => pick({ type: "repeat", value })}
       />
     </div>
@@ -281,8 +312,17 @@ export function TaskEditor({
 
   const form = (
     <form
-      className={cx("editor", touch && "on-keyboard", touch && !keyboard.up && "keyboard-down")}
-      style={touch ? { bottom: keyboard.inset + CARD_GAP } : undefined}
+      className={cx(
+        "editor",
+        touch && "on-keyboard",
+        touch && !keyboard.up && "keyboard-down",
+        touch && open !== null && "picking",
+      )}
+      style={
+        touch
+          ? ({ bottom: keyboard.inset + CARD_GAP, "--card-room": `${keyboard.room}px` } as CSSProperties)
+          : undefined
+      }
       // Pressing anything but a text field keeps the title focused, so the keyboard stays up.
       onMouseDown={touch ? keepFocus : undefined}
       onPointerUp={tapField}
@@ -298,41 +338,47 @@ export function TaskEditor({
       }}
     >
       {!touch && open !== null ? clickAway : null}
-      <HighlightedTitle
-        segments={view.segments}
-        value={values.content}
-        placeholder={quickAdd ? "Task name — try “Call mom tomorrow 5pm p1 #Home @phone”" : "Task name"}
-        onInput={(text) => {
-          closeForField();
-          setValues((v) => withTitle(v, text));
-        }}
-        onEnter={submit}
-        onUnhighlight={(caret) => {
-          closeForField();
-          setValues((v) => (quickAdd ? (unhighlightAt(v, projects, sections, today, caret) ?? v) : v));
-        }}
-        inputRef={title}
-      />
-      {view.preview.length > 0 ? (
-        <div className="quick-preview">
-          {view.preview.map((c, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: the chips follow the parse's order.
-            <span key={i} className={`quick-chip ${PREVIEW[c.kind]}`}>
-              {c.text}
-            </span>
-          ))}
+      {/* The part that scrolls once the card fills the room above the keyboard. */}
+      <div className="editor-text">
+        <HighlightedTitle
+          segments={view.segments}
+          value={values.content}
+          placeholder={quickAdd ? "Task name — try “Call mom tomorrow 5pm p1 #Home @phone”" : "Task name"}
+          onInput={(text) => {
+            closeForField();
+            setValues((v) => withTitle(v, text));
+          }}
+          onEnter={submit}
+          onUnhighlight={(caret) => {
+            closeForField();
+            setValues((v) => (quickAdd ? (unhighlightAt(v, projects, sections, today, caret) ?? v) : v));
+          }}
+          inputRef={title}
+        />
+        <div className="desc-wrap">
+          <div className="desc-mirror" aria-hidden="true">
+            {`${values.description}\u200b`}
+          </div>
+          <textarea
+            className="desc"
+            rows={1}
+            placeholder="Description"
+            value={values.description}
+            onChange={(e) => {
+              const description = e.target.value;
+              closeForField();
+              setValues((v) => ({ ...v, description }));
+            }}
+            onKeyDown={(e) => {
+              // Enter is a new line here; the modifier is the keyboard's way to save.
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+          />
         </div>
-      ) : null}
-      <input
-        className="desc"
-        placeholder="Description"
-        value={values.description}
-        onChange={(e) => {
-          const description = e.target.value;
-          closeForField();
-          setValues((v) => ({ ...v, description }));
-        }}
-      />
+      </div>
       {touch ? (
         <div className={cx("editor-actions", pillRow.fadeClass)}>
           {pills}

@@ -416,9 +416,15 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .editor-scrim { position: fixed; inset: 0; z-index: 44; background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
 .editor-scrim.pop-backdrop { z-index: 44; }
 .editor.on-keyboard .name { font-size: 18px; line-height: 24px; font-weight: 500; }
-.editor.on-keyboard .desc { display: block; font-size: 15px; line-height: 20px; padding: 8px 0 0; }
+.editor.on-keyboard .desc, .editor.on-keyboard .desc-mirror { font-size: 15px; line-height: 20px; padding: 8px 0 0; }
 .on-keyboard .title-wrap > .title-mirror, .on-keyboard .title-wrap > .title-input { padding: 0; font-size: 18px; line-height: 24px; font-weight: 500; }
-.on-keyboard .title-wrap { max-height: 120px; overflow-y: auto; }
+/* It grows to the top of what's visible; then the text scrolls and the pills stay. */
+.editor.on-keyboard { display: flex; flex-direction: column; max-height: calc(var(--card-room, 100dvh) - var(--safe-top) - 16px); }
+.editor.on-keyboard.keyboard-down { max-height: calc(var(--card-room, 100dvh) - var(--safe-top) - 16px - env(safe-area-inset-bottom)); }
+.on-keyboard .editor-text { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.on-keyboard .editor-actions { flex: none; }
+/* A picker needs the room: long text shrinks as far as it asks (`fitText`). */
+.editor.on-keyboard.picking .editor-text { max-height: var(--picker-text, 84px); }
 .editor-actions { position: relative; display: flex; align-items: center; gap: 8px; padding-top: 12px; }
 /* Pills run a third of the way under the save button, fading out there, only while one does. */
 .editor-actions { --pill-fade: var(--bg); }
@@ -429,7 +435,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   color-mix(in srgb, var(--pill-fade) 82%, transparent) 75%, var(--pill-fade)); }
 .editor-actions.pills-run-on::after { top: 12px; right: 29px; }
 .editor-actions.pills-run-back::before { top: 12px; left: -12px; width: 48px; z-index: 1; }
-.on-keyboard .pill-tinted.chip-btn.chip-open { background: color-mix(in srgb, currentColor 12%, var(--bg)); font-weight: 600; }
+.on-keyboard .pill-tinted.chip-btn.chip-open { background: color-mix(in srgb, currentColor 16%, var(--bg)); color: var(--accent-text); font-weight: 600; }
 .on-keyboard .pill-tinted.pill-p1.chip-btn.chip-open { color: var(--p1); }
 .on-keyboard .pill-tinted.pill-p2.chip-btn.chip-open { color: var(--p2-text); }
 .on-keyboard .pill-tinted.pill-p3.chip-btn.chip-open { color: var(--p3-text); }
@@ -437,15 +443,20 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .menu-item.row-p2, .menu-item.row-p2 .menu-check { color: var(--p2-text); }
 .menu-item.row-p3, .menu-item.row-p3 .menu-check { color: var(--p3-text); }
 .label-row[style*="color"] .label-opt, .label-row[style*="color"] .label-color-btn, .label-row[style*="color"] .menu-check { color: inherit; }
-.on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; margin: 0 -23px 0 -12px; padding: 0 31px 0 12px; overflow-x: auto; scrollbar-width: none; }
+.on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; margin: 0 -23px 0 -12px; padding: 0 31px 0 12px; overflow-x: auto; scroll-behavior: smooth; scrollbar-width: none; }
 .on-keyboard .chips::-webkit-scrollbar { display: none; }
 .on-keyboard .chip-btn { height: 44px; max-width: none; padding: 0 14px; border: none; background: var(--field-fill); color: var(--text); font-size: 15px; white-space: nowrap; }
+/* A filled-out pill, like a chosen label's row: its color (the green without one of its own) over a tint of it. */
+.chip-btn.pill-set { color: var(--accent-text); }
+.chip-btn.pill-set, .on-keyboard .chip-btn.pill-set { border-color: transparent; background: color-mix(in srgb, currentColor 16%, var(--bg)); }
+.chip-btn.pill-set .chip-icon { color: inherit; }
+.chip-btn.pill-set .chip-icon:not(.pill-tag) .icon, .chip-btn.pill-set .pill-tag .icon { color: inherit; }
 .on-keyboard .chip-btn .icon, .on-keyboard .chip-caret { display: none; }
 .on-keyboard .chip-btn .chip-icon[class*="pri-"] .icon, .on-keyboard .chip-btn .chip-icon[class*="loc-"] .icon, .on-keyboard .chip-btn .pill-tag .icon { display: inline-flex; }
 .on-keyboard .chip-btn .chip-icon[class*="pri-"] svg, .on-keyboard .chip-btn .chip-icon[class*="loc-"] svg, .on-keyboard .chip-btn .pill-tag svg { width: 16px; height: 16px; }
-.on-keyboard .pill-p1 { color: var(--p1); }
-.on-keyboard .pill-p2 { color: var(--p2-text); }
-.on-keyboard .pill-p3 { color: var(--p3-text); }
+.chip-btn.pill-p1 { color: var(--p1); }
+.chip-btn.pill-p2 { color: var(--p2-text); }
+.chip-btn.pill-p3 { color: var(--p3-text); }
 .on-keyboard .chip-btn.chip-open .chip-icon { color: inherit; }
 .on-keyboard .chip-btn.chip-open { background: var(--accent); color: var(--on-fill); font-weight: 600; }
 .on-keyboard .chip-wrap { position: static; flex: none; }
@@ -455,22 +466,20 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Solid even when disabled: pills pass under it. */
 .btn-save:disabled { background: color-mix(in srgb, var(--accent) 45%, var(--bg)); color: color-mix(in srgb, #fff 60%, var(--bg)); }
 .editor .name { width: 100%; border: none; outline: none; font-size: 15px; font-weight: 600; padding: 2px 0; background: transparent; }
-.editor .desc { width: 100%; border: none; outline: none; font-size: 13px; padding: 5px 0 12px; background: transparent; }
+/* As the title: textarea and mirror share one grid cell, so the mirror's wrapped text sizes the field. */
+.desc-wrap { display: grid; }
+.editor .desc, .editor .desc-mirror { grid-area: 1 / 1; width: 100%; margin: 0; border: none; outline: none; font: inherit; font-size: 13px; line-height: 18px; letter-spacing: inherit; padding: 5px 0 12px; background: transparent;
+  white-space: pre-wrap; overflow-wrap: anywhere; }
+.editor .desc { resize: none; overflow: hidden; color: var(--text); }
+.desc-mirror { visibility: hidden; }
 .editor .name::placeholder, .editor .desc::placeholder, .project-input::placeholder { color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; }
 .chip { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px;
   border: 1px solid var(--chip-border); border-radius: var(--r-full); font-size: 12px; color: var(--subtle); background: var(--chip-bg); }
 @media (hover: hover) { .chip:hover { background: var(--chip-hover); border-color: var(--border-strong); } }
+@media (hover: hover) { .chip-btn.pill-set:hover { background: color-mix(in srgb, currentColor 24%, var(--bg)); border-color: transparent; } }
 .chip:focus-within { box-shadow: 0 0 0 3px var(--focus-ring); }
 .chip input, .chip select { border: none; outline: none; background: transparent; font-size: 12px; color: var(--chip-text); }
-.quick-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 6px; font-size: 12px; }
-.quick-chip { padding: 2px 8px; border-radius: 999px; background: var(--panel); color: var(--chip-text);
-  animation: pop-in .16s var(--ease); }
-.quick-chip.chip-date { color: var(--due-today); }
-.quick-chip.chip-repeat { color: var(--due-week); }
-.quick-chip.chip-priority { color: var(--p1); }
-.quick-chip.chip-project { color: var(--p3-text); }
-.quick-chip.chip-label { color: var(--p2-text); }
 .chip select option { background: var(--chip-bg); color: var(--chip-text); }
 .editor-footer { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--divider); padding: 10px 0 12px; }
 .btn { border: none; border-radius: var(--r-full); padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
@@ -976,7 +985,6 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .deadline-chip.set { color: var(--accent-text); }
 .deadline-chip.urgent { color: var(--due-overdue); }
 .reminder-chip { color: var(--accent-text); }
-.quick-chip.chip-deadline { color: var(--due-week); }
 .hl-deadline { --hl-rgb: var(--hl-repeat); }
 .reminder-item { display: flex; align-items: center; flex: none; gap: 10px; min-height: 36px; padding: 0 4px 0 12px; font-size: 14px; }
 .reminder-item .icon-btn { font-size: 16px; line-height: 1; width: 26px; height: 26px; }

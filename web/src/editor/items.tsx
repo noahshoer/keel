@@ -29,3 +29,7 @@ export const locationItems = (choices: LocationChoice[]): MenuItem[] =>
 /** The icon of the chosen project or section, for its pill. */
 export const locationFace = (choices: LocationChoice[], selected: string) =>
   LOCATION[choices.find((c) => c.value === selected)?.kind ?? "Project"];
+
+/** Whether a project or section was chosen: the Inbox is where a task goes unless told otherwise. */
+export const locationChosen = (choices: LocationChoice[], selected: string): boolean =>
+  choices.find((c) => c.value === selected)?.kind !== "Inbox";
