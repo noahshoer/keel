@@ -5,9 +5,14 @@
 /** The window moves in stretches this long, so most scrolling redraws nothing. */
 const STRETCH = 8;
 
-/** The month at the top of the view; snapping can settle a fraction of a pixel short. */
-export function monthAt(tops: number[], scrollTop: number): number {
-  const at = scrollTop + 0.5;
+/**
+ * The month to show: the one at the view's middle, row 3 of the six in view. A
+ * month has at least four weeks, so settled on its 1st it's still that month,
+ * and the next one takes over as soon as it fills the lower half. Snapping can
+ * settle a fraction of a pixel short.
+ */
+export function monthInView(tops: number[], scrollTop: number, rowHeight: number): number {
+  const at = scrollTop + rowHeight * 3 + 0.5;
   let lo = 0;
   let hi = tops.length - 1;
   while (lo < hi) {

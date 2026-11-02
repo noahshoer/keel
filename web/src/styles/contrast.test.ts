@@ -81,7 +81,7 @@ describe.each(THEMES)("a day outside the shown month, %s", (_theme, tokens) => {
   it("is readable on --bg", () => {
     expect(contrast(tokens["--cal-other"] as string, tokens["--bg"] as string)).toBeGreaterThanOrEqual(4.5);
   });
-  it("is grayer than a past day of the shown month", () => {
+  it("is grayer than other secondary text", () => {
     const toBg = (t: string) => contrast(tokens[t] as string, tokens["--bg"] as string);
     expect(toBg("--cal-other")).toBeLessThan(toBg("--secondary"));
   });
@@ -175,8 +175,11 @@ describe("text that used to miss the rule", () => {
     expect(css).toMatch(/\.quick-chip\.chip-project \{ color: var\(--p3-text\); \}/);
     expect(css).toMatch(/\.quick-chip\.chip-label \{ color: var\(--p2-text\); \}/);
   });
-  it("past and other-month days aren't faded below it", () => {
-    expect(css).not.toMatch(/\.cal-day\.(past|other) \{[^}]*opacity/);
+  it("other-month days aren't faded below it", () => {
+    expect(css).not.toMatch(/\.cal-day\.other \{[^}]*opacity/);
+  });
+  it("gray in the calendar only means outside the shown month, so a past month still lights up", () => {
+    expect(css).not.toMatch(/\.cal-day\.past/);
   });
 });
 

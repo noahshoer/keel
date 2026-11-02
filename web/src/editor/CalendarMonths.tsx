@@ -1,12 +1,12 @@
 // The calendar's days: one unbroken run of weeks in a vertical scroll that
-// settles on the week of a month's 1st, like iOS Calendar. The month at the top
-// is in full color, every other day grayed. keel-core builds the weeks; this
-// draws the ones around the view.
+// settles on the week of a month's 1st, like iOS Calendar. The month filling the
+// view is in full color, every other day grayed. keel-core builds the weeks;
+// this draws the ones around the view.
 import { type CSSProperties, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Recurrence } from "../bindings";
 import { dueBucket, monthFirstWeeks, weekRows } from "../core";
 import { BUCKET_CLASS } from "../lists/chips";
-import { monthAt, weekWindow } from "./calendarScroll";
+import { monthInView, weekWindow } from "./calendarScroll";
 
 /** The view's height, in weeks: room for the longest month. */
 const VISIBLE_WEEKS = 6;
@@ -93,7 +93,7 @@ export function CalendarMonths({
           const top = e.currentTarget.scrollTop;
           const next = weekWindow(Math.floor(top / rowHeight), total);
           if (next[0] !== from || next[1] !== to) setDrawn(next);
-          const at = monthAt(tops, top);
+          const at = monthInView(tops, top, rowHeight);
           if (at !== shownIndex) onShown(firstYear + Math.floor(at / 12), (at % 12) + 1);
         }}
       >
@@ -111,7 +111,6 @@ export function CalendarMonths({
                 {week.map((cell) => {
                   const cls = ["cal-day"];
                   if (!cell.inMonth) cls.push("other");
-                  if (cell.past) cls.push("past");
                   if (cell.today) cls.push("is-today");
                   if (cell.selected) cls.push("selected");
                   if (cell.selected && bucketFill) {

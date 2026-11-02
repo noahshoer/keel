@@ -552,6 +552,20 @@ describe("DatePicker", () => {
   };
   const title = () => document.querySelector(".cal-title")?.textContent;
 
+  it("a month lights up once it fills the lower half of the view, before reaching the top", () => {
+    render(<DateHost onChange={vi.fn()} />);
+    openIt();
+    calendar();
+    const november = document.querySelector('[data-month="2026-11"]') as HTMLElement;
+    const row =
+      Number.parseFloat((november.nextElementSibling as HTMLElement).style.top) -
+      Number.parseFloat(november.style.top);
+    scroller().scrollTop = topOf("2026-11") - row * 3;
+    fireEvent.scroll(scroller());
+    expect(title()).toBe("November 2026");
+    expect(document.querySelectorAll(".cal-day:not(.other)")).toHaveLength(30);
+  });
+
   it("scrolling the calendar moves the title, with no month arrows", () => {
     render(<DateHost onChange={vi.fn()} />);
     openIt();

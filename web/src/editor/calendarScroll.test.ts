@@ -1,18 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { monthAt, weekWindow } from "./calendarScroll";
+import { monthInView, weekWindow } from "./calendarScroll";
 
 describe("the calendar's scroll", () => {
+  // Rows of 40, six in view; the first month has five weeks, the second four.
+  const row = 40;
   const tops = [0, 200, 360];
 
-  it("the month at the top is the shown one, from the week of its 1st", () => {
-    expect(monthAt(tops, 0)).toBe(0);
-    expect(monthAt(tops, 199)).toBe(0);
-    expect(monthAt(tops, 200)).toBe(1);
-    expect(monthAt(tops, 5000)).toBe(2);
+  it("settled on a month's 1st, that month is the shown one, even a four-week month", () => {
+    expect(monthInView(tops, 0, row)).toBe(0);
+    expect(monthInView(tops, 200, row)).toBe(1);
+    expect(monthInView(tops, 360, row)).toBe(2);
   });
 
-  it("settling a fraction of a pixel short still counts as that month", () => {
-    expect(monthAt(tops, 199.6)).toBe(1);
+  it("the next month takes over once its 1st reaches the middle of the view", () => {
+    // The 1st of the second month is at row 3 when the view's top is at 80.
+    expect(monthInView(tops, 79, row)).toBe(0);
+    expect(monthInView(tops, 80, row)).toBe(1);
+  });
+
+  it("a fraction of a pixel short still counts", () => {
+    expect(monthInView(tops, 79.6, row)).toBe(1);
+  });
+
+  it("stays on the last month past the end", () => {
+    expect(monthInView(tops, 5000, row)).toBe(2);
   });
 
   it("draws weeks well past the view each way, inside the range", () => {
