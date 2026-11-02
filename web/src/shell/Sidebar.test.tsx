@@ -4,6 +4,7 @@ import { App } from "../app/App";
 import { UPCOMING_DAYS } from "../app/view";
 import { localToday } from "../clock";
 import { sidebarCounts } from "../core";
+import { ROW_PRESS } from "../gestures/long-press";
 import { addLabel } from "../ipc/actions";
 import { invoke } from "../ipc/invoke";
 import { loadCoreForTests } from "../test/wasm";
@@ -181,9 +182,9 @@ it("adding a project: + focuses the field, Enter adds it, + again closes", async
   expect(screen.queryByPlaceholderText("Label name, then Enter")).toBeNull();
 });
 
-/** Opens the row's ••• menu and picks from it. */
+/** Opens the row's menu, as a long press does, and picks from it. */
 function pickFromMenu(row: HTMLElement, item: string) {
-  fireEvent.click(within(row).getByTitle("More"));
+  fireEvent(row, new Event(ROW_PRESS));
   fireEvent.click(within(document.querySelector(".row-menu") as HTMLElement).getByText(item));
 }
 
@@ -424,10 +425,11 @@ it.each([
   ["project", "Home"],
   ["label", "errand"],
   ["filter", "Important"],
-])("a %s's ••• menu offers Edit and Delete, and closes on a click outside", async (_kind, name) => {
+])("a long press on a %s offers Edit and Delete, and closes on a click outside", async (_kind, name) => {
   await start();
   const row = within(sidebar()).getByText(name).closest(".nav-item") as HTMLElement;
-  fireEvent.click(within(row).getByTitle("More"));
+  expect(within(row).queryByTitle("More")).toBeNull();
+  fireEvent(row, new Event(ROW_PRESS));
   const menu = document.querySelector(".row-menu") as HTMLElement;
   expect(within(menu).getByText("Edit")).toBeTruthy();
   expect(within(menu).getByText("Delete").closest(".menu-item")?.classList.contains("danger")).toBe(true);
@@ -435,22 +437,13 @@ it.each([
   expect(document.querySelector(".row-menu")).toBeNull();
 });
 
-it("opening a row's menu doesn't open the row, and ••• closes it again", async () => {
-  await start();
-  const before = title();
-  const row = within(sidebar()).getByText("Home").closest(".nav-item") as HTMLElement;
-  fireEvent.click(within(row).getByTitle("More"));
-  expect(title()).toBe(before);
-  fireEvent.click(within(row).getByTitle("More"));
-  expect(document.querySelector(".row-menu")).toBeNull();
-});
-
-it("another row's ••• swaps the open menu", async () => {
+it("another row's long press swaps the open menu", async () => {
   await start();
   const home = within(sidebar()).getByText("Home").closest(".nav-item") as HTMLElement;
   const errand = within(sidebar()).getByText("errand").closest(".nav-item") as HTMLElement;
-  fireEvent.click(within(home).getByTitle("More"));
-  fireEvent.click(within(errand).getByTitle("More"));
+  fireEvent(home, new Event(ROW_PRESS));
+  fireEvent.touchStart(errand);
+  fireEvent(errand, new Event(ROW_PRESS));
   expect(document.querySelectorAll(".row-menu")).toHaveLength(1);
 });
 
@@ -467,7 +460,7 @@ it("the delete confirm closes on a click outside, leaving the row", async () => 
 it("a touch outside closes a row's menu, so a swipe can't leave it behind", async () => {
   await start();
   const row = within(sidebar()).getByText("Home").closest(".nav-item") as HTMLElement;
-  fireEvent.click(within(row).getByTitle("More"));
+  fireEvent(row, new Event(ROW_PRESS));
   fireEvent.touchStart(document.body);
   expect(document.querySelector(".row-menu")).toBeNull();
 });

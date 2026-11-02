@@ -711,9 +711,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .nav-icon svg { width: 20px; height: 20px; }
   .nav-icon.hash { font-size: 18px; }
   .nav-item .count { font-size: 15px; }
-  /* No hover to reveal it: a full tap target that doesn't make the row taller. */
-  .nav-item .nav-actions { display: inline-flex; margin: -8px -12px -8px 0; }
-  .nav-actions .icon-btn { width: 44px; height: 44px; }
+  /* Spaced like the completed toggle beside it. */
+  .view-more { width: 44px; height: 44px; margin-right: -12px; }
+  .view-more svg { width: 24px; height: 24px; }
   .section-head { font-size: 14px; line-height: 19px; padding: 16px 0 6px; }
   .section-head .icon-btn { width: 44px; }
   .section-head .icon-btn svg { width: 20px; height: 20px; }
@@ -766,13 +766,6 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .task.completed .task-content { text-decoration: line-through; color: var(--muted); }
 .done-when { color: var(--muted); }
 .nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nav-actions { display: none; gap: 0; }
-/* Mouse: hover shows a row's ••• (always there on touch, below). */
-@media (hover: hover) { .nav-item:hover .nav-actions { display: inline-flex; } }
-.nav-actions .icon-btn { padding: 3px; }
-/* Mouse: a row's ••• takes the count's place while hovered. */
-@media (hover: hover) { .nav-item:hover > .count:has(+ .nav-actions) { display: none; } }
-.nav-item > .count:has(+ .nav-actions) { margin-left: 0; }
 .confirm-box { margin: 4px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md);
   background: var(--bg); box-shadow: var(--shadow-md); animation: pop-in .16s var(--ease); }
 .confirm-text { font-size: 12px; margin-bottom: 8px; }
@@ -857,6 +850,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Over the drawer, and sized for its confirm as well as its two items. */
 .row-menu { z-index: 60; width: 240px; min-width: 0; border: 1px solid var(--border); }
 .row-menu .confirm-text { padding: 4px 4px 0; line-height: 1.35; }
+/* The forms fill it, so a tap anywhere in it counts as inside them. */
+.row-menu.editing { width: 320px; max-height: none; padding: 0; }
+.row-menu .project-form { margin: 0; padding: 10px; }
+.row-menu .project-form .project-input { background: var(--field-fill); }
+.row-menu .filter-form { padding: 10px; }
 /* The views stacked in the sheet: the top one, and under it the one Back
    returns to, hidden but for an edge swipe (gestures.rs). Its header is a
    spacer of the real one's height (52px in both layouts). */
@@ -1227,6 +1225,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .popover { width: calc(100vw - 16px); max-width: none; min-width: 0; padding: 12px; border-radius: 24px; animation: fade-in .16s var(--ease); }
   .tv-head-actions .popover { width: auto; min-width: 210px; }
   .popover.row-menu { width: 240px; }
+  .popover.row-menu.editing { width: min(340px, calc(100vw - 16px)); padding: 0; }
   .row-menu .confirm-text { font-size: 15px; }
   .row-menu .menu-item { min-height: 44px; font-size: 16px; }
   .task-view > .pop-backdrop { background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }

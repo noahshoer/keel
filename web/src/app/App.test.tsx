@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeAll, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { mockPageScrollHeld } from "../ipc/mock";
 import { setWidth, touch } from "../test/touch";
 import { loadCoreForTests } from "../test/wasm";
@@ -140,4 +140,86 @@ it("the page holds still while the drawer is open", async () => {
   await waitFor(() => expect(mockPageScrollHeld()).toBe(true));
   fireEvent.click(document.querySelector(".drawer-scrim") as Element);
   await waitFor(() => expect(mockPageScrollHeld()).toBe(false));
+});
+
+describe("the ••• on a project, label or filter page", () => {
+  const open = async (name: string) => {
+    const r = render(<App />);
+    await waitFor(() => expect(r.container.querySelector(".view-title")).not.toBeNull());
+    fireEvent.click(within(r.container.querySelector(".sidebar") as HTMLElement).getByText(name));
+    await waitFor(() => expect(r.container.querySelector(".view-title")?.textContent).toBe(name));
+    return r;
+  };
+  const more = (c: HTMLElement) => c.querySelector(".view-head .view-more") as HTMLElement;
+  const popup = () => document.querySelector(".row-menu") as HTMLElement;
+  const pick = (c: HTMLElement, item: string) => {
+    fireEvent.click(more(c));
+    fireEvent.click(within(popup()).getByText(item));
+  };
+
+  it.each(["Inbox", "Today", "Upcoming"])("%s has none", async (name) => {
+    const { container } = await open(name);
+    expect(more(container)).toBeNull();
+  });
+
+  it("renames a project from its page, keeping the page's title in sync", async () => {
+    const { container } = await open("Home");
+    pick(container, "Edit");
+    const field = popup().querySelector("input") as HTMLInputElement;
+    expect(document.activeElement).toBe(field);
+    expect(field.value).toBe("Home");
+    fireEvent.change(field, { target: { value: "House" } });
+    fireEvent.submit(field);
+    await waitFor(() => expect(container.querySelector(".view-title")?.textContent).toBe("House"));
+    expect(popup()).toBeNull();
+  });
+
+  it("renames a label from its page", async () => {
+    const { container } = await open("errand");
+    pick(container, "Edit");
+    const field = popup().querySelector("input") as HTMLInputElement;
+    fireEvent.change(field, { target: { value: "chores" } });
+    fireEvent.submit(field);
+    await waitFor(() => expect(container.querySelector(".view-title")?.textContent).toBe("chores"));
+  });
+
+  it("edits a filter's name and query from its page", async () => {
+    const { container } = await open("Important");
+    pick(container, "Edit");
+    const name = within(popup()).getByPlaceholderText("Filter name") as HTMLInputElement;
+    expect(document.activeElement).toBe(name);
+    fireEvent.change(name, { target: { value: "Top" } });
+    const save = within(popup()).getByText("Save") as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
+    await waitFor(() => expect(container.querySelector(".view-title")?.textContent).toBe("Top"));
+  });
+
+  it("deletes after asking, then goes to the Inbox", async () => {
+    const { container } = await open("Home");
+    pick(container, "Delete");
+    expect(popup().querySelector(".confirm-text")?.textContent).toBe("Delete “Home” and all its tasks?");
+    fireEvent.click(within(popup()).getByText("Delete"));
+    await waitFor(() => expect(container.querySelector(".view-title")?.textContent).toBe("Inbox"));
+  });
+
+  it("••• closes it again, and so does a click outside", async () => {
+    const { container } = await open("Home");
+    fireEvent.click(more(container));
+    expect(popup()).not.toBeNull();
+    fireEvent.click(more(container));
+    expect(popup()).toBeNull();
+    fireEvent.click(more(container));
+    fireEvent.click(document.body);
+    expect(popup()).toBeNull();
+  });
+
+  it("typing in the edit form doesn't close it", async () => {
+    const { container } = await open("Home");
+    pick(container, "Edit");
+    const field = popup().querySelector("input") as HTMLInputElement;
+    fireEvent.scroll(field);
+    fireEvent.touchStart(field);
+    expect(popup()).not.toBeNull();
+  });
 });

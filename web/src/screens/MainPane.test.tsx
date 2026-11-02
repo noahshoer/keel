@@ -28,6 +28,7 @@ function Harness({ view, showCompleted = false }: { view: View; showCompleted?: 
         onToggleCompleted={() => setCompleted((c) => !c)}
         onOpenDrawer={() => {}}
         onLeaveSearch={() => {}}
+        setView={() => {}}
         onOpenSearch={() => {}}
         motion="fade"
         swap={0}

@@ -1,14 +1,17 @@
 // Long press on a task row or a sidebar row (touch only). A task gets `.pressed`,
 // which shows its row actions until the next touch. A sidebar row is highlighted
-// only while the finger is down, and opens its ••• menu if it has one
-// (crates/ui/src/gestures.rs `LONG_PRESS_JS`, without the glass menu, which is
-// parked). A plain tap opens the row, as on desktop; hover reveals are
-// mouse-only (app.css).
+// only while the finger is down, and is sent `ROW_PRESS`, which opens its menu if
+// it has one; a right click sends it too (crates/ui/src/gestures.rs
+// `LONG_PRESS_JS`, without the glass menu, which is parked). A plain tap opens the
+// row, as on desktop; hover reveals are mouse-only (app.css).
 
 const HOLD_MS = 450;
 const SLOP = 10;
 const ROWS = ".task-row, .nav-item";
-const ACTIONS = ".task-actions, .nav-actions, .row-menu";
+const ACTIONS = ".task-actions, .row-menu";
+
+/** Sent to a sidebar row by a long press or a right click. */
+export const ROW_PRESS = "keel-row-press";
 
 /** Installs the listeners on `doc`; returns a function that removes them. */
 export function installLongPress(doc: Document): () => void {
@@ -47,7 +50,7 @@ export function installLongPress(doc: Document): () => void {
       timer = null;
       clear();
       (row.closest(".task") ?? row).classList.add("pressed");
-      row.querySelector<HTMLElement>(".nav-more")?.click();
+      if (row.matches(".nav-item")) row.dispatchEvent(new Event(ROW_PRESS));
       pressedAt = Date.now();
     }, HOLD_MS);
   };
@@ -66,6 +69,7 @@ export function installLongPress(doc: Document): () => void {
   };
   const onMenu = (ev: MouseEvent) => {
     if (closest(ev.target, ROWS)) ev.preventDefault();
+    closest(ev.target, ".nav-item")?.dispatchEvent(new Event(ROW_PRESS));
   };
 
   const passive = { passive: true } as const;

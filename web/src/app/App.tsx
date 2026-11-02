@@ -159,6 +159,7 @@ export function App() {
           onOpenDrawer={() => setDrawer(true)}
           onLeaveSearch={() => setView(beforeSearch.current)}
           onOpenSearch={openSearch}
+          setView={setView}
           motion={swap.motion}
           swap={swap.n}
           onChanged={reload}

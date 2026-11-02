@@ -1,5 +1,5 @@
-// A project or label row in the sidebar with a ••• menu (hover on a mouse,
-// always on touch, or a long press): rename inline, delete after a confirm
+// A project or label row in the sidebar whose long press opens a menu: rename
+// inline, delete after a confirm
 // (crates/ui/src/sidebar.rs `ManagedRow`), without the glass menu and prompt.
 import { type ReactNode, type RefObject, useRef, useState } from "react";
 import { useCloseOnClickOutside } from "./clickOutside";
@@ -9,7 +9,7 @@ import { RowMenu } from "./RowMenu";
 type Mode = "normal" | "renaming";
 
 /** The row while it's renamed: Enter saves, Escape or a click outside leaves it as it was. */
-function RenameForm({
+export function RenameForm({
   input,
   draft,
   setDraft,
@@ -54,7 +54,7 @@ export function ManagedRow({
   icon,
   iconClass,
   active,
-  kind,
+  warning,
   menuId,
   onOpen,
   onRename,
@@ -66,7 +66,8 @@ export function ManagedRow({
   icon: ReactNode;
   iconClass: string;
   active: boolean;
-  kind: "project" | "label";
+  /** What Delete asks first. */
+  warning: string;
   /** `project:<id>` / `label:<id>`. */
   menuId: string;
   onOpen: () => void;
@@ -76,11 +77,7 @@ export function ManagedRow({
   const [mode, setMode] = useState<Mode>("normal");
   const [draft, setDraft] = useState("");
   const input = useRef<HTMLInputElement>(null);
-  const warning =
-    kind === "project"
-      ? `Delete “${name}” and all its tasks?`
-      : `Delete label “${name}”? It’s removed from its tasks.`;
-
+  const row = useRef<HTMLDivElement>(null);
   if (mode === "renaming") {
     return (
       <RenameForm
@@ -98,22 +95,21 @@ export function ManagedRow({
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: same markup as the Dioxus sidebar (div rows).
     // biome-ignore lint/a11y/noStaticElementInteractions: see above.
-    <div className={active ? "nav-item active" : "nav-item"} data-menu-id={menuId} onClick={onOpen}>
+    <div ref={row} className={active ? "nav-item active" : "nav-item"} data-menu-id={menuId} onClick={onOpen}>
       <span className={`nav-icon ${iconClass}`}>{icon}</span>
       <span className="nav-name">{name}</span>
       {count !== undefined && count > 0 ? <span className="count">{count}</span> : null}
-      <span className="nav-actions">
-        <RowMenu
-          warning={warning}
-          onEdit={() =>
-            openAndFocus(() => {
-              setDraft(name);
-              setMode("renaming");
-            }, input)
-          }
-          onDelete={onDelete}
-        />
-      </span>
+      <RowMenu
+        row={row}
+        warning={warning}
+        onEdit={() =>
+          openAndFocus(() => {
+            setDraft(name);
+            setMode("renaming");
+          }, input)
+        }
+        onDelete={onDelete}
+      />
     </div>
   );
 }

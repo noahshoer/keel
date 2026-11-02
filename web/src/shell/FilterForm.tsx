@@ -107,18 +107,22 @@ type Mode = "normal" | "editing";
 export function FilterRow({
   filter,
   active,
+  warning,
   onOpen,
   onSave,
   onDelete,
 }: {
   filter: Filter;
   active: boolean;
+  /** What Delete asks first. */
+  warning: string;
   onOpen: () => void;
   onSave: (name: string, query: string) => void;
   onDelete: () => void;
 }) {
   const [mode, setMode] = useState<Mode>("normal");
   const nameRef = useRef<HTMLInputElement>(null);
+  const row = useRef<HTMLDivElement>(null);
   if (mode === "editing") {
     return (
       <FilterForm
@@ -138,6 +142,7 @@ export function FilterRow({
     // biome-ignore lint/a11y/useKeyWithClickEvents: same markup as the Dioxus sidebar (div rows).
     // biome-ignore lint/a11y/noStaticElementInteractions: see above.
     <div
+      ref={row}
       className={active ? "nav-item active" : "nav-item"}
       data-menu-id={`filter:${filter.id}`}
       title={filter.query}
@@ -147,13 +152,12 @@ export function FilterRow({
         <FunnelIcon />
       </span>
       <span className="nav-name">{filter.name}</span>
-      <span className="nav-actions">
-        <RowMenu
-          warning={`Delete filter “${filter.name}”? Your tasks aren’t affected.`}
-          onEdit={() => openAndFocus(() => setMode("editing"), nameRef)}
-          onDelete={onDelete}
-        />
-      </span>
+      <RowMenu
+        row={row}
+        warning={warning}
+        onEdit={() => openAndFocus(() => setMode("editing"), nameRef)}
+        onDelete={onDelete}
+      />
     </div>
   );
 }

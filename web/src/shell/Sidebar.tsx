@@ -8,17 +8,7 @@ import type { Id } from "../bindings";
 import { localToday } from "../clock";
 import { sidebarCounts } from "../core";
 import { labelTagColor } from "../editor/labelColors";
-import {
-  addFilter,
-  addLabel,
-  addProject,
-  deleteFilter,
-  deleteLabel,
-  deleteProject,
-  renameLabel,
-  renameProject,
-  updateFilter,
-} from "../ipc/actions";
+import { addFilter, addLabel, addProject } from "../ipc/actions";
 import type { CompletionIcon } from "../lists/completion";
 import { Settings } from "../settings/Settings";
 import { FORM_TOGGLE, useCloseOnClickOutside } from "./clickOutside";
@@ -39,6 +29,7 @@ import {
   TodayIcon,
   UpcomingIcon,
 } from "./icons";
+import { filterActions, type ListContext, labelActions, projectActions } from "./listActions";
 import { ManagedRow } from "./ManagedRow";
 import { currentPlatform, searchTooltip, useWideLayout } from "./platform";
 import { nextTheme, type Theme, themeLabel } from "./theme";
@@ -134,6 +125,7 @@ export function Sidebar({
     openAndFocus(() => setAdding((a) => (a === what ? null : what)), field);
   // Every change reloads; a failed one too (the backend's state is the truth).
   const then = (p: Promise<unknown>) => p.then(onChanged, onChanged);
+  const context: ListContext = { view, setView, settle: then };
   const day = new Date().getDate();
   // A wasm call serializes every task, and a desktop search re-renders this per keystroke.
   const today = localToday();
@@ -227,28 +219,24 @@ export function Sidebar({
       <NavCard>
         {loaded.projects
           .filter((p) => !p.is_inbox)
-          .map((p) => (
-            <ManagedRow
-              key={p.id}
-              name={p.name}
-              count={ofProject(p.id)}
-              icon={<HashSmallIcon />}
-              iconClass="hash"
-              active={view.kind === "project" && view.id === p.id}
-              kind="project"
-              menuId={`project:${p.id}`}
-              onOpen={() => setView({ kind: "project", id: p.id, name: p.name })}
-              onRename={(name) => {
-                void then(renameProject(p.id, name));
-                // Keep the open view's title in sync with the new name.
-                if (view.kind === "project" && view.id === p.id) setView({ kind: "project", id: p.id, name });
-              }}
-              onDelete={() => {
-                void then(deleteProject(p.id));
-                if (view.kind === "project" && view.id === p.id) setView({ kind: "inbox" });
-              }}
-            />
-          ))}
+          .map((p) => {
+            const actions = projectActions(p, context);
+            return (
+              <ManagedRow
+                key={p.id}
+                name={p.name}
+                count={ofProject(p.id)}
+                icon={<HashSmallIcon />}
+                iconClass="hash"
+                active={view.kind === "project" && view.id === p.id}
+                warning={actions.warning}
+                menuId={`project:${p.id}`}
+                onOpen={() => setView({ kind: "project", id: p.id, name: p.name })}
+                onRename={actions.rename}
+                onDelete={actions.remove}
+              />
+            );
+          })}
       </NavCard>
 
       <SectionHead title="Labels" add="Add label" onAdd={() => toggle("label", labelField)} />
@@ -262,7 +250,7 @@ export function Sidebar({
       ) : null}
       <NavCard>
         {loaded.labels.map((l) => {
-          const open = view.kind === "label" && view.name.toLowerCase() === l.name.toLowerCase();
+          const actions = labelActions(l, context);
           return (
             <ManagedRow
               key={l.id}
@@ -274,17 +262,11 @@ export function Sidebar({
               }
               iconClass="label"
               active={view.kind === "label" && view.name === l.name}
-              kind="label"
+              warning={actions.warning}
               menuId={`label:${l.id}`}
               onOpen={() => setView({ kind: "label", name: l.name })}
-              onRename={(name) => {
-                void then(renameLabel(l.id, name));
-                if (open) setView({ kind: "label", name });
-              }}
-              onDelete={() => {
-                void then(deleteLabel(l.id));
-                if (open) setView({ kind: "inbox" });
-              }}
+              onRename={actions.rename}
+              onDelete={actions.remove}
             />
           );
         })}
@@ -309,24 +291,20 @@ export function Sidebar({
         />
       ) : null}
       <NavCard>
-        {loaded.filters.map((f) => (
-          <FilterRow
-            key={f.id}
-            filter={f}
-            active={view.kind === "filter" && view.id === f.id}
-            onOpen={() => setView({ kind: "filter", id: f.id, name: f.name, query: f.query })}
-            onSave={(name, query) => {
-              void then(updateFilter(f.id, name, query));
-              // Keep the open view in sync with the edited filter.
-              if (view.kind === "filter" && view.id === f.id)
-                setView({ kind: "filter", id: f.id, name, query });
-            }}
-            onDelete={() => {
-              void then(deleteFilter(f.id));
-              if (view.kind === "filter" && view.id === f.id) setView({ kind: "inbox" });
-            }}
-          />
-        ))}
+        {loaded.filters.map((f) => {
+          const actions = filterActions(f, context);
+          return (
+            <FilterRow
+              key={f.id}
+              filter={f}
+              active={view.kind === "filter" && view.id === f.id}
+              warning={actions.warning}
+              onOpen={() => setView({ kind: "filter", id: f.id, name: f.name, query: f.query })}
+              onSave={actions.save}
+              onDelete={actions.remove}
+            />
+          );
+        })}
       </NavCard>
     </aside>
   );

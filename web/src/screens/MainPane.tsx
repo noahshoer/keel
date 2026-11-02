@@ -10,6 +10,7 @@ import {
   emptyText,
   type Motion,
   showsProject,
+  type View,
   viewKey,
   viewMode,
   viewPlace,
@@ -28,6 +29,7 @@ import { currentPlatform, searchTooltip } from "../shell/platform";
 import { attachHeadScroll } from "./headScroll";
 import { AddSection, SectionBlock } from "./SectionBlock";
 import { useTitleFit } from "./titleFit";
+import { ViewMenu } from "./ViewMenu";
 
 const SEARCH = viewPlace({ kind: "search" });
 
@@ -44,6 +46,7 @@ export function MainPane({
   onOpenDrawer,
   onLeaveSearch,
   onOpenSearch,
+  setView,
   motion,
   swap,
   onChanged,
@@ -56,6 +59,7 @@ export function MainPane({
   /** The phone's Search screen goes back to the view before it. */
   onLeaveSearch: () => void;
   onOpenSearch: () => void;
+  setView: (v: View) => void;
   motion: Motion;
   /** Bumped when a different view lands; alternates the fade-in. */
   swap: number;
@@ -245,6 +249,7 @@ export function MainPane({
               <span className="view-toggle-label">{showCompleted ? "Hide completed" : "Show completed"}</span>
             </button>
           ) : null}
+          <ViewMenu view={view} loaded={loaded} setView={setView} onChanged={onChanged} />
           {search ? null : (
             <button
               type="button"

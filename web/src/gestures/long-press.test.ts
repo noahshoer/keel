@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { installLongPress } from "./long-press";
+import { installLongPress, ROW_PRESS } from "./long-press";
 
 let uninstall: () => void;
 
@@ -12,7 +12,7 @@ beforeEach(() => {
         <div class="task-actions"><button id="delete">Delete</button></div>
       </div>
     </div>
-    <div class="nav-item" id="nav">Home<span class="nav-actions"><button class="nav-more" id="more">More</button></span></div>
+    <div class="nav-item" id="nav">Home</div>
     <div class="nav-item" id="fixed">Inbox</div>
     <div id="elsewhere">elsewhere</div>`;
   uninstall = installLongPress(document);
@@ -115,9 +115,20 @@ it("a sidebar row's highlight goes when the finger lifts; a task's stays", () =>
   expect(el("task").classList.contains("pressed")).toBe(true);
 });
 
-it("a long press on a sidebar row opens its menu, once", () => {
+it("a right click on a sidebar row asks for its menu; on a task it doesn't", () => {
   const opened = vi.fn();
-  el("more").addEventListener("click", opened);
+  el("nav").addEventListener(ROW_PRESS, opened);
+  el("nav").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+  expect(opened).toHaveBeenCalledTimes(1);
+  const onTask = vi.fn();
+  el("row").addEventListener(ROW_PRESS, onTask);
+  el("body").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+  expect(onTask).not.toHaveBeenCalled();
+});
+
+it("a long press on a sidebar row asks for its menu, once", () => {
+  const opened = vi.fn();
+  el("nav").addEventListener(ROW_PRESS, opened);
   touch("touchstart", el("nav"));
   vi.advanceTimersByTime(449);
   expect(opened).not.toHaveBeenCalled();
