@@ -435,7 +435,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   color-mix(in srgb, var(--pill-fade) 82%, transparent) 75%, var(--pill-fade)); }
 .editor-actions.pills-run-on::after { top: 12px; right: 29px; }
 .editor-actions.pills-run-back::before { top: 12px; left: -12px; width: 48px; z-index: 1; }
-.on-keyboard .pill-tinted.chip-btn.chip-open { background: color-mix(in srgb, currentColor 12%, var(--bg)); font-weight: 600; }
+.on-keyboard .pill-tinted.chip-btn.chip-open { background: color-mix(in srgb, currentColor 16%, var(--bg)); color: var(--accent-text); font-weight: 600; }
 .on-keyboard .pill-tinted.pill-p1.chip-btn.chip-open { color: var(--p1); }
 .on-keyboard .pill-tinted.pill-p2.chip-btn.chip-open { color: var(--p2-text); }
 .on-keyboard .pill-tinted.pill-p3.chip-btn.chip-open { color: var(--p3-text); }
@@ -446,12 +446,17 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; margin: 0 -23px 0 -12px; padding: 0 31px 0 12px; overflow-x: auto; scroll-behavior: smooth; scrollbar-width: none; }
 .on-keyboard .chips::-webkit-scrollbar { display: none; }
 .on-keyboard .chip-btn { height: 44px; max-width: none; padding: 0 14px; border: none; background: var(--field-fill); color: var(--text); font-size: 15px; white-space: nowrap; }
+/* A filled-out pill, like a chosen label's row: its color (the green without one of its own) over a tint of it. */
+.chip-btn.pill-set { color: var(--accent-text); }
+.chip-btn.pill-set, .on-keyboard .chip-btn.pill-set { border-color: transparent; background: color-mix(in srgb, currentColor 16%, var(--bg)); }
+.chip-btn.pill-set .chip-icon { color: inherit; }
+.chip-btn.pill-set .chip-icon:not(.pill-tag) .icon, .chip-btn.pill-set .pill-tag .icon { color: inherit; }
 .on-keyboard .chip-btn .icon, .on-keyboard .chip-caret { display: none; }
 .on-keyboard .chip-btn .chip-icon[class*="pri-"] .icon, .on-keyboard .chip-btn .chip-icon[class*="loc-"] .icon, .on-keyboard .chip-btn .pill-tag .icon { display: inline-flex; }
 .on-keyboard .chip-btn .chip-icon[class*="pri-"] svg, .on-keyboard .chip-btn .chip-icon[class*="loc-"] svg, .on-keyboard .chip-btn .pill-tag svg { width: 16px; height: 16px; }
-.on-keyboard .pill-p1 { color: var(--p1); }
-.on-keyboard .pill-p2 { color: var(--p2-text); }
-.on-keyboard .pill-p3 { color: var(--p3-text); }
+.chip-btn.pill-p1 { color: var(--p1); }
+.chip-btn.pill-p2 { color: var(--p2-text); }
+.chip-btn.pill-p3 { color: var(--p3-text); }
 .on-keyboard .chip-btn.chip-open .chip-icon { color: inherit; }
 .on-keyboard .chip-btn.chip-open { background: var(--accent); color: var(--on-fill); font-weight: 600; }
 .on-keyboard .chip-wrap { position: static; flex: none; }
@@ -472,6 +477,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chip { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px;
   border: 1px solid var(--chip-border); border-radius: var(--r-full); font-size: 12px; color: var(--subtle); background: var(--chip-bg); }
 @media (hover: hover) { .chip:hover { background: var(--chip-hover); border-color: var(--border-strong); } }
+@media (hover: hover) { .chip-btn.pill-set:hover { background: color-mix(in srgb, currentColor 24%, var(--bg)); border-color: transparent; } }
 .chip:focus-within { box-shadow: 0 0 0 3px var(--focus-ring); }
 .chip input, .chip select { border: none; outline: none; background: transparent; font-size: 12px; color: var(--chip-text); }
 .chip select option { background: var(--chip-bg); color: var(--chip-text); }

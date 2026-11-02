@@ -133,7 +133,7 @@ export function ReminderPicker({
       <button
         type="button"
         className={cx(
-          face?.className ?? cx("chip chip-btn", reminders.length > 0 && "reminder-chip"),
+          face?.className ?? cx("chip chip-btn", reminders.length > 0 && "reminder-chip pill-set"),
           isOpen && "chip-open",
         )}
         title="Reminders"

@@ -38,7 +38,7 @@ import { ArrowUpIcon, FlagFilledIcon, RepeatSmallIcon } from "../shell/icons";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
 import { HighlightedTitle } from "./HighlightedTitle";
-import { flagClass, locationFace, locationItems, PRIORITY_ITEMS } from "./items";
+import { flagClass, locationChosen, locationFace, locationItems, PRIORITY_ITEMS } from "./items";
 import { useKeyboard } from "./keyboardAnchor";
 import { LabelPicker } from "./LabelPicker";
 import { isTouch } from "./locale";
@@ -251,7 +251,9 @@ export function TaskEditor({
         open={open}
         setOpen={setPop}
         chipClass={
-          ["1", "2", "3"].includes(view.shown.priority) ? `pill-p${view.shown.priority} pill-tinted` : ""
+          ["1", "2", "3"].includes(view.shown.priority)
+            ? `pill-p${view.shown.priority} pill-tinted pill-set`
+            : ""
         }
         onSelect={(value) => pick({ type: "priority", value })}
       />
@@ -265,6 +267,7 @@ export function TaskEditor({
         selected={view.location}
         open={open}
         setOpen={setPop}
+        chipClass={locationChosen(view.locations, view.location) ? "pill-set" : ""}
         onSelect={(value) => pick(locationPick(value))}
       />
       <LabelPicker
@@ -295,6 +298,7 @@ export function TaskEditor({
         selected={values.repeat}
         open={open}
         setOpen={setPop}
+        chipClass={view.repeat_rule !== null ? "pill-set" : ""}
         onSelect={(value) => pick({ type: "repeat", value })}
       />
     </div>

@@ -346,6 +346,50 @@ describe("on touch", () => {
     expect(pill().className).toContain("pill-tinted");
   });
 
+  describe("a pill that's been filled out", () => {
+    const filled = () =>
+      [...document.querySelectorAll<HTMLElement>(".chips .chip-btn.pill-set")].map((b) => b.title);
+
+    it("none are on an empty card", () => {
+      adding();
+      expect(filled()).toEqual([]);
+    });
+
+    it("shows on every pill a phrase fills", () => {
+      const title = adding();
+      type(title, "Call mom tomorrow p1 #Home @errand {nov 9} every day");
+      expect(filled()).toEqual([
+        "Date",
+        "Deadline: the date it must be done by",
+        "Priority",
+        "Project / section",
+        "Labels",
+        "Repeat",
+      ]);
+      type(title, "Call mom");
+      expect(filled()).toEqual([]);
+    });
+
+    it("shows on a pill picked by hand, and the reminders too", () => {
+      const title = adding();
+      type(title, "Call mom tomorrow");
+      fireEvent.click(screen.getByTitle("Priority"));
+      fireEvent.click(screen.getByText("Priority 2"));
+      expect(filled()).toEqual(["Date", "Priority"]);
+      fireEvent.click(screen.getByTitle("Reminders"));
+      fireEvent.click(screen.getByText("30 min before"));
+      expect(filled()).toContain("Reminders");
+    });
+
+    it("the Inbox doesn't count: it's where a task goes unless told otherwise", () => {
+      const title = adding();
+      type(title, "Call mom #Home");
+      expect(filled()).toContain("Project / section");
+      type(title, "Call mom");
+      expect(filled()).not.toContain("Project / section");
+    });
+  });
+
   it("the Priority pill shows a flag, in its color once one is set", () => {
     adding();
     const pill = () => screen.getByTitle("Priority");

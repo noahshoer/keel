@@ -123,11 +123,16 @@ export function LabelPicker({
         type="button"
         className={cx(
           face?.className ?? "chip chip-btn",
-          face === undefined && tint !== undefined && "pill-tinted",
+          face === undefined && tint !== undefined && "pill-tinted pill-set",
           isOpen && "chip-open",
         )}
         title="Labels"
-        style={tint !== undefined ? { color: labelColorVar(tint.color) } : undefined}
+        // On the card, a label with no color reads in the green of the other pills with none.
+        style={
+          tint !== undefined
+            ? { color: face === undefined ? labelTagColor(tint.color) : labelColorVar(tint.color) }
+            : undefined
+        }
         onClick={() => setOpen(isOpen ? null : "labels")}
       >
         {face === undefined || face.icon ? (

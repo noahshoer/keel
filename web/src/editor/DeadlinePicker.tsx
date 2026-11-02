@@ -30,7 +30,12 @@ export function DeadlinePicker({
   actions?: CalendarActions;
 }) {
   const isOpen = open === "deadline";
-  const state = urgent === null ? "deadline-chip" : urgent ? "deadline-chip urgent" : "deadline-chip set";
+  const state =
+    urgent === null
+      ? "deadline-chip"
+      : urgent
+        ? "deadline-chip urgent pill-set"
+        : "deadline-chip set pill-set";
   return (
     <div className="chip-wrap">
       <button
