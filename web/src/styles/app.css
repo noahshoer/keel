@@ -1179,9 +1179,19 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   100% { transform: scale(0, .03);   filter: brightness(3);   opacity: 0; }
 }
 @keyframes row-collapse { from { max-height: 400px; } to { max-height: 0; margin-top: 0; margin-bottom: 0; } }
+/* A card that goes with its row switches off whole: the row is its head (its
+   sub-tasks complete with it) or the only row under a head that's just
+   context. A sub-task with others beside it goes alone. */
+.task-card:has(> .task.switch-off:first-child),
+.task-card:has(> .card-head + .task.switch-off:last-child) { overflow: hidden; transform-origin: center; pointer-events: none;
+  animation: tv-off .38s cubic-bezier(.6, .05, .4, 1) forwards, row-collapse .18s ease .2s forwards; }
+.task-card > .task.switch-off:first-child,
+.task-card > .card-head + .task.switch-off:last-child { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .task.completing .check { animation: none; }
   .task.switch-off { animation: fade-away .4s ease forwards; }
+  .task-card:has(> .task.switch-off:first-child),
+  .task-card:has(> .card-head + .task.switch-off:last-child) { animation: fade-away .4s ease forwards; }
   @keyframes fade-away { to { opacity: 0; } }
 }
 @media (pointer: coarse) { .check .icon svg.done-mark { width: 16px; height: 16px; } }
