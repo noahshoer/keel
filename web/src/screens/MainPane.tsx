@@ -196,7 +196,6 @@ export function MainPane({
             ref={title.ref}
             className="view-title"
             aria-label={title.text === fullTitle ? undefined : fullTitle}
-            style={title.style}
           >
             {title.text}
           </h1>
