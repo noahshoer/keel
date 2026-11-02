@@ -265,7 +265,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .nav-icon svg { width: 18px; height: 18px; }
 .nav-icon.hash { color: var(--icon); font-size: 16px; font-weight: 500; }
 .section-head { display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 12px 4px; font-weight: 600; color: var(--secondary); font-size: 13px; line-height: 18px; }
+  padding: 16px 0 4px; font-weight: 600; color: var(--secondary); font-size: 13px; line-height: 18px; }
+/* Headings start at the logo's left edge; their plus icons line up under the settings icon. */
+.section-head .icon-btn { width: 28px; padding: 5px 0; }
 .project-form { padding: 4px 8px; }
 .project-input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r);
   font-size: 13px; outline: none; background: var(--bg); transition: border-color .16s, box-shadow .16s; }
@@ -679,7 +681,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .nav-icon svg { width: 20px; height: 20px; }
   .nav-icon.hash { font-size: 18px; }
   .nav-item .count { font-size: 15px; }
-  .section-head { font-size: 14px; line-height: 19px; padding: 16px 16px 6px; }
+  .section-head { font-size: 14px; line-height: 19px; padding: 16px 0 6px; }
+  .section-head .icon-btn { width: 44px; }
   .section-head .icon-btn svg { width: 20px; height: 20px; }
   /* Fields read at full size, and iOS doesn't zoom into them. */
   input:not([type="checkbox"]), textarea, select { font-size: 16px; }
