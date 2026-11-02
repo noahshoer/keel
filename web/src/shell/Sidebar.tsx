@@ -21,6 +21,7 @@ import {
 } from "../ipc/actions";
 import type { CompletionIcon } from "../lists/completion";
 import { Settings } from "../settings/Settings";
+import { FORM_TOGGLE, useCloseOnClickOutside } from "./clickOutside";
 import { FilterForm, FilterRow } from "./FilterForm";
 import { openAndFocus } from "./focus";
 import {
@@ -47,7 +48,7 @@ function SectionHead({ title, add, onAdd }: { title: string; add: string; onAdd:
   return (
     <div className="section-head">
       {title}
-      <button type="button" className="icon-btn" title={add} onClick={onAdd}>
+      <button type="button" className="icon-btn" title={add} onClick={onAdd} {...{ [FORM_TOGGLE]: "" }}>
         <PlusIcon size={16} />
       </button>
     </div>
@@ -64,14 +65,19 @@ function AddForm({
   placeholder,
   field,
   onAdd,
+  onClose,
 }: {
   placeholder: string;
   field: React.RefObject<HTMLInputElement | null>;
   onAdd: (name: string) => Promise<unknown>;
+  onClose: () => void;
 }) {
   const [name, setName] = useState("");
+  const form = useRef<HTMLFormElement>(null);
+  useCloseOnClickOutside(form, onClose);
   return (
     <form
+      ref={form}
       className="project-form"
       onSubmit={(e) => {
         e.preventDefault();
@@ -208,6 +214,7 @@ export function Sidebar({
           placeholder="Project name, then Enter"
           field={projectField}
           onAdd={(n) => then(addProject(n)).then(() => setAdding(null))}
+          onClose={() => setAdding(null)}
         />
       ) : null}
       <NavCard>
@@ -243,6 +250,7 @@ export function Sidebar({
           placeholder="Label name, then Enter"
           field={labelField}
           onAdd={(n) => then(addLabel(n)).then(() => setAdding(null))}
+          onClose={() => setAdding(null)}
         />
       ) : null}
       <NavCard>

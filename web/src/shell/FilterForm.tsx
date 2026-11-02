@@ -3,6 +3,7 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
 import type { Filter } from "../bindings";
 import { invoke } from "../ipc/invoke";
+import { useCloseOnClickOutside } from "./clickOutside";
 import { openAndFocus } from "./focus";
 import { FunnelIcon, PencilIcon, TrashSmallIcon } from "./icons";
 
@@ -52,9 +53,12 @@ export function FilterForm({
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, for the query the form opened with.
   useEffect(() => check(first.current), []);
   const canSave = name.trim() !== "" && query.trim() !== "" && problem === null;
+  const form = useRef<HTMLFormElement>(null);
+  useCloseOnClickOutside(form, onCancel);
 
   return (
     <form
+      ref={form}
       className="filter-form"
       onSubmit={(e) => {
         e.preventDefault();

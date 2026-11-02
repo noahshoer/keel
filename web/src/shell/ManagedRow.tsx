@@ -1,11 +1,52 @@
 // A project or label row in the sidebar with hover (or long-press) actions:
 // rename inline, delete after an inline confirm (crates/ui/src/sidebar.rs
 // `ManagedRow`), without the glass menu and prompt.
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useRef, useState } from "react";
+import { useCloseOnClickOutside } from "./clickOutside";
 import { openAndFocus } from "./focus";
 import { PencilIcon, TrashSmallIcon } from "./icons";
 
 type Mode = "normal" | "renaming" | "confirm";
+
+/** The row while it's renamed: Enter saves, Escape or a click outside leaves it as it was. */
+function RenameForm({
+  input,
+  draft,
+  setDraft,
+  onSave,
+  onClose,
+}: {
+  input: RefObject<HTMLInputElement | null>;
+  draft: string;
+  setDraft: (draft: string) => void;
+  onSave: (name: string) => void;
+  onClose: () => void;
+}) {
+  const form = useRef<HTMLFormElement>(null);
+  useCloseOnClickOutside(form, onClose);
+  return (
+    <form
+      ref={form}
+      className="project-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const n = draft.trim();
+        if (n) onSave(n);
+        else onClose();
+      }}
+    >
+      <input
+        ref={input}
+        className="project-input"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onClose();
+        }}
+      />
+    </form>
+  );
+}
 
 export function ManagedRow({
   name,
@@ -42,25 +83,16 @@ export function ManagedRow({
 
   if (mode === "renaming") {
     return (
-      <form
-        className="project-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const n = draft.trim();
-          if (n) onRename(n);
+      <RenameForm
+        input={input}
+        draft={draft}
+        setDraft={setDraft}
+        onSave={(n) => {
+          onRename(n);
           setMode("normal");
         }}
-      >
-        <input
-          ref={input}
-          className="project-input"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setMode("normal");
-          }}
-        />
-      </form>
+        onClose={() => setMode("normal")}
+      />
     );
   }
   if (mode === "confirm") {

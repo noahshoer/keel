@@ -276,10 +276,13 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .project-input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
 /* The sidebar's add forms read as a card of one row; renaming takes the shape of the row it replaces. */
 .project-form { padding: 0; margin-bottom: 6px; }
-.project-form .project-input { height: 40px; padding: 0 12px; border: none; border-radius: var(--r-card); font-size: 14px; }
+.project-form .project-input, .sidebar > .filter-form .project-input { height: 40px; padding: 0 12px; border: none; border-radius: var(--r-card); font-size: 14px; }
+.sidebar > .filter-form { padding: 0; margin-bottom: 6px; }
+.sidebar > .filter-form .project-input.invalid { box-shadow: inset 0 0 0 1px var(--due-overdue); }
+.sidebar > .filter-form .filter-hint, .sidebar > .filter-form .filter-problem { padding: 0 12px; }
 .nav-card .project-form { margin-bottom: 1px; }
 .nav-card .project-form .project-input { height: 36px; border-radius: var(--r-item); }
-@media (min-width: 900px) { .project-form .project-input { background: var(--panel); } }
+@media (min-width: 900px) { .project-form .project-input, .sidebar > .filter-form .project-input { background: var(--panel); } }
 
 .icon { display: inline-flex; align-items: center; justify-content: center; }
 .icon-btn { border: none; background: none; cursor: pointer; color: var(--icon); padding: 5px; border-radius: var(--r-full);
@@ -714,7 +717,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   /* The custom scrollbar draws nothing on iOS but still takes 10px from some of the drawer's rows. */
   .sidebar { scrollbar-width: none; }
   .sidebar::-webkit-scrollbar { display: none; }
-  .project-form .project-input { height: 48px; padding: 0 16px; font-size: 16px; }
+  .project-form .project-input, .sidebar > .filter-form .project-input { height: 48px; padding: 0 16px; font-size: 16px; }
+  .sidebar > .filter-form .filter-hint, .sidebar > .filter-form .filter-problem { padding: 0 16px; }
   .nav-card .project-form .project-input { height: 44px; border-radius: 16px; }
   .switch { width: 51px; height: 31px; }
   .switch .knob { width: 27px; height: 27px; top: 2px; left: 2px; }

@@ -353,3 +353,61 @@ it("a mark picked in Settings is the one rows complete with", async () => {
   // The pine's viewBox, as DoneMark draws it in the circle.
   expect(row.querySelector(".check svg.done-mark")?.getAttribute("viewBox")).toBe("20 12 24 22");
 });
+
+it.each([
+  ["Add project", "Project name, then Enter"],
+  ["Add label", "Label name, then Enter"],
+  ["Add filter", "Filter name"],
+])("%s closes when you click outside it", async (add, placeholder) => {
+  await start();
+  fireEvent.click(screen.getByTitle(add));
+  const field = screen.getByPlaceholderText(placeholder);
+  fireEvent.click(field);
+  expect(screen.getByPlaceholderText(placeholder)).toBeTruthy();
+  fireEvent.click(document.body);
+  expect(screen.queryByPlaceholderText(placeholder)).toBeNull();
+});
+
+it("a click on a row closes the add form and still opens the row", async () => {
+  await start();
+  fireEvent.click(screen.getByTitle("Add project"));
+  fireEvent.click(within(sidebar()).getByText("Home"));
+  expect(screen.queryByPlaceholderText("Project name, then Enter")).toBeNull();
+  await waitFor(() => expect(title()).toBe("Home"));
+});
+
+it("another section's plus swaps the open add form", async () => {
+  await start();
+  fireEvent.click(screen.getByTitle("Add project"));
+  fireEvent.click(screen.getByTitle("Add label"));
+  expect(screen.queryByPlaceholderText("Project name, then Enter")).toBeNull();
+  expect(document.activeElement).toBe(screen.getByPlaceholderText("Label name, then Enter"));
+});
+
+it("a drag that starts in the field and ends outside keeps the form open", async () => {
+  await start();
+  fireEvent.click(screen.getByTitle("Add project"));
+  fireEvent.pointerDown(screen.getByPlaceholderText("Project name, then Enter"));
+  fireEvent.click(document.body);
+  expect(screen.getByPlaceholderText("Project name, then Enter")).toBeTruthy();
+});
+
+it("renaming closes unchanged when you click outside it", async () => {
+  await start();
+  const row = within(sidebar()).getByText("Home").closest(".nav-item") as HTMLElement;
+  fireEvent.click(within(row).getByTitle("Rename"));
+  const input = sidebar().querySelector<HTMLInputElement>(".project-form input") as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "House" } });
+  fireEvent.click(document.body);
+  expect(sidebar().querySelector(".project-form")).toBeNull();
+  expect(within(sidebar()).getByText("Home")).toBeTruthy();
+});
+
+it("editing a filter closes when you click outside it", async () => {
+  await start();
+  const row = within(sidebar()).getByText("Important").closest(".nav-item") as HTMLElement;
+  fireEvent.click(within(row).getByTitle("Edit filter"));
+  expect(sidebar().querySelector(".filter-form")).toBeTruthy();
+  fireEvent.click(document.body);
+  expect(sidebar().querySelector(".filter-form")).toBeNull();
+});
