@@ -5,7 +5,8 @@ import type { Filter } from "../bindings";
 import { invoke } from "../ipc/invoke";
 import { useCloseOnClickOutside } from "./clickOutside";
 import { openAndFocus } from "./focus";
-import { FunnelIcon, PencilIcon, TrashSmallIcon } from "./icons";
+import { FunnelIcon } from "./icons";
+import { RowMenu } from "./RowMenu";
 
 const HINT =
   "today · overdue · 7 days · p1 · #Project · /Section · @label · no date · search: word · due before: +3 days · deadline before: +7 days · no deadline — combine with & | ! ( ) and , for separate lists";
@@ -101,7 +102,7 @@ export function FilterForm({
   );
 }
 
-type Mode = "normal" | "editing" | "confirm";
+type Mode = "normal" | "editing";
 
 export function FilterRow({
   filter,
@@ -133,28 +134,6 @@ export function FilterRow({
       />
     );
   }
-  if (mode === "confirm") {
-    return (
-      <div className="confirm-box">
-        <div className="confirm-text">{`Delete filter “${filter.name}”? Your tasks aren’t affected.`}</div>
-        <div className="confirm-actions">
-          <button type="button" className="btn btn-cancel" onClick={() => setMode("normal")}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn-add"
-            onClick={() => {
-              setMode("normal");
-              onDelete();
-            }}
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    );
-  }
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: same markup as the Dioxus sidebar (div rows).
     // biome-ignore lint/a11y/noStaticElementInteractions: see above.
@@ -169,28 +148,11 @@ export function FilterRow({
       </span>
       <span className="nav-name">{filter.name}</span>
       <span className="nav-actions">
-        <button
-          type="button"
-          className="icon-btn"
-          title="Edit filter"
-          onClick={(e) => {
-            e.stopPropagation();
-            openAndFocus(() => setMode("editing"), nameRef);
-          }}
-        >
-          <PencilIcon />
-        </button>
-        <button
-          type="button"
-          className="icon-btn"
-          title="Delete filter"
-          onClick={(e) => {
-            e.stopPropagation();
-            setMode("confirm");
-          }}
-        >
-          <TrashSmallIcon />
-        </button>
+        <RowMenu
+          warning={`Delete filter “${filter.name}”? Your tasks aren’t affected.`}
+          onEdit={() => openAndFocus(() => setMode("editing"), nameRef)}
+          onDelete={onDelete}
+        />
       </span>
     </div>
   );

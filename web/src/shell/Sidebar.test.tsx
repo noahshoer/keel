@@ -181,12 +181,18 @@ it("adding a project: + focuses the field, Enter adds it, + again closes", async
   expect(screen.queryByPlaceholderText("Label name, then Enter")).toBeNull();
 });
 
+/** Opens the row's ••• menu and picks from it. */
+function pickFromMenu(row: HTMLElement, item: string) {
+  fireEvent.click(within(row).getByTitle("More"));
+  fireEvent.click(within(document.querySelector(".row-menu") as HTMLElement).getByText(item));
+}
+
 it("renaming a project keeps its open view's title in sync", async () => {
   await start();
   fireEvent.click(within(sidebar()).getByText("Home"));
   await waitFor(() => expect(title()).toBe("Home"));
   const row = within(sidebar()).getByText("Home").closest(".nav-item") as HTMLElement;
-  fireEvent.click(within(row).getByTitle("Rename"));
+  pickFromMenu(row, "Edit");
   const input = sidebar().querySelector<HTMLInputElement>(".project-form input");
   expect(document.activeElement).toBe(input);
   expect(input?.value).toBe("Home");
@@ -201,9 +207,11 @@ it("deleting a project asks first, then goes to the Inbox", async () => {
   fireEvent.click(within(sidebar()).getByText("Home"));
   await waitFor(() => expect(title()).toBe("Home"));
   const row = within(sidebar()).getByText("Home").closest(".nav-item") as HTMLElement;
-  fireEvent.click(within(row).getByTitle("Delete"));
-  expect(sidebar().querySelector(".confirm-text")?.textContent).toBe("Delete “Home” and all its tasks?");
-  fireEvent.click(within(sidebar()).getByText("Delete"));
+  pickFromMenu(row, "Delete");
+  expect(document.querySelector(".row-menu .confirm-text")?.textContent).toBe(
+    "Delete “Home” and all its tasks?",
+  );
+  fireEvent.click(within(document.querySelector(".row-menu") as HTMLElement).getByText("Delete"));
   await waitFor(() => expect(title()).toBe("Inbox"));
   expect(within(sidebar()).queryByText("Home")).toBeNull();
 });
@@ -211,13 +219,13 @@ it("deleting a project asks first, then goes to the Inbox", async () => {
 it("a label's delete warning and rename", async () => {
   await start();
   const row = within(sidebar()).getByText("errand").closest(".nav-item") as HTMLElement;
-  fireEvent.click(within(row).getByTitle("Delete"));
-  expect(sidebar().querySelector(".confirm-text")?.textContent).toBe(
+  pickFromMenu(row, "Delete");
+  expect(document.querySelector(".row-menu .confirm-text")?.textContent).toBe(
     "Delete label “errand”? It’s removed from its tasks.",
   );
-  fireEvent.click(within(sidebar()).getByText("Cancel"));
+  fireEvent.click(within(document.querySelector(".row-menu") as HTMLElement).getByText("Cancel"));
   const again = within(sidebar()).getByText("errand").closest(".nav-item") as HTMLElement;
-  fireEvent.click(within(again).getByTitle("Rename"));
+  pickFromMenu(again, "Edit");
   const input = sidebar().querySelector<HTMLInputElement>(".project-form input") as HTMLInputElement;
   fireEvent.change(input, { target: { value: "chores" } });
   fireEvent.submit(input);
@@ -284,7 +292,7 @@ it("a stale filter check never overrides a newer one", async () => {
 it("editing and deleting a filter", async () => {
   await start();
   const row = within(sidebar()).getByText("Important").closest(".nav-item") as HTMLElement;
-  fireEvent.click(within(row).getByTitle("Edit filter"));
+  pickFromMenu(row, "Edit");
   const name = screen.getByPlaceholderText("Filter name") as HTMLInputElement;
   expect(name.value).toBe("Important");
   fireEvent.change(name, { target: { value: "Top" } });
@@ -292,11 +300,11 @@ it("editing and deleting a filter", async () => {
   fireEvent.click(screen.getByText("Save"));
   await waitFor(() => expect(within(sidebar()).getByText("Top")).toBeTruthy());
   const top = within(sidebar()).getByText("Top").closest(".nav-item") as HTMLElement;
-  fireEvent.click(within(top).getByTitle("Delete filter"));
-  expect(sidebar().querySelector(".confirm-text")?.textContent).toBe(
+  pickFromMenu(top, "Delete");
+  expect(document.querySelector(".row-menu .confirm-text")?.textContent).toBe(
     "Delete filter “Top”? Your tasks aren’t affected.",
   );
-  fireEvent.click(within(sidebar()).getByText("Delete"));
+  fireEvent.click(within(document.querySelector(".row-menu") as HTMLElement).getByText("Delete"));
   await waitFor(() => expect(within(sidebar()).queryByText("Top")).toBeNull());
   expect((await invoke("list_filters", {})).map((f) => f.name)).not.toContain("Top");
 });
@@ -395,7 +403,7 @@ it("a drag that starts in the field and ends outside keeps the form open", async
 it("renaming closes unchanged when you click outside it", async () => {
   await start();
   const row = within(sidebar()).getByText("Home").closest(".nav-item") as HTMLElement;
-  fireEvent.click(within(row).getByTitle("Rename"));
+  pickFromMenu(row, "Edit");
   const input = sidebar().querySelector<HTMLInputElement>(".project-form input") as HTMLInputElement;
   fireEvent.change(input, { target: { value: "House" } });
   fireEvent.click(document.body);
@@ -406,8 +414,60 @@ it("renaming closes unchanged when you click outside it", async () => {
 it("editing a filter closes when you click outside it", async () => {
   await start();
   const row = within(sidebar()).getByText("Important").closest(".nav-item") as HTMLElement;
-  fireEvent.click(within(row).getByTitle("Edit filter"));
+  pickFromMenu(row, "Edit");
   expect(sidebar().querySelector(".filter-form")).toBeTruthy();
   fireEvent.click(document.body);
   expect(sidebar().querySelector(".filter-form")).toBeNull();
+});
+
+it.each([
+  ["project", "Home"],
+  ["label", "errand"],
+  ["filter", "Important"],
+])("a %s's ••• menu offers Edit and Delete, and closes on a click outside", async (_kind, name) => {
+  await start();
+  const row = within(sidebar()).getByText(name).closest(".nav-item") as HTMLElement;
+  fireEvent.click(within(row).getByTitle("More"));
+  const menu = document.querySelector(".row-menu") as HTMLElement;
+  expect(within(menu).getByText("Edit")).toBeTruthy();
+  expect(within(menu).getByText("Delete").closest(".menu-item")?.classList.contains("danger")).toBe(true);
+  fireEvent.click(document.body);
+  expect(document.querySelector(".row-menu")).toBeNull();
+});
+
+it("opening a row's menu doesn't open the row, and ••• closes it again", async () => {
+  await start();
+  const before = title();
+  const row = within(sidebar()).getByText("Home").closest(".nav-item") as HTMLElement;
+  fireEvent.click(within(row).getByTitle("More"));
+  expect(title()).toBe(before);
+  fireEvent.click(within(row).getByTitle("More"));
+  expect(document.querySelector(".row-menu")).toBeNull();
+});
+
+it("another row's ••• swaps the open menu", async () => {
+  await start();
+  const home = within(sidebar()).getByText("Home").closest(".nav-item") as HTMLElement;
+  const errand = within(sidebar()).getByText("errand").closest(".nav-item") as HTMLElement;
+  fireEvent.click(within(home).getByTitle("More"));
+  fireEvent.click(within(errand).getByTitle("More"));
+  expect(document.querySelectorAll(".row-menu")).toHaveLength(1);
+});
+
+it("the delete confirm closes on a click outside, leaving the row", async () => {
+  await start();
+  const row = within(sidebar()).getByText("Home").closest(".nav-item") as HTMLElement;
+  pickFromMenu(row, "Delete");
+  expect(document.querySelector(".row-menu .confirm-text")).toBeTruthy();
+  fireEvent.click(document.body);
+  expect(document.querySelector(".row-menu")).toBeNull();
+  expect(within(sidebar()).getByText("Home")).toBeTruthy();
+});
+
+it("a touch outside closes a row's menu, so a swipe can't leave it behind", async () => {
+  await start();
+  const row = within(sidebar()).getByText("Home").closest(".nav-item") as HTMLElement;
+  fireEvent.click(within(row).getByTitle("More"));
+  fireEvent.touchStart(document.body);
+  expect(document.querySelector(".row-menu")).toBeNull();
 });

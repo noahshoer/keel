@@ -1,12 +1,12 @@
-// A project or label row in the sidebar with hover (or long-press) actions:
-// rename inline, delete after an inline confirm (crates/ui/src/sidebar.rs
-// `ManagedRow`), without the glass menu and prompt.
+// A project or label row in the sidebar with a ••• menu (hover on a mouse,
+// always on touch, or a long press): rename inline, delete after a confirm
+// (crates/ui/src/sidebar.rs `ManagedRow`), without the glass menu and prompt.
 import { type ReactNode, type RefObject, useRef, useState } from "react";
 import { useCloseOnClickOutside } from "./clickOutside";
 import { openAndFocus } from "./focus";
-import { PencilIcon, TrashSmallIcon } from "./icons";
+import { RowMenu } from "./RowMenu";
 
-type Mode = "normal" | "renaming" | "confirm";
+type Mode = "normal" | "renaming";
 
 /** The row while it's renamed: Enter saves, Escape or a click outside leaves it as it was. */
 function RenameForm({
@@ -95,28 +95,6 @@ export function ManagedRow({
       />
     );
   }
-  if (mode === "confirm") {
-    return (
-      <div className="confirm-box">
-        <div className="confirm-text">{warning}</div>
-        <div className="confirm-actions">
-          <button type="button" className="btn btn-cancel" onClick={() => setMode("normal")}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn-add"
-            onClick={() => {
-              setMode("normal");
-              onDelete();
-            }}
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    );
-  }
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: same markup as the Dioxus sidebar (div rows).
     // biome-ignore lint/a11y/noStaticElementInteractions: see above.
@@ -125,31 +103,16 @@ export function ManagedRow({
       <span className="nav-name">{name}</span>
       {count !== undefined && count > 0 ? <span className="count">{count}</span> : null}
       <span className="nav-actions">
-        <button
-          type="button"
-          className="icon-btn"
-          title="Rename"
-          onClick={(e) => {
-            e.stopPropagation();
+        <RowMenu
+          warning={warning}
+          onEdit={() =>
             openAndFocus(() => {
               setDraft(name);
               setMode("renaming");
-            }, input);
-          }}
-        >
-          <PencilIcon />
-        </button>
-        <button
-          type="button"
-          className="icon-btn"
-          title="Delete"
-          onClick={(e) => {
-            e.stopPropagation();
-            setMode("confirm");
-          }}
-        >
-          <TrashSmallIcon />
-        </button>
+            }, input)
+          }
+          onDelete={onDelete}
+        />
       </span>
     </div>
   );
