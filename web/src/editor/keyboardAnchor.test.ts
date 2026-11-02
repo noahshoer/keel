@@ -37,11 +37,17 @@ describe("placeAboveCard", () => {
     expect(placeAboveCard(card, rect(0, 0, 386, 600), 402)).toEqual({ top: 8, left: 8, maxHeight: 484 });
   });
 
+  it("always leaves a picker room, even above a very tall card", () => {
+    const tall = rect(0, 100, 402, 500);
+    const at = placeAboveCard(tall, rect(0, 0, 386, 300), 402, 400);
+    expect(at.maxHeight).toBe(120);
+  });
+
   it("keeps a tall picker below the visible top, leaving it the room to scroll in", () => {
-    expect(placeAboveCard(card, rect(0, 0, 386, 383), 402, 400)).toEqual({
-      top: 400,
+    expect(placeAboveCard(card, rect(0, 0, 386, 383), 402, 200)).toEqual({
+      top: 200,
       left: 8,
-      maxHeight: 92,
+      maxHeight: 292,
     });
   });
 });

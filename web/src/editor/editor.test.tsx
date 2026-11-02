@@ -1,4 +1,6 @@
 // The task editor, with the clock at Friday 2026-10-30 noon.
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditorValues } from "../bindings";
@@ -124,6 +126,23 @@ describe("on touch", () => {
     expect(document.querySelector(".editor-scrim")?.closest("form")).toBeNull();
     fireEvent.click(screen.getByTitle("Priority"));
     expect(document.querySelector(".pop-backdrop")?.closest("form")).toBeNull();
+  });
+
+  it("keeps one dim layer as pickers open and close, so it doesn't flash", () => {
+    adding();
+    const dim = document.querySelector(".editor-scrim");
+    fireEvent.click(screen.getByTitle("Priority"));
+    expect(document.querySelector(".pop-backdrop")).toBe(dim);
+    expect(document.querySelector(".editor-scrim")).toBe(dim);
+    fireEvent.click(dim as Element);
+    expect(document.querySelector(".popover")).toBeNull();
+    expect(document.querySelector(".editor-scrim")).toBe(dim);
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("caps a very long title's height, so the card stays on screen", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/styles/app.css"), "utf8");
+    expect(css).toMatch(/\.on-keyboard \.title-wrap \{ max-height: \d+px; overflow-y: auto; \}/);
   });
 
   it("floats a small gap above the keyboard", () => {
@@ -402,6 +421,19 @@ it("a repeat chosen in the date card with no date set uses today, and returns to
   // A repeat always has a date: today, by default.
   expect(document.querySelector(".cal-day.selected")?.textContent).toBe("30");
   expect(screen.getByTitle("Date").textContent).toContain("Today");
+});
+
+it("the date card's Repeat row shows a repeat typed in the title", () => {
+  adding();
+  const title = document.querySelector(".title-input") as HTMLTextAreaElement;
+  fireEvent.change(title, { target: { value: "Water plants every week" } });
+  fireEvent.click(screen.getByTitle("Date"));
+  fireEvent.click(screen.getByText("Pick a date and time"));
+  const row = within(document.querySelector(".scheduler") as HTMLElement).getByRole("button", {
+    name: /^Repeat/,
+  });
+  expect(row.textContent).not.toContain("No repeat");
+  expect(row.textContent).toContain("Every Fri");
 });
 
 it("the Repeat pill still works on its own", () => {

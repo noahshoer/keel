@@ -25,7 +25,7 @@ use keel_core::reminders::{PlannedReminder, ReminderSettings};
 use keel_core::search::SearchResults;
 use keel_core::settings::{MenuKind, ReminderMenus, SettingChoice, SettingMenu};
 use keel_core::task_view::{Field, FieldLayout, Missing, MissingPill, TaskDetail};
-use keel_core::views::{Card, CardMode, CardRow, DateGroup, DateGroupMode, DueBucket, LabelGroup, Progress, ProjectCount, SidebarCounts};
+use keel_core::views::{Card, CardMode, CardRow, DateGroup, DateGroupMode, DueBucket, LabelChoice, LabelGroup, Progress, ProjectCount, SidebarCounts};
 use ts_rs::TS;
 
 /// `TS_RS_EXPORT_DIR` from `.cargo/config.toml` (absolute: `relative = true`).
@@ -65,7 +65,7 @@ fn bindings_cover_ipc_types() {
         // commands
         Action, Command, ApplyResult, DueEdit,
         // views / quick add / calendar (the wasm boundary)
-        CardRow, Card, CardMode, LabelGroup, ProjectCount, SidebarCounts, DateGroup, DateGroupMode, Progress, DueBucket, QuickAdd, Span, SpanKind, MonthView, DayCell,
+        CardRow, Card, CardMode, LabelChoice, LabelGroup, ProjectCount, SidebarCounts, DateGroup, DateGroupMode, Progress, DueBucket, QuickAdd, Span, SpanKind, MonthView, DayCell,
         // the editor (the wasm boundary)
         EditorValues, EditorView, ReminderDraft, Pick, TaskPatch, LocationChoice, LocationKind, TitleSegment, PreviewChip,
         AddPlan, EditPlan,

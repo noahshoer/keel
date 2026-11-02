@@ -58,7 +58,8 @@ it("counts the labels past the visible edge", () => {
   stubObserver();
   layout(100);
   const { container } = render(<Probe names={["a", "b", "c", "d", "e"]} />);
-  expect(shown(container)).toBe("2");
+  // At 0, 40, 80, 120 and 160: the one at 80 has too little showing to read.
+  expect(shown(container)).toBe("3");
 });
 
 it("counts again when the row's width changes", () => {

@@ -117,7 +117,7 @@ A repeat always has a date: today, by default. While a task repeats, the Date pi
 
 - **The bar above the keyboard is hidden everywhere**, since its check mark only closed the keyboard. That leaves about 324pt above the task card on an iPhone 17, below the Dynamic Island.
 - **Calendars (Date and Deadline):** they need more room, so opening one lowers the keyboard. An X and a check at the top of the calendar go back to typing: the check keeps the choice and the X undoes what changed since the calendar opened. Another pill or a tap outside also brings the keyboard back, keeping the choice.
-- **Time:** a Keel wheel inside the date card on touch. The iOS picker would take focus from the title. Desktop types a time.
+- **Time:** a Keel wheel inside the date card on touch, starting at the current time. Nothing saves until it's moved or Set time is tapped. The iOS picker would take focus from the title. Desktop types a time.
 - **Quick choices and other tall lists:** the keyboard stays up and the list scrolls inside the room above the card.
 - **Colors:** the quick choices' text and the open Date pill follow the date's color, like the selected day (later dates in green). A deadline's selected day, open pill and set pill text are Keel green.
 

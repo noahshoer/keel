@@ -15,6 +15,8 @@ import {
   dueTime,
   fieldLayout,
   importLine,
+  labelChoices,
+  labelChosen,
   labelGroups,
   pickSetting,
   progress,
@@ -269,6 +271,26 @@ describe("settings", () => {
       kept_as_text: 0,
     });
     expect(line).toBe("Travel: 2 tasks, 1 section");
+  });
+});
+
+describe("labelChoices", () => {
+  it("finds labels and marks the chosen ones", () => {
+    const label = {
+      id: "l",
+      name: "Home",
+      color: "red",
+      item_order: 0,
+      is_favorite: false,
+      is_deleted: false,
+    };
+    const other = { ...label, id: "m", name: "Work" };
+    expect(labelChoices([label, other], ["home"], "o").map((c) => [c.label.name, c.on])).toEqual([
+      ["Home", true],
+      ["Work", false],
+    ]);
+    expect(labelChoices([label, other], ["home"], "wo").map((c) => c.label.name)).toEqual(["Work"]);
+    expect(labelChosen(["home"], "HOME")).toBe(true);
   });
 });
 

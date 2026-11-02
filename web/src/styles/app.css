@@ -403,10 +403,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   padding: 16px 16px 12px; animation: none; box-shadow: var(--shadow-lg); }
 .editor.on-keyboard.keyboard-down { margin-bottom: env(safe-area-inset-bottom); }
 .editor-scrim { position: fixed; inset: 0; z-index: 44; background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
-.pop-backdrop:has(+ .on-keyboard) { z-index: 44; background: rgba(0,0,0,.2); }
+.editor-scrim.pop-backdrop { z-index: 44; }
 .editor.on-keyboard .name { font-size: 18px; line-height: 24px; font-weight: 500; }
 .editor.on-keyboard .desc { display: block; font-size: 15px; line-height: 20px; padding: 8px 0 0; }
 .on-keyboard .title-wrap > .title-mirror, .on-keyboard .title-wrap > .title-input { padding: 0; font-size: 18px; line-height: 24px; font-weight: 500; }
+.on-keyboard .title-wrap { max-height: 120px; overflow-y: auto; }
 .editor-actions { position: relative; display: flex; align-items: center; gap: 8px; padding-top: 12px; }
 /* Pills run a third of the way under the save button, fading out there, only while one does. */
 .editor-actions { --pill-fade: var(--bg); }
@@ -462,7 +463,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .on-keyboard .menu-hint { font-size: 14px; }
 .on-keyboard .label-color-name { font-size: 16px; min-height: 44px; padding: 0 12px; }
 .on-keyboard .cal-grid { justify-items: center; }
-.on-keyboard .cal-day { width: 40px; height: 40px; font-size: 16px; }
+.on-keyboard .cal-day { position: relative; width: 40px; height: 40px; font-size: 16px; }
+.on-keyboard .cal-day::after { content: ''; position: absolute; inset: -2px; }
 .on-keyboard .sched-time { min-height: 44px; padding: 0 12px; border-top: none; }
 .on-keyboard .sched-row-label { font-size: 16px; }
 .btn-save { position: relative; z-index: 1; flex: none; width: 44px; height: 44px; border: none; border-radius: 50%; padding: 0; background: var(--accent); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; }

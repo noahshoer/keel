@@ -175,6 +175,12 @@ describe("phone tap targets", () => {
   });
 });
 
+describe("calendar days on the phone", () => {
+  it("reach 44pt beyond their drawn 40", () => {
+    expect(css).toMatch(/\.on-keyboard \.cal-day::after \{ content: ''; position: absolute; inset: -2px; \}/);
+  });
+});
+
 describe("radii", () => {
   it("has the card, panel and item radii", () => {
     expect(css).toMatch(/--r-card:\s*20px/);

@@ -2,15 +2,13 @@
 // Enter (it's created and ticked). crates/ui/src/editor.rs `LabelPicker`.
 import { useRef, useState } from "react";
 import type { Label } from "../bindings";
-import { labelGroups } from "../core";
+import { labelChoices, labelChosen, labelGroups } from "../core";
 import { addLabel, setLabelColor } from "../ipc/actions";
 import { CheckSmallIcon, TagSmallIcon } from "../shell/icons";
 import { LabelColorPicker } from "./LabelColorPicker";
 import { labelColorVar, labelTagColor } from "./labelColors";
 import { cx, type Face, type PopProps } from "./pop";
 import { usePlacedPopover } from "./popover";
-
-const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 function LabelMenu({
   labels,
@@ -41,8 +39,7 @@ function LabelMenu({
       </div>
     );
   }
-  const query = draft.trim().toLowerCase();
-  const shown = labels.filter((l) => l.name.toLowerCase().includes(query));
+  const shown = labelChoices(labels, selected, draft);
   return (
     <div ref={ref} className="popover menu label-pop">
       <input
@@ -55,14 +52,13 @@ function LabelMenu({
           e.preventDefault();
           const name = draft.trim();
           if (!name) return;
-          if (!selected.some((n) => same(n, name))) onToggle(name);
+          if (!labelChosen(selected, name)) onToggle(name);
           setDraft("");
           addLabel(name).then(onChanged, onChanged);
         }}
       />
       {labels.length === 0 ? <div className="label-empty">No labels yet</div> : null}
-      {shown.map((l) => {
-        const on = selected.some((n) => same(n, l.name));
+      {shown.map(({ label: l, on }) => {
         return (
           <div
             key={l.id}

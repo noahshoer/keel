@@ -122,6 +122,28 @@ pub fn sidebar_counts(
     output(&views::sidebar_counts(&all, today, i64::from(upcoming_days)))
 }
 
+/// `views::label_choices`: the labels picker's rows.
+#[wasm_bindgen(js_name = labelChoices, unchecked_return_type = "import('../../bindings').LabelChoice[]")]
+pub fn label_choices(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Label[]")] labels: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "string[]")] selected: JsValue,
+    query: &str,
+) -> Result<JsValue, JsError> {
+    let labels: Vec<Label> = input("labels", labels)?;
+    let selected: Vec<String> = input("selected", selected)?;
+    output(&views::label_choices(&labels, &selected, query))
+}
+
+/// `views::label_chosen`: whether a name is among the chosen labels.
+#[wasm_bindgen(js_name = labelChosen)]
+pub fn label_chosen(
+    #[wasm_bindgen(unchecked_param_type = "string[]")] selected: JsValue,
+    name: &str,
+) -> Result<bool, JsError> {
+    let selected: Vec<String> = input("selected", selected)?;
+    Ok(views::label_chosen(&selected, name))
+}
+
 /// `views::label_groups`: a task's labels grouped by color, in added order.
 #[wasm_bindgen(js_name = labelGroups, unchecked_return_type = "import('../../bindings').LabelGroup[]")]
 pub fn label_groups(

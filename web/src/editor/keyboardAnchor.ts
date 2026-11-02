@@ -6,6 +6,8 @@ import { keyboardInset } from "../gestures/sheet-rules";
 import type { Rect } from "./popover";
 
 const MARGIN = 8;
+/** A picker keeps this much room, even above a very tall card. */
+const MIN_ROOM = 120;
 
 /**
  * Where a picker sits: above the task card, inside the side margins. It never
@@ -22,7 +24,7 @@ export function placeAboveCard(
   return {
     top: Math.max(minTop, bottom - pop.height),
     left: Math.max(MARGIN, (vw - pop.width) / 2),
-    maxHeight: bottom - minTop,
+    maxHeight: Math.max(bottom - minTop, MIN_ROOM),
   };
 }
 

@@ -26,9 +26,12 @@ export function ringDash(p: Progress): string {
   return `${Math.round((RING * p.done) / p.total)} ${Math.round(RING)}`;
 }
 
-/** How many labels start past the visible edge. The first always shows. */
+/** How much of a label has to show before it counts as showing. */
+const READABLE = 20;
+
+/** How many labels have too little showing to read. The first always shows. */
 export function hiddenCount(lefts: number[], limit: number): number {
-  return lefts.slice(1).filter((left) => left >= limit).length;
+  return lefts.slice(1).filter((left) => left >= limit - READABLE).length;
 }
 
 export function locationText(l: RowLocation): string {

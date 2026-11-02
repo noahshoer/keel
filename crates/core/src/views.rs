@@ -232,6 +232,30 @@ pub fn sidebar_counts(all: &[Task], today: NaiveDate, upcoming_days: i64) -> Sid
     counts
 }
 
+/// A row of the labels picker.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct LabelChoice {
+    pub label: Label,
+    pub on: bool,
+}
+
+/// Whether `name` is among the chosen labels, matching as `label_groups` does.
+pub fn label_chosen(selected: &[String], name: &str) -> bool {
+    let name = name.trim();
+    selected.iter().any(|s| s.eq_ignore_ascii_case(name))
+}
+
+/// The labels whose names contain `query` (any case), each marked if chosen.
+pub fn label_choices(labels: &[Label], selected: &[String], query: &str) -> Vec<LabelChoice> {
+    let query = query.trim().to_lowercase();
+    labels
+        .iter()
+        .filter(|l| l.name.to_lowercase().contains(&query))
+        .map(|l| LabelChoice { label: l.clone(), on: label_chosen(selected, &l.name) })
+        .collect()
+}
+
 /// A task's labels of one color, for the row's one tag per color.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -1242,5 +1266,51 @@ mod sidebar_count_tests {
         assert_eq!(counts.today, 2);
         assert_eq!(counts.upcoming, 2);
         assert_eq!(of(&counts.projects, "a"), 1);
+    }
+}
+
+#[cfg(test)]
+mod label_choice_tests {
+    use super::{label_choices, label_chosen};
+    use crate::ids::Id;
+    use crate::model::Label;
+
+    fn label(name: &str) -> Label {
+        Label {
+            id: Id::from(name),
+            name: name.to_string(),
+            color: "red".to_string(),
+            item_order: 0,
+            is_favorite: false,
+            is_deleted: false,
+        }
+    }
+
+    fn names(selected: &[&str]) -> Vec<String> {
+        selected.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn finds_by_any_part_of_the_name_ignoring_case() {
+        let all = [label("Errand"), label("Home"), label("Paper")];
+        let found: Vec<String> =
+            label_choices(&all, &[], " ER ").into_iter().map(|c| c.label.name).collect();
+        assert_eq!(found, vec!["Errand", "Paper"]);
+        assert_eq!(label_choices(&all, &[], "").len(), 3);
+    }
+
+    #[test]
+    fn marks_the_chosen_ones_as_labels_match_everywhere() {
+        let all = [label("Home"), label("Work"), label("\u{c9}t\u{e9}")];
+        let on: Vec<bool> =
+            label_choices(&all, &names(&["home", "\u{e9}t\u{e9}"]), "").into_iter().map(|c| c.on).collect();
+        // Case-insensitive for ASCII only, as `label_groups` and renames are.
+        assert_eq!(on, vec![true, false, false]);
+    }
+
+    #[test]
+    fn says_whether_a_name_is_chosen() {
+        assert!(label_chosen(&names(&["Home"]), " home "));
+        assert!(!label_chosen(&names(&["Home"]), "Work"));
     }
 }

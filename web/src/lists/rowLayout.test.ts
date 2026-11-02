@@ -36,9 +36,14 @@ describe("ringDash", () => {
 
 describe("hiddenCount", () => {
   it("counts the labels that start past the visible edge", () => {
-    expect(hiddenCount([0, 40, 90, 140], 100)).toBe(1);
+    expect(hiddenCount([0, 40, 110, 140], 100)).toBe(2);
     expect(hiddenCount([0, 40], 100)).toBe(0);
     expect(hiddenCount([0, 110, 220], 100)).toBe(2);
+  });
+
+  it("counts a label with too little showing to read", () => {
+    expect(hiddenCount([0, 40, 90], 100)).toBe(1);
+    expect(hiddenCount([0, 40, 70], 100)).toBe(0);
   });
 
   it("always leaves the first label showing", () => {

@@ -7,7 +7,15 @@ import { createPortal } from "react-dom";
 import { holdPage } from "../app/pageHold";
 import type { EditorPick, EditorValues, Label, Project, Recurrence, Section, SpanKind } from "../bindings";
 import { localToday } from "../clock";
-import { applyPick, editorView, locationPick, toggleLabel, unhighlightAt, withTitle } from "../core";
+import {
+  applyPick,
+  editorView,
+  locationPick,
+  repeatText,
+  toggleLabel,
+  unhighlightAt,
+  withTitle,
+} from "../core";
 import { ArrowUpIcon, FlagFilledIcon, RepeatSmallIcon } from "../shell/icons";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
@@ -168,7 +176,11 @@ export function TaskEditor({
         repeat={{
           items: repeatItems,
           selected: values.repeat,
-          text: repeatItems.find((i) => i.value === values.repeat)?.label ?? view.repeat_chip_text,
+          // A repeat typed in the title isn't one of the menu's choices.
+          text:
+            values.repeat === "none" && view.repeat_rule !== null
+              ? repeatText(view.repeat_rule)
+              : (repeatItems.find((i) => i.value === values.repeat)?.label ?? view.repeat_chip_text),
           onSelect: (value) => pick({ type: "repeat", value }),
         }}
         today={today}
@@ -249,12 +261,7 @@ export function TaskEditor({
   const clickAway = (
     // biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes the popover from the form; this is the click-away.
     // biome-ignore lint/a11y/noStaticElementInteractions: a click-away layer, as in the Dioxus editor.
-    <div
-      className="pop-backdrop"
-      onClick={() => setPop(null)}
-      onWheel={() => setPop(null)}
-      onMouseDown={touch ? keepFocus : undefined}
-    />
+    <div className="pop-backdrop" onClick={() => setPop(null)} onWheel={() => setPop(null)} />
   );
 
   const form = (
@@ -333,16 +340,18 @@ export function TaskEditor({
   );
   // On touch it leaves the page: a moving sheet or pane above it would carry a fixed card along.
   if (!touch) return form;
-  // The dim layer sits beside the card: inside it, it would dim the card's own color.
+  // The dim layer sits beside the card: inside it, it would dim the card's own
+  // color. One element throughout, so a picker closing doesn't restart its fade.
   return createPortal(
     <>
-      {open !== null ? (
-        clickAway
-      ) : (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: Escape cancels from the form; this is the tap outside.
-        // biome-ignore lint/a11y/noStaticElementInteractions: a dimmed tap-away layer behind the card.
-        <div className="editor-scrim" onClick={onCancel} onMouseDown={keepFocus} />
-      )}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: Escape acts from the form; this is the tap outside. */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: a dimmed tap-away layer behind the card. */}
+      <div
+        className={open !== null ? "editor-scrim pop-backdrop" : "editor-scrim"}
+        onClick={open !== null ? () => setPop(null) : onCancel}
+        onWheel={open !== null ? () => setPop(null) : undefined}
+        onMouseDown={keepFocus}
+      />
       {form}
     </>,
     document.body,

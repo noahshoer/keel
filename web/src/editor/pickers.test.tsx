@@ -548,15 +548,33 @@ describe("DatePicker", () => {
       expect(fireEvent.mouseDown(timeRow())).toBeTruthy();
     });
 
-    it("opening the wheel on an empty time adds the time now", () => {
+    it("opening the wheel saves nothing; it starts at now, and Set time takes it", () => {
       vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(new Date(2026, 10, 2, 15, 34));
       const onChange = vi.fn();
       wheelOpen("2026-11-02", onChange);
       fireEvent.click(timeRow());
       vi.useRealTimers();
-      expect(onChange).toHaveBeenLastCalledWith("2026-11-02", "15:34");
+      expect(onChange).not.toHaveBeenCalled();
       expect(document.querySelectorAll(".time-wheel .wheel-col")).toHaveLength(3);
+      const minutes = document.querySelector('.time-wheel [data-col="minute"]') as HTMLElement;
+      expect(minutes.scrollTop).toBe(34 * 36);
+      expect(screen.queryByRole("button", { name: "Remove time" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Set time" }));
+      expect(onChange).toHaveBeenLastCalledWith("2026-11-02", "15:34");
+    });
+
+    it("scrolling from an empty time sets what the wheel shows", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 10, 2, 15, 34));
+      const onChange = vi.fn();
+      wheelOpen("2026-11-02", onChange);
+      fireEvent.click(timeRow());
+      vi.useRealTimers();
+      const minutes = document.querySelector('.time-wheel [data-col="minute"]') as HTMLElement;
+      minutes.scrollTop = 40 * 36;
+      fireEvent.scroll(minutes);
+      await vi.waitFor(() => expect(onChange).toHaveBeenLastCalledWith("2026-11-02", "15:40"));
     });
 
     it("scrolling a column changes the time", async () => {

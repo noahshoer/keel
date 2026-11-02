@@ -17,6 +17,7 @@ import type {
   Id,
   ImportSummary,
   Label,
+  LabelChoice,
   LabelGroup,
   MenuKind,
   MonthView,
@@ -109,6 +110,18 @@ export function streakText(task: Task): string {
 export function sidebarCounts(all: Task[], today: string, upcomingDays: number): SidebarCounts {
   ready();
   return core.sidebarCounts(all, today, upcomingDays);
+}
+
+/** The labels picker's rows: those matching `query`, each marked if chosen. */
+export function labelChoices(labels: Label[], selected: string[], query: string): LabelChoice[] {
+  ready();
+  return core.labelChoices(labels, selected, query);
+}
+
+/** Whether `name` is among the chosen labels. */
+export function labelChosen(selected: string[], name: string): boolean {
+  ready();
+  return core.labelChosen(selected, name);
 }
 
 /** A task's labels grouped by color, in added order. */
