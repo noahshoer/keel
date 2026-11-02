@@ -20,9 +20,11 @@ export function ghost(dir: "push" | "pop", doc: Document = document): void {
   el.style.cssText = `left:${m.left - a.left}px;top:${m.top - a.top}px;width:${m.width}px;height:${m.height}px;border-radius:${radius}`;
   const copy = content.cloneNode(true) as HTMLElement;
   copy.classList.remove("view-in-a", "view-in-b", "view-pop");
-  copy.style.cssText = `position:absolute;margin:0;top:${c.top - m.top}px;left:${c.left - m.left}px;width:${c.width}px`;
+  copy.style.cssText = `position:absolute;margin:0;top:${c.top - m.top}px;left:${c.left - m.left}px;width:${c.width}px;height:${c.height}px`;
   el.appendChild(copy);
   app.appendChild(el);
+  const list = copy.querySelector(".list-scroll");
+  if (list) list.scrollTop = content.querySelector(".list-scroll")?.scrollTop ?? 0;
   // In case the new view never lands.
   setTimeout(() => el.remove(), 2000);
 }

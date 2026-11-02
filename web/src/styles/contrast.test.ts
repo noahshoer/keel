@@ -204,9 +204,18 @@ describe("phone tap targets", () => {
   });
 });
 
+describe("the view header", () => {
+  it("fades over what's under it only once the list has scrolled", () => {
+    expect(css).toMatch(/\.list-scroll::before \{[^}]*linear-gradient\(var\(--page-bg\), transparent\)/);
+    expect(css).toMatch(/\.list-scroll::before \{[^}]*animation-timeline: scroll\(\)/);
+  });
+});
+
 describe("lists on touch", () => {
   it("always scroll, however short, so they bounce like a full list", () => {
-    expect(css).toContain("@media (pointer: coarse) { .main > .content { min-height: calc(100% + 1px); } }");
+    expect(css).toContain(
+      "@media (pointer: coarse) { .list-scroll > .list-body { min-height: calc(100% + 1px); } }",
+    );
   });
 });
 

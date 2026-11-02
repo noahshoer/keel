@@ -1,6 +1,6 @@
 // A short list still scrolls: `.main` overflows by a pixel on every view, and
 // a real drag (sent from outside, within the 12 s wait) pulls it past its top.
-const main = document.querySelector('.main');
+const main = document.querySelector('.list-scroll');
 const report = (name) => check(`${name}: overflow ${main.scrollHeight - main.clientHeight}px`);
 await sleep(500);
 report(document.querySelector('.view-title').textContent);

@@ -67,7 +67,7 @@ it("on desktop the field types the search, and results fill the main area", asyn
   expect(document.querySelector(".search-input")).toBeNull();
   fireEvent.change(field, { target: { value: "laundry" } });
   await waitFor(() =>
-    expect(document.querySelector(".content > .view-sub")?.textContent).toBe("2 results for laundry"),
+    expect(document.querySelector(".list-body > .view-sub")?.textContent).toBe("2 results for laundry"),
   );
   expect(document.querySelector("main.main .task-card .task-row")).not.toBeNull();
   vi.unstubAllGlobals();
