@@ -1,7 +1,7 @@
 // The task title: an auto-growing textarea over a mirror that paints the
 // quick-add phrases keel-core recognized (crates/ui/src/editor.rs
-// `HighlightedTitle`). Enter submits (titles are one line). Backspace right
-// where a highlight ends turns it back into text, as in Todoist.
+// `HighlightedTitle`). Enter is a new line, Cmd/Ctrl+Enter submits. Backspace
+// right where a highlight ends turns it back into text, as in Todoist.
 import type { RefObject } from "react";
 import type { SpanKind, TitleSegment } from "../bindings";
 
@@ -37,7 +37,7 @@ export function HighlightedTitle({
   value,
   placeholder,
   onInput,
-  onEnter,
+  onSubmit,
   onUnhighlight,
   inputRef,
 }: {
@@ -45,7 +45,7 @@ export function HighlightedTitle({
   value: string;
   placeholder: string;
   onInput: (text: string) => void;
-  onEnter: () => void;
+  onSubmit: () => void;
   /** Turns the highlight ending at `caret` plain. */
   onUnhighlight: (caret: number) => void;
   inputRef?: RefObject<HTMLTextAreaElement | null> | undefined;
@@ -76,11 +76,13 @@ export function HighlightedTitle({
         autoFocus
         spellCheck={false}
         value={value}
-        onChange={(e) => onInput(e.target.value.replace(/[\n\r]/g, " "))}
+        onChange={(e) => onInput(e.target.value.replace(/\r\n?/g, "\n"))}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
-            e.preventDefault();
-            onEnter();
+            if (e.metaKey || e.ctrlKey) {
+              e.preventDefault();
+              onSubmit();
+            }
             return;
           }
           const ta = e.currentTarget;

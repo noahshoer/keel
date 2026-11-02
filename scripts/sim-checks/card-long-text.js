@@ -42,3 +42,18 @@ check(`with a picker: text ${text().clientHeight}pt, picker clear of the card ${
 priority().click();
 await sleep(300);
 check(`picker closed: text back to ${text().clientHeight}pt`);
+
+// Every picker, above a full card with the keyboard up: does it fit without scrolling?
+for (const name of ["Date", "Deadline: the date it must be done by", "Priority", "Project / section", "Labels", "Reminders", "Repeat"]) {
+  const chip = document.querySelector(`.chip-btn[title="${name}"]`);
+  if (!chip) { check(`${name}: no pill`); continue; }
+  chip.scrollIntoView({ inline: "center", block: "nearest" });
+  chip.click();
+  await sleep(500);
+  const p = document.querySelector(".popover");
+  const clip = p ? p.scrollHeight - p.clientHeight : -1;
+  const kb = visualViewport.height < document.documentElement.clientHeight - 0.5;
+  check(`${name}: picker ${p ? Math.round(p.getBoundingClientRect().height) : "none"}pt, cut off by ${clip}pt, text ${text().clientHeight}pt, keyboard ${kb ? "up" : "down"}`);
+  chip.click();
+  await sleep(400);
+}

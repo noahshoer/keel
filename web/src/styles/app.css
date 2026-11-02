@@ -343,7 +343,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .check.p2 { border: 2px solid var(--p2); background: var(--p2-bg); color: var(--p2); }
 .check.p3 { border: 2px solid var(--p3); background: var(--p3-bg); color: var(--p3); }
 .task-body { flex: 1; min-width: 0; }
-.task-content { font-size: 15px; line-height: 21px; font-weight: 500; word-wrap: break-word; }
+.task-content { font-size: 15px; line-height: 21px; font-weight: 500; word-wrap: break-word; white-space: pre-line; }
 .task-desc { color: var(--secondary); font-size: 13px; line-height: 18px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 5px; font-size: 13px; line-height: 18px; }
 .due { display: inline-flex; align-items: center; gap: 4px; }
@@ -423,8 +423,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .editor.on-keyboard.keyboard-down { max-height: calc(var(--card-room, 100dvh) - var(--safe-top) - 16px - env(safe-area-inset-bottom)); }
 .on-keyboard .editor-text { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .on-keyboard .editor-actions { flex: none; }
-/* A picker needs the room: long text shrinks to a usual card's (title, chips, one line of description). */
-.editor.on-keyboard.picking .editor-text { max-height: 84px; }
+/* A picker needs the room: long text shrinks as far as it asks (`fitText`). */
+.editor.on-keyboard.picking .editor-text { max-height: var(--picker-text, 84px); }
 .editor-actions { position: relative; display: flex; align-items: center; gap: 8px; padding-top: 12px; }
 /* Pills run a third of the way under the save button, fading out there, only while one does. */
 .editor-actions { --pill-fade: var(--bg); }
