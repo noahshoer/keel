@@ -290,7 +290,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .app { background: var(--chrome); }
   .main { --page-bg: var(--page-wide); }
 }
-.content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.content { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
 /* Both edges: a scrollbar that takes up room leaves the list centered under the header. */
 .list-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable both-edges; }
 .list-body { max-width: 820px; margin: 0 auto; padding: 0 48px 96px; }
@@ -612,21 +612,24 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 
 /* Completed tasks + sidebar management */
 /* The header stays put, even while the list bounces, because it sits outside
-   the scroller. The list slides under it into a fade that grows with the scroll:
-   solid at the header's edge from the first pixel, so nothing is cut off there,
-   and gone at the top, where it would wash out what sits below. */
-.view-head { flex: none; width: 100%; max-width: 820px; margin: 0 auto; padding: 40px 48px 0;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.list-scroll::before { content: ''; display: block; position: sticky; top: 0; z-index: 5; height: 72px; margin-bottom: -72px;
-  pointer-events: none; transform-origin: top;
+   the scroller. The list slides under it into a fade that grows with the scroll
+   (--list-fade, headScroll.ts). */
+.view-head { position: relative; z-index: 5; flex: none; width: 100%; max-width: 820px; margin: 0 auto; padding: 40px 48px 0;
+  background: var(--page-bg); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.view-head::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 96px;
+  pointer-events: none; transform-origin: top; transform: scaleY(var(--list-fade, 0));
+  /* Solid at first, so text is gone before the header's edge cuts it, then a
+     smoothstep, so the fade has no visible start, end or steps. */
   background: linear-gradient(
-    var(--page-bg),
-    color-mix(in srgb, var(--page-bg) 80%, transparent) 22%,
-    color-mix(in srgb, var(--page-bg) 45%, transparent) 48%,
-    color-mix(in srgb, var(--page-bg) 16%, transparent) 74%,
-    transparent);
-  animation: view-head-fade linear both; animation-timeline: scroll(); animation-range: 0 72px; }
-@keyframes view-head-fade { from { transform: scaleY(0); } to { transform: none; } }
+    var(--page-bg) 14%,
+    color-mix(in srgb, var(--page-bg) 95%, transparent) 25%,
+    color-mix(in srgb, var(--page-bg) 84%, transparent) 36%,
+    color-mix(in srgb, var(--page-bg) 67%, transparent) 47%,
+    color-mix(in srgb, var(--page-bg) 48%, transparent) 58%,
+    color-mix(in srgb, var(--page-bg) 30%, transparent) 69%,
+    color-mix(in srgb, var(--page-bg) 14%, transparent) 80%,
+    color-mix(in srgb, var(--page-bg) 4%, transparent) 90%,
+    transparent); }
 /* iPhone: native glass buttons float over the header (menu left, search
    right) and the list (+ bottom right); keep their spots clear. */
 .native-glass .menu-btn { display: none; }
@@ -1216,4 +1219,19 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .scheduler-compact .cal-grid, .scheduler-compact .wheel { flex: none; }
   .scheduler-compact .cal-scroll { flex: 0 1 auto; min-height: 0; }
   .scheduler-compact .cal-day { width: 36px; height: 36px; }
+}
+/* The phone's header: as the list scrolls, the title rides up into the top row
+   at 20px (20/34 of its size), between the menu and the icons, and the header
+   shrinks with it. It lies over the list, so the list never resizes under a
+   finger. --head-collapse and --title-move come from headScroll.ts, whose distance
+   is --title-row. */
+@media (max-width: 700px) and (pointer: coarse) {
+  .content { --title-row: 42px; --head-top: calc(10px + env(safe-area-inset-top) + 44px); --head-h: calc(var(--head-top) + var(--title-row)); }
+  .content:has(.back-btn) { --title-row: 0px; }
+  .view-head { position: absolute; top: 0; left: 0; right: 0; max-width: none; align-content: flex-start;
+    height: calc(var(--head-top) + var(--title-row) * (1 - var(--head-collapse, 0))); }
+  .view-head .view-title { will-change: translate, scale;
+    transform-origin: left top; translate: calc(var(--title-move, 0) * 36px) calc(var(--title-move, 0) * -34px);
+    scale: calc(1 - var(--title-move, 0) * 0.412); }
+  .list-body { padding-top: var(--head-h); }
 }
