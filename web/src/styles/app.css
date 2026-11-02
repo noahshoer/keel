@@ -693,6 +693,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .view-head .view-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .view-head .view-toggle { flex-shrink: 0; }
 .view-toggle .icon { color: var(--icon); }
+.view-toggle[aria-pressed="true"] .icon { color: var(--accent); }
 .chip-icon:not([class*="pri-"]):not(.pill-tag) .icon { color: var(--icon); }
 .search-btn { flex: none; }
 .search-btn svg { width: 22px; height: 22px; }
@@ -1062,7 +1063,12 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .view-head:has(.back-btn) .view-title { display: none; }
   .main { margin: 0; border-radius: 0; box-shadow: none; }
   .content { padding: calc(10px + env(safe-area-inset-top)) 16px 80px; }
-  .view-toggle { padding: 6px 8px; }
+  /* The header's room goes to the title: the toggle is its icon alone, sized
+     like the search beside it, and a long title wraps, ending in … only past three lines. */
+  .view-toggle { justify-content: center; width: 44px; height: 44px; padding: 0; margin-right: -12px; }
+  .view-toggle svg { width: 24px; height: 24px; }
+  .view-toggle-label { display: none; }
+  .view-head .view-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: break-word; }
   .section-title { padding-left: 8px; padding-right: 8px; }
   .streak-panel { margin-left: 0; gap: 12px; }
   /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */

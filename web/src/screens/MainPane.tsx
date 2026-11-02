@@ -195,10 +195,12 @@ export function MainPane({
               type="button"
               className="view-toggle"
               title="Completed tasks are hidden by default"
+              aria-label={showCompleted ? "Hide completed" : "Show completed"}
+              aria-pressed={showCompleted}
               onClick={onToggleCompleted}
             >
               <CheckCircleIcon />
-              {showCompleted ? "Hide completed" : "Show completed"}
+              <span className="view-toggle-label">{showCompleted ? "Hide completed" : "Show completed"}</span>
             </button>
           ) : null}
           {search ? null : (
