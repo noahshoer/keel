@@ -271,10 +271,15 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   padding: 16px 0 4px; font-weight: 600; color: var(--secondary); font-size: 13px; line-height: 18px; }
 /* Headings start at the logo's left edge; their plus icons line up under the settings icon. */
 .section-head .icon-btn { width: 28px; padding: 5px 0; }
-.project-form { padding: 4px 8px; }
 .project-input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r);
   font-size: 13px; outline: none; background: var(--bg); transition: border-color .16s, box-shadow .16s; }
 .project-input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
+/* The sidebar's add forms read as a card of one row; renaming takes the shape of the row it replaces. */
+.project-form { padding: 0; margin-bottom: 6px; }
+.project-form .project-input { height: 40px; padding: 0 12px; border: none; border-radius: var(--r-card); font-size: 14px; }
+.nav-card .project-form { margin-bottom: 1px; }
+.nav-card .project-form .project-input { height: 36px; border-radius: var(--r-item); }
+@media (min-width: 900px) { .project-form .project-input { background: var(--panel); } }
 
 .icon { display: inline-flex; align-items: center; justify-content: center; }
 .icon-btn { border: none; background: none; cursor: pointer; color: var(--icon); padding: 5px; border-radius: var(--r-full);
@@ -706,6 +711,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   input:not([type="checkbox"]), textarea, select { font-size: 16px; }
   .project-input, .search-input, .time-input { min-height: 44px; }
   .project-input { padding: 10px 12px; }
+  .project-form .project-input { height: 48px; padding: 0 16px; font-size: 16px; }
+  .nav-card .project-form .project-input { height: 44px; border-radius: 16px; }
   .switch { width: 51px; height: 31px; }
   .switch .knob { width: 27px; height: 27px; top: 2px; left: 2px; }
   .switch.on .knob { transform: translateX(20px); }
