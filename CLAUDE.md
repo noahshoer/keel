@@ -74,7 +74,7 @@ Fresh machine: Node 24 (Homebrew `node@24`, on PATH via `~/.zshrc`), `corepack e
 
 ## Conventions
 
-- Workflow per phase: write a short plan in `docs/superpowers/plans/` → feature branch → **TDD** (failing test first) → commit per task → merge `--no-ff` to `main` → push. Noah prefers you build without asking for routine decisions; ask about genuinely personal choices (names, visual direction), ideally with visual options.
+- Workflow per phase: write a short plan in `docs/superpowers/plans/` → feature branch → **TDD** (failing test first) → commit per task → stop and ask. Merging to `main` and pushing need explicit approval, each time; once approved, merge `--no-ff` to `main` and push. Noah prefers you build without asking for routine decisions; ask about genuinely personal choices (names, visual direction), ideally with visual options.
 - **Where logic lives.** The test is whether it's about the data or about the screen, not which platform uses it.
   - Data rules go in `keel-core`, with Rust tests: what's true about tasks, dates, recurrence, quick-add parsing, filters, views and grouping, streaks, what an edit changes. The frontend calls them through IPC or the wasm build (`crates/core-wasm`) and never re-implements them in TypeScript, not even a small copy.
   - Screen rules stay in the frontend, typed and tested with Vitest: components (shared by the desktop and phone layouts or not), layout, gestures and sheet detents, keyboard timing, navigation, focus. Interaction logic lives in plain `.ts` modules with tests, and components connect it through hooks.
