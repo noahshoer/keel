@@ -33,6 +33,7 @@ const start = (scrollTop: number, over: Partial<DragStart> = {}): DragStart => (
   blocked: false,
   inField: false,
   fieldFocused: false,
+  inPills: false,
   width: 390,
   detent: "medium",
   ...over,
@@ -164,6 +165,16 @@ describe("sheet drag", () => {
     expect(holdsScroll(large(0), 0, -3)).toBe(false); // upward at large scrolls
     expect(holdsScroll(start(0, { blocked: true }), 0, 3)).toBe(false);
     expect(holdsScroll(start(0), 0, 0)).toBe(false);
+  });
+
+  it("a_touch_on_the_pills_is_never_held_so_a_wobble_cant_stop_them_scrolling", () => {
+    // iOS gives up a scroll for the whole touch once its first move is cancelled.
+    const pills = start(0, { inPills: true });
+    expect(holdsScroll(pills, 1, 1)).toBe(false);
+    expect(holdsScroll(pills, 0, 3)).toBe(false);
+    // Once it's clearly vertical, it still drags the sheet.
+    expect(sheetDragAction(pills, 1, 9)).toBe("drag");
+    expect(sheetDragAction(pills, 1, -9)).toBe("drag");
   });
 
   it("the_sheet_follows_the_finger_but_not_above_large", () => {

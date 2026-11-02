@@ -19,7 +19,7 @@ beforeEach(() => {
         <div class="task-view tv-under" id="under"><div class="tv-body" id="under-body">Parent</div></div>
         <div class="task-view" id="top">
           <div class="tv-head"><button class="tv-back" id="back">‹</button></div>
-          <div class="tv-body" id="body"><div class="tv-scroll" id="scroll">Sub-task</div></div>
+          <div class="tv-body" id="body"><div class="tv-scroll" id="scroll">Sub-task<div class="tv-pills" id="pills"><button id="pill">+ Repeat</button></div></div></div>
         </div>
       </div>
     </div>`;
@@ -81,6 +81,38 @@ describe("the vertical drag", () => {
     touch("touchstart", el("scroll"), 200, 300, 0);
     const first = touch("touchmove", el("scroll"), 200, 320, 100);
     expect(first.defaultPrevented).toBe(true);
+  });
+
+  it("leaves a wobbling touch on the pills alone, and still drags once it's clearly vertical", () => {
+    touch("touchstart", el("pill"), 200, 300, 0);
+    expect(touch("touchmove", el("pill"), 199, 301, 16).defaultPrevented).toBe(false);
+    expect(touch("touchmove", el("pill"), 199, 320, 32).defaultPrevented).toBe(true);
+  });
+
+  it("leaves the pills to scroll sideways after a wobble", () => {
+    touch("touchstart", el("pill"), 200, 300, 0);
+    touch("touchmove", el("pill"), 199, 301, 16);
+    expect(touch("touchmove", el("pill"), 150, 303, 32).defaultPrevented).toBe(false);
+    expect(el("sheet").classList.contains("tv-large")).toBe(false);
+  });
+
+  it("keeps the content still while a touch from the pills drags the sheet, and lets go after", () => {
+    el("scroll").scrollTop = 40;
+    touch("touchstart", el("pill"), 200, 300, 0);
+    touch("touchmove", el("pill"), 200, 280, 16);
+    el("scroll").scrollTop = 64; // iOS began to scroll: nothing held this touch's first move.
+    touch("touchmove", el("pill"), 200, 260, 32);
+    expect(el("scroll").style.overflowY).toBe("hidden");
+    expect(el("scroll").scrollTop).toBe(40);
+    touch("touchend", el("pill"), 200, 260, 48);
+    expect(el("scroll").style.overflowY).toBe("");
+    expect(el("scroll").scrollTop).toBe(40);
+  });
+
+  it("leaves the content's overflow alone for a drag that didn't start on the pills", () => {
+    touch("touchstart", el("scroll"), 200, 300, 0);
+    touch("touchmove", el("scroll"), 200, 280, 16);
+    expect(el("scroll").style.overflowY).toBe("");
   });
 
   it("nothing moves on the desktop panel", () => {

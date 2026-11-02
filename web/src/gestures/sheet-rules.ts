@@ -69,6 +69,8 @@ export type DragStart = {
   inField: boolean;
   /** ...and that field has focus (being typed in). */
   fieldFocused: boolean;
+  /** On the row of pills, which scrolls sideways. */
+  inPills: boolean;
   /** Viewport width. */
   width: number;
   /** The height the sheet was resting at. */
@@ -116,10 +118,11 @@ export function sheetDragAction(s: DragStart, dx: number, dy: number): SheetDrag
  * While still pending, whether a move cancels the browser's scroll: only a
  * vertical, not-sideways-leaning move that would become a drag (iOS would
  * otherwise start a scroll it won't give back). A move leaning sideways is
- * left alone, so the pill row still scrolls.
+ * left alone, and so is any move on the pills: cancelling a touch's first move
+ * costs it its scroll for good, so a finger's first wobble would freeze the row.
  */
 export function holdsScroll(s: DragStart, dx: number, dy: number): boolean {
-  return !excluded(s) && dy !== 0 && Math.abs(dy) >= Math.abs(dx) && vertical(s, dy) === "drag";
+  return !excluded(s) && !s.inPills && dy !== 0 && Math.abs(dy) >= Math.abs(dx) && vertical(s, dy) === "drag";
 }
 
 /**
