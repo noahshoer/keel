@@ -612,14 +612,21 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 
 /* Completed tasks + sidebar management */
 /* The header stays put, even while the list bounces, because it sits outside
-   the scroller. The list slides under it into a fade that appears as the list
-   scrolls (at the top it would wash out what sits below). */
+   the scroller. The list slides under it into a fade that grows with the scroll:
+   solid at the header's edge from the first pixel, so nothing is cut off there,
+   and gone at the top, where it would wash out what sits below. */
 .view-head { flex: none; width: 100%; max-width: 820px; margin: 0 auto; padding: 40px 48px 0;
   display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.list-scroll::before { content: ''; display: block; position: sticky; top: 0; z-index: 5; height: 24px; margin-bottom: -24px;
-  pointer-events: none; background: linear-gradient(var(--page-bg), transparent);
-  animation: view-head-fade linear both; animation-timeline: scroll(); animation-range: 0 24px; }
-@keyframes view-head-fade { from { opacity: 0; } to { opacity: 1; } }
+.list-scroll::before { content: ''; display: block; position: sticky; top: 0; z-index: 5; height: 72px; margin-bottom: -72px;
+  pointer-events: none; transform-origin: top;
+  background: linear-gradient(
+    var(--page-bg),
+    color-mix(in srgb, var(--page-bg) 80%, transparent) 22%,
+    color-mix(in srgb, var(--page-bg) 45%, transparent) 48%,
+    color-mix(in srgb, var(--page-bg) 16%, transparent) 74%,
+    transparent);
+  animation: view-head-fade linear both; animation-timeline: scroll(); animation-range: 0 72px; }
+@keyframes view-head-fade { from { transform: scaleY(0); } to { transform: none; } }
 /* iPhone: native glass buttons float over the header (menu left, search
    right) and the list (+ bottom right); keep their spots clear. */
 .native-glass .menu-btn { display: none; }

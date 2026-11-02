@@ -206,8 +206,15 @@ describe("phone tap targets", () => {
 
 describe("the view header", () => {
   it("fades over what's under it only once the list has scrolled", () => {
-    expect(css).toMatch(/\.list-scroll::before \{[^}]*linear-gradient\(var\(--page-bg\), transparent\)/);
+    expect(css).toMatch(/\.list-scroll::before \{[^}]*linear-gradient\(\s*var\(--page-bg\),/);
     expect(css).toMatch(/\.list-scroll::before \{[^}]*animation-timeline: scroll\(\)/);
+  });
+
+  it("is never partly see-through at the header's edge, so a task is never cut off there", () => {
+    expect(css).toMatch(
+      /@keyframes view-head-fade \{ from \{ transform: scaleY\(0\); \} to \{ transform: none; \} \}/,
+    );
+    expect(css).toMatch(/\.list-scroll::before \{[^}]*transform-origin: top/);
   });
 });
 
