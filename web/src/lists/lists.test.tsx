@@ -379,6 +379,18 @@ it("a card whose head doesn't match shows it as context, with its sub-task rows"
   expect(container.querySelector(".task-project")?.textContent).toBe("Inbox");
 });
 
+it("the streak goal takes only digits", () => {
+  const task = { ...fixture("t-laundry"), streak_enabled: true };
+  if (task.due) task.due = { ...task.due, is_recurring: true };
+  const { container } = renderRow(task);
+  fireEvent.click(screen.getByTitle("Streak"));
+  const goal = container.querySelector<HTMLInputElement>(".streak-panel input") as HTMLInputElement;
+  expect(goal.inputMode).toBe("numeric");
+  expect(goal.pattern).toBe("[0-9]*");
+  fireEvent.change(goal, { target: { value: "1a2.-e3" } });
+  expect(goal.value).toBe("123");
+});
+
 it("the streak goal saves once, when the field is left", async () => {
   const task = { ...fixture("t-laundry"), streak_enabled: true };
   if (task.due) task.due = { ...task.due, is_recurring: true };
