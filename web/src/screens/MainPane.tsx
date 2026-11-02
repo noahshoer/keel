@@ -26,9 +26,10 @@ import { CompletedRow } from "../lists/CompletedRow";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
 import { openAndFocus } from "../shell/focus";
 import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, SearchIcon } from "../shell/icons";
-import { pageActions } from "../shell/listActions";
+import { type PageEditing, pageActions } from "../shell/listActions";
 import { currentPlatform, searchTooltip } from "../shell/platform";
 import { attachHeadScroll } from "./headScroll";
+import { useHeldText } from "./heldText";
 import { PageEdit } from "./PageEdit";
 import { AddSection, SectionBlock } from "./SectionBlock";
 import { useTitleFit } from "./titleFit";
@@ -50,6 +51,7 @@ export function MainPane({
   onLeaveSearch,
   onOpenSearch,
   setView,
+  renameView,
   motion,
   swap,
   onChanged,
@@ -63,6 +65,7 @@ export function MainPane({
   onLeaveSearch: () => void;
   onOpenSearch: () => void;
   setView: (v: View) => void;
+  renameView: (v: View) => void;
   motion: Motion;
   /** Bumped when a different view lands; alternates the fade-in. */
   swap: number;
@@ -74,7 +77,8 @@ export function MainPane({
   const today = localToday();
   const mode = viewMode(view);
   const toggle = canShowCompleted(view);
-  const fullTitle = viewTitle(view);
+  const heldTitle = useHeldText(viewTitle(view));
+  const fullTitle = heldTitle.text;
   const title = useTitleFit(fullTitle);
   const head = useRef<HTMLDivElement>(null);
   const listScroll = useRef<HTMLDivElement>(null);
@@ -104,15 +108,37 @@ export function MainPane({
       detach();
     };
   }, [place]);
-  const subtitle = viewSubtitle(view, today);
+  const heldSubtitle = useHeldText(viewSubtitle(view, today));
+  const subtitle = heldSubtitle.text;
   const actions = pageActions(loaded, {
     view,
     setView,
+    renameView,
     settle: (p) => p.then(onChanged, onChanged),
   });
   // By place, so it doesn't outlive the page it was opened on.
   const [editingPlace, setEditingPlace] = useState<string | null>(null);
-  const editing = editingPlace === place && actions !== null ? actions.editing : null;
+  const edited = editingPlace === place && actions !== null ? actions.editing : null;
+  // What's saved shows at once, in the frame the field goes.
+  const editing: PageEditing | null =
+    edited?.kind === "name"
+      ? {
+          ...edited,
+          rename: (name) => {
+            heldTitle.hold(name);
+            edited.rename(name);
+          },
+        }
+      : edited?.kind === "filter"
+        ? {
+            ...edited,
+            save: (name, query) => {
+              heldTitle.hold(name);
+              heldSubtitle.hold(query);
+              edited.save(name, query);
+            },
+          }
+        : null;
   const stopEditing = () => setEditingPlace(null);
   const titleField = useRef<HTMLInputElement>(null);
   const [querySlot, setQuerySlot] = useState<HTMLElement | null>(null);

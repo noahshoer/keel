@@ -103,6 +103,12 @@ export function App() {
     motion: "fade",
   });
   const landedView = useRef<View | null>(null);
+  // The open view under its new name is the same page: it doesn't fade in again.
+  const renamedTo = useRef<View | null>(null);
+  const renameView = (v: View) => {
+    renamedTo.current = v;
+    setView(v);
+  };
   useEffect(() => {
     const landed = loaded?.view ?? null;
     if (error !== null || landed !== null) {
@@ -115,6 +121,10 @@ export function App() {
     if (landed === null || (landedView.current !== null && sameView(landedView.current, landed))) return;
     const before = landedView.current;
     landedView.current = landed;
+    if (renamedTo.current !== null && sameView(renamedTo.current, landed)) {
+      renamedTo.current = null;
+      return;
+    }
     const motion = before === null ? "fade" : viewMotion(before, landed);
     setSwap((s) => ({ key: viewKey(landed), n: s.n + 1, motion }));
     // After the new page renders, the left-behind copy moves off.
@@ -142,6 +152,7 @@ export function App() {
         <Sidebar
           view={view}
           setView={setView}
+          renameView={renameView}
           loaded={loaded}
           theme={theme}
           setTheme={setTheme}
@@ -160,6 +171,7 @@ export function App() {
           onLeaveSearch={() => setView(beforeSearch.current)}
           onOpenSearch={openSearch}
           setView={setView}
+          renameView={renameView}
           motion={swap.motion}
           swap={swap.n}
           onChanged={reload}

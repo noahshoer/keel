@@ -14,6 +14,8 @@ import {
 export type ListContext = {
   view: View;
   setView: (v: View) => void;
+  /** The open view under its new name: the same page, so it doesn't fade in again. */
+  renameView: (v: View) => void;
   /** Reloads once the change lands, whether or not it worked. */
   settle: (p: Promise<unknown>) => Promise<unknown>;
 };
@@ -25,14 +27,14 @@ export type FilterActions = {
   remove: () => void;
 };
 
-export function projectActions(p: Project, { view, setView, settle }: ListContext): NameActions {
+export function projectActions(p: Project, { view, setView, renameView, settle }: ListContext): NameActions {
   const open = view.kind === "project" && view.id === p.id;
   return {
     warning: `Delete “${p.name}” and all its tasks?`,
     rename: (name) => {
       void settle(renameProject(p.id, name));
       // Keep the open view's title in sync with the new name.
-      if (open) setView({ kind: "project", id: p.id, name });
+      if (open) renameView({ kind: "project", id: p.id, name });
     },
     remove: () => {
       void settle(deleteProject(p.id));
@@ -41,13 +43,13 @@ export function projectActions(p: Project, { view, setView, settle }: ListContex
   };
 }
 
-export function labelActions(l: Label, { view, setView, settle }: ListContext): NameActions {
+export function labelActions(l: Label, { view, setView, renameView, settle }: ListContext): NameActions {
   const open = view.kind === "label" && view.name.toLowerCase() === l.name.toLowerCase();
   return {
     warning: `Delete label “${l.name}”? It’s removed from its tasks.`,
     rename: (name) => {
       void settle(renameLabel(l.id, name));
-      if (open) setView({ kind: "label", name });
+      if (open) renameView({ kind: "label", name });
     },
     remove: () => {
       void settle(deleteLabel(l.id));
@@ -56,14 +58,14 @@ export function labelActions(l: Label, { view, setView, settle }: ListContext): 
   };
 }
 
-export function filterActions(f: Filter, { view, setView, settle }: ListContext): FilterActions {
+export function filterActions(f: Filter, { view, setView, renameView, settle }: ListContext): FilterActions {
   const open = view.kind === "filter" && view.id === f.id;
   return {
     warning: `Delete filter “${f.name}”? Your tasks aren’t affected.`,
     save: (name, query) => {
       void settle(updateFilter(f.id, name, query));
       // Keep the open view in sync with the edited filter.
-      if (open) setView({ kind: "filter", id: f.id, name, query });
+      if (open) renameView({ kind: "filter", id: f.id, name, query });
     },
     remove: () => {
       void settle(deleteFilter(f.id));
