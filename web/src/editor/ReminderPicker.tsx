@@ -4,7 +4,7 @@
 import { useRef, useState } from "react";
 import type { ReminderDraft } from "../bindings";
 import { customReminderAt, reminderPresets } from "../core";
-import { BellSmallIcon, CheckSmallIcon, XSmallIcon } from "../shell/icons";
+import { BellSmallIcon, CheckCircleIcon, XSmallIcon } from "../shell/icons";
 import { cx, type Face, type PopProps } from "./pop";
 import { usePlacedPopover } from "./popover";
 
@@ -75,7 +75,7 @@ function ReminderMenu({
             <span className="menu-label">{text}</span>
             {on ? (
               <span className="menu-check">
-                <CheckSmallIcon />
+                <CheckCircleIcon />
               </span>
             ) : null}
           </button>

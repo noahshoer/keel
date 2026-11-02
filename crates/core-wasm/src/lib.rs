@@ -558,6 +558,17 @@ pub fn year_choices(today: &str, shown: i32) -> Result<JsValue, JsError> {
     output(&calendar::year_choices(date(today)?, shown))
 }
 
+/// `calendar::month_rows`. `week_start` as in `monthView`.
+#[wasm_bindgen(js_name = monthRows, unchecked_return_type = "number[]")]
+pub fn month_rows(first_year: i32, last_year: i32, week_start: u8) -> Result<JsValue, JsError> {
+    let start = match week_start {
+        7 => Weekday::Sun,
+        6 => Weekday::Sat,
+        _ => Weekday::Mon,
+    };
+    output(&calendar::month_rows(first_year, last_year, start))
+}
+
 /// `calendar::MONTHS`.
 #[wasm_bindgen(js_name = monthNames, unchecked_return_type = "string[]")]
 pub fn month_names() -> Result<JsValue, JsError> {

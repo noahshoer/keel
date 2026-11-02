@@ -3,25 +3,10 @@
 // grid alone. keel-core builds the grid and reads typed times; this draws them.
 import { useEffect, useRef, useState } from "react";
 import type { Recurrence } from "../bindings";
-import {
-  dueBucket,
-  monthNames,
-  monthView,
-  quickDates,
-  shiftMonth,
-  timeLabel,
-  typedTime,
-  yearChoices,
-} from "../core";
+import { dueBucket, monthNames, monthView, quickDates, timeLabel, typedTime, yearChoices } from "../core";
 import { BUCKET_CLASS } from "../lists/chips";
-import {
-  CheckSmallIcon,
-  ChevronDownSmallIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  XIcon,
-  XSmallIcon,
-} from "../shell/icons";
+import { CheckCircleIcon, ChevronDownSmallIcon, ChevronLeftIcon, XIcon, XSmallIcon } from "../shell/icons";
+import { CalendarMonths } from "./CalendarMonths";
 import { isTouch, weekStart } from "./locale";
 import type { MenuItem } from "./Menu";
 import { cx } from "./pop";
@@ -85,10 +70,10 @@ export function Scheduler({
   const [month, setMonth] = useState<[number, number]>(() => yearMonth(selected ?? today));
   const monthRef = useRef(month);
   monthRef.current = month;
-  // The month / year wheels, opened from the title. The years are fixed
-  // while they're open, so a wheel's rows don't shift under it.
+  // The years the calendar scrolls through and the wheels offer.
+  const [years] = useState(() => yearChoices(today, yearMonth(selected ?? today)[0]));
+  // The month / year wheels, opened from the title.
   const [choosing, setChoosing] = useState(false);
-  const [wheelYears, setWheelYears] = useState<number[]>([]);
   const wheel = useRef<HTMLDivElement>(null);
   const [timeText, setTimeText] = useState(() => (time === null ? "" : timeLabel(time)));
   const [timeBad, setTimeBad] = useState(false);
@@ -99,29 +84,23 @@ export function Scheduler({
   useEffect(() => {
     if (!choosing) return;
     const [y, mo] = monthRef.current;
-    const years = yearChoices(today, y);
-    setWheelYears(years);
     const col = wheel.current?.querySelectorAll<HTMLElement>(".wheel-col");
     const months = col?.[0];
     const yearsCol = col?.[1];
     const stops: Array<() => void> = [];
     if (months) stops.push(installMonthWheel(months, mo - 1, (m0) => setMonth(([yy]) => [yy, m0 + 1])));
     if (yearsCol) {
-      // The year rows render with the years set above; wait for them.
-      const frame = requestAnimationFrame(() => {
-        stops.push(
-          installYearWheel(yearsCol, Math.max(0, years.indexOf(y)), (i) => {
-            const year = years[i];
-            if (year !== undefined) setMonth(([, m]) => [year, m]);
-          }),
-        );
-      });
-      stops.push(() => cancelAnimationFrame(frame));
+      stops.push(
+        installYearWheel(yearsCol, Math.max(0, years.indexOf(y)), (i) => {
+          const year = years[i];
+          if (year !== undefined) setMonth(([, m]) => [year, m]);
+        }),
+      );
     }
     return () => {
       for (const stop of stops) stop();
     };
-  }, [choosing, today]);
+  }, [choosing, years]);
 
   const [y, mo] = month;
   const view = monthView(y, mo, start, today, selected, rule);
@@ -176,7 +155,7 @@ export function Scheduler({
               <span className="menu-hint">{hint}</span>
               {d === selected ? (
                 <span className="menu-check">
-                  <CheckSmallIcon />
+                  <CheckCircleIcon />
                 </span>
               ) : null}
             </button>
@@ -226,7 +205,7 @@ export function Scheduler({
               <span className="menu-label">{item.label}</span>
               {item.value === repeat.selected ? (
                 <span className="menu-check">
-                  <CheckSmallIcon />
+                  <CheckCircleIcon />
                 </span>
               ) : null}
             </button>
@@ -235,57 +214,33 @@ export function Scheduler({
       ) : null}
       {step === "card" ? (
         <>
-          {actions !== undefined ? (
-            <div className="sched-actions">
+          <div className="sched-head">
+            {actions !== undefined ? (
               <button type="button" className="icon-btn" aria-label="Cancel" onClick={actions.onCancel}>
                 <XIcon />
               </button>
+            ) : null}
+            <button
+              type="button"
+              className={choosing ? "cal-title chooser open" : "cal-title chooser"}
+              title="Choose month and year"
+              onClick={() => setChoosing((c) => !c)}
+            >
+              {view.title}
+              <ChevronDownSmallIcon />
+            </button>
+            {actions !== undefined ? (
               <button
                 type="button"
                 className="icon-btn sched-done"
                 aria-label="Done"
                 onClick={actions.onDone}
               >
-                <CheckSmallIcon />
+                <CheckCircleIcon />
               </button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
           <div className="sched-cal">
-            <div className="cal-nav">
-              <button
-                type="button"
-                className={choosing ? "cal-title chooser open" : "cal-title chooser"}
-                title="Choose month and year"
-                onClick={() => setChoosing((c) => !c)}
-              >
-                {view.title}
-                <ChevronDownSmallIcon />
-              </button>
-              <button
-                type="button"
-                className="icon-btn"
-                title="Previous month"
-                onClick={() => setMonth(shiftMonth(y, mo, -1))}
-              >
-                <ChevronLeftIcon />
-              </button>
-              <button
-                type="button"
-                className="icon-btn"
-                title="Today"
-                onClick={() => setMonth(yearMonth(today))}
-              >
-                <span className="cal-dot" />
-              </button>
-              <button
-                type="button"
-                className="icon-btn"
-                title="Next month"
-                onClick={() => setMonth(shiftMonth(y, mo, 1))}
-              >
-                <ChevronRightIcon />
-              </button>
-            </div>
             {choosing ? (
               // Month and year wheels, like iOS Calendar's; they stand in for
               // the day grid while open.
@@ -300,7 +255,7 @@ export function Scheduler({
                   ))}
                 </div>
                 <div className="wheel-col" data-col="1">
-                  {wheelYears.map((year, i) => (
+                  {years.map((year, i) => (
                     <div key={year} className={year === y ? "wheel-item on" : "wheel-item"} data-i={i}>
                       {year}
                     </div>
@@ -308,42 +263,23 @@ export function Scheduler({
                 </div>
               </div>
             ) : (
-              <div className="cal-grid">
-                {view.weekdays.map((d, i) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: weekday letters repeat (T, S); their column is the key.
-                  <span key={`h${i}`} className="cal-dow">
-                    {d}
-                  </span>
-                ))}
-                {view.weeks
-                  .filter((week) => week.some((cell) => cell.inMonth))
-                  .flat()
-                  .map((cell) => {
-                    const cls = ["cal-day"];
-                    if (!cell.inMonth) cls.push("other");
-                    if (cell.past) cls.push("past");
-                    if (cell.today) cls.push("is-today");
-                    // A date's fill follows its bucket; a deadline's stays the plain selected color.
-                    if (cell.selected) cls.push("selected");
-                    if (cell.selected && withTime)
-                      cls.push(`sel-${BUCKET_CLASS[dueBucket(cell.date, today)]}`);
-                    if (cell.repeat) cls.push("repeat-day");
-                    return (
-                      <button
-                        key={cell.date}
-                        type="button"
-                        className={cls.join(" ")}
-                        onClick={() => {
-                          onPick(cell.date, timeStr);
-                          // A date still has its Time and Repeat rows to offer.
-                          if (!withTime && actions === undefined) close();
-                        }}
-                      >
-                        {cell.day}
-                      </button>
-                    );
-                  })}
-              </div>
+              <CalendarMonths
+                years={years}
+                shown={month}
+                weekdays={view.weekdays}
+                touch={touch}
+                onShown={(year, m) => setMonth([year, m])}
+                start={start}
+                today={today}
+                selected={selected}
+                rule={rule}
+                bucketFill={withTime}
+                onDay={(date) => {
+                  onPick(date, timeStr);
+                  // A date still has its Time and Repeat rows to offer.
+                  if (!withTime && actions === undefined) close();
+                }}
+              />
             )}
           </div>
           {withTime && touch ? (

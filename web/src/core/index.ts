@@ -378,10 +378,16 @@ export function shiftMonth(year: number, month: number, delta: number): [number,
   return core.shiftMonth(year, month, delta);
 }
 
-/** The years the month / year wheel offers. */
+/** The years the calendar and its month / year wheel offer. */
 export function yearChoices(today: string, shown: number): number[] {
   ready();
   return core.yearChoices(today, shown);
+}
+
+/** How many weeks each month of the years takes, January first; `weekStart` as in `monthView`. */
+export function monthRows(firstYear: number, lastYear: number, weekStart: number): number[] {
+  ready();
+  return core.monthRows(firstYear, lastYear, weekStart);
 }
 
 /** "January" … "December". */

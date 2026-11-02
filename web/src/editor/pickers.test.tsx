@@ -5,6 +5,7 @@ import { useState } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { DueBucket, Label, ReminderDraft } from "../bindings";
 import { invoke } from "../ipc/invoke";
+import { CheckCircleIcon } from "../shell/icons";
 import { loadCoreForTests } from "../test/wasm";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
@@ -24,6 +25,14 @@ beforeAll(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
 });
+
+/** The drawing of the check-circle, to compare a picker's mark with. */
+function checkCircle(): string {
+  const { container, unmount } = render(<CheckCircleIcon />);
+  const drawing = container.querySelector("svg")?.innerHTML ?? "";
+  unmount();
+  return drawing;
+}
 
 function usePop(): [Pop, (p: Pop) => void] {
   return useState<Pop>(null);
@@ -265,7 +274,7 @@ describe("LabelPicker", () => {
     expect(pop.firstElementChild?.getAttribute("placeholder")).toBe("Find or add a label");
     const row = document.querySelector(".label-row") as HTMLElement;
     expect(row.className).toContain("on");
-    expect(row.querySelector(".menu-check")).not.toBeNull();
+    expect(row.querySelector(".menu-check svg")?.innerHTML).toBe(checkCircle());
   });
 
   it("shows each label's tag in its color, unknown colors as the default", async () => {
@@ -456,12 +465,11 @@ describe("DatePicker", () => {
     expect(document.querySelector(".sched-quick")).toBeNull();
   });
 
-  it("draws no week that's wholly in another month", () => {
+  it("a month draws only its own days", () => {
     render(<DateHost onChange={vi.fn()} />);
     openIt();
     calendar();
-    // October 2026 starts on a Thursday and ends on a Saturday: five weeks.
-    expect(document.querySelectorAll(".cal-day")).toHaveLength(35);
+    expect(document.querySelectorAll('[data-month="2026-10"] .cal-day')).toHaveLength(31);
   });
 
   it("a day picks and stays open, so a time or repeat can follow", () => {
@@ -469,7 +477,7 @@ describe("DatePicker", () => {
     render(<DateHost onChange={onChange} />);
     openIt();
     calendar();
-    fireEvent.click(screen.getByText("12", { selector: ".cal-day:not(.other)" }));
+    fireEvent.click(screen.getByText("12", { selector: '[data-month="2026-10"] .cal-day' }));
     expect(onChange).toHaveBeenLastCalledWith("2026-10-12", "");
     expect(document.querySelector(".scheduler")).not.toBeNull();
   });
@@ -503,18 +511,51 @@ describe("DatePicker", () => {
     expect(screen.queryByRole("button", { name: /^Repeat/ })).toBeNull();
   });
 
-  it("month arrows move the calendar", () => {
+  const scroller = () => document.querySelector(".cal-scroll") as HTMLElement;
+  const topOf = (month: string) =>
+    Number.parseFloat((document.querySelector(`[data-month="${month}"]`) as HTMLElement).style.top);
+  const scrollTo = (month: string) => {
+    scroller().scrollTop = topOf(month);
+    fireEvent.scroll(scroller());
+  };
+  const title = () => document.querySelector(".cal-title")?.textContent;
+
+  it("scrolling the calendar moves the title, with no month arrows", () => {
     render(<DateHost onChange={vi.fn()} />);
     openIt();
     calendar();
-    expect(document.querySelector(".cal-title")?.textContent).toBe("October 2026");
-    fireEvent.click(screen.getByTitle("Next month"));
-    expect(document.querySelector(".cal-title")?.textContent).toBe("November 2026");
-    fireEvent.click(screen.getByTitle("Previous month"));
-    fireEvent.click(screen.getByTitle("Previous month"));
-    expect(document.querySelector(".cal-title")?.textContent).toBe("September 2026");
-    fireEvent.click(screen.getByTitle("Today"));
-    expect(document.querySelector(".cal-title")?.textContent).toBe("October 2026");
+    expect(title()).toBe("October 2026");
+    expect(screen.queryByTitle("Next month")).toBeNull();
+    expect(screen.queryByTitle("Previous month")).toBeNull();
+    scrollTo("2026-11");
+    expect(title()).toBe("November 2026");
+    scrollTo("2026-12");
+    expect(title()).toBe("December 2026");
+  });
+
+  it("opens scrolled to the selected month", () => {
+    render(<DeadlineHost deadline="2026-12-25" />);
+    fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
+    expect(title()).toBe("December 2026");
+    expect(scroller().scrollTop).toBe(topOf("2026-12"));
+    expect(scroller().scrollTop).toBeGreaterThan(0);
+  });
+
+  it("closing the month / year chooser returns to the shown month", () => {
+    render(<DateHost onChange={vi.fn()} />);
+    openIt();
+    calendar();
+    scrollTo("2026-11");
+    fireEvent.click(screen.getByTitle("Choose month and year"));
+    fireEvent.click(screen.getByTitle("Choose month and year"));
+    expect(title()).toBe("November 2026");
+    expect(scroller().scrollTop).toBe(topOf("2026-11"));
+  });
+
+  it("marks a chosen quick date with the check-circle", () => {
+    render(<DateHost onChange={vi.fn()} date="2026-10-31" />);
+    openIt();
+    expect(document.querySelector(".menu-check svg")?.innerHTML).toBe(checkCircle());
   });
 
   it("a typed time picks today with it; a bad one is marked", () => {
@@ -642,7 +683,7 @@ describe("DeadlinePicker", () => {
   it("a day picks and closes", () => {
     render(<DeadlineHost />);
     openIt();
-    fireEvent.click(screen.getByText("12", { selector: ".cal-day:not(.other)" }));
+    fireEvent.click(screen.getByText("12", { selector: '[data-month="2026-10"] .cal-day' }));
     expect(document.querySelector(".scheduler")).toBeNull();
   });
 });

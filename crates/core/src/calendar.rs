@@ -91,10 +91,28 @@ pub fn shift_month(year: i32, month: u32, delta: i32) -> (i32, u32) {
     (index.div_euclid(12), index.rem_euclid(12) as u32 + 1)
 }
 
-/// The years the month / year wheel offers: last year to ten ahead,
-/// stretched to hold the `shown` year when the arrows went past either end.
+/// The years the calendar and its month / year wheel offer: last year to ten
+/// ahead, stretched to hold the `shown` year.
 pub fn year_choices(today: NaiveDate, shown: i32) -> Vec<i32> {
     (shown.min(today.year() - 1)..=shown.max(today.year() + 10)).collect()
+}
+
+/// How many weeks each month of `first_year` through `last_year` touches,
+/// January first, so a scrolling calendar knows its height before drawing it.
+pub fn month_rows(first_year: i32, last_year: i32, week_start: Weekday) -> Vec<u32> {
+    (first_year..=last_year)
+        .flat_map(|year| {
+            (1..=12).map(move |month| {
+                let first = NaiveDate::from_ymd_opt(year, month, 1).expect("day 1 exists");
+                let (next_year, next_month) = shift_month(year, month, 1);
+                let next = NaiveDate::from_ymd_opt(next_year, next_month, 1).expect("day 1 exists");
+                let lead = (7 + first.weekday().num_days_from_monday() as i64
+                    - week_start.num_days_from_monday() as i64)
+                    % 7;
+                ((lead + (next - first).num_days() + 6) / 7) as u32
+            })
+        })
+        .collect()
 }
 
 /// The weeks shown for the month containing `day`: always 6 rows of
@@ -183,5 +201,17 @@ mod tests {
         assert_eq!(year_choices(today, 2040).last(), Some(&2040));
         assert_eq!(year_choices(today, 2020).first(), Some(&2020));
         assert_eq!(MONTHS[9], "October");
+    }
+
+    #[test]
+    fn month_rows_counts_the_weeks_each_month_touches() {
+        // Weeks from Sunday: February 2026 fits in four, October in five, August needs six.
+        let rows = month_rows(2026, 2026, Weekday::Sun);
+        assert_eq!(rows.len(), 12);
+        assert_eq!((rows[1], rows[9], rows[7]), (4, 5, 6));
+        // From Monday, February 2026 starts on the last column.
+        assert_eq!(month_rows(2026, 2026, Weekday::Mon)[1], 5);
+        // A range runs through its last December.
+        assert_eq!(month_rows(2026, 2027, Weekday::Sun).len(), 24);
     }
 }
