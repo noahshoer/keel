@@ -70,6 +70,17 @@ const PILLS = [
   "Repeat",
 ];
 
+it("with a mouse too, clicking the title or description closes a picker", () => {
+  const title = adding();
+  fireEvent.click(screen.getByTitle("Priority"));
+  fireEvent.pointerUp(title);
+  expect(document.querySelector(".popover")).toBeNull();
+  fireEvent.click(screen.getByTitle("Priority"));
+  fireEvent.pointerUp(screen.getByPlaceholderText("Description"));
+  expect(document.querySelector(".popover")).toBeNull();
+  cleanup();
+});
+
 describe("on touch", () => {
   beforeEach(() => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
@@ -225,6 +236,10 @@ describe("on touch", () => {
     });
 
     const openDeadline = () => fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
+    const openCalendar = () => {
+      fireEvent.click(screen.getByTitle("Date"));
+      fireEvent.click(screen.getByText("Pick a date and time"));
+    };
     const day = (n: string) => screen.getByText(n, { selector: ".cal-day:not(.other)" });
 
     it("the calendar's X, month and check share one row", () => {
@@ -246,21 +261,42 @@ describe("on touch", () => {
       expect(done).toBe(plain);
     });
 
-    it("Deadline lowers it at once; a day selects and stays until the check", () => {
+    it("Deadline leaves it up; a day selects and stays until the check", () => {
       adding();
       title().focus();
       openDeadline();
-      expect(focused()).toBe(false);
+      expect(focused()).toBe(true);
       fireEvent.click(day("12"));
       expect(document.querySelector(".cal-day.selected")?.textContent).toBe("12");
-      expect(focused()).toBe(false);
+      expect(focused()).toBe(true);
       fireEvent.click(screen.getByRole("button", { name: "Done" }));
       expect(document.querySelector(".popover")).toBeNull();
       expect(focused()).toBe(true);
       expect(screen.getByTitle("Deadline: the date it must be done by").textContent).toContain("12");
     });
 
-    it("the X undoes the deadline and brings the keyboard back", () => {
+    it("the deadline has no No deadline row, and tapping its day clears it", () => {
+      adding();
+      openDeadline();
+      expect(screen.queryByText("No deadline")).toBeNull();
+      fireEvent.click(day("12"));
+      expect(document.querySelector(".cal-day.selected")?.textContent).toBe("12");
+      fireEvent.click(day("12"));
+      expect(document.querySelector(".cal-day.selected")).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Done" }));
+      expect(screen.getByTitle("Deadline: the date it must be done by").textContent).not.toContain("12");
+    });
+
+    it("only the deadline's calendar is compact, to fit above the keyboard", () => {
+      adding();
+      openDeadline();
+      expect(document.querySelector(".scheduler")?.className).toContain("scheduler-compact");
+      fireEvent.click(screen.getByRole("button", { name: "Done" }));
+      openCalendar();
+      expect(document.querySelector(".scheduler")?.className).not.toContain("scheduler-compact");
+    });
+
+    it("the X undoes the deadline and leaves the keyboard up", () => {
       adding();
       title().focus();
       openDeadline();
@@ -294,29 +330,14 @@ describe("on touch", () => {
     });
 
     const desc = () => screen.getByPlaceholderText("Description") as HTMLInputElement;
-    const openDeadlinePill = () =>
-      fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
 
     it("lowers the keyboard from the description too, and goes back to it", () => {
       adding();
       desc().focus();
-      openDeadlinePill();
+      openCalendar();
       expect(document.activeElement).not.toBe(desc());
       fireEvent.click(screen.getByRole("button", { name: "Done" }));
       expect(document.activeElement).toBe(desc());
-    });
-
-    it("the X keeps text typed while the calendar was open", () => {
-      adding();
-      title().focus();
-      openDeadlinePill();
-      fireEvent.click(day("12"));
-      fireEvent.change(title(), { target: { value: "Typed meanwhile" } });
-      fireEvent.change(desc(), { target: { value: "Notes meanwhile" } });
-      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-      expect(title().value).toBe("Typed meanwhile");
-      expect(desc().value).toBe("Notes meanwhile");
-      expect(screen.getByTitle("Deadline: the date it must be done by").textContent).not.toContain("12");
     });
 
     it("closing a picker from its own field goes back to the title", () => {
@@ -331,13 +352,84 @@ describe("on touch", () => {
     it("another pill or a tap outside brings it back", () => {
       adding();
       title().focus();
-      fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
+      openCalendar();
+      expect(focused()).toBe(false);
       fireEvent.click(screen.getByTitle("Priority"));
       expect(focused()).toBe(true);
-      fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
+      fireEvent.click(screen.getByTitle("Priority"));
+      openCalendar();
       expect(focused()).toBe(false);
       fireEvent.click(document.querySelector(".pop-backdrop") as Element);
       expect(focused()).toBe(true);
+    });
+
+    it("going from the date's calendar to the deadline brings it back", () => {
+      adding();
+      title().focus();
+      openCalendar();
+      openDeadline();
+      expect(document.querySelector(".cal-grid")).not.toBeNull();
+      expect(focused()).toBe(true);
+    });
+
+    // iOS sends no click for a tap in the field that already has the cursor.
+    it("tapping the focused title or description closes a picker, with no click", () => {
+      adding();
+      title().focus();
+      fireEvent.click(screen.getByTitle("Priority"));
+      fireEvent.pointerUp(title());
+      expect(document.querySelector(".popover")).toBeNull();
+      expect(focused()).toBe(true);
+
+      desc().focus();
+      fireEvent.click(screen.getByTitle("Priority"));
+      fireEvent.pointerUp(desc());
+      expect(document.querySelector(".popover")).toBeNull();
+      expect(document.activeElement).toBe(desc());
+    });
+
+    it("typing in the title or description closes a picker and keeps what it chose", () => {
+      adding();
+      title().focus();
+      openDeadline();
+      fireEvent.click(day("12"));
+      fireEvent.change(title(), { target: { value: "Typed" } });
+      expect(document.querySelector(".popover")).toBeNull();
+      expect(title().value).toBe("Typed");
+      expect(screen.getByTitle("Deadline: the date it must be done by").textContent).toContain("12");
+
+      fireEvent.click(screen.getByTitle("Priority"));
+      fireEvent.change(desc(), { target: { value: "Notes" } });
+      expect(document.querySelector(".popover")).toBeNull();
+      expect(desc().value).toBe("Notes");
+    });
+
+    it("typing in a picker's own field leaves the picker open", () => {
+      adding();
+      fireEvent.click(screen.getByTitle("Labels"));
+      fireEvent.change(screen.getByPlaceholderText("Find or add a label"), { target: { value: "er" } });
+      expect(document.querySelector(".popover")).not.toBeNull();
+    });
+
+    it("tapping the description from the date's calendar stays there and keeps the day", () => {
+      adding();
+      title().focus();
+      openCalendar();
+      fireEvent.click(day("12"));
+      desc().focus();
+      fireEvent.pointerUp(desc());
+      expect(document.querySelector(".popover")).toBeNull();
+      expect(document.activeElement).toBe(desc());
+      expect(screen.getByTitle("Date").textContent).toContain("12");
+      // The next picker has no keyboard to give back.
+      fireEvent.click(screen.getByTitle("Priority"));
+      fireEvent.click(document.querySelector(".pop-backdrop") as Element);
+      expect(document.activeElement).toBe(desc());
+    });
+
+    it("the title stays above a picker's backdrop, so one click closes it and types", () => {
+      const css = readFileSync(resolve(process.cwd(), "src/styles/app.css"), "utf8");
+      expect(css).toMatch(/\.editor \.title-wrap, \.editor \.desc \{ position: relative; z-index: 20; \}/);
     });
   });
 
