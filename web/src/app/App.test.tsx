@@ -132,3 +132,12 @@ it("on a phone, a swipe right opens the drawer and a swipe left closes it", asyn
     setWidth(1024);
   }
 });
+
+it("the page holds still while the drawer is open", async () => {
+  // WebKit would otherwise shift the whole page, drawer and all, to reveal a focused field.
+  render(<App />);
+  fireEvent.click(await screen.findByTitle("Open menu"));
+  await waitFor(() => expect(mockPageScrollHeld()).toBe(true));
+  fireEvent.click(document.querySelector(".drawer-scrim") as Element);
+  await waitFor(() => expect(mockPageScrollHeld()).toBe(false));
+});

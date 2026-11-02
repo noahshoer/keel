@@ -219,6 +219,7 @@ function Frame({
   // pruned against this load (the same pass the sheet draws from).
   const viewOpen = loaded !== null && top(pruned(nav.stack, loaded.all)) !== null;
   useEffect(() => (viewOpen ? holdPage() : undefined), [viewOpen]);
+  useEffect(() => (drawer ? holdPage() : undefined), [drawer]);
   return (
     <div className={`app${drawer ? " drawer-open" : ""}${viewOpen ? " view-open" : ""}`}>
       {drawer ? (

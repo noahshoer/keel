@@ -1096,7 +1096,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 @media (max-width: 700px) {
   .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; width: min(360px, 88vw);
     background: var(--app-bg); box-shadow: var(--shadow-lg);
-    padding-top: calc(14px + env(safe-area-inset-top)); padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    padding-top: calc(14px + env(safe-area-inset-top)); padding-bottom: calc(14px + max(env(safe-area-inset-bottom), var(--keyboard-inset, 0px)));
     transform: translateX(-100%); visibility: hidden;
     transition: transform .26s var(--ease), visibility 0s linear .26s; }
   .app.drawer-open .sidebar { transform: none; visibility: visible; transition: transform .26s var(--ease); }

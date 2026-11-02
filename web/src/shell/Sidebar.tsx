@@ -22,6 +22,7 @@ import {
 import type { CompletionIcon } from "../lists/completion";
 import { Settings } from "../settings/Settings";
 import { FORM_TOGGLE, useCloseOnClickOutside } from "./clickOutside";
+import { useDrawerKeyboard } from "./drawerKeyboard";
 import { FilterForm, FilterRow } from "./FilterForm";
 import { openAndFocus } from "./focus";
 import {
@@ -122,6 +123,8 @@ export function Sidebar({
   onChanged: () => void;
 }) {
   const wide = useWideLayout();
+  const aside = useRef<HTMLElement>(null);
+  const keyboard = useDrawerKeyboard(aside);
   const [showSettings, setShowSettings] = useState(false);
   const [adding, setAdding] = useState<"project" | "label" | "filter" | null>(null);
   const projectField = useRef<HTMLInputElement>(null);
@@ -150,7 +153,11 @@ export function Sidebar({
   );
 
   return (
-    <aside className="sidebar">
+    <aside
+      ref={aside}
+      className="sidebar"
+      style={{ "--keyboard-inset": `${keyboard}px` } as React.CSSProperties}
+    >
       <div className="brand">
         <div className="brand-mark" title="Keel">
           <Logo size={36} />
