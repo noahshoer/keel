@@ -7,13 +7,19 @@ import { type RefObject, useEffect, useRef } from "react";
 /** The attribute on a button that opens and closes a form by itself. */
 export const FORM_TOGGLE = "data-form-toggle";
 
-export function useCloseOnClickOutside(form: RefObject<HTMLElement | null>, close: () => void): void {
+type Form = RefObject<HTMLElement | null>;
+
+/** `form` can be in several parts: a click in any of them is inside. */
+export function useCloseOnClickOutside(form: Form | Form[], close: () => void): void {
   const latest = useRef(close);
+  const parts = useRef<Form[]>([]);
+  parts.current = Array.isArray(form) ? form : [form];
   useEffect(() => {
     latest.current = close;
   });
   useEffect(() => {
-    const inForm = (e: Event) => e.target instanceof Node && form.current?.contains(e.target) === true;
+    const inForm = (e: Event) =>
+      parts.current.some((part) => e.target instanceof Node && part.current?.contains(e.target) === true);
     // A drag from the field (selecting its text) ends in a click on whatever it ends over.
     let startedInForm = false;
     const onPointerDown = (e: PointerEvent) => {
@@ -30,5 +36,5 @@ export function useCloseOnClickOutside(form: RefObject<HTMLElement | null>, clos
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("click", onClick, true);
     };
-  }, [form]);
+  }, []);
 }

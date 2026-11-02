@@ -9,7 +9,7 @@ import { RowMenu } from "./RowMenu";
 type Mode = "normal" | "renaming";
 
 /** The row while it's renamed: Enter saves, Escape or a click outside leaves it as it was. */
-export function RenameForm({
+function RenameForm({
   input,
   draft,
   setDraft,

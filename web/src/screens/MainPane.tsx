@@ -3,7 +3,7 @@
 // date groups, filters into their comma groups, projects into sections.
 // Each list ends with its "+ Add task" row, as in Dioxus.
 
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { Loaded } from "../app/load";
 import {
   canShowCompleted,
@@ -24,9 +24,12 @@ import { AddTask } from "../editor/AddTask";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
+import { openAndFocus } from "../shell/focus";
 import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, SearchIcon } from "../shell/icons";
+import { pageActions } from "../shell/listActions";
 import { currentPlatform, searchTooltip } from "../shell/platform";
 import { attachHeadScroll } from "./headScroll";
+import { PageEdit } from "./PageEdit";
 import { AddSection, SectionBlock } from "./SectionBlock";
 import { useTitleFit } from "./titleFit";
 import { ViewMenu } from "./ViewMenu";
@@ -102,6 +105,17 @@ export function MainPane({
     };
   }, [place]);
   const subtitle = viewSubtitle(view, today);
+  const actions = pageActions(loaded, {
+    view,
+    setView,
+    settle: (p) => p.then(onChanged, onChanged),
+  });
+  // By place, so it doesn't outlive the page it was opened on.
+  const [editingPlace, setEditingPlace] = useState<string | null>(null);
+  const editing = editingPlace === place && actions !== null ? actions.editing : null;
+  const stopEditing = () => setEditingPlace(null);
+  const titleField = useRef<HTMLInputElement>(null);
+  const [querySlot, setQuerySlot] = useState<HTMLElement | null>(null);
   const locations = locationsOf([...loaded.all, ...loaded.completed], loaded.projects, loaded.sections);
   const namesProject = showsProject(view);
   const search = view.kind === "search";
@@ -232,10 +246,14 @@ export function MainPane({
           <h1
             ref={title.ref}
             className="view-title"
+            hidden={editing !== null}
             aria-label={title.text === fullTitle ? undefined : fullTitle}
           >
             {title.text}
           </h1>
+          {editing ? (
+            <PageEdit editing={editing} field={titleField} querySlot={querySlot} onClose={stopEditing} />
+          ) : null}
           {toggle ? (
             <button
               type="button"
@@ -249,7 +267,17 @@ export function MainPane({
               <span className="view-toggle-label">{showCompleted ? "Hide completed" : "Show completed"}</span>
             </button>
           ) : null}
-          <ViewMenu view={view} loaded={loaded} setView={setView} onChanged={onChanged} />
+          {actions ? (
+            <ViewMenu
+              warning={actions.warning}
+              onEdit={() => {
+                // At the top, where the title is at its full size on the phone.
+                if (listScroll.current) listScroll.current.scrollTop = 0;
+                openAndFocus(() => setEditingPlace(place), titleField);
+              }}
+              onDelete={actions.remove}
+            />
+          ) : null}
           {search ? null : (
             <button
               type="button"
@@ -264,7 +292,9 @@ export function MainPane({
         </div>
         <div ref={listScroll} className="list-scroll">
           <div className="list-body">
-            {subtitle ? (
+            {editing?.kind === "filter" ? (
+              <div ref={setQuerySlot} className="view-edit-query" />
+            ) : subtitle ? (
               <p className={view.kind === "filter" ? "view-sub mono" : "view-sub"}>{subtitle}</p>
             ) : null}
             {loaded.filterError !== null ? (

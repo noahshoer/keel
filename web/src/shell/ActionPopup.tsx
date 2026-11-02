@@ -2,13 +2,12 @@
 // first in the same place. It opens under what it belongs to, or above it near
 // the bottom. Portaled, since a sidebar row scales while pressed and a fixed
 // element inside it would move with it.
-import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { holdPage } from "../app/pageHold";
 import { PencilIcon, TrashSmallIcon } from "./icons";
 import { placeRowMenu } from "./placeRowMenu";
 
-export type PopupStep = "closed" | "menu" | "confirm" | "edit";
+export type PopupStep = "closed" | "menu" | "confirm";
 
 export function ActionPopup({
   anchor,
@@ -18,7 +17,6 @@ export function ActionPopup({
   warning,
   onEdit,
   onDelete,
-  editor,
 }: {
   /** What it opens against. */
   anchor: RefObject<HTMLElement | null>;
@@ -29,14 +27,8 @@ export function ActionPopup({
   warning: string;
   onEdit: () => void;
   onDelete: () => void;
-  /** The form for the "edit" step. */
-  editor?: ReactNode;
 }) {
   const popup = useRef<HTMLDivElement>(null);
-  const editing = step === "edit";
-
-  // A field in it raises the keyboard; WebKit would shift the page to reveal it.
-  useEffect(() => holdPage(), []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: each step is a different size.
   useLayoutEffect(() => {
@@ -67,8 +59,7 @@ export function ActionPopup({
     document.addEventListener("contextmenu", outside, true);
     document.addEventListener("touchstart", outside, { capture: true, passive: true });
     document.addEventListener("keydown", onKey);
-    // While editing, a long name scrolls inside its own field.
-    if (!editing) window.addEventListener("scroll", close, true);
+    window.addEventListener("scroll", close, true);
     return () => {
       document.removeEventListener("click", outside, true);
       document.removeEventListener("contextmenu", outside, true);
@@ -76,16 +67,12 @@ export function ActionPopup({
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", close, true);
     };
-  }, [editing, setStep, toggle]);
+  }, [setStep, toggle]);
 
   return createPortal(
     // biome-ignore lint/a11y/useKeyWithClickEvents: only keeps a click in the portal from reaching the row.
     // biome-ignore lint/a11y/noStaticElementInteractions: see above.
-    <div
-      ref={popup}
-      className={editing ? "popover menu row-menu editing" : "popover menu row-menu"}
-      onClick={(e) => e.stopPropagation()}
-    >
+    <div ref={popup} className="popover menu row-menu" onClick={(e) => e.stopPropagation()}>
       {step === "menu" ? (
         <>
           <button type="button" className="menu-item" onClick={onEdit}>
@@ -122,7 +109,6 @@ export function ActionPopup({
           </div>
         </>
       ) : null}
-      {editing ? editor : null}
     </div>,
     document.body,
   );

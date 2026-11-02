@@ -71,3 +71,36 @@ export function filterActions(f: Filter, { view, setView, settle }: ListContext)
     },
   };
 }
+
+export type PageEditing =
+  | { kind: "name"; name: string; rename: (name: string) => void }
+  | { kind: "filter"; filter: Filter; save: (name: string, query: string) => void };
+
+export type PageActions = { warning: string; remove: () => void; editing: PageEditing };
+
+/** What a view's page offers: only a project, label or filter has actions. */
+export function pageActions(
+  lists: { projects: Project[]; labels: Label[]; filters: Filter[] },
+  context: ListContext,
+): PageActions | null {
+  const { view } = context;
+  if (view.kind === "project") {
+    const project = lists.projects.find((p) => p.id === view.id);
+    if (!project) return null;
+    const { warning, rename, remove } = projectActions(project, context);
+    return { warning, remove, editing: { kind: "name", name: project.name, rename } };
+  }
+  if (view.kind === "label") {
+    const label = lists.labels.find((l) => l.name.toLowerCase() === view.name.toLowerCase());
+    if (!label) return null;
+    const { warning, rename, remove } = labelActions(label, context);
+    return { warning, remove, editing: { kind: "name", name: label.name, rename } };
+  }
+  if (view.kind === "filter") {
+    const filter = lists.filters.find((f) => f.id === view.id);
+    if (!filter) return null;
+    const { warning, save, remove } = filterActions(filter, context);
+    return { warning, remove, editing: { kind: "filter", filter, save } };
+  }
+  return null;
+}
