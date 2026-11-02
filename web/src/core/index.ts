@@ -8,6 +8,7 @@ import type {
   CardMode,
   DateGroup,
   DateGroupMode,
+  DayCell,
   DueBucket,
   EditorPick,
   EditorValues,
@@ -378,10 +379,31 @@ export function shiftMonth(year: number, month: number, delta: number): [number,
   return core.shiftMonth(year, month, delta);
 }
 
-/** The years the month / year wheel offers. */
+/** The years the calendar and its month / year wheel offer. */
 export function yearChoices(today: string, shown: number): number[] {
   ready();
   return core.yearChoices(today, shown);
+}
+
+/** The week each month of the years starts in, January first; `weekStart` as in `monthView`. */
+export function monthFirstWeeks(firstYear: number, lastYear: number, weekStart: number): number[] {
+  ready();
+  return core.monthFirstWeeks(firstYear, lastYear, weekStart);
+}
+
+/** `count` weeks of the calendar's run of weeks, from week `from` as `monthFirstWeeks` counts them. */
+export function weekRows(
+  firstYear: number,
+  weekStart: number,
+  from: number,
+  count: number,
+  shown: [number, number],
+  today: string,
+  selected: string | null,
+  rule: Recurrence | null,
+): DayCell[][] {
+  ready();
+  return core.weekRows(firstYear, weekStart, from, count, shown[0], shown[1], today, selected, rule);
 }
 
 /** "January" … "December". */

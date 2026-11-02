@@ -44,6 +44,24 @@ pub struct MonthView {
     pub weeks: Vec<Vec<DayCell>>,
 }
 
+fn day_cell(
+    date: NaiveDate,
+    in_month: bool,
+    today: NaiveDate,
+    selected: Option<NaiveDate>,
+    rule: Option<&Recurrence>,
+) -> DayCell {
+    DayCell {
+        date,
+        day: date.day(),
+        in_month,
+        today: date == today,
+        past: date < today,
+        selected: Some(date) == selected,
+        repeat: date >= today && rule.is_some_and(|r| r.contains(date)),
+    }
+}
+
 /// The month `year`/`month` (1-based), weeks starting on `week_start`.
 pub fn month_view(
     year: i32,
@@ -54,22 +72,13 @@ pub fn month_view(
     rule: Option<&Recurrence>,
 ) -> MonthView {
     let first = NaiveDate::from_ymd_opt(year, month, 1).unwrap_or(today);
-    let lead = (7 + first.weekday().num_days_from_monday() as i64 - week_start.num_days_from_monday() as i64) % 7;
-    let start = first - Duration::days(lead);
+    let start = week_of(first, week_start);
     let weeks = (0..6)
         .map(|w| {
             (0..7)
                 .map(|i| {
                     let date = start + Duration::days(w * 7 + i);
-                    DayCell {
-                        date,
-                        day: date.day(),
-                        in_month: date.month() == first.month(),
-                        today: date == today,
-                        past: date < today,
-                        selected: Some(date) == selected,
-                        repeat: date >= today && rule.is_some_and(|r| r.contains(date)),
-                    }
+                    day_cell(date, date.month() == first.month(), today, selected, rule)
                 })
                 .collect()
         })
@@ -91,10 +100,62 @@ pub fn shift_month(year: i32, month: u32, delta: i32) -> (i32, u32) {
     (index.div_euclid(12), index.rem_euclid(12) as u32 + 1)
 }
 
-/// The years the month / year wheel offers: last year to ten ahead,
-/// stretched to hold the `shown` year when the arrows went past either end.
+/// The years the calendar and its month / year wheel offer: last year to ten
+/// ahead, stretched to hold the `shown` year.
 pub fn year_choices(today: NaiveDate, shown: i32) -> Vec<i32> {
     (shown.min(today.year() - 1)..=shown.max(today.year() + 10)).collect()
+}
+
+/// The first day of the week holding `day`.
+fn week_of(day: NaiveDate, week_start: Weekday) -> NaiveDate {
+    let lead = (7 + day.weekday().num_days_from_monday() as i64 - week_start.num_days_from_monday() as i64) % 7;
+    day - Duration::days(lead)
+}
+
+/// The scrolling calendar's first week: the one holding January 1st of `first_year`.
+fn first_week(first_year: i32, week_start: Weekday) -> NaiveDate {
+    week_of(NaiveDate::from_ymd_opt(first_year, 1, 1).expect("day 1 exists"), week_start)
+}
+
+/// The week each month of `first_year` through `last_year` starts in, January
+/// first, counted from the week holding January 1st of `first_year`.
+pub fn month_first_weeks(first_year: i32, last_year: i32, week_start: Weekday) -> Vec<u32> {
+    let start = first_week(first_year, week_start);
+    (first_year..=last_year)
+        .flat_map(|year| (1..=12).map(move |month| (year, month)))
+        .map(|(year, month)| {
+            let first = NaiveDate::from_ymd_opt(year, month, 1).expect("day 1 exists");
+            ((first - start).num_days() / 7) as u32
+        })
+        .collect()
+}
+
+/// `count` weeks of the unbroken run of weeks a scrolling calendar draws, from
+/// week `from` (counted as in `month_first_weeks`). `in_month` means part of
+/// the `shown` month, `(year, month)`.
+#[allow(clippy::too_many_arguments)]
+pub fn week_rows(
+    first_year: i32,
+    week_start: Weekday,
+    from: u32,
+    count: u32,
+    shown: (i32, u32),
+    today: NaiveDate,
+    selected: Option<NaiveDate>,
+    rule: Option<&Recurrence>,
+) -> Vec<Vec<DayCell>> {
+    let start = first_week(first_year, week_start);
+    (from..from + count)
+        .map(|w| {
+            (0..7)
+                .map(|i| {
+                    let date = start + Duration::days(w as i64 * 7 + i);
+                    let in_month = (date.year(), date.month()) == shown;
+                    day_cell(date, in_month, today, selected, rule)
+                })
+                .collect()
+        })
+        .collect()
 }
 
 /// The weeks shown for the month containing `day`: always 6 rows of
@@ -183,5 +244,36 @@ mod tests {
         assert_eq!(year_choices(today, 2040).last(), Some(&2040));
         assert_eq!(year_choices(today, 2020).first(), Some(&2020));
         assert_eq!(MONTHS[9], "October");
+    }
+
+    #[test]
+    fn month_first_weeks_finds_the_week_holding_each_first() {
+        // Weeks from Sunday, counted from the week of January 1st 2026 (a Thursday).
+        let weeks = month_first_weeks(2026, 2026, Weekday::Sun);
+        assert_eq!(weeks.len(), 12);
+        // February 1st is a Sunday, starting week 5; March 1st is too, four weeks on.
+        assert_eq!(&weeks[..3], &[0, 5, 9]);
+        // A range runs through its last December.
+        assert_eq!(month_first_weeks(2026, 2027, Weekday::Sun).len(), 24);
+    }
+
+    #[test]
+    fn week_rows_run_on_without_a_break_and_mark_the_shown_month() {
+        let today = NaiveDate::from_ymd_opt(2026, 10, 30).unwrap();
+        let selected = NaiveDate::from_ymd_opt(2026, 11, 3);
+        // From week 43 of 2026's Sunday weeks: Oct 25 to Oct 31, then Nov 1 on.
+        let rows = week_rows(2026, Weekday::Sun, 43, 2, (2026, 10), today, selected, None);
+        assert_eq!(rows.len(), 2);
+        let first = &rows[0];
+        let second = &rows[1];
+        assert_eq!(first[0].date, NaiveDate::from_ymd_opt(2026, 10, 25).unwrap());
+        assert_eq!(second[0].date, first[6].date + Duration::days(1));
+        assert!(first[6].in_month);
+        assert!(!second[0].in_month);
+        assert!(first[5].today);
+        assert!(second[2].selected);
+        // The year counts too: the same month a year on isn't the shown one.
+        let later = week_rows(2026, Weekday::Sun, 95, 1, (2026, 10), today, None, None);
+        assert!(later[0].iter().all(|c| !c.in_month));
     }
 }

@@ -7,6 +7,7 @@ import type { EditorValues } from "../bindings";
 import { blankValues, valuesFromTask } from "../core";
 import * as fx from "../ipc/fixtures";
 import { mockPageScrollHeld } from "../ipc/mock";
+import { CheckSmallIcon } from "../shell/icons";
 import { loadCoreForTests } from "../test/wasm";
 import { TaskEditor } from "./TaskEditor";
 
@@ -225,6 +226,25 @@ describe("on touch", () => {
 
     const openDeadline = () => fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
     const day = (n: string) => screen.getByText(n, { selector: ".cal-day:not(.other)" });
+
+    it("the calendar's X, month and check share one row", () => {
+      adding();
+      openDeadline();
+      const row = document.querySelector(".sched-head") as HTMLElement;
+      expect(within(row).getByRole("button", { name: "Cancel" })).toBeTruthy();
+      expect(row.querySelector(".cal-title")?.textContent).toBe("October 2026");
+      expect(within(row).getByRole("button", { name: "Done" })).toBeTruthy();
+    });
+
+    it("the calendar's Done is the plain check, not the check-circle", () => {
+      adding();
+      openDeadline();
+      const done = screen.getByRole("button", { name: "Done" }).querySelector("svg")?.innerHTML;
+      const { container, unmount } = render(<CheckSmallIcon />);
+      const plain = container.querySelector("svg")?.innerHTML;
+      unmount();
+      expect(done).toBe(plain);
+    });
 
     it("Deadline lowers it at once; a day selects and stays until the check", () => {
       adding();

@@ -1,7 +1,7 @@
 // A chip that opens a list of choices; the current one is checked
 // (crates/ui/src/pickers.rs `Menu`): priority, repeat, project / section.
 import { type ReactNode, useRef } from "react";
-import { CheckSmallIcon, ChevronDownSmallIcon } from "../shell/icons";
+import { CheckCircleIcon, ChevronDownSmallIcon } from "../shell/icons";
 import { cx, type Face, type Pop, type PopProps } from "./pop";
 import { usePlacedPopover } from "./popover";
 
@@ -48,7 +48,7 @@ function MenuList({
             <span className="menu-label">{item.label}</span>
             {checked ? (
               <span className="menu-check">
-                <CheckSmallIcon />
+                <CheckCircleIcon />
               </span>
             ) : null}
           </button>

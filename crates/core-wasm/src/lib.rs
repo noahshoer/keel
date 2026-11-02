@@ -536,14 +536,18 @@ pub fn month_view(
     #[wasm_bindgen(unchecked_param_type = "string | null")] selected: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")] rule: JsValue,
 ) -> Result<JsValue, JsError> {
-    let start = match week_start {
+    let selected = opt_date("selected", selected)?;
+    let rule: Option<Recurrence> = input("rule", rule)?;
+    output(&calendar::month_view(year, month, week_day(week_start), date(today)?, selected, rule.as_ref()))
+}
+
+/// A `week_start` (1 = Monday … 7 = Sunday) as its weekday.
+fn week_day(week_start: u8) -> Weekday {
+    match week_start {
         7 => Weekday::Sun,
         6 => Weekday::Sat,
         _ => Weekday::Mon,
-    };
-    let selected = opt_date("selected", selected)?;
-    let rule: Option<Recurrence> = input("rule", rule)?;
-    output(&calendar::month_view(year, month, start, date(today)?, selected, rule.as_ref()))
+    }
 }
 
 /// `calendar::shift_month`: `[year, month]`.
@@ -556,6 +560,40 @@ pub fn shift_month(year: i32, month: u32, delta: i32) -> Result<JsValue, JsError
 #[wasm_bindgen(js_name = yearChoices, unchecked_return_type = "number[]")]
 pub fn year_choices(today: &str, shown: i32) -> Result<JsValue, JsError> {
     output(&calendar::year_choices(date(today)?, shown))
+}
+
+/// `calendar::month_first_weeks`. `week_start` as in `monthView`.
+#[wasm_bindgen(js_name = monthFirstWeeks, unchecked_return_type = "number[]")]
+pub fn month_first_weeks(first_year: i32, last_year: i32, week_start: u8) -> Result<JsValue, JsError> {
+    output(&calendar::month_first_weeks(first_year, last_year, week_day(week_start)))
+}
+
+/// `calendar::week_rows`. `week_start` as in `monthView`.
+#[allow(clippy::too_many_arguments)]
+#[wasm_bindgen(js_name = weekRows, unchecked_return_type = "import('../../bindings').DayCell[][]")]
+pub fn week_rows(
+    first_year: i32,
+    week_start: u8,
+    from: u32,
+    count: u32,
+    shown_year: i32,
+    shown_month: u32,
+    today: &str,
+    #[wasm_bindgen(unchecked_param_type = "string | null")] selected: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")] rule: JsValue,
+) -> Result<JsValue, JsError> {
+    let selected = opt_date("selected", selected)?;
+    let rule: Option<Recurrence> = input("rule", rule)?;
+    output(&calendar::week_rows(
+        first_year,
+        week_day(week_start),
+        from,
+        count,
+        (shown_year, shown_month),
+        date(today)?,
+        selected,
+        rule.as_ref(),
+    ))
 }
 
 /// `calendar::MONTHS`.

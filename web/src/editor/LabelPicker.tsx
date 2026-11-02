@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import type { Label } from "../bindings";
 import { labelChoices, labelChosen, labelGroups } from "../core";
 import { addLabel, setLabelColor } from "../ipc/actions";
-import { CheckSmallIcon, TagSmallIcon } from "../shell/icons";
+import { CheckCircleIcon, TagSmallIcon } from "../shell/icons";
 import { LabelColorPicker } from "./LabelColorPicker";
 import { labelColorVar, labelTagColor } from "./labelColors";
 import { cx, type Face, type PopProps } from "./pop";
@@ -82,7 +82,7 @@ function LabelMenu({
             </button>
             {on ? (
               <span className="menu-check">
-                <CheckSmallIcon />
+                <CheckCircleIcon />
               </span>
             ) : null}
           </div>
