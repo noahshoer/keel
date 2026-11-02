@@ -1,13 +1,11 @@
 // The app's icons: Phosphor (MIT) in bold, plain, on every platform. Filled
 // weight only for the deadline and priority flags. Each renders inside a
-// `span.icon`. Logo and DoneMark are Keel's own marks.
+// `span.icon`. Logo and DoneMark are Keel's own marks, and the tag, inbox and
+// calendars are Keel's own rounder drawings of Phosphor's (see `Drawn`).
 import { ArrowBendDownRight } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
-import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { ArrowUp } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { Bell } from "@phosphor-icons/react/dist/csr/Bell";
 import { BellRinging } from "@phosphor-icons/react/dist/csr/BellRinging";
-import { CalendarBlank } from "@phosphor-icons/react/dist/csr/CalendarBlank";
-import { CalendarDots } from "@phosphor-icons/react/dist/csr/CalendarDots";
 import { CaretDown } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRight } from "@phosphor-icons/react/dist/csr/CaretRight";
@@ -15,7 +13,6 @@ import { Check } from "@phosphor-icons/react/dist/csr/Check";
 import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { CircleDashed } from "@phosphor-icons/react/dist/csr/CircleDashed";
 import { Clock } from "@phosphor-icons/react/dist/csr/Clock";
-import { Couch } from "@phosphor-icons/react/dist/csr/Couch";
 import { DotsThree } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { Fire } from "@phosphor-icons/react/dist/csr/Fire";
 import { Flag } from "@phosphor-icons/react/dist/csr/Flag";
@@ -32,32 +29,78 @@ import { Prohibit } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { Repeat } from "@phosphor-icons/react/dist/csr/Repeat";
 import { Rows } from "@phosphor-icons/react/dist/csr/Rows";
 import { Sun } from "@phosphor-icons/react/dist/csr/Sun";
-import { Tag } from "@phosphor-icons/react/dist/csr/Tag";
 import { Target } from "@phosphor-icons/react/dist/csr/Target";
-import { TextAlignLeft } from "@phosphor-icons/react/dist/csr/TextAlignLeft";
 import { Trash } from "@phosphor-icons/react/dist/csr/Trash";
-import { Tray } from "@phosphor-icons/react/dist/csr/Tray";
 import { X } from "@phosphor-icons/react/dist/csr/X";
 import type { Icon } from "@phosphor-icons/react/dist/lib/types";
 import type { ReactNode } from "react";
+
+/** Extra line weight for `heavier` icons, on Phosphor's 256 grid (bold lines are 24). */
+const HEAVIER_STROKE = 6;
 
 function Ph({
   icon: Glyph,
   size,
   weight = "bold",
+  heavier = false,
   children,
 }: {
   icon: Icon;
   size: number;
   weight?: "bold" | "fill";
+  heavier?: boolean;
   children?: ReactNode;
 }) {
+  const stroke = heavier
+    ? { stroke: "currentColor", strokeWidth: HEAVIER_STROKE, strokeLinejoin: "round" as const }
+    : {};
   return (
     <span className="icon">
-      <Glyph size={size} weight={weight} aria-hidden="true">
+      <Glyph size={size} weight={weight} aria-hidden="true" {...stroke}>
         {children}
       </Glyph>
     </span>
+  );
+}
+
+/** Line weight and ends for `Drawn` icons, matching Phosphor's bold. */
+const LINE = {
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 24,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+} as const;
+
+/** An icon Keel draws itself, on Phosphor's 256 grid. */
+function Drawn({ size, children }: { size: number; children: ReactNode }) {
+  return (
+    <span className="icon">
+      <svg width={size} height={size} viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
+        {children}
+      </svg>
+    </span>
+  );
+}
+
+function CalendarFrame() {
+  return (
+    <g {...LINE}>
+      <rect x="40" y="40" width="176" height="176" rx="20" />
+      <path d="M40 88H216M80 24V56M176 24V56" />
+    </g>
+  );
+}
+
+function TagShape() {
+  return (
+    <>
+      <path
+        {...LINE}
+        d="M40 68Q40 40 68 40L124.4 40Q136 40 144.2 48.2L223.2 127.2Q243 147 223.2 166.8L166.8 223.2Q147 243 127.2 223.2L48.2 144.2Q40 136 40 124.4Z"
+      />
+      <circle cx="88" cy="88" r="16" />
+    </>
   );
 }
 
@@ -71,34 +114,51 @@ export function FlagFillIcon({ size = 14 }: { size?: number }) {
 }
 
 export function PlusIcon({ size }: { size: number }) {
-  return <Ph icon={Plus} size={size} />;
+  return <Ph icon={Plus} size={size} heavier />;
 }
 
 /** Calendar showing today's day-of-month. */
 export function TodayIcon({ day }: { day: number }) {
   return (
-    <Ph icon={CalendarBlank} size={20}>
+    <Drawn size={20}>
+      <CalendarFrame />
       <text x="128" y="190" textAnchor="middle" fontSize="96" fontWeight="700" fontFamily="sans-serif">
         {day}
       </text>
-    </Ph>
+    </Drawn>
   );
 }
 
 export function InboxIcon() {
-  return <Ph icon={Tray} size={20} />;
+  return (
+    <Drawn size={20}>
+      <g {...LINE}>
+        <rect x="40" y="40" width="176" height="176" rx="20" />
+        <path d="M40 156H76.7a8 8 0 0 1 5.66 2.34L100.7 176.7a8 8 0 0 0 5.66 2.34h43.3a8 8 0 0 0 5.66-2.34l18.3-18.3A8 8 0 0 1 179.3 156H216" />
+      </g>
+    </Drawn>
+  );
 }
 
 export function UpcomingIcon() {
-  return <Ph icon={CalendarDots} size={20} />;
+  return (
+    <Drawn size={20}>
+      <CalendarFrame />
+      <circle cx="128" cy="128" r="16" />
+      <circle cx="176" cy="128" r="16" />
+      <circle cx="80" cy="176" r="16" />
+      <circle cx="128" cy="176" r="16" />
+      <circle cx="176" cy="176" r="16" />
+    </Drawn>
+  );
 }
 
 export function SearchIcon() {
-  return <Ph icon={MagnifyingGlass} size={20} />;
+  return <Ph icon={MagnifyingGlass} size={20} heavier />;
 }
 
 export function MenuIcon() {
-  return <Ph icon={List} size={20} />;
+  return <Ph icon={List} size={20} heavier />;
 }
 
 export function MonitorIcon() {
@@ -110,11 +170,19 @@ export function GearIcon() {
 }
 
 export function TagIcon() {
-  return <Ph icon={Tag} size={18} />;
+  return (
+    <Drawn size={18}>
+      <TagShape />
+    </Drawn>
+  );
 }
 
 export function TagSmallIcon() {
-  return <Ph icon={Tag} size={12} />;
+  return (
+    <Drawn size={12}>
+      <TagShape />
+    </Drawn>
+  );
 }
 
 export function FunnelIcon() {
@@ -122,16 +190,15 @@ export function FunnelIcon() {
 }
 
 export function CalendarSmallIcon() {
-  return <Ph icon={CalendarBlank} size={12} />;
+  return (
+    <Drawn size={12}>
+      <CalendarFrame />
+    </Drawn>
+  );
 }
 
 export function MoreIcon() {
-  return <Ph icon={DotsThree} size={18} />;
-}
-
-/** A paragraph: the description's row. */
-export function TextLinesIcon() {
-  return <Ph icon={TextAlignLeft} size={16} />;
+  return <Ph icon={DotsThree} size={18} heavier />;
 }
 
 export function RepeatSmallIcon() {
@@ -144,10 +211,6 @@ export function FlagFilledIcon() {
 
 export function ClockSmallIcon() {
   return <Ph icon={Clock} size={12} />;
-}
-
-export function FlagSmallIcon() {
-  return <Ph icon={Flag} size={12} />;
 }
 
 export function HashSmallIcon() {
@@ -165,14 +228,6 @@ export function ChevronLeftIcon() {
 
 export function ChevronDownSmallIcon() {
   return <Ph icon={CaretDown} size={12} />;
-}
-
-export function SofaIcon() {
-  return <Ph icon={Couch} size={16} />;
-}
-
-export function ArrowRightIcon() {
-  return <Ph icon={ArrowRight} size={16} />;
 }
 
 export function ArrowUpIcon() {
@@ -196,7 +251,7 @@ export function CheckSmallIcon() {
 }
 
 export function CheckCircleIcon() {
-  return <Ph icon={CheckCircle} size={16} />;
+  return <Ph icon={CheckCircle} size={16} heavier />;
 }
 
 export function TargetSmallIcon() {
@@ -224,11 +279,11 @@ export function PencilIcon() {
 }
 
 export function SunIcon() {
-  return <Ph icon={Sun} size={18} />;
+  return <Ph icon={Sun} size={18} heavier />;
 }
 
 export function MoonIcon() {
-  return <Ph icon={Moon} size={18} />;
+  return <Ph icon={Moon} size={18} heavier />;
 }
 
 export function XIcon() {
