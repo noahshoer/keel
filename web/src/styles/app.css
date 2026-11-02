@@ -443,7 +443,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .menu-item.row-p2, .menu-item.row-p2 .menu-check { color: var(--p2-text); }
 .menu-item.row-p3, .menu-item.row-p3 .menu-check { color: var(--p3-text); }
 .label-row[style*="color"] .label-opt, .label-row[style*="color"] .label-color-btn, .label-row[style*="color"] .menu-check { color: inherit; }
-.on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; margin: 0 -23px 0 -12px; padding: 0 31px 0 12px; overflow-x: auto; scrollbar-width: none; }
+.on-keyboard .chips { flex: 1; min-width: 0; flex-wrap: nowrap; gap: 8px; margin: 0 -23px 0 -12px; padding: 0 31px 0 12px; overflow-x: auto; scroll-behavior: smooth; scrollbar-width: none; }
 .on-keyboard .chips::-webkit-scrollbar { display: none; }
 .on-keyboard .chip-btn { height: 44px; max-width: none; padding: 0 14px; border: none; background: var(--field-fill); color: var(--text); font-size: 15px; white-space: nowrap; }
 .on-keyboard .chip-btn .icon, .on-keyboard .chip-caret { display: none; }

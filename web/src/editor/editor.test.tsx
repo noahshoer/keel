@@ -195,6 +195,58 @@ describe("on touch", () => {
     expect(container.querySelector("form")).toBeNull();
   });
 
+  describe("when a phrase fills a pill out of view", () => {
+    const rect = (left: number, right: number) => ({ left, right }) as DOMRect;
+    const row = () => document.querySelector<HTMLElement>(".chips") as HTMLElement;
+    /** Lays the row out with the Labels pill past the save button. */
+    const layOut = () => {
+      row().getBoundingClientRect = () => rect(12, 380);
+      (document.querySelector(".btn-save") as HTMLElement).getBoundingClientRect = () => rect(340, 384);
+      screen.getByTitle("Labels").getBoundingClientRect = () => rect(300, 420);
+      screen.getByTitle("Priority").getBoundingClientRect = () => rect(100, 200);
+    };
+
+    it("scrolls the row to it, clear of the save button", () => {
+      const title = adding();
+      layOut();
+      type(title, "Call mom @phone");
+      expect(row().scrollLeft).toBe(88);
+    });
+
+    it("leaves the row alone for a pill already in view", () => {
+      const title = adding();
+      layOut();
+      type(title, "Call mom p1");
+      expect(row().scrollLeft).toBe(0);
+    });
+
+    it("leaves the row alone when the phrase goes", () => {
+      const title = adding();
+      layOut();
+      type(title, "Call mom @phone");
+      row().scrollLeft = 0;
+      type(title, "Call mom");
+      expect(row().scrollLeft).toBe(0);
+    });
+
+    it("leaves the row alone for plain typing", () => {
+      const title = adding();
+      layOut();
+      type(title, "Call mom @phone");
+      row().scrollLeft = 0;
+      type(title, "Call mom @phone soon");
+      expect(row().scrollLeft).toBe(0);
+    });
+
+    it("leaves the row alone for a pick on the pills", () => {
+      adding();
+      layOut();
+      fireEvent.click(screen.getByTitle("Labels"));
+      fireEvent.click(screen.getByText("errand"));
+      expect(row().scrollLeft).toBe(0);
+    });
+  });
+
   it("scrolls its pills in the approved order, with a fixed save button and no Cancel", () => {
     adding();
     const pills = [...document.querySelectorAll<HTMLElement>(".chips .chip-btn")].map((b) => b.title);

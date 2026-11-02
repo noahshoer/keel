@@ -14,7 +14,16 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { holdPage } from "../app/pageHold";
-import type { EditorPick, EditorValues, Label, Project, Recurrence, Section } from "../bindings";
+import type {
+  EditorPick,
+  EditorValues,
+  EditorView,
+  Label,
+  Project,
+  Recurrence,
+  Section,
+  SpanKind,
+} from "../bindings";
 import { localToday } from "../clock";
 import {
   applyPick,
@@ -34,8 +43,8 @@ import { useKeyboard } from "./keyboardAnchor";
 import { LabelPicker } from "./LabelPicker";
 import { isTouch } from "./locale";
 import { Menu, type MenuItem } from "./Menu";
-import { usePillFade } from "./pillFade";
-import { cx, type Pop } from "./pop";
+import { type TypedPills, usePillFade, useRevealFilled } from "./pillFade";
+import { cx, DEADLINE_TITLE, type Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
 
 /** The space between the task card and the keyboard. */
@@ -45,6 +54,28 @@ const CARD_GAP = 8;
 function keepFocus(e: MouseEvent<HTMLElement>): void {
   const target = e.target as HTMLElement;
   if (!target.closest("input, textarea, select")) e.preventDefault();
+}
+
+/** What each pill with a phrase in the title says, by the pill's `title`. */
+function typedPills(view: EditorView): TypedPills {
+  const pills: Record<SpanKind, [string, string]> = {
+    Date: ["Date", view.date_chip[0]],
+    Time: ["Date", view.date_chip[0]],
+    Deadline: [DEADLINE_TITLE, view.deadline_text],
+    Priority: ["Priority", view.priority_text],
+    Project: ["Project / section", view.location_text],
+    Section: ["Project / section", view.location_text],
+    Label: ["Labels", view.labels_text],
+    Repeat: ["Repeat", view.repeat_chip_text],
+  };
+  const typed: TypedPills = {};
+  for (const { kind } of view.segments) {
+    if (kind !== null) {
+      const [title, text] = pills[kind];
+      typed[title] = text;
+    }
+  }
+  return typed;
 }
 
 export function TaskEditor({
@@ -160,6 +191,8 @@ export function TaskEditor({
     }
     onSubmit(v);
   };
+
+  useRevealFilled(pillRow.ref, typedPills(view));
 
   const repeatItems: MenuItem[] = view.repeat_options.map(([value, label]) => ({ value, label }));
 
