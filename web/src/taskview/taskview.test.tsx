@@ -228,6 +228,32 @@ it("a tracked streak's row shows current and best, and opens the streak panel", 
   await setStreak("t-trip", false, null);
 });
 
+it("the streak row opens the streak in a popover, closed by a tap outside", async () => {
+  await setStreak("t-trip", true, null);
+  await show(["t-trip"]);
+  expect(top().querySelector(".streak-panel")).toBeNull();
+  fireEvent.click(top().querySelector(".tv-streak") as HTMLElement);
+  const panel = top().querySelector(".tv-row .popover .streak-panel");
+  expect(panel?.textContent).toContain("Stop tracking");
+  fireEvent.click(top().querySelector(".pop-backdrop") as HTMLElement);
+  expect(top().querySelector(".streak-panel")).toBeNull();
+  await setStreak("t-trip", false, null);
+});
+
+it("a goal typed in the popover is saved when it closes, without the field being left", async () => {
+  await setStreak("t-trip", true, null);
+  await show(["t-trip"]);
+  fireEvent.click(top().querySelector(".tv-streak") as HTMLElement);
+  const goal = top().querySelector(".streak-panel input") as HTMLInputElement;
+  fireEvent.change(goal, { target: { value: "30" } });
+  fireEvent.click(top().querySelector(".pop-backdrop") as HTMLElement);
+  await waitFor(async () => {
+    const saved = (await invoke("all_tasks", {})).find((t) => t.id === "t-trip");
+    expect(saved?.streak_goal).toBe(30);
+  });
+  await setStreak("t-trip", false, null);
+});
+
 it("no streak row without a tracked streak", async () => {
   await setStreak("t-trip", false, null);
   await show(["t-trip"]);

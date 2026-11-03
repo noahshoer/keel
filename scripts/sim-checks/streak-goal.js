@@ -1,42 +1,43 @@
-// The streak goal stays in view above the keyboard. A headless simulator has no
-// keyboard, so this reports one to the page as Swift does (`window.keelKeyboard`).
-// Expect the goal's bottom to end above the sheet's scroll bottom, and that
-// bottom at the keyboard's top.
-const sheetOf = () => document.querySelector('.tv-sheet .task-view:not(.tv-under) .tv-scroll');
+// The streak opens in a popover from the streak row and from the •••, on screen
+// and under what opened it. A goal typed there saves when it closes. A headless
+// simulator has no keyboard: sitting above one is for the phone.
 const tap = (list, re) => [...document.querySelectorAll(list)].find((b) => re.test(b.innerText))?.click();
+const box = (el) => {
+  const r = el.getBoundingClientRect();
+  return `${Math.round(r.left)},${Math.round(r.top)} to ${Math.round(r.right)},${Math.round(r.bottom)}`;
+};
+const pop = () => document.querySelector('.streak-pop');
 document.querySelector('.task-body').click();
 await sleep(1500);
 if (!document.querySelector('.tv-field-btn.tv-streak')) {
-  tap('.tv-pill', /Repeat/);
-  await sleep(500);
-  tap('.popover button', /^Every day$/);
+  if (!/Every|every/.test(document.querySelector('.tv-sheet').innerText)) {
+    tap('.tv-pill', /Repeat/);
+    await sleep(500);
+    tap('.popover button', /^Every day$/);
+    await sleep(800);
+  }
+  document.querySelector('.tv-more').click();
+  await sleep(400);
+  tap('.menu-item', /Streak/);
+  await sleep(600);
+  check(`from the more button ${box(document.querySelector('.tv-more'))}: popover ${box(pop())}, says ${pop().innerText.replace(/\n/g, ' / ')}`);
+  tap('.streak-panel button', /Track streak/);
   await sleep(800);
+  document.querySelector('.pop-backdrop').click();
+  await sleep(500);
 }
-const more = document.querySelector('.tv-head-actions button:last-child');
-more.click();
-await sleep(400);
-tap('.menu-item', /Streak/);
+document.querySelector('.tv-streak').click();
 await sleep(600);
-tap('.streak-panel button', /Track streak/);
-await sleep(800);
-const input = document.querySelector('.streak-panel input');
-const report = (when) => {
-  const s = sheetOf().getBoundingClientRect();
-  const g = input.getBoundingClientRect();
-  check(`${when}: goal ${Math.round(g.top)}-${Math.round(g.bottom)}, scroll ends ${Math.round(s.bottom)}, screen ${document.documentElement.clientHeight}, scrollTop ${Math.round(sheetOf().scrollTop)}`);
-};
-// A task with many fields: the goal starts low enough for the rising sheet to cover it.
-sheetOf().firstElementChild.style.marginTop = '400px';
-sheetOf().scrollTop = 0;
-await sleep(300);
-sheetOf().scrollTop = input.getBoundingClientRect().bottom - sheetOf().getBoundingClientRect().bottom + 20;
-await sleep(300);
-report('before');
+check(`from the row ${box(document.querySelector('.tv-streak'))}: popover ${box(pop())}, screen ${innerWidth}x${innerHeight}`);
+const input = pop().querySelector('input');
 input.focus();
-const kb = 336;
-window.keelKeyboard({ kb, secs: 0.25, ease: 'ease' });
-await sleep(100);
-report('rising');
-await sleep(1400);
-report(`keyboard ${kb}`);
-check(`active: ${document.activeElement === input}, top of keyboard ${document.documentElement.clientHeight - kb}`);
+// React tracks `.value`; the prototype's setter is what typing looks like to it.
+Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '30');
+input.dispatchEvent(new Event('input', { bubbles: true }));
+await sleep(500);
+document.querySelector('.pop-backdrop').click();
+await sleep(1200);
+check(`closed: ${pop() === null}`);
+document.querySelector('.tv-streak').click();
+await sleep(800);
+check(`goal after reopening: ${pop().querySelector('input').value}`);

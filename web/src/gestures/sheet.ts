@@ -18,12 +18,7 @@
 //   (crates/plugin-ios Keyboard.swift) calls `window.keelKeyboard` as it
 //   starts: the sheet's bottom rises with it, on its curve and at its pace,
 //   and a medium sheet goes to large alongside and stays there.
-// - The streak goal: the one field low in the sheet's scroll. While the page
-//   holds (`holdPage`), WebKit has nothing to scroll to reveal it, and the
-//   rising sheet would leave it under the fold, so the sheet scrolls it into
-//   view.
 // Reduced motion snaps.
-import { revealedScrollTop } from "../shell/drawerKeyboard";
 import { currentPlatform } from "../shell/platform";
 import {
   atEdge,
@@ -59,12 +54,6 @@ declare global {
 
 const BLOCK = ".popover, .menu, .editor, .modal-scrim, .pop-backdrop";
 const FIELD = "input, textarea, select, [contenteditable]";
-/** What stays in view around a focused field in the sheet's scroll. */
-const REVEAL = ".streak-panel";
-/** Keeps it clear of the scroll area's edges. */
-const REVEAL_MARGIN = 12;
-/** Past the keyboard's pace, when the sheet's rising bottom has landed and can be measured. */
-const SETTLED_MS = 100;
 
 type Heights = { M: number; largeTop: number; mediumH: number };
 type Placed = Heights & { sheet: HTMLElement };
@@ -388,21 +377,6 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
       root.style.setProperty("--kb", `${keyboardInset(root.clientHeight, v.offsetTop, v.height, held)}px`);
     }
   };
-  const revealField = () => {
-    const form = doc.activeElement?.closest(REVEAL);
-    const scroller = form?.closest(".tv-scroll");
-    if (!form || !scroller) return;
-    const box = scroller.getBoundingClientRect();
-    const top = revealedScrollTop(scroller.scrollTop, form.getBoundingClientRect(), {
-      top: box.top + REVEAL_MARGIN,
-      bottom: box.bottom - REVEAL_MARGIN,
-    });
-    scroller.scrollTo({ top, behavior: reduce() ? "auto" : "smooth" });
-  };
-  const onViewport = () => {
-    viewport();
-    revealField();
-  };
   // The sheet's bottom follows the keyboard both ways; coming up, a medium
   // sheet also slides up to large from wherever it is, and stays large once
   // the keyboard has gone.
@@ -411,7 +385,6 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
     const sheet = sheetEl();
     const s = reduce() ? 0 : secs;
     kbHold = kb > 0 ? { kb, until: win.performance.now() + s * 1000 + 500 } : null;
-    if (kb > 0) later(revealField, s * 1000 + SETTLED_MS);
     if (!sheet || closing) {
       viewport();
       return;
@@ -464,9 +437,8 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
   doc.addEventListener("touchcancel", onEdgeCancel, passive);
   doc.addEventListener("touchend", onEnd, passive);
   doc.addEventListener("touchcancel", onCancel, passive);
-  doc.addEventListener("focusin", revealField);
   win.keelKeyboard = keyboard;
-  win.visualViewport?.addEventListener("resize", onViewport);
+  win.visualViewport?.addEventListener("resize", viewport);
   win.visualViewport?.addEventListener("scroll", viewport);
   win.addEventListener("resize", viewport);
   active = slide;
@@ -482,9 +454,8 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
     doc.removeEventListener("touchcancel", onEdgeCancel, true);
     doc.removeEventListener("touchend", onEnd, true);
     doc.removeEventListener("touchcancel", onCancel, true);
-    doc.removeEventListener("focusin", revealField);
     if (win.keelKeyboard === keyboard) delete win.keelKeyboard;
-    win.visualViewport?.removeEventListener("resize", onViewport);
+    win.visualViewport?.removeEventListener("resize", viewport);
     win.visualViewport?.removeEventListener("scroll", viewport);
     win.removeEventListener("resize", viewport);
     for (const k of VARS) doc.documentElement.style.removeProperty(k);

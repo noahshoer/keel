@@ -207,51 +207,6 @@ describe("keelKeyboard", () => {
     expect(el("sheet").dataset["detent"]).toBe("medium");
   });
 
-  describe("the streak goal above the keyboard", () => {
-    // The sheet's scroll area ends at y 400; the panel sits below that.
-    const goal = () => {
-      el("scroll").insertAdjacentHTML(
-        "beforeend",
-        `<div class="streak-panel" id="panel"><input id="goal" /></div><input id="other" />`,
-      );
-      const rect = (top: number, bottom: number) => ({ top, bottom }) as DOMRect;
-      el("scroll").getBoundingClientRect = () => rect(100, 400);
-      el("panel").getBoundingClientRect = () => rect(500, 600);
-      const scrollTo = vi.fn();
-      el("scroll").scrollTo = scrollTo;
-      el("scroll").scrollTop = 40;
-      return scrollTo;
-    };
-    // 40 + (600 - (400 - 12)): the panel's bottom ends 12 px above the scroll area's.
-    const revealed = { top: 252, behavior: "smooth" };
-
-    it("scrolls it into the room once the keyboard has come up", () => {
-      const scrollTo = goal();
-      el("goal").focus();
-      scrollTo.mockClear();
-      window.keelKeyboard?.({ kb: 328, secs: 0.25, ease: "ease" });
-      // The sheet's bottom is still landing as the keyboard's pace runs out.
-      vi.advanceTimersByTime(250);
-      expect(scrollTo).not.toHaveBeenCalled();
-      vi.advanceTimersByTime(100);
-      expect(scrollTo).toHaveBeenCalledWith(revealed);
-    });
-
-    it("scrolls it into the room when it's focused with the keyboard already up", () => {
-      const scrollTo = goal();
-      el("goal").focus();
-      expect(scrollTo).toHaveBeenCalledWith(revealed);
-    });
-
-    it("leaves the scroll alone for any other field", () => {
-      const scrollTo = goal();
-      el("other").focus();
-      window.keelKeyboard?.({ kb: 328, secs: 0, ease: "ease" });
-      vi.advanceTimersByTime(400);
-      expect(scrollTo).not.toHaveBeenCalled();
-    });
-  });
-
   it("is installed and removed with the listeners", () => {
     expect(typeof window.keelKeyboard).toBe("function");
     uninstall();

@@ -24,13 +24,13 @@ import { saveEdit } from "../editor/save";
 import { slideClose } from "../gestures/sheet";
 import { completeTask, deleteTask, uncompleteTask } from "../ipc/actions";
 import { CHECK_CLASS } from "../lists/chips";
-import { StreakPanel } from "../lists/StreakPanel";
 import { CheckIcon, ChevronLeftIcon, FireIcon, MoreIcon, XIcon } from "../shell/icons";
 import { commitDrafts, takesStoredText } from "./drafts";
 import { FieldControl } from "./FieldControl";
 import { GrowingText } from "./GrowingText";
 import { MoreMenu } from "./MoreMenu";
 import { useTaskNav } from "./nav-context";
+import { StreakPopover } from "./StreakPopover";
 import { SubtaskCard } from "./SubtaskCard";
 import { fieldsShown, sameValues, settle } from "./view-rules";
 
@@ -113,7 +113,6 @@ export function TaskView({
 
   const [descOpen, setDescOpen] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [streak, setStreak] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [open, setOpen] = useState<Pop>(null);
 
@@ -254,7 +253,7 @@ export function TaskView({
                 recurring={recurring}
                 onStreak={() => {
                   setMoreOpen(false);
-                  setStreak((s) => !s);
+                  setOpen("streak-more");
                 }}
                 onDelete={() => {
                   setMoreOpen(false);
@@ -263,6 +262,7 @@ export function TaskView({
                 }}
               />
             ) : null}
+            {open === "streak-more" ? <StreakPopover task={task} onChanged={onChanged} /> : null}
           </div>
         </div>
       ) : (
@@ -307,15 +307,18 @@ export function TaskView({
             <div className="tv-card tv-fields">
               {task.streak_enabled ? (
                 <div className="tv-row">
-                  <button
-                    type="button"
-                    className="tv-field-btn tv-streak"
-                    onClick={() => setStreak((s) => !s)}
-                  >
-                    <FireIcon />
-                    {streakText(task)}
-                    <span className="tv-streak-best">{`Best ${task.streak_best}`}</span>
-                  </button>
+                  <div className="chip-wrap">
+                    <button
+                      type="button"
+                      className="tv-field-btn tv-streak"
+                      onClick={() => setOpen(open === "streak-row" ? null : "streak-row")}
+                    >
+                      <FireIcon />
+                      {streakText(task)}
+                      <span className="tv-streak-best">{`Best ${task.streak_best}`}</span>
+                    </button>
+                    {open === "streak-row" ? <StreakPopover task={task} onChanged={onChanged} /> : null}
+                  </div>
                 </div>
               ) : null}
               {rows.flatMap((f) => {
@@ -344,11 +347,6 @@ export function TaskView({
                   </span>
                 ))}
               </div>
-            </div>
-          ) : null}
-          {streak && (recurring || task.streak_enabled) ? (
-            <div className="tv-card">
-              <StreakPanel task={task} onChanged={onChanged} />
             </div>
           ) : null}
           <SubtaskCard

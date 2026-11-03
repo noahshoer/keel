@@ -958,7 +958,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .tv-sub-body { font-size: 14px; }
   .tv-add-sub { min-height: 36px; padding: 6px 12px; gap: 10px; font-size: 14px; }
 }
-.tv-card .streak-panel { margin: 0; background: none; border-radius: 0; }
+.streak-pop { width: 300px; }
+.streak-pop .streak-panel { margin: 0; padding: 6px 4px 4px; background: none; border-radius: 0; animation: none; }
 /* iPhone: iOS sizes (17pt text, 44pt rows, 16pt margins and gaps). The
    header holds the glass X, ‹ (in a sub-task's view) and •••, with the
    parent's or project's name small in the middle; the sub-tasks' heading
@@ -1249,7 +1250,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
    creation pickers"). Last in the file so these win over the rules above. */
 @media (pointer: coarse) {
   .popover { width: calc(100vw - 16px); max-width: none; min-width: 0; padding: 12px; border-radius: 24px; animation: fade-in .16s var(--ease); }
-  .tv-head-actions .popover { width: auto; min-width: 210px; }
+  .tv-head-actions .popover:not(.streak-pop) { width: auto; min-width: 210px; }
   .popover.row-menu { width: 240px; }
   .row-menu .confirm-text { font-size: 15px; }
   .row-menu .menu-item { min-height: 44px; font-size: 16px; }
