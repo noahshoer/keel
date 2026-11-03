@@ -8,9 +8,10 @@ export type Pop =
   | "repeat"
   | "location"
   | "labels"
-  // The task view's streak, from its row or from the •••.
+  // The task view's streak: from its row, from the •••, or on the keyboard.
   | "streak-row"
   | "streak-more"
+  | "streak-keyboard"
   // Settings' reminder menus.
   | "offset"
   | "allday"

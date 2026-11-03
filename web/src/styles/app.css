@@ -897,7 +897,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-row > .chip-wrap, .tv-row > .chip-wrap > .tv-field-btn { flex: 1; width: 100%; }
 .tv-field-btn.tv-streak { color: var(--accent-text); }
 .tv-field-btn.tv-streak .icon { color: var(--accent); }
-.tv-streak-best { margin-left: auto; font-size: 15px; color: var(--secondary); }
+.tv-streak-best { flex: none; display: inline-flex; gap: 12px; margin-left: auto; font-size: 15px; color: var(--secondary); }
+.tv-streak-stat { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.tv-field-btn.tv-streak .tv-streak-stat .icon { color: inherit; }
+.tv-field-btn .tv-streak-stat svg { width: 16px; height: 16px; }
 .tv-field-btn svg { width: 20px; height: 20px; }
 .tv-field-btn .pill-tag, .tv-field-btn .pill-tag .icon { color: inherit; }
 .tv-field-btn.deadline-chip.set, .tv-field-btn.deadline-chip.urgent { color: var(--due-overdue); }
@@ -951,7 +954,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .tv-round svg { width: 20px; height: 20px; }
   .tv-head { padding: 8px 12px; }
   .tv-field-btn svg { width: 18px; height: 18px; }
-  .tv-streak-best { font-size: 13px; }
+  .tv-streak-best { font-size: 13px; gap: 10px; }
+  .tv-field-btn .tv-streak-stat svg { width: 14px; height: 14px; }
   .tv-pill { font-size: 13px; min-height: 36px; padding: 0 12px; }
   .tv-sub-head { padding: 0 12px 4px; font-size: 13px; line-height: 18px; }
   .tv-sub { min-height: 36px; padding: 6px 12px; gap: 10px; }
@@ -959,6 +963,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .tv-add-sub { min-height: 36px; padding: 6px 12px; gap: 10px; font-size: 14px; }
 }
 .streak-pop { width: 300px; }
+/* On the keyboard, over the sheet. With the keyboard down, above the home indicator. */
+.popover.keyboard-card { position: fixed; top: auto; left: 8px; right: 8px; width: auto; z-index: 45;
+  bottom: calc(max(var(--kb, 0px), env(safe-area-inset-bottom)) + 8px); }
 .streak-pop .streak-panel { margin: 0; padding: 6px 4px 4px; background: none; border-radius: 0; animation: none; }
 /* iPhone: iOS sizes (17pt text, 44pt rows, 16pt margins and gaps). The
    header holds the glass X, ‹ (in a sub-task's view) and •••, with the

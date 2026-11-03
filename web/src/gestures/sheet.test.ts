@@ -201,6 +201,14 @@ describe("keelKeyboard", () => {
     expect(el("sheet").style.transform).toBe("");
   });
 
+  it("a card on the keyboard moves at the keyboard's pace", () => {
+    document.body.insertAdjacentHTML("beforeend", `<div class="keyboard-card" id="card"></div>`);
+    window.keelKeyboard?.({ kb: 328, secs: 0.25, ease: "ease" });
+    expect(el("card").style.transition).toBe("bottom 0.25s ease");
+    window.keelKeyboard?.({ kb: 0, secs: 0, ease: "ease" });
+    expect(el("card").style.transition).toBe("none");
+  });
+
   it("does nothing elsewhere", () => {
     vi.mocked(currentPlatform).mockReturnValue("other");
     window.keelKeyboard?.({ kb: 328, secs: 0.25, ease: "ease" });

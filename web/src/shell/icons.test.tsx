@@ -53,6 +53,7 @@ describe("icons", () => {
     "TodayIcon",
     "UpcomingIcon",
     "CalendarSmallIcon",
+    "TrophySmallIcon",
   ]);
   const drawnExports = iconExports.filter(([name]) => DRAWN.has(name));
 
@@ -64,7 +65,8 @@ describe("icons", () => {
     const { container } = render(createElement(icon as FunctionComponent<{ day: number }>, { day: 7 }));
     const line = container.querySelector('svg [stroke-width="24"]');
     expect(line?.getAttribute("stroke-linejoin")).toBe("round");
-    if (!name.startsWith("Tag")) expect(container.querySelector("svg rect")?.getAttribute("rx")).toBe("20");
+    if (!name.startsWith("Tag") && !name.startsWith("Trophy"))
+      expect(container.querySelector("svg rect")?.getAttribute("rx")).toBe("20");
   });
 
   it("shows the day inside Today's calendar", () => {

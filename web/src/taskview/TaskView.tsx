@@ -18,19 +18,29 @@ import {
   toggleLabel,
   valuesFromTask,
 } from "../core";
+import { isTouch } from "../editor/locale";
 import { usePillFade } from "../editor/pillFade";
 import type { Pop } from "../editor/pop";
 import { saveEdit } from "../editor/save";
 import { slideClose } from "../gestures/sheet";
 import { completeTask, deleteTask, uncompleteTask } from "../ipc/actions";
 import { CHECK_CLASS } from "../lists/chips";
-import { CheckIcon, ChevronLeftIcon, FireIcon, MoreIcon, XIcon } from "../shell/icons";
+import { openAndFocus } from "../shell/focus";
+import {
+  CheckIcon,
+  ChevronLeftIcon,
+  FireIcon,
+  MoreIcon,
+  TargetSmallIcon,
+  TrophySmallIcon,
+  XIcon,
+} from "../shell/icons";
 import { commitDrafts, takesStoredText } from "./drafts";
 import { FieldControl } from "./FieldControl";
 import { GrowingText } from "./GrowingText";
 import { MoreMenu } from "./MoreMenu";
 import { useTaskNav } from "./nav-context";
-import { StreakPopover } from "./StreakPopover";
+import { StreakOnKeyboard, StreakPopover } from "./StreakPopover";
 import { SubtaskCard } from "./SubtaskCard";
 import { fieldsShown, sameValues, settle } from "./view-rules";
 
@@ -169,6 +179,17 @@ export function TaskView({
   const toggle = (name: string) =>
     saveValues(toggleLabel(baseRef.current, name, false, projects, sections, localToday()));
 
+  // On touch a tracked streak opens on the keyboard, which only a focus inside
+  // the tap raises. Otherwise it hangs from what opened it.
+  const goalField = useRef<HTMLInputElement>(null);
+  const openStreak = (from: "streak-row" | "streak-more") => {
+    const onKeyboard = isTouch() && task.streak_enabled;
+    openAndFocus(() => {
+      setMoreOpen(false);
+      setOpen(onKeyboard ? "streak-keyboard" : open === from ? null : from);
+    }, goalField);
+  };
+
   const completeHere = () => {
     if (!nav.holdCircles()) return;
     const pair = commit();
@@ -218,6 +239,9 @@ export function TaskView({
           }}
         />
       ) : null}
+      {open === "streak-keyboard" ? (
+        <StreakOnKeyboard task={task} onChanged={onChanged} goal={goalField} />
+      ) : null}
       {active ? (
         <div className="tv-head">
           <button
@@ -251,10 +275,7 @@ export function TaskView({
             {moreOpen ? (
               <MoreMenu
                 recurring={recurring}
-                onStreak={() => {
-                  setMoreOpen(false);
-                  setOpen("streak-more");
-                }}
+                onStreak={() => openStreak("streak-more")}
                 onDelete={() => {
                   setMoreOpen(false);
                   // The reload prunes the stack: this view and any above it close.
@@ -311,11 +332,22 @@ export function TaskView({
                     <button
                       type="button"
                       className="tv-field-btn tv-streak"
-                      onClick={() => setOpen(open === "streak-row" ? null : "streak-row")}
+                      onClick={() => openStreak("streak-row")}
                     >
                       <FireIcon />
                       {streakText(task)}
-                      <span className="tv-streak-best">{`Best ${task.streak_best}`}</span>
+                      <span className="tv-streak-best">
+                        <span className="tv-streak-stat" title="Best">
+                          <TrophySmallIcon />
+                          {task.streak_best}
+                        </span>
+                        {task.streak_goal === null ? null : (
+                          <span className="tv-streak-stat" title="Goal">
+                            <TargetSmallIcon />
+                            {task.streak_goal}
+                          </span>
+                        )}
+                      </span>
                     </button>
                     {open === "streak-row" ? <StreakPopover task={task} onChanged={onChanged} /> : null}
                   </div>

@@ -1,12 +1,21 @@
 // A repeating task's streak: current and best, a goal, and tracking on or
 // off (crates/ui/src/task_row.rs `StreakPanel`).
 
-import { useEffect, useRef } from "react";
+import { type RefObject, useEffect, useRef } from "react";
 import type { Task } from "../bindings";
 import { setStreak } from "../ipc/actions";
 import { FireIcon } from "../shell/icons";
 
-export function StreakPanel({ task, onChanged }: { task: Task; onChanged: () => void }) {
+export function StreakPanel({
+  task,
+  onChanged,
+  goalField,
+}: {
+  task: Task;
+  onChanged: () => void;
+  /** The goal's input, for whoever opens the panel to focus. */
+  goalField?: RefObject<HTMLInputElement | null>;
+}) {
   const on = task.streak_enabled;
   const goal = task.streak_goal;
   const save = (enabled: boolean, g: number | null) => {
@@ -48,6 +57,7 @@ export function StreakPanel({ task, onChanged }: { task: Task; onChanged: () => 
           <label className="stat">
             Goal{" "}
             <input
+              ref={goalField}
               type="text"
               inputMode="numeric"
               // With this pattern iOS opens the 0-9 pad, not the symbols keyboard.

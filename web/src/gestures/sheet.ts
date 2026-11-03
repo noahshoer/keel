@@ -385,11 +385,13 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
     const sheet = sheetEl();
     const s = reduce() ? 0 : secs;
     kbHold = kb > 0 ? { kb, until: win.performance.now() + s * 1000 + 500 } : null;
+    const bottom = s > 0 ? `bottom ${s}s ${ease}` : "none";
+    const card = doc.querySelector<HTMLElement>(".keyboard-card");
+    if (card) card.style.transition = bottom;
     if (!sheet || closing) {
       viewport();
       return;
     }
-    const bottom = s > 0 ? `bottom ${s}s ${ease}` : "none";
     if (!keyboardExpands(detentOf(sheet), win.innerWidth, kb)) {
       // Large already, or the keyboard going: only the bottom moves (a
       // settle's own transform, if any, carries on).
