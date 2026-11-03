@@ -3,7 +3,7 @@
 // leaves it on with no goal.
 import { type RefObject, useRef } from "react";
 import { openAndFocus } from "../shell/focus";
-import { ChevronDownSmallIcon, FireIcon, TargetSmallIcon } from "../shell/icons";
+import { ChevronDownSmallIcon, FireIcon, TargetSmallIcon, TrashSmallIcon } from "../shell/icons";
 import { cx, type PopProps } from "./pop";
 import { usePlacedPopover } from "./popover";
 
@@ -52,8 +52,14 @@ function GoalPopover({
           }}
         />
       </label>
-      <button type="button" className="menu-item danger" onClick={onRemove}>
-        <span className="menu-label">Remove streak</span>
+      <button
+        type="button"
+        className="icon-btn streak-goal-remove"
+        title="Remove streak"
+        aria-label="Remove streak"
+        onClick={onRemove}
+      >
+        <TrashSmallIcon />
       </button>
     </div>
   );

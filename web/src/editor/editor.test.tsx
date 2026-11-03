@@ -211,7 +211,7 @@ describe("the Streak pill", () => {
     const title = adding();
     type(title, "Run every day");
     fireEvent.click(pill() as HTMLButtonElement);
-    fireEvent.click(screen.getByText("Remove streak"));
+    fireEvent.click(screen.getByTitle("Remove streak"));
     expect(goal()).toBeNull();
     expect(pill()?.textContent).toBe("+ Streak");
     fireEvent.click(pill() as HTMLButtonElement);
