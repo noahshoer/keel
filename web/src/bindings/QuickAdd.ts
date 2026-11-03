@@ -17,6 +17,14 @@ content: string, date: string | null, time: string | null, recurrence: Recurrenc
  */
 deadline: string | null, 
 /**
+ * From "streak" beside the repeat phrase: track a streak.
+ */
+streak: boolean, 
+/**
+ * From "streak 30": its goal.
+ */
+streak_goal: number | null, 
+/**
  * The recognized phrases, as byte ranges into the input (sorted), for
  * highlighting. Empty when nothing was applied.
  */

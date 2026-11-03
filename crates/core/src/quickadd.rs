@@ -3,6 +3,7 @@
 //!
 //! Matching is on whole whitespace-separated words (trailing `,.;!?` ignored),
 //! so "today's" or "Mondays" stay text. The first date, time and repeat win.
+//! "streak" counts only beside the repeat phrase, and is otherwise just a word.
 
 use chrono::{Datelike, Duration, Months, NaiveDate, NaiveTime};
 
@@ -25,6 +26,11 @@ pub struct QuickAdd {
     pub labels: Vec<String>,
     /// From `{oct 30}`: the "must be done by" date.
     pub deadline: Option<NaiveDate>,
+    /// From "streak" beside the repeat phrase: track a streak.
+    pub streak: bool,
+    /// From "streak 30": its goal.
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub streak_goal: Option<i64>,
     /// The recognized phrases, as byte ranges into the input (sorted), for
     /// highlighting. Empty when nothing was applied.
     pub spans: Vec<Span>,
@@ -54,6 +60,7 @@ pub enum SpanKind {
     Section,
     Label,
     Deadline,
+    Streak,
 }
 
 impl QuickAdd {
@@ -613,6 +620,8 @@ fn parse_tokens(input: &str, today: NaiveDate, projects: &[Project], sections: &
     let mut used = vec![false; t.len()];
     let mut q = QuickAdd::default();
     let mut repeat: Option<RepeatSpec> = None;
+    // Where the repeat phrase is: (first word, words).
+    let mut repeat_at: Option<(usize, usize)> = None;
     let project_names: Vec<&str> = projects.iter().map(|p| p.name.as_str()).collect();
 
     let mut spans: Vec<Span> = Vec::new();
@@ -674,6 +683,7 @@ fn parse_tokens(input: &str, today: NaiveDate, projects: &[Project], sections: &
         if repeat.is_none() {
             if let Some((n, spec)) = match_repeat(&t, i) {
                 repeat = Some(spec);
+                repeat_at = Some((i, n));
                 take(&mut used, &mut spans, i, n, SpanKind::Repeat);
                 i += n;
                 continue;
@@ -722,6 +732,28 @@ fn parse_tokens(input: &str, today: NaiveDate, projects: &[Project], sections: &
                 q.project_id.get_or_insert(scope.clone());
                 take(&mut used, &mut spans, i, n, SpanKind::Section);
             }
+        }
+    }
+
+    // "streak" (or "streak 30") as the next words either side of the repeat;
+    // other phrases may sit between ("every day 5pm streak"). A streak means
+    // nothing without a repeat, so with none it stays text.
+    if let Some((at, n)) = repeat_at {
+        let goal_at = |j: usize| {
+            let digits = t.get(j).filter(|w| !used[j] && w.norm.bytes().all(|b| b.is_ascii_digit()))?;
+            digits.norm.parse::<i64>().ok().filter(|g| *g > 0)
+        };
+        let is_streak = |j: &usize| t[*j].norm == "streak";
+        let after = (at + n..t.len()).find(|&j| !used[j]).filter(is_streak);
+        let before = (0..at).rev().find(|&j| !used[j]).and_then(|j| {
+            // The word before the repeat may be the goal, with "streak" right before it.
+            if goal_at(j).is_some() { j.checked_sub(1).filter(|k| !used[*k]) } else { Some(j) }
+        });
+        if let Some(j) = after.or(before.filter(is_streak)) {
+            q.streak = true;
+            q.streak_goal = goal_at(j + 1);
+            let words = if q.streak_goal.is_some() { 2 } else { 1 };
+            take(&mut used, &mut spans, j, words, SpanKind::Streak);
         }
     }
 
@@ -864,6 +896,51 @@ mod tests {
         assert_eq!(p("x 12pm").time, Some(t(12, 0)));
         let q = p("x tomorrow at 9am");
         assert_eq!(q.due_string().as_deref(), Some("2026-10-20T09:00:00"));
+    }
+
+    #[test]
+    fn streak_counts_only_beside_a_repeat() {
+        let q = p("Run every day streak");
+        assert!(q.streak);
+        assert_eq!(q.content, "Run");
+        assert_eq!(q.recurrence, Some(Recurrence::Daily));
+        assert_eq!(q.spans.last().map(|s| s.kind), Some(SpanKind::Streak));
+
+        let q = p("Run streak every day");
+        assert!(q.streak);
+        assert_eq!(q.content, "Run");
+        assert_eq!(q.spans.iter().map(|s| s.kind).collect::<Vec<_>>(), [SpanKind::Streak, SpanKind::Repeat]);
+
+        // Other phrases between it and the repeat don't matter; words do.
+        assert!(p("Run every day 5pm streak").streak);
+        let q = p("Keep my reading streak alive every day");
+        assert!(!q.streak);
+        assert_eq!(q.content, "Keep my reading streak alive");
+
+        // A number right after it is the goal, whichever side of the repeat.
+        let q = p("Run every day streak 30");
+        assert_eq!((q.streak, q.streak_goal), (true, Some(30)));
+        assert_eq!(q.content, "Run");
+        let q = p("Run streak 30 every day");
+        assert_eq!((q.streak, q.streak_goal), (true, Some(30)));
+        assert_eq!(q.content, "Run");
+        assert_eq!(q.spans.iter().map(|s| s.kind).collect::<Vec<_>>(), [SpanKind::Streak, SpanKind::Repeat]);
+        // Only a whole number above zero; anything else stays in the title.
+        let q = p("Run every day streak 0");
+        assert_eq!((q.streak, q.streak_goal, q.content.as_str()), (true, None, "Run 0"));
+        let q = p("Run every day streak 3x");
+        assert_eq!((q.streak, q.streak_goal, q.content.as_str()), (true, None, "Run 3x"));
+        // A number by the repeat without "streak" is just a number.
+        let q = p("Run 30 every day");
+        assert_eq!((q.streak, q.content.as_str()), (false, "Run 30"));
+
+        // No repeat, no streak: it's only a word.
+        let q = p("Keep my streak");
+        assert!(!q.streak);
+        assert_eq!(q.content, "Keep my streak");
+        assert!(q.spans.is_empty());
+        let q = p("Keep my streak 30");
+        assert_eq!((q.streak, q.streak_goal, q.content.as_str()), (false, None, "Keep my streak 30"));
     }
 
     #[test]

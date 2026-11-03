@@ -141,6 +141,36 @@ describe("the description", () => {
   });
 });
 
+describe("the Streak pill", () => {
+  const pill = () => document.querySelector<HTMLButtonElement>('button[title="Streak"]');
+  afterEach(cleanup);
+
+  it("is there only with a repeat, and highlights what's typed", () => {
+    const title = adding();
+    type(title, "Run streak");
+    expect(pill()).toBeNull();
+    expect(marks()).toEqual([]);
+    type(title, "Run every day");
+    expect(pill()?.textContent).toBe("+ Streak");
+    expect(pill()?.className).toContain("pill-offer");
+    type(title, "Run every day streak 30");
+    expect(pill()?.textContent).toBe("Streak 30");
+    expect(pill()?.className).toContain("pill-set");
+    expect(marks()).toContain("hl hl-date:streak 30");
+  });
+
+  it("turns on and off with a tap, and goes when the repeat does", () => {
+    const title = adding();
+    type(title, "Run every day");
+    fireEvent.click(pill() as HTMLButtonElement);
+    expect(pill()?.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(pill() as HTMLButtonElement);
+    expect(pill()?.getAttribute("aria-pressed")).toBe("false");
+    type(title, "Run");
+    expect(pill()).toBeNull();
+  });
+});
+
 describe("a card too long for the screen", () => {
   beforeEach(() => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));

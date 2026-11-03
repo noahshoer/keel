@@ -474,6 +474,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chip-btn.pill-set { color: var(--accent-text); }
 .chip-btn.pill-set, .on-keyboard .chip-btn.pill-set { border-color: transparent; background: color-mix(in srgb, currentColor 16%, var(--bg)); }
 .chip-btn.pill-set .chip-icon { color: inherit; }
+/* The Streak pill, once there's a repeat: dashed until it's on, its flame kept on touch. */
+.chip-btn.pill-offer, .on-keyboard .chip-btn.pill-offer { border: 1px dashed currentColor; background: none; color: var(--accent-text); animation: pop-in .16s var(--ease); }
+.chip-btn.pill-offer .chip-icon { color: inherit; }
+.on-keyboard .chip-btn.pill-streak .icon { display: inline-flex; }
+.on-keyboard .chip-btn.pill-streak svg { width: 16px; height: 16px; }
 .chip-btn.pill-set .chip-icon:not(.pill-tag) .icon, .chip-btn.pill-set .pill-tag .icon { color: inherit; }
 .on-keyboard .chip-btn .icon, .on-keyboard .chip-caret { display: none; }
 .on-keyboard .chip-btn .chip-icon[class*="pri-"] .icon, .on-keyboard .chip-btn .chip-icon[class*="loc-"] .icon, .on-keyboard .chip-btn .pill-tag .icon { display: inline-flex; }

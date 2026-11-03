@@ -35,6 +35,8 @@ it("values compare by value", () => {
     deadline: "",
     reminders: [],
     plain: [],
+    streak: false,
+    streak_goal: null,
   };
   expect(sameValues(v, { ...v })).toBe(true);
   expect(sameValues(v, { ...v, priority: "1" })).toBe(false);

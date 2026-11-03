@@ -59,3 +59,17 @@ it("saves a move, a reminder change and a field change", async () => {
   expect(saved?.priority).toBe("P3");
   expect((await invoke("list_reminders", {})).some((r) => r.id === "r-laundry")).toBe(false);
 });
+
+it("a typed streak and goal are tracked once the task has its id", async () => {
+  await addFromEditor(typed("Stretch every day streak 30"), fx.projects, fx.sections, fx.labels, TODAY);
+  const task = (await invoke("all_tasks", {})).find((t) => t.content === "Stretch");
+  expect(task?.streak_enabled).toBe(true);
+  expect(task?.streak_goal).toBe(30);
+});
+
+it("streak without a repeat is only a word, and nothing is tracked", async () => {
+  await addFromEditor(typed("Keep my streak 30"), fx.projects, fx.sections, fx.labels, TODAY);
+  const task = (await invoke("all_tasks", {})).find((t) => t.content === "Keep my streak 30");
+  expect(task?.streak_enabled).toBe(false);
+  expect(task?.streak_goal).toBeNull();
+});

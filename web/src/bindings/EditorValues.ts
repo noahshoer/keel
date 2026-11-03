@@ -34,4 +34,14 @@ deadline: string, reminders: Array<ReminderDraft>,
  * Byte ranges of `content` turned back into plain text (backspace
  * right after a highlight); quick add leaves them alone.
  */
-plain: Array<[number, number]>, };
+plain: Array<[number, number]>, 
+/**
+ * Track a streak, from the Streak pill. Only used when adding, and only
+ * with a repeat.
+ */
+streak: boolean, 
+/**
+ * Its goal, carried over from a typed "streak 30" when a pick takes the
+ * phrase out of the title.
+ */
+streak_goal: number | null, };

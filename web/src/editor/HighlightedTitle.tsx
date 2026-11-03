@@ -14,6 +14,7 @@ const MARK: Record<SpanKind, string> = {
   Section: "hl hl-project",
   Label: "hl hl-label",
   Deadline: "hl hl-deadline",
+  Streak: "hl hl-date",
 };
 
 /** A highlight's class; a priority's colour is its level ("p2" → `hl-p2`). */
