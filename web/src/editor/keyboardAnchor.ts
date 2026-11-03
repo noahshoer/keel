@@ -1,7 +1,7 @@
 // The task card sits on the keyboard, and its pickers on the card. How far up
 // the keyboard reaches is sheet-rules' `keyboardInset`, shared with the task
 // view's sheet.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { keyboardInset } from "../gestures/sheet-rules";
 import type { Rect } from "./popover";
 
@@ -79,4 +79,25 @@ export function useKeyboard(enabled: boolean): KeyboardState {
     };
   }, [enabled]);
   return state;
+}
+
+/**
+ * The inset to stay at instead of the keyboard's. It's the height when `holding`
+ * began, kept until the keyboard is back up to it or gone: after `holding` ends
+ * the taller keyboard is still on its way.
+ */
+export function nextHeld(held: number | null, inset: number, holding: boolean, up: boolean): number | null {
+  if (holding) return Math.max(held ?? 0, inset);
+  return held === null || !up || inset >= held ? null : held;
+}
+
+/**
+ * The keyboard's reach, staying put while `holding`: the number pad is shorter
+ * than the letters, and the card would drop to it and rise again.
+ */
+export function useHeldKeyboard(keyboard: KeyboardState, holding: boolean): KeyboardState {
+  const held = useRef<number | null>(null);
+  held.current = nextHeld(held.current, keyboard.inset, holding, keyboard.up);
+  if (held.current === null) return keyboard;
+  return { ...keyboard, inset: held.current, room: keyboard.room - (held.current - keyboard.inset) };
 }

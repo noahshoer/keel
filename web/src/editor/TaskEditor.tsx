@@ -39,7 +39,7 @@ import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
 import { HighlightedTitle } from "./HighlightedTitle";
 import { flagClass, locationChosen, locationFace, locationItems, PRIORITY_ITEMS } from "./items";
-import { useKeyboard } from "./keyboardAnchor";
+import { useHeldKeyboard, useKeyboard } from "./keyboardAnchor";
 import { LabelPicker } from "./LabelPicker";
 import { isTouch } from "./locale";
 import { Menu, type MenuItem } from "./Menu";
@@ -125,7 +125,7 @@ export function TaskEditor({
   const [values, setValues] = useState(initial);
   const [open, setOpen] = useState<Pop>(null);
   const [touch] = useState(isTouch);
-  const keyboard = useKeyboard(touch);
+  const keyboard = useHeldKeyboard(useKeyboard(touch), open === "streak-goal");
   useEffect(() => (touch ? holdPage() : undefined), [touch]);
   const ownTitle = useRef<HTMLTextAreaElement>(null);
   const title = titleRef ?? ownTitle;
