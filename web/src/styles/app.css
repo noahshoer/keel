@@ -60,6 +60,8 @@
   --due-later: #5a5a5a;
   --active-tint: #e6f1ec;
   --streak: #1f6f55;
+  --streak-best: #b8860b;
+  --streak-goal: #2f6fdb;
   --inbox: #246fe0;
   --today: #058527;
   --upcoming: #692fc2;
@@ -130,6 +132,8 @@
   --due-later: #a8a8a8;
   --active-tint: rgba(92,199,162,.16);
   --streak: #5cc7a2;
+  --streak-best: #e3b341;
+  --streak-goal: #6ea8fe;
   --inbox: #5297ff;
   --today: #25b84c;
   --upcoming: #a970ff;
@@ -200,6 +204,8 @@
   --due-later: #a8a8a8;
   --active-tint: rgba(92,199,162,.16);
   --streak: #5cc7a2;
+  --streak-best: #e3b341;
+  --streak-goal: #6ea8fe;
   --inbox: #5297ff;
   --today: #25b84c;
   --upcoming: #a970ff;
@@ -899,7 +905,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-field-btn.tv-streak .icon { color: var(--accent); }
 .tv-streak-best { flex: none; display: inline-flex; gap: 12px; margin-left: auto; font-size: 15px; color: var(--secondary); }
 .tv-streak-stat { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
-.tv-field-btn.tv-streak .tv-streak-stat .icon { color: inherit; }
+.tv-field-btn.tv-streak .tv-streak-stat[title="Best"] .icon { color: var(--streak-best); }
+.tv-field-btn.tv-streak .tv-streak-stat[title="Goal"] .icon { color: var(--streak-goal); }
 .tv-field-btn .tv-streak-stat svg { width: 16px; height: 16px; }
 .tv-field-btn svg { width: 20px; height: 20px; }
 .tv-field-btn .pill-tag, .tv-field-btn .pill-tag .icon { color: inherit; }
@@ -963,9 +970,14 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .tv-add-sub { min-height: 36px; padding: 6px 12px; gap: 10px; font-size: 14px; }
 }
 .streak-pop { width: 300px; }
-/* On the keyboard, over the sheet. With the keyboard down, above the home indicator. */
+/* On the keyboard, over the sheet; above the home indicator with the keyboard down.
+   It rises by `transform`, which WebKit runs off the main thread, as the keyboard
+   does; `bottom` would be laid out on it every frame, and fall behind. The pace is
+   gestures/sheet.ts's, this one until the first report (Keyboard.swift's defaults). */
 .popover.keyboard-card { position: fixed; top: auto; left: 8px; right: 8px; width: auto; z-index: 45;
-  bottom: calc(max(var(--kb, 0px), env(safe-area-inset-bottom)) + 8px); }
+  bottom: calc(env(safe-area-inset-bottom) + 8px); will-change: transform;
+  transform: translateY(calc(env(safe-area-inset-bottom) - max(var(--kb, 0px), env(safe-area-inset-bottom))));
+  transition: transform .4259s cubic-bezier(.25,.9,.3,1); }
 .streak-pop .streak-panel { margin: 0; padding: 6px 4px 4px; background: none; border-radius: 0; animation: none; }
 /* iPhone: iOS sizes (17pt text, 44pt rows, 16pt margins and gaps). The
    header holds the glass X, ‹ (in a sub-task's view) and •••, with the

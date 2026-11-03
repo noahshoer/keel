@@ -2,7 +2,7 @@
 // the streak row or the •••. On touch, a tracked streak's sits on the keyboard
 // instead, with its goal focused. That one is on the page, not in the sheet,
 // whose expanding would carry it down first; `--kb` and its pace come from
-// `gestures/sheet.ts`.
+// `gestures/sheet.ts`, and it rises by `transform` (app.css).
 import { type RefObject, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { Task } from "../bindings";
