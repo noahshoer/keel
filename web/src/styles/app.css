@@ -404,8 +404,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   padding: 12px 14px; background: var(--panel); border-radius: var(--r-lg); font-size: 13px;
   animation: pop-in .18s var(--ease); }
 .streak-panel .stat b { font-size: 15px; }
-.streak-panel input { width: 64px; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--r);
-  background: var(--bg); outline: none; }
+.streak-panel label { display: inline-flex; align-items: center; gap: 8px; }
+.streak-panel input { width: 64px; min-height: 36px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--r-item);
+  font-size: 15px; outline: none; background: var(--field-fill); color: var(--text); }
 .streak-panel input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
 
 /* Add task */
