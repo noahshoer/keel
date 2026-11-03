@@ -223,9 +223,59 @@ it("a tracked streak's row shows current and best, and opens the streak panel", 
   await show(["t-trip"]);
   const row = top().querySelector(".tv-fields > .tv-row button.tv-streak") as HTMLElement;
   // keel-core's wording; this task doesn't repeat, so it's the generic one.
-  expect(row.textContent).toBe("Streak of 0Best 0");
+  expect(row.textContent).toBe("Streak of 00");
+  expect(row.querySelector('[title="Best"] svg')).not.toBeNull();
+  expect(row.querySelector('[title="Goal"]')).toBeNull();
   expect(row.querySelector("svg")).not.toBeNull();
   await setStreak("t-trip", false, null);
+});
+
+it("the streak row opens the streak in a popover, closed by a tap outside", async () => {
+  await setStreak("t-trip", true, null);
+  await show(["t-trip"]);
+  expect(top().querySelector(".streak-panel")).toBeNull();
+  fireEvent.click(top().querySelector(".tv-streak") as HTMLElement);
+  const panel = top().querySelector(".tv-row .popover .streak-panel");
+  expect(panel?.textContent).toContain("Stop tracking");
+  fireEvent.click(top().querySelector(".pop-backdrop") as HTMLElement);
+  expect(top().querySelector(".streak-panel")).toBeNull();
+  await setStreak("t-trip", false, null);
+});
+
+it("a goal typed in the popover is saved when it closes, without the field being left", async () => {
+  await setStreak("t-trip", true, null);
+  await show(["t-trip"]);
+  fireEvent.click(top().querySelector(".tv-streak") as HTMLElement);
+  const goal = top().querySelector(".streak-panel input") as HTMLInputElement;
+  fireEvent.change(goal, { target: { value: "30" } });
+  fireEvent.click(top().querySelector(".pop-backdrop") as HTMLElement);
+  await waitFor(async () => {
+    const saved = (await invoke("all_tasks", {})).find((t) => t.id === "t-trip");
+    expect(saved?.streak_goal).toBe(30);
+  });
+  await setStreak("t-trip", false, null);
+});
+
+it("the streak row shows a goal that's set", async () => {
+  await setStreak("t-trip", true, 30);
+  await show(["t-trip"]);
+  expect(top().querySelector('.tv-streak [title="Goal"]')?.textContent).toBe("30");
+  expect(top().querySelector('.tv-streak [title="Goal"] svg')).not.toBeNull();
+  await setStreak("t-trip", false, null);
+});
+
+it("on touch, a tracked streak opens on the keyboard with its goal focused inside the tap", async () => {
+  vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+  await setStreak("t-trip", true, null);
+  await show(["t-trip"]);
+  fireEvent.click(top().querySelector(".tv-streak") as HTMLElement);
+  // On the page, not in the sheet, whose expanding would carry it down first.
+  const card = document.querySelector("body > .streak-pop.keyboard-card") as HTMLElement;
+  expect(document.activeElement).toBe(card.querySelector("input"));
+  fireEvent.click(top().querySelector(".pop-backdrop") as HTMLElement);
+  expect(document.querySelector(".streak-pop")).toBeNull();
+  await setStreak("t-trip", false, null);
+  vi.unstubAllGlobals();
 });
 
 it("no streak row without a tracked streak", async () => {

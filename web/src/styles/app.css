@@ -60,6 +60,8 @@
   --due-later: #5a5a5a;
   --active-tint: #e6f1ec;
   --streak: #1f6f55;
+  --streak-best: #b8860b;
+  --streak-goal: #2f6fdb;
   --inbox: #246fe0;
   --today: #058527;
   --upcoming: #692fc2;
@@ -130,6 +132,8 @@
   --due-later: #a8a8a8;
   --active-tint: rgba(92,199,162,.16);
   --streak: #5cc7a2;
+  --streak-best: #e3b341;
+  --streak-goal: #6ea8fe;
   --inbox: #5297ff;
   --today: #25b84c;
   --upcoming: #a970ff;
@@ -200,6 +204,8 @@
   --due-later: #a8a8a8;
   --active-tint: rgba(92,199,162,.16);
   --streak: #5cc7a2;
+  --streak-best: #e3b341;
+  --streak-goal: #6ea8fe;
   --inbox: #5297ff;
   --today: #25b84c;
   --upcoming: #a970ff;
@@ -400,12 +406,17 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
    a hover reveal on iPhone would cost every tap on a task an extra tap. */
 @media (hover: hover) { .task:hover .task-actions { opacity: 1; transform: none; pointer-events: auto; } }
 .task.pressed .task-actions, .task-actions:focus-within { opacity: 1; transform: none; pointer-events: auto; }
-.streak-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin: 2px 0 10px 40px;
-  padding: 12px 14px; background: var(--panel); border-radius: var(--r-lg); font-size: 13px;
+/* Three columns: each stat's number or field over its name (`column-reverse`,
+   so the name still reads first), the rest of the panel below them, centered. */
+.streak-panel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; margin: 2px 0 10px 40px;
+  padding: 14px 16px; background: var(--panel); border-radius: var(--r-lg); font-size: 15px; line-height: 20px; text-align: center;
   animation: pop-in .18s var(--ease); }
-.streak-panel .stat b { font-size: 15px; }
-.streak-panel input { width: 64px; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--r);
-  background: var(--bg); outline: none; }
+.streak-panel > :not(.stat) { grid-column: 1 / -1; }
+.streak-panel > .btn { justify-self: center; }
+.streak-panel .stat { display: flex; flex-direction: column-reverse; align-items: center; gap: 2px; min-width: 0; font-size: 13px; line-height: 18px; color: var(--secondary); }
+.streak-panel .stat b { display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 36px; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.streak-panel input { width: 64px; min-height: 36px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--r-item);
+  font-size: 20px; font-weight: 600; text-align: center; outline: none; background: var(--field-fill); color: var(--text); }
 .streak-panel input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
 
 /* Add task */
@@ -463,6 +474,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chip-btn.pill-set { color: var(--accent-text); }
 .chip-btn.pill-set, .on-keyboard .chip-btn.pill-set { border-color: transparent; background: color-mix(in srgb, currentColor 16%, var(--bg)); }
 .chip-btn.pill-set .chip-icon { color: inherit; }
+/* The Streak pill, once there's a repeat: dashed until it's on, its flame kept on touch. */
+.chip-btn.pill-offer, .on-keyboard .chip-btn.pill-offer { border: 1px dashed currentColor; background: none; color: var(--accent-text); animation: pop-in .16s var(--ease); }
+.chip-btn.pill-offer .chip-icon { color: inherit; }
+.on-keyboard .chip-btn.pill-streak .icon { display: inline-flex; }
+.on-keyboard .chip-btn.pill-streak svg { width: 16px; height: 16px; }
 .chip-btn.pill-set .chip-icon:not(.pill-tag) .icon, .chip-btn.pill-set .pill-tag .icon { color: inherit; }
 .on-keyboard .chip-btn .icon, .on-keyboard .chip-caret { display: none; }
 .on-keyboard .chip-btn .chip-icon[class*="pri-"] .icon, .on-keyboard .chip-btn .chip-icon[class*="loc-"] .icon, .on-keyboard .chip-btn .pill-tag .icon { display: inline-flex; }
@@ -764,7 +780,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chip-icon:not([class*="pri-"]):not(.pill-tag) .icon { color: var(--icon); }
 .search-btn { flex: none; }
 .search-btn svg { width: 22px; height: 22px; }
-.streak-count { display: inline-flex; align-items: center; gap: 3px; }
+.streak-count { display: inline-flex; align-items: center; gap: 4px; }
 .streak-count .icon { color: var(--accent); }
 .menu-btn { display: none; margin-left: -6px; color: var(--icon); }
 .back-btn { display: none; margin-left: -6px; }
@@ -892,7 +908,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-row > .chip-wrap, .tv-row > .chip-wrap > .tv-field-btn { flex: 1; width: 100%; }
 .tv-field-btn.tv-streak { color: var(--accent-text); }
 .tv-field-btn.tv-streak .icon { color: var(--accent); }
-.tv-streak-best { margin-left: auto; font-size: 15px; color: var(--secondary); }
+.tv-streak-best { flex: none; display: inline-flex; gap: 12px; margin-left: auto; font-size: 15px; color: var(--secondary); }
+.tv-streak-stat { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.tv-field-btn.tv-streak .tv-streak-stat[title="Best"] .icon { color: var(--streak-best); }
+.tv-field-btn.tv-streak .tv-streak-stat[title="Goal"] .icon { color: var(--streak-goal); }
+.tv-field-btn .tv-streak-stat svg { width: 16px; height: 16px; }
 .tv-field-btn svg { width: 20px; height: 20px; }
 .tv-field-btn .pill-tag, .tv-field-btn .pill-tag .icon { color: inherit; }
 .tv-field-btn.deadline-chip.set, .tv-field-btn.deadline-chip.urgent { color: var(--due-overdue); }
@@ -939,18 +959,42 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .tv-desc { font-size: 14px; }
   .tv-row, .tv-field-btn { min-height: 36px; }
   .tv-field-btn { padding: 6px 12px; gap: 10px; font-size: 14px; border-radius: var(--r-item); }
+  .streak-panel { padding: 12px; font-size: 14px; }
+  .streak-panel .stat { font-size: 12px; }
+  .streak-panel .stat b, .streak-panel input { min-height: 30px; font-size: 18px; }
   .tv-round { width: 36px; height: 36px; }
   .tv-round svg { width: 20px; height: 20px; }
   .tv-head { padding: 8px 12px; }
   .tv-field-btn svg { width: 18px; height: 18px; }
-  .tv-streak-best { font-size: 13px; }
+  .tv-streak-best { font-size: 13px; gap: 10px; }
+  .tv-field-btn .tv-streak-stat svg { width: 14px; height: 14px; }
   .tv-pill { font-size: 13px; min-height: 36px; padding: 0 12px; }
   .tv-sub-head { padding: 0 12px 4px; font-size: 13px; line-height: 18px; }
   .tv-sub { min-height: 36px; padding: 6px 12px; gap: 10px; }
   .tv-sub-body { font-size: 14px; }
   .tv-add-sub { min-height: 36px; padding: 6px 12px; gap: 10px; font-size: 14px; }
 }
-.tv-card .streak-panel { margin: 0; padding: 12px 16px; background: none; border-radius: 0; }
+.streak-pop { width: 300px; }
+/* The Streak pill's goal, while adding a task. */
+.menu.streak-goal-pop { flex-direction: row; align-items: center; gap: 4px; min-width: 220px; padding: 4px; }
+.streak-goal-row { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; min-height: 40px; padding: 0 4px 0 12px; font-size: 14px; color: var(--text); }
+.on-keyboard .streak-goal-row { font-size: 16px; }
+.streak-goal-icon { display: flex; color: var(--streak-goal); }
+.streak-goal-row .menu-label { flex: 1; }
+/* Only a number at the end of the row; the cursor shows it's the field. */
+.streak-goal-row input { width: 64px; min-width: 0; padding: 0; border: none; font: inherit; font-weight: 600; font-variant-numeric: tabular-nums;
+  text-align: right; outline: none; background: none; color: var(--text); }
+.streak-goal-row input::placeholder { font-weight: 400; color: var(--muted); }
+.streak-goal-remove { flex: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; color: var(--p1); }
+/* On the keyboard, over the sheet; above the home indicator with the keyboard down.
+   It rises by `transform`, which WebKit runs off the main thread, as the keyboard
+   does; `bottom` would be laid out on it every frame, and fall behind. The pace is
+   gestures/sheet.ts's, this one until the first report (Keyboard.swift's defaults). */
+.popover.keyboard-card { position: fixed; top: auto; left: 8px; right: 8px; width: auto; z-index: 45;
+  bottom: calc(env(safe-area-inset-bottom) + 8px); will-change: transform;
+  transform: translateY(calc(env(safe-area-inset-bottom) - max(var(--kb, 0px), env(safe-area-inset-bottom))));
+  transition: transform .4259s cubic-bezier(.25,.9,.3,1); }
+.streak-pop .streak-panel { margin: 0; padding: 6px 4px 4px; background: none; border-radius: 0; animation: none; }
 /* iPhone: iOS sizes (17pt text, 44pt rows, 16pt margins and gaps). The
    header holds the glass X, ‹ (in a sub-task's view) and •••, with the
    parent's or project's name small in the middle; the sub-tasks' heading
@@ -1135,7 +1179,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .view-toggle svg { width: 24px; height: 24px; }
   .view-toggle-label { display: none; }
   .section-title { padding-left: 8px; padding-right: 8px; }
-  .streak-panel { margin-left: 0; gap: 12px; }
+  .streak-panel { margin-left: 0; }
   /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */
   .editor { padding: 10px 10px 0; }
   .chips { position: relative; gap: 6px; }
@@ -1241,7 +1285,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
    creation pickers"). Last in the file so these win over the rules above. */
 @media (pointer: coarse) {
   .popover { width: calc(100vw - 16px); max-width: none; min-width: 0; padding: 12px; border-radius: 24px; animation: fade-in .16s var(--ease); }
-  .tv-head-actions .popover { width: auto; min-width: 210px; }
+  .tv-head-actions .popover:not(.streak-pop) { width: auto; min-width: 210px; }
   .popover.row-menu { width: 240px; }
   .row-menu .confirm-text { font-size: 15px; }
   .row-menu .menu-item { min-height: 44px; font-size: 16px; }

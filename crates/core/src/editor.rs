@@ -39,6 +39,15 @@ pub struct EditorValues {
     /// Byte ranges of `content` turned back into plain text (backspace
     /// right after a highlight); quick add leaves them alone.
     pub plain: Vec<(usize, usize)>,
+    /// Track a streak, from the Streak pill. Only used when adding, and only
+    /// with a repeat.
+    #[serde(default)]
+    pub streak: bool,
+    /// Its goal, carried over from a typed "streak 30" when a pick takes the
+    /// phrase out of the title.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub streak_goal: Option<i64>,
 }
 
 impl EditorValues {
@@ -57,6 +66,8 @@ impl EditorValues {
             deadline: String::new(),
             reminders: Vec::new(),
             plain: Vec::new(),
+            streak: false,
+            streak_goal: None,
         }
     }
 
@@ -76,6 +87,8 @@ impl EditorValues {
             deadline: t.deadline.clone().unwrap_or_default(),
             reminders: Vec::new(),
             plain: Vec::new(),
+            streak: false,
+            streak_goal: None,
         }
     }
 
@@ -176,6 +189,12 @@ pub enum Pick {
     Deadline { date: String },
     Repeat { value: String },
     Location { project_id: Id, section_id: Option<Id> },
+    Streak {
+        on: bool,
+        /// Its goal, from the pill's popover. Ignored unless above zero.
+        #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+        goal: Option<i64>,
+    },
 }
 
 /// Only the fields that changed; `None` leaves a field as it is.
@@ -446,7 +465,9 @@ fn kinds_for(pick: &Pick) -> &'static [SpanKind] {
         Pick::Labels { .. } => &[SpanKind::Label],
         Pick::Reminders { .. } => &[],
         Pick::Deadline { .. } => &[SpanKind::Deadline],
-        Pick::Repeat { .. } => &[SpanKind::Repeat],
+        // A typed "streak" goes with the typed repeat it needs (and carries over).
+        Pick::Repeat { .. } => &[SpanKind::Repeat, SpanKind::Streak],
+        Pick::Streak { .. } => &[SpanKind::Streak],
         Pick::Location { .. } => &[SpanKind::Project, SpanKind::Section],
     }
 }
@@ -463,13 +484,17 @@ pub fn apply_pick(
     sections: &[Section],
     today: NaiveDate,
 ) {
+    let mut typed_streak = false;
+    let mut typed_goal = None;
     if quick_add {
         let qa = parse_title(v, projects, sections, today);
+        typed_streak = qa.streak;
+        typed_goal = qa.streak_goal;
         let mut kinds = kinds_for(pick).to_vec();
         if let Pick::Date { date, .. } = pick {
             let shown = qa.date.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| v.date.clone());
             if *date != shown {
-                kinds.push(SpanKind::Repeat);
+                kinds.extend([SpanKind::Repeat, SpanKind::Streak]);
             }
         }
         // Through `with_title`, so un-highlighted ranges move with the text.
@@ -481,7 +506,16 @@ pub fn apply_pick(
         Pick::Labels { names } => v.labels = names.clone(),
         Pick::Reminders { drafts } => v.reminders = drafts.clone(),
         Pick::Deadline { date } => v.deadline = date.clone(),
-        Pick::Repeat { value } => v.repeat = value.clone(),
+        Pick::Repeat { value } => {
+            v.repeat = value.clone();
+            // No repeat, no streak.
+            v.streak = value != "none" && (v.streak || typed_streak);
+            v.streak_goal = if v.streak { typed_goal.or(v.streak_goal) } else { None };
+        }
+        Pick::Streak { on, goal } => {
+            v.streak = *on;
+            v.streak_goal = if *on { goal.filter(|g| *g > 0) } else { None };
+        }
         Pick::Location { project_id, section_id } => (v.project_id, v.section_id) = (project_id.clone(), section_id.clone()),
     }
     // A repeat always has a date: today, by default.
@@ -716,6 +750,9 @@ pub struct EditorView {
     pub shown: EditorValues,
     /// The days it will repeat on: the typed rule, or the Repeat menu's.
     pub repeat_rule: Option<Recurrence>,
+    /// The Streak pill shows: adding a task that repeats. `shown.streak` is
+    /// whether it's on, and is never true without this.
+    pub streak_offered: bool,
     /// Relative reminders count back from a due date (typed or picked).
     pub has_due: bool,
     /// The location menu's selected value.
@@ -753,9 +790,12 @@ pub fn editor_view(
         None => !v.content.trim().is_empty(),
     };
     let spans = qa.as_ref().map(|q| q.spans.as_slice()).unwrap_or(&[]);
-    let shown = qa.as_ref().map(|q| shown_values(v, q)).unwrap_or_else(|| v.clone());
+    let mut shown = qa.as_ref().map(|q| shown_values(v, q)).unwrap_or_else(|| v.clone());
     let typed_repeat = qa.as_ref().and_then(|q| q.recurrence.clone());
     let repeat_rule = typed_repeat.clone().or_else(|| recurrence_for(&v.repeat, &shown.date, existing, today));
+    let streak_offered = quick_add && repeat_rule.is_some();
+    shown.streak = streak_offered && (v.streak || qa.as_ref().is_some_and(|q| q.streak));
+    shown.streak_goal = if shown.streak { qa.as_ref().and_then(|q| q.streak_goal).or(v.streak_goal) } else { None };
     let has_due = !shown.date.is_empty() || !shown.time.is_empty();
     let opts = repeat_options(&shown.date, keep_label, today);
     let date = NaiveDate::parse_from_str(&shown.date, "%Y-%m-%d").ok();
@@ -765,6 +805,7 @@ pub fn editor_view(
         can_submit,
         segments: title_segments(&v.content, spans),
         repeat_rule,
+        streak_offered,
         has_due,
         location: shown.location(),
         location_text: location_text(&shown.project_id, shown.section_id.as_ref(), projects, sections),
@@ -813,6 +854,10 @@ pub struct AddPlan {
     pub labels: Vec<String>,
     pub task: Action,
     pub reminders: Vec<ReminderDraft>,
+    /// Track a streak, once the task has its id. Never without a repeat.
+    pub streak: bool,
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub streak_goal: Option<i64>,
 }
 
 pub fn add_plan(v: &EditorValues, projects: &[Project], sections: &[Section], labels: &[Label], today: NaiveDate) -> AddPlan {
@@ -826,7 +871,10 @@ pub fn add_plan(v: &EditorValues, projects: &[Project], sections: &[Section], la
             new_labels.push(name.clone());
         }
     }
-    AddPlan { labels: new_labels, task: new_task_from(v, &qa, today).into_action(), reminders: v.reminders.clone() }
+    let task = new_task_from(v, &qa, today);
+    let streak = (v.streak || qa.streak) && task.recurrence.is_some();
+    let streak_goal = if streak { qa.streak_goal.or(v.streak_goal) } else { None };
+    AddPlan { labels: new_labels, task: task.into_action(), reminders: v.reminders.clone(), streak, streak_goal }
 }
 
 /// What saving an edit sends, in order: the move (it carries the sub-tree),
@@ -1145,6 +1193,124 @@ mod tests {
         }
         let blank = add_plan(&typed("x"), &[], &[], &[], day30());
         assert!(matches!(blank.task, Action::TaskAdd { description: None, due: None, .. }));
+    }
+
+    #[test]
+    fn a_typed_streak_shows_and_is_planned() {
+        let v = typed("Run every day streak");
+        let view = editor_view(&v, true, None, None, &[], &[], day30());
+        assert!(view.streak_offered);
+        assert!(view.shown.streak);
+        assert!(view.can_submit);
+        assert!(add_plan(&v, &[], &[], &[], day30()).streak);
+    }
+
+    #[test]
+    fn a_typed_goal_shows_is_planned_and_survives_a_picked_repeat() {
+        let mut v = typed("Run every day streak 30");
+        assert_eq!(editor_view(&v, true, None, None, &[], &[], day30()).shown.streak_goal, Some(30));
+        assert_eq!(add_plan(&v, &[], &[], &[], day30()).streak_goal, Some(30));
+
+        apply_pick(&mut v, &Pick::Repeat { value: "weekly".into() }, true, &[], &[], day30());
+        assert_eq!(v.content, "Run");
+        assert_eq!(add_plan(&v, &[], &[], &[], day30()).streak_goal, Some(30));
+
+        // Off clears it, and coming back on doesn't bring it back.
+        apply_pick(&mut v, &Pick::Streak { on: false, goal: None }, true, &[], &[], day30());
+        apply_pick(&mut v, &Pick::Streak { on: true, goal: None }, true, &[], &[], day30());
+        assert_eq!(add_plan(&v, &[], &[], &[], day30()).streak_goal, None);
+    }
+
+    #[test]
+    fn a_goal_from_the_popover_replaces_what_was_typed() {
+        let mut v = typed("Run every day streak 30");
+        let on = |goal| Pick::Streak { on: true, goal };
+
+        apply_pick(&mut v, &on(Some(40)), true, &[], &[], day30());
+        // The word goes, and the repeat it went with stays.
+        assert_eq!(v.content, "Run every day");
+        let view = editor_view(&v, true, None, None, &[], &[], day30());
+        assert!(view.shown.streak);
+        assert_eq!(view.shown.streak_goal, Some(40));
+        assert_eq!(add_plan(&v, &[], &[], &[], day30()).streak_goal, Some(40));
+
+        // An emptied field, or a zero, is no goal; the streak stays on.
+        for empty in [None, Some(0)] {
+            apply_pick(&mut v, &on(empty), true, &[], &[], day30());
+            let plan = add_plan(&v, &[], &[], &[], day30());
+            assert!(plan.streak);
+            assert_eq!(plan.streak_goal, None);
+        }
+
+        apply_pick(&mut v, &Pick::Streak { on: false, goal: Some(40) }, true, &[], &[], day30());
+        assert!(!add_plan(&v, &[], &[], &[], day30()).streak);
+        assert_eq!(v.streak_goal, None);
+    }
+
+    #[test]
+    fn the_streak_pill_shows_only_with_a_repeat() {
+        let v = typed("Run");
+        assert!(!editor_view(&v, true, None, None, &[], &[], day30()).streak_offered);
+
+        let mut v = typed("Run");
+        apply_pick(&mut v, &Pick::Repeat { value: "daily".into() }, true, &[], &[], day30());
+        let view = editor_view(&v, true, None, None, &[], &[], day30());
+        assert!(view.streak_offered);
+        assert!(!view.shown.streak, "offered, not on");
+
+        apply_pick(&mut v, &Pick::Streak { on: true, goal: None }, true, &[], &[], day30());
+        assert!(editor_view(&v, true, None, None, &[], &[], day30()).shown.streak);
+        assert!(add_plan(&v, &[], &[], &[], day30()).streak);
+
+        // Not when editing: the task view has its own.
+        assert!(!editor_view(&v, false, None, None, &[], &[], day30()).streak_offered);
+    }
+
+    #[test]
+    fn removing_the_repeat_removes_the_streak() {
+        let mut v = typed("Run");
+        apply_pick(&mut v, &Pick::Repeat { value: "daily".into() }, true, &[], &[], day30());
+        apply_pick(&mut v, &Pick::Streak { on: true, goal: None }, true, &[], &[], day30());
+        apply_pick(&mut v, &Pick::Repeat { value: "none".into() }, true, &[], &[], day30());
+        assert!(!v.streak);
+        assert!(!editor_view(&v, true, None, None, &[], &[], day30()).streak_offered);
+        assert!(!add_plan(&v, &[], &[], &[], day30()).streak);
+    }
+
+    #[test]
+    fn a_streak_never_saves_without_a_repeat() {
+        // On from the pill, then the typed repeat is deleted from the title.
+        let mut v = typed("Run");
+        v.streak = true;
+        assert!(!editor_view(&v, true, None, None, &[], &[], day30()).shown.streak);
+        assert!(!add_plan(&v, &[], &[], &[], day30()).streak);
+    }
+
+    #[test]
+    fn a_picked_repeat_keeps_a_typed_streak_and_takes_its_word() {
+        let mut v = typed("Run every day streak");
+        apply_pick(&mut v, &Pick::Repeat { value: "weekly".into() }, true, &[], &[], day30());
+        assert_eq!(v.content, "Run", "no stray word left in the title");
+        assert!(v.streak);
+        assert!(add_plan(&v, &[], &[], &[], day30()).streak);
+    }
+
+    #[test]
+    fn turning_a_typed_streak_off_takes_its_word_and_keeps_the_repeat() {
+        let mut v = typed("Run every day streak");
+        apply_pick(&mut v, &Pick::Streak { on: false, goal: None }, true, &[], &[], day30());
+        assert_eq!(v.content, "Run every day");
+        let view = editor_view(&v, true, None, None, &[], &[], day30());
+        assert!(view.streak_offered);
+        assert!(!view.shown.streak);
+    }
+
+    #[test]
+    fn a_new_day_takes_a_typed_repeat_and_its_streak() {
+        let mut v = typed("Run every day streak");
+        apply_pick(&mut v, &Pick::Date { date: "2026-11-05".into(), time: String::new() }, true, &[], &[], day30());
+        assert_eq!(v.content, "Run");
+        assert!(!add_plan(&v, &[], &[], &[], day30()).streak);
     }
 
     #[test]

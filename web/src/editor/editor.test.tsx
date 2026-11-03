@@ -141,6 +141,85 @@ describe("the description", () => {
   });
 });
 
+describe("the Streak pill", () => {
+  const pill = () => document.querySelector<HTMLButtonElement>('button[title="Streak"]');
+  afterEach(cleanup);
+
+  it("is there only with a repeat, and highlights what's typed", () => {
+    const title = adding();
+    type(title, "Run streak");
+    expect(pill()).toBeNull();
+    expect(marks()).toEqual([]);
+    type(title, "Run every day");
+    expect(pill()?.textContent).toBe("+ Streak");
+    expect(pill()?.className).toContain("pill-offer");
+    type(title, "Run every day streak 30");
+    expect(pill()?.textContent).toBe("Streak 30");
+    expect(pill()?.className).toContain("pill-set");
+    expect(marks()).toContain("hl hl-date:streak 30");
+  });
+
+  const goal = () => document.querySelector<HTMLInputElement>(".streak-goal-pop input");
+
+  it("a tap turns it on and opens the goal, focused", () => {
+    const title = adding();
+    type(title, "Run every day");
+    expect(goal()).toBeNull();
+    fireEvent.click(pill() as HTMLButtonElement);
+    expect(pill()?.getAttribute("aria-pressed")).toBe("true");
+    expect(pill()?.textContent).toBe("Streak");
+    expect(document.activeElement).toBe(goal());
+    // Tapping it again only closes it.
+    fireEvent.click(pill() as HTMLButtonElement);
+    expect(goal()).toBeNull();
+    expect(pill()?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("the goal shows on the pill as it's typed, digits only", () => {
+    const title = adding();
+    type(title, "Run every day");
+    fireEvent.click(pill() as HTMLButtonElement);
+    fireEvent.change(goal() as HTMLInputElement, { target: { value: "3a0" } });
+    expect(goal()?.value).toBe("30");
+    expect(pill()?.textContent).toBe("Streak 30");
+    fireEvent.change(goal() as HTMLInputElement, { target: { value: "" } });
+    expect(pill()?.textContent).toBe("Streak");
+  });
+
+  it("opens on a typed goal, which stays typed until it changes", () => {
+    const title = adding();
+    type(title, "Run every day streak 30");
+    fireEvent.click(pill() as HTMLButtonElement);
+    expect(goal()?.value).toBe("30");
+    expect(title.value).toBe("Run every day streak 30");
+    fireEvent.change(goal() as HTMLInputElement, { target: { value: "40" } });
+    expect(title.value).toBe("Run every day");
+    expect(pill()?.textContent).toBe("Streak 40");
+  });
+
+  it("Enter closes the popover without saving the task", () => {
+    const title = adding();
+    type(title, "Run every day");
+    fireEvent.click(pill() as HTMLButtonElement);
+    const pressed = fireEvent.keyDown(goal() as HTMLInputElement, { key: "Enter" });
+    expect(pressed).toBe(false);
+    expect(goal()).toBeNull();
+    expect(document.activeElement).toBe(title);
+  });
+
+  it("Remove streak turns it off, and it goes when the repeat does", () => {
+    const title = adding();
+    type(title, "Run every day");
+    fireEvent.click(pill() as HTMLButtonElement);
+    fireEvent.click(screen.getByTitle("Remove streak"));
+    expect(goal()).toBeNull();
+    expect(pill()?.textContent).toBe("+ Streak");
+    fireEvent.click(pill() as HTMLButtonElement);
+    type(title, "Run");
+    expect(pill()).toBeNull();
+  });
+});
+
 describe("a card too long for the screen", () => {
   beforeEach(() => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));

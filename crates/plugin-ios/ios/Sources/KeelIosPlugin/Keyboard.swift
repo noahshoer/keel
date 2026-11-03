@@ -4,8 +4,8 @@ import WebKit
 /// Keel's keyboard pace, app wide: the keyboard slides in and out at one
 /// speed, 10% slower than iOS's own (its windows' layers run at `speed`).
 /// The page hears of each move as it starts (`window.keelKeyboard`), so the
-/// task sheet moves with the keyboard instead of after it: the web view's
-/// visual viewport only resizes once the keyboard is up.
+/// task sheet moves with the keyboard at its pace: the web view's visual
+/// viewport jumps to the keyboard's final height, with no pace of its own.
 enum KeyboardPace {
   /// The keyboard's animation speed (1 is iOS's own).
   static let speed: Float = 0.9
@@ -83,6 +83,17 @@ enum KeyboardPace {
         Diag.log("KB curve \(key) basic \(ease) dur \(b.duration)")
       } else {
         Diag.log("KB curve \(key) \(type(of: anim)) dur \(anim.duration)")
+      }
+      return
+    }
+    // The keyboard is drawn in another process, so its window has nothing to
+    // read; what hosts it here may. Only logged, until it's known to be its curve.
+    for w in windows() where NSStringFromClass(type(of: w)).contains("TextEffects") {
+      guard let (key, anim) = slide(in: w.layer) else { continue }
+      if let s = anim as? CASpringAnimation {
+        Diag.log("KB host curve \(key) spring m \(s.mass) k \(s.stiffness) c \(s.damping) v \(s.initialVelocity) dur \(s.duration) settle \(s.settlingDuration)")
+      } else {
+        Diag.log("KB host curve \(key) \(type(of: anim)) dur \(anim.duration) timing \(String(describing: anim.timingFunction))")
       }
       return
     }

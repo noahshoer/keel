@@ -13,12 +13,12 @@
 //   off and Back is clicked (so a pending edit saves, as for a tap on ‹),
 //   otherwise it springs back.
 // - The keyboard: `--vv-top`, `--vv-h` and `--kb` (on the root) keep the sheet
-//   inside the visible area, above the keyboard, header in view. The visual
-//   viewport only resizes once the keyboard has arrived, so Swift
+//   inside the visible area, above the keyboard, header in view. Swift
 //   (crates/plugin-ios Keyboard.swift) calls `window.keelKeyboard` as it
-//   starts: the sheet's bottom rises with it, on its curve and at its pace,
+//   starts, for its pace: the sheet's bottom rises with it, at that pace,
 //   and a medium sheet goes to large alongside and stays there.
 // Reduced motion snaps.
+import { log } from "../diag";
 import { currentPlatform } from "../shell/platform";
 import {
   atEdge,
@@ -382,14 +382,17 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
   // the keyboard has gone.
   const keyboard = ({ kb, secs, ease }: KeyboardMove) => {
     if (!touchDevice()) return;
+    log(`keelKeyboard kb ${kb} secs ${secs} ease ${ease}`);
     const sheet = sheetEl();
     const s = reduce() ? 0 : secs;
     kbHold = kb > 0 ? { kb, until: win.performance.now() + s * 1000 + 500 } : null;
+    const bottom = s > 0 ? `bottom ${s}s ${ease}` : "none";
+    const card = doc.querySelector<HTMLElement>(".keyboard-card");
+    if (card) card.style.transition = s > 0 ? `transform ${s}s ${ease}` : "none";
     if (!sheet || closing) {
       viewport();
       return;
     }
-    const bottom = s > 0 ? `bottom ${s}s ${ease}` : "none";
     if (!keyboardExpands(detentOf(sheet), win.innerWidth, kb)) {
       // Large already, or the keyboard going: only the bottom moves (a
       // settle's own transform, if any, carries on).

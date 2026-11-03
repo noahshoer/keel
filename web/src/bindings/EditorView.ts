@@ -22,6 +22,11 @@ shown: EditorValues,
  */
 repeat_rule: Recurrence | null, 
 /**
+ * The Streak pill shows: adding a task that repeats. `shown.streak` is
+ * whether it's on, and is never true without this.
+ */
+streak_offered: boolean, 
+/**
  * Relative reminders count back from a due date (typed or picked).
  */
 has_due: boolean, 

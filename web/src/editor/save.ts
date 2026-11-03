@@ -3,7 +3,7 @@
 // `add_from_editor` and `save_edit` do.
 import type { EditorValues, Id, Label, Project, Recurrence, Section } from "../bindings";
 import { addPlan, editPlan, reminderActions } from "../core";
-import { addLabel, dispatchAction } from "../ipc/actions";
+import { addLabel, dispatchAction, setStreak } from "../ipc/actions";
 
 /** Sends each action, ignoring failures (reminders and labels are best effort). */
 async function bestEffort(sends: Array<() => Promise<unknown>>): Promise<void> {
@@ -33,6 +33,7 @@ export async function addFromEditor(
   const id = Object.values(result.id_mapping)[0];
   if (id === undefined) return;
   await bestEffort(reminderActions(id, [], plan.reminders).map((a) => () => dispatchAction(a)));
+  if (plan.streak) await bestEffort([() => setStreak(id, true, plan.streak_goal)]);
 }
 
 /**

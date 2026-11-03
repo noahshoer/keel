@@ -1,7 +1,7 @@
 // The app's icons: Phosphor (MIT) in bold, plain, on every platform. Filled
 // weight only for the deadline and priority flags. Each renders inside a
-// `span.icon`. Logo and DoneMark are Keel's own marks, and the tag, inbox and
-// calendars are Keel's own rounder drawings of Phosphor's (see `Drawn`).
+// `span.icon`. Logo and DoneMark are Keel's own marks, and the tag, trophy, inbox
+// and calendars are Keel's own rounder drawings of Phosphor's (see `Drawn`).
 import { ArrowBendDownRight } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
 import { ArrowUp } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { Bell } from "@phosphor-icons/react/dist/csr/Bell";
@@ -181,6 +181,17 @@ export function TagSmallIcon() {
   return (
     <Drawn size={12}>
       <TagShape />
+    </Drawn>
+  );
+}
+
+export function TrophySmallIcon() {
+  return (
+    <Drawn size={12}>
+      <path
+        {...LINE}
+        d="M76 44H180Q196 44 196 60V112A68 68 0 0 1 60 112V60Q60 44 76 44ZM60 68H36Q20 68 20 84V92Q20 132 64 136M196 68H220Q236 68 236 84V92Q236 132 192 136M128 180V216M88 216H168"
+      />
     </Drawn>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { keyboardInset } from "../gestures/sheet-rules";
-import { placeAboveCard, textRoomUnderPicker } from "./keyboardAnchor";
+import { nextHeld, placeAboveCard, textRoomUnderPicker } from "./keyboardAnchor";
 import type { Rect } from "./popover";
 
 const rect = (left: number, top: number, width: number, height: number): Rect => ({
@@ -67,5 +67,29 @@ describe("placeAboveCard", () => {
       left: 8,
       maxHeight: 292,
     });
+  });
+});
+
+describe("nextHeld", () => {
+  const LETTERS = 336;
+  const PAD = 310;
+
+  it("keeps the height the letters reached while the number pad is up", () => {
+    const held = nextHeld(null, LETTERS, true, true);
+    expect(held).toBe(LETTERS);
+    expect(nextHeld(held, PAD, true, true)).toBe(LETTERS);
+  });
+
+  it("lets go only once the letters are back, so closing doesn't dip", () => {
+    expect(nextHeld(LETTERS, PAD, false, true)).toBe(LETTERS);
+    expect(nextHeld(LETTERS, LETTERS, false, true)).toBeNull();
+  });
+
+  it("lets go if the keyboard goes away", () => {
+    expect(nextHeld(LETTERS, 0, false, false)).toBeNull();
+  });
+
+  it("holds nothing when nothing asks it to", () => {
+    expect(nextHeld(null, LETTERS, false, true)).toBeNull();
   });
 });

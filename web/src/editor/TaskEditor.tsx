@@ -39,13 +39,14 @@ import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
 import { HighlightedTitle } from "./HighlightedTitle";
 import { flagClass, locationChosen, locationFace, locationItems, PRIORITY_ITEMS } from "./items";
-import { useKeyboard } from "./keyboardAnchor";
+import { useHeldKeyboard, useKeyboard } from "./keyboardAnchor";
 import { LabelPicker } from "./LabelPicker";
 import { isTouch } from "./locale";
 import { Menu, type MenuItem } from "./Menu";
 import { type TypedPills, usePillFade, useRevealFilled } from "./pillFade";
 import { cx, DEADLINE_TITLE, type Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
+import { StreakPicker } from "./StreakPicker";
 
 /** The space between the task card and the keyboard. */
 const CARD_GAP = 8;
@@ -54,6 +55,11 @@ const CARD_GAP = 8;
 function keepFocus(e: MouseEvent<HTMLElement>): void {
   const target = e.target as HTMLElement;
   if (!target.closest("input, textarea, select")) e.preventDefault();
+}
+
+function streakPillText(view: EditorView): string {
+  if (!view.shown.streak) return "+ Streak";
+  return view.shown.streak_goal === null ? "Streak" : `Streak ${view.shown.streak_goal}`;
 }
 
 /** What each pill with a phrase in the title says, by the pill's `title`. */
@@ -67,6 +73,7 @@ function typedPills(view: EditorView): TypedPills {
     Section: ["Project / section", view.location_text],
     Label: ["Labels", view.labels_text],
     Repeat: ["Repeat", view.repeat_chip_text],
+    Streak: ["Streak", streakPillText(view)],
   };
   const typed: TypedPills = {};
   for (const { kind } of view.segments) {
@@ -75,6 +82,8 @@ function typedPills(view: EditorView): TypedPills {
       typed[title] = text;
     }
   }
+  // It appears with a repeat, beyond the end of the row: bring it into view.
+  if (view.streak_offered) typed["Streak"] = streakPillText(view);
   return typed;
 }
 
@@ -116,7 +125,7 @@ export function TaskEditor({
   const [values, setValues] = useState(initial);
   const [open, setOpen] = useState<Pop>(null);
   const [touch] = useState(isTouch);
-  const keyboard = useKeyboard(touch);
+  const keyboard = useHeldKeyboard(useKeyboard(touch), open === "streak-goal");
   useEffect(() => (touch ? holdPage() : undefined), [touch]);
   const ownTitle = useRef<HTMLTextAreaElement>(null);
   const title = titleRef ?? ownTitle;
@@ -301,6 +310,20 @@ export function TaskEditor({
         chipClass={view.repeat_rule !== null ? "pill-set" : ""}
         onSelect={(value) => pick({ type: "repeat", value })}
       />
+      {view.streak_offered ? (
+        <StreakPicker
+          text={streakPillText(view)}
+          on={view.shown.streak}
+          goal={view.shown.streak_goal}
+          open={open}
+          setOpen={setPop}
+          onPick={(on, goal) => pick({ type: "streak", on, goal })}
+          onEnter={() => {
+            setPop(null);
+            title.current?.focus();
+          }}
+        />
+      ) : null}
     </div>
   );
 
