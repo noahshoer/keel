@@ -189,7 +189,12 @@ pub enum Pick {
     Deadline { date: String },
     Repeat { value: String },
     Location { project_id: Id, section_id: Option<Id> },
-    Streak { on: bool },
+    Streak {
+        on: bool,
+        /// Its goal, from the pill's popover. Ignored unless above zero.
+        #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+        goal: Option<i64>,
+    },
 }
 
 /// Only the fields that changed; `None` leaves a field as it is.
@@ -507,9 +512,9 @@ pub fn apply_pick(
             v.streak = value != "none" && (v.streak || typed_streak);
             v.streak_goal = if v.streak { typed_goal.or(v.streak_goal) } else { None };
         }
-        Pick::Streak { on } => {
+        Pick::Streak { on, goal } => {
             v.streak = *on;
-            v.streak_goal = None;
+            v.streak_goal = if *on { goal.filter(|g| *g > 0) } else { None };
         }
         Pick::Location { project_id, section_id } => (v.project_id, v.section_id) = (project_id.clone(), section_id.clone()),
     }
@@ -1211,9 +1216,35 @@ mod tests {
         assert_eq!(add_plan(&v, &[], &[], &[], day30()).streak_goal, Some(30));
 
         // Off clears it, and coming back on doesn't bring it back.
-        apply_pick(&mut v, &Pick::Streak { on: false }, true, &[], &[], day30());
-        apply_pick(&mut v, &Pick::Streak { on: true }, true, &[], &[], day30());
+        apply_pick(&mut v, &Pick::Streak { on: false, goal: None }, true, &[], &[], day30());
+        apply_pick(&mut v, &Pick::Streak { on: true, goal: None }, true, &[], &[], day30());
         assert_eq!(add_plan(&v, &[], &[], &[], day30()).streak_goal, None);
+    }
+
+    #[test]
+    fn a_goal_from_the_popover_replaces_what_was_typed() {
+        let mut v = typed("Run every day streak 30");
+        let on = |goal| Pick::Streak { on: true, goal };
+
+        apply_pick(&mut v, &on(Some(40)), true, &[], &[], day30());
+        // The word goes, and the repeat it went with stays.
+        assert_eq!(v.content, "Run every day");
+        let view = editor_view(&v, true, None, None, &[], &[], day30());
+        assert!(view.shown.streak);
+        assert_eq!(view.shown.streak_goal, Some(40));
+        assert_eq!(add_plan(&v, &[], &[], &[], day30()).streak_goal, Some(40));
+
+        // An emptied field, or a zero, is no goal; the streak stays on.
+        for empty in [None, Some(0)] {
+            apply_pick(&mut v, &on(empty), true, &[], &[], day30());
+            let plan = add_plan(&v, &[], &[], &[], day30());
+            assert!(plan.streak);
+            assert_eq!(plan.streak_goal, None);
+        }
+
+        apply_pick(&mut v, &Pick::Streak { on: false, goal: Some(40) }, true, &[], &[], day30());
+        assert!(!add_plan(&v, &[], &[], &[], day30()).streak);
+        assert_eq!(v.streak_goal, None);
     }
 
     #[test]
@@ -1227,7 +1258,7 @@ mod tests {
         assert!(view.streak_offered);
         assert!(!view.shown.streak, "offered, not on");
 
-        apply_pick(&mut v, &Pick::Streak { on: true }, true, &[], &[], day30());
+        apply_pick(&mut v, &Pick::Streak { on: true, goal: None }, true, &[], &[], day30());
         assert!(editor_view(&v, true, None, None, &[], &[], day30()).shown.streak);
         assert!(add_plan(&v, &[], &[], &[], day30()).streak);
 
@@ -1239,7 +1270,7 @@ mod tests {
     fn removing_the_repeat_removes_the_streak() {
         let mut v = typed("Run");
         apply_pick(&mut v, &Pick::Repeat { value: "daily".into() }, true, &[], &[], day30());
-        apply_pick(&mut v, &Pick::Streak { on: true }, true, &[], &[], day30());
+        apply_pick(&mut v, &Pick::Streak { on: true, goal: None }, true, &[], &[], day30());
         apply_pick(&mut v, &Pick::Repeat { value: "none".into() }, true, &[], &[], day30());
         assert!(!v.streak);
         assert!(!editor_view(&v, true, None, None, &[], &[], day30()).streak_offered);
@@ -1267,7 +1298,7 @@ mod tests {
     #[test]
     fn turning_a_typed_streak_off_takes_its_word_and_keeps_the_repeat() {
         let mut v = typed("Run every day streak");
-        apply_pick(&mut v, &Pick::Streak { on: false }, true, &[], &[], day30());
+        apply_pick(&mut v, &Pick::Streak { on: false, goal: None }, true, &[], &[], day30());
         assert_eq!(v.content, "Run every day");
         let view = editor_view(&v, true, None, None, &[], &[], day30());
         assert!(view.streak_offered);

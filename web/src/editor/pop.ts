@@ -8,6 +8,8 @@ export type Pop =
   | "repeat"
   | "location"
   | "labels"
+  // The Streak pill's goal, while adding a task.
+  | "streak-goal"
   // The task view's streak: from its row, from the •••, or on the keyboard.
   | "streak-row"
   | "streak-more"

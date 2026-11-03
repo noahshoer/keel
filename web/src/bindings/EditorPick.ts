@@ -6,4 +6,8 @@ import type { ReminderDraft } from "./ReminderDraft";
  * A value chosen in a picker, in [`EditorValues`]' formats. (TypeScript
  * calls it `EditorPick`: `Pick` is a built-in type there.)
  */
-export type EditorPick = { "type": "date", date: string, time: string, } | { "type": "priority", value: string, } | { "type": "labels", names: Array<string>, } | { "type": "reminders", drafts: Array<ReminderDraft>, } | { "type": "deadline", date: string, } | { "type": "repeat", value: string, } | { "type": "location", projectId: Id, sectionId: Id | null, } | { "type": "streak", on: boolean, };
+export type EditorPick = { "type": "date", date: string, time: string, } | { "type": "priority", value: string, } | { "type": "labels", names: Array<string>, } | { "type": "reminders", drafts: Array<ReminderDraft>, } | { "type": "deadline", date: string, } | { "type": "repeat", value: string, } | { "type": "location", projectId: Id, sectionId: Id | null, } | { "type": "streak", on: boolean, 
+/**
+ * Its goal, from the pill's popover. Ignored unless above zero.
+ */
+goal: number | null, };

@@ -34,7 +34,7 @@ import {
   unhighlightAt,
   withTitle,
 } from "../core";
-import { ArrowUpIcon, FireIcon, FlagFilledIcon, RepeatSmallIcon } from "../shell/icons";
+import { ArrowUpIcon, FlagFilledIcon, RepeatSmallIcon } from "../shell/icons";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
 import { HighlightedTitle } from "./HighlightedTitle";
@@ -46,6 +46,7 @@ import { Menu, type MenuItem } from "./Menu";
 import { type TypedPills, usePillFade, useRevealFilled } from "./pillFade";
 import { cx, DEADLINE_TITLE, type Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
+import { StreakPicker } from "./StreakPicker";
 
 /** The space between the task card and the keyboard. */
 const CARD_GAP = 8;
@@ -310,20 +311,18 @@ export function TaskEditor({
         onSelect={(value) => pick({ type: "repeat", value })}
       />
       {view.streak_offered ? (
-        <div className="chip-wrap">
-          <button
-            type="button"
-            className={cx("chip chip-btn pill-streak", view.shown.streak ? "pill-set" : "pill-offer")}
-            title="Streak"
-            aria-pressed={view.shown.streak}
-            onClick={() => pick({ type: "streak", on: !view.shown.streak })}
-          >
-            <span className="chip-icon">
-              <FireIcon size={12} />
-            </span>
-            {streakPillText(view)}
-          </button>
-        </div>
+        <StreakPicker
+          text={streakPillText(view)}
+          on={view.shown.streak}
+          goal={view.shown.streak_goal}
+          open={open}
+          setOpen={setPop}
+          onPick={(on, goal) => pick({ type: "streak", on, goal })}
+          onEnter={() => {
+            setPop(null);
+            title.current?.focus();
+          }}
+        />
       ) : null}
     </div>
   );

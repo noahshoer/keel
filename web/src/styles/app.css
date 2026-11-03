@@ -975,6 +975,14 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .tv-add-sub { min-height: 36px; padding: 6px 12px; gap: 10px; font-size: 14px; }
 }
 .streak-pop { width: 300px; }
+/* The Streak pill's goal, while adding a task. */
+.menu.streak-goal-pop { min-width: 240px; }
+.streak-goal-row { display: flex; align-items: center; gap: 10px; flex: none; min-height: 44px; padding: 0 4px 0 12px; font-size: 14px; color: var(--text); }
+.streak-goal-icon { display: flex; color: var(--streak-goal); }
+.streak-goal-row .menu-label { flex: 1; }
+.streak-goal-row input { width: 72px; min-height: 36px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--r-item);
+  font-size: 16px; font-weight: 600; text-align: center; outline: none; background: var(--field-fill); color: var(--text); }
+.streak-goal-row input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
 /* On the keyboard, over the sheet; above the home indicator with the keyboard down.
    It rises by `transform`, which WebKit runs off the main thread, as the keyboard
    does; `bottom` would be laid out on it every frame, and fall behind. The pace is
