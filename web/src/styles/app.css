@@ -400,15 +400,17 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
    a hover reveal on iPhone would cost every tap on a task an extra tap. */
 @media (hover: hover) { .task:hover .task-actions { opacity: 1; transform: none; pointer-events: auto; } }
 .task.pressed .task-actions, .task-actions:focus-within { opacity: 1; transform: none; pointer-events: auto; }
-/* Rows like the task view's fields: the name on the left, its value on the right. */
-.streak-panel { display: flex; flex-direction: column; align-items: stretch; margin: 2px 0 10px 40px;
-  padding: 8px 16px 14px; background: var(--panel); border-radius: var(--r-lg); font-size: 16px; line-height: 22px;
+/* Three columns: each stat's number or field over its name (`column-reverse`,
+   so the name still reads first), the rest of the panel below them, centered. */
+.streak-panel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; margin: 2px 0 10px 40px;
+  padding: 14px 16px; background: var(--panel); border-radius: var(--r-lg); font-size: 15px; line-height: 20px; text-align: center;
   animation: pop-in .18s var(--ease); }
-.streak-panel .stat { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
-.streak-panel .stat b { font-weight: 600; font-variant-numeric: tabular-nums; }
-.streak-panel .btn { align-self: flex-start; margin-top: 8px; }
-.streak-panel input { width: 72px; min-height: 36px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--r-item);
-  font-size: 16px; font-weight: 600; text-align: right; outline: none; background: var(--field-fill); color: var(--text); }
+.streak-panel > :not(.stat) { grid-column: 1 / -1; }
+.streak-panel > .btn { justify-self: center; }
+.streak-panel .stat { display: flex; flex-direction: column-reverse; align-items: center; gap: 2px; min-width: 0; font-size: 13px; line-height: 18px; color: var(--secondary); }
+.streak-panel .stat b { display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 36px; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.streak-panel input { width: 64px; min-height: 36px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--r-item);
+  font-size: 20px; font-weight: 600; text-align: center; outline: none; background: var(--field-fill); color: var(--text); }
 .streak-panel input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
 
 /* Add task */
@@ -942,9 +944,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .tv-desc { font-size: 14px; }
   .tv-row, .tv-field-btn { min-height: 36px; }
   .tv-field-btn { padding: 6px 12px; gap: 10px; font-size: 14px; border-radius: var(--r-item); }
-  .streak-panel { padding: 6px 12px 12px; font-size: 14px; line-height: 20px; }
-  .streak-panel .stat { min-height: 36px; }
-  .streak-panel input { min-height: 30px; font-size: 14px; }
+  .streak-panel { padding: 12px; font-size: 14px; }
+  .streak-panel .stat { font-size: 12px; }
+  .streak-panel .stat b, .streak-panel input { min-height: 30px; font-size: 18px; }
   .tv-round { width: 36px; height: 36px; }
   .tv-round svg { width: 20px; height: 20px; }
   .tv-head { padding: 8px 12px; }
