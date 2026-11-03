@@ -400,13 +400,15 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
    a hover reveal on iPhone would cost every tap on a task an extra tap. */
 @media (hover: hover) { .task:hover .task-actions { opacity: 1; transform: none; pointer-events: auto; } }
 .task.pressed .task-actions, .task-actions:focus-within { opacity: 1; transform: none; pointer-events: auto; }
-.streak-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin: 2px 0 10px 40px;
-  padding: 12px 14px; background: var(--panel); border-radius: var(--r-lg); font-size: 13px;
+/* Rows like the task view's fields: the name on the left, its value on the right. */
+.streak-panel { display: flex; flex-direction: column; align-items: stretch; margin: 2px 0 10px 40px;
+  padding: 8px 16px 14px; background: var(--panel); border-radius: var(--r-lg); font-size: 16px; line-height: 22px;
   animation: pop-in .18s var(--ease); }
-.streak-panel .stat b { font-size: 15px; }
-.streak-panel label { display: inline-flex; align-items: center; gap: 8px; }
-.streak-panel input { width: 64px; min-height: 36px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--r-item);
-  font-size: 15px; outline: none; background: var(--field-fill); color: var(--text); }
+.streak-panel .stat { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+.streak-panel .stat b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.streak-panel .btn { align-self: flex-start; margin-top: 8px; }
+.streak-panel input { width: 72px; min-height: 36px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--r-item);
+  font-size: 16px; font-weight: 600; text-align: right; outline: none; background: var(--field-fill); color: var(--text); }
 .streak-panel input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
 
 /* Add task */
@@ -765,7 +767,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .chip-icon:not([class*="pri-"]):not(.pill-tag) .icon { color: var(--icon); }
 .search-btn { flex: none; }
 .search-btn svg { width: 22px; height: 22px; }
-.streak-count { display: inline-flex; align-items: center; gap: 3px; }
+.streak-count { display: inline-flex; align-items: center; gap: 4px; }
 .streak-count .icon { color: var(--accent); }
 .menu-btn { display: none; margin-left: -6px; color: var(--icon); }
 .back-btn { display: none; margin-left: -6px; }
@@ -940,6 +942,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .tv-desc { font-size: 14px; }
   .tv-row, .tv-field-btn { min-height: 36px; }
   .tv-field-btn { padding: 6px 12px; gap: 10px; font-size: 14px; border-radius: var(--r-item); }
+  .streak-panel { padding: 6px 12px 12px; font-size: 14px; line-height: 20px; }
+  .streak-panel .stat { min-height: 36px; }
+  .streak-panel input { min-height: 30px; font-size: 14px; }
   .tv-round { width: 36px; height: 36px; }
   .tv-round svg { width: 20px; height: 20px; }
   .tv-head { padding: 8px 12px; }
@@ -951,7 +956,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .tv-sub-body { font-size: 14px; }
   .tv-add-sub { min-height: 36px; padding: 6px 12px; gap: 10px; font-size: 14px; }
 }
-.tv-card .streak-panel { margin: 0; padding: 12px 16px; background: none; border-radius: 0; }
+.tv-card .streak-panel { margin: 0; background: none; border-radius: 0; }
 /* iPhone: iOS sizes (17pt text, 44pt rows, 16pt margins and gaps). The
    header holds the glass X, ‹ (in a sub-task's view) and •••, with the
    parent's or project's name small in the middle; the sub-tasks' heading
@@ -1136,7 +1141,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .view-toggle svg { width: 24px; height: 24px; }
   .view-toggle-label { display: none; }
   .section-title { padding-left: 8px; padding-right: 8px; }
-  .streak-panel { margin-left: 0; gap: 12px; }
+  .streak-panel { margin-left: 0; }
   /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */
   .editor { padding: 10px 10px 0; }
   .chips { position: relative; gap: 6px; }

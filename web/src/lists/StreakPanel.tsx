@@ -32,7 +32,7 @@ export function StreakPanel({ task, onChanged }: { task: Task; onChanged: () => 
           <span className="stat">
             Best <b>{task.streak_best}</b>
           </span>
-          <label>
+          <label className="stat">
             Goal{" "}
             <input
               type="text"
