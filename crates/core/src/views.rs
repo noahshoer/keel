@@ -156,16 +156,21 @@ pub fn chain(id: &Id, all: &[Task]) -> Vec<Id> {
     chain
 }
 
-/// Counts a task's direct, non-deleted sub-tasks. Repeating sub-tasks are
-/// left out (they never stay complete). `None` when nothing is counted.
+/// Counts a task's direct, non-deleted sub-tasks. Repeating sub-tasks never
+/// stay complete, so they count only under a repeating parent, where one is
+/// done once its date is past the parent's. `None` when nothing is counted.
 pub fn progress(parent: &Id, all: &[Task]) -> Option<Progress> {
+    let repeating = |t: &Task| t.due.as_ref().is_some_and(|d| d.is_recurring);
+    let round = all.iter().find(|t| &t.id == parent).filter(|t| repeating(t)).and_then(due_date_of);
     let mut p = Progress { done: 0, total: 0 };
-    for t in all {
-        if t.is_deleted || t.parent_id.as_ref() != Some(parent) || t.due.as_ref().is_some_and(|d| d.is_recurring) {
-            continue;
-        }
+    for t in all.iter().filter(|t| !t.is_deleted && t.parent_id.as_ref() == Some(parent)) {
+        let ahead = match (repeating(t), round) {
+            (false, _) => false,
+            (true, None) => continue,
+            (true, Some(round)) => due_date_of(t).is_some_and(|d| d > round),
+        };
         p.total += 1;
-        if t.checked {
+        if t.checked || ahead {
             p.done += 1;
         }
     }
@@ -708,6 +713,28 @@ mod progress_tests {
         let p = t("p", None, false, false);
         let h = t("h", Some(&p), false, true);
         assert_eq!(progress(&p.id, &[p.clone(), h]), None);
+    }
+
+    fn dated(mut task: Task, date: &str) -> Task {
+        task.due = Some(Due {
+            date: date.into(),
+            timezone: None,
+            string: "every day".into(),
+            lang: "en".into(),
+            is_recurring: true,
+            recurrence: None,
+        });
+        task
+    }
+
+    #[test]
+    fn progress_counts_a_repeating_parents_repeating_children() {
+        let p = dated(t("p", None, false, false), "2026-11-03");
+        let due = dated(t("due", Some(&p), false, false), "2026-11-03");
+        let ahead = dated(t("ahead", Some(&p), false, false), "2026-11-04");
+        let plain = t("plain", Some(&p), false, false);
+        let pr = progress(&p.id, &[p.clone(), due, ahead, plain]);
+        assert_eq!(pr, Some(Progress { done: 1, total: 3 }));
     }
 
     #[test]
