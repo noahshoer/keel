@@ -39,7 +39,7 @@ export function SectionBlock({
   const [draft, setDraft] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const { show: showSubtasks } = useContext(ShowSubtasksContext);
-  const list = cards(tasks, all, showSubtasks ? "Grouped" : "TopLevel");
+  const list = cards(tasks, all, showSubtasks ? "Grouped" : "TopLevel", today);
   // What the section shows: its top-level tasks (sub-tasks go with them).
   const count = list.length;
 

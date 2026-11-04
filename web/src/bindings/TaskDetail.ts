@@ -8,6 +8,10 @@ import type { Task } from "./Task";
  */
 export type TaskDetail = { task: Task, parent: Task | null, progress: Progress | null, 
 /**
+ * See [`views::is_done`].
+ */
+done: boolean, 
+/**
  * Direct sub-tasks in child order; done ones only when `show_completed`.
  */
 visible: Array<SubtaskLine>, };

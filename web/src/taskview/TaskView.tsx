@@ -193,10 +193,10 @@ export function TaskView({
   const completeHere = () => {
     if (!nav.holdCircles()) return;
     const pair = commit();
-    const checked = task.checked;
+    const done = detail.done;
     void (async () => {
       if (pair !== null) await settle(save(pair));
-      if (checked) await settle(uncompleteTask(id));
+      if (done) await settle(uncompleteTask(id));
       // Back to the parent, or closed at the top.
       else if (await settle(completeTask(id))) nav.completedHere();
       onChanged();
@@ -291,11 +291,11 @@ export function TaskView({
       )}
       <div className="tv-body">
         <div className="tv-scroll">
-          <div className={task.checked ? "tv-titleline done" : "tv-titleline"}>
+          <div className={detail.done ? "tv-titleline done" : "tv-titleline"}>
             <button
               type="button"
-              className={task.checked ? "check done" : CHECK_CLASS[task.priority]}
-              title={task.checked ? "Mark as not done" : "Complete task"}
+              className={detail.done ? "check done" : CHECK_CLASS[task.priority]}
+              title={detail.done ? "Mark as not done" : "Complete task"}
               onClick={completeHere}
             >
               <CheckIcon />

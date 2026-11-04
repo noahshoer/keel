@@ -103,7 +103,7 @@ export function SearchPane({
             {r.open.map((task) => (
               <TaskRow
                 key={task.id}
-                row={{ task, progress: progress(task.id, loaded.all) }}
+                row={{ task, progress: progress(task.id, loaded.all, today) }}
                 today={today}
                 location={where(task)}
                 labels={loaded.labels}

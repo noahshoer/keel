@@ -1,6 +1,7 @@
 //! What the task view shows, as data: the fields card's layout, the data one
 //! level renders, for the React UI.
 
+use chrono::NaiveDate;
 use serde::Serialize;
 
 use crate::editor::EditorValues;
@@ -104,7 +105,7 @@ pub fn field_layout(v: &EditorValues, inbox_id: &Id) -> FieldLayout {
 pub struct SubtaskLine {
     pub task: Task,
     pub progress: Option<Progress>,
-    /// See [`views::subtask_done`].
+    /// See [`views::is_done`].
     pub done: bool,
 }
 
@@ -115,23 +116,25 @@ pub struct TaskDetail {
     pub task: Task,
     pub parent: Option<Task>,
     pub progress: Option<Progress>,
+    /// See [`views::is_done`].
+    pub done: bool,
     /// Direct sub-tasks in child order; done ones only when `show_completed`.
     pub visible: Vec<SubtaskLine>,
 }
 
-pub fn detail(id: &Id, all: &[Task], show_completed: bool) -> Option<TaskDetail> {
+pub fn detail(id: &Id, all: &[Task], show_completed: bool, today: NaiveDate) -> Option<TaskDetail> {
     let task = all.iter().find(|t| &t.id == id)?.clone();
     let parent = task.parent_id.as_ref().and_then(|p| all.iter().find(|t| &t.id == p)).cloned();
     let visible = views::children(id, all)
         .into_iter()
         .map(|c| SubtaskLine {
             task: c.clone(),
-            progress: views::progress(&c.id, all),
-            done: views::subtask_done(c, all),
+            progress: views::progress(&c.id, all, today),
+            done: views::is_done(c, today),
         })
         .filter(|line| show_completed || !line.done)
         .collect();
-    Some(TaskDetail { progress: views::progress(id, all), task, parent, visible })
+    Some(TaskDetail { progress: views::progress(id, all, today), done: views::is_done(&task, today), task, parent, visible })
 }
 
 #[cfg(test)]
@@ -276,12 +279,16 @@ mod tests {
         let mut c = task("C", Some("P"), 0);
         c.checked = true;
         let all = vec![task("P", None, 0), task("S", Some("P"), 1), c];
-        let hidden = detail(&id("P"), &all, false).unwrap();
+        let hidden = detail(&id("P"), &all, false, some_day()).unwrap();
         let ids: Vec<_> = hidden.visible.iter().map(|r| r.task.id.clone()).collect();
         assert_eq!(ids, vec![id("S")]);
-        let shown = detail(&id("P"), &all, true).unwrap();
+        let shown = detail(&id("P"), &all, true, some_day()).unwrap();
         let ids: Vec<_> = shown.visible.iter().map(|r| r.task.id.clone()).collect();
         assert_eq!(ids, vec![id("C"), id("S")]);
+    }
+
+    fn some_day() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 11, 3).unwrap()
     }
 
     fn repeats(mut t: Task, date: &str) -> Task {
@@ -297,7 +304,7 @@ mod tests {
     }
 
     #[test]
-    fn a_repeating_sub_task_past_its_parents_date_counts_as_completed() {
+    fn a_repeating_sub_task_completed_today_shows_as_completed() {
         let mut completed = repeats(task("Done", Some("P"), 1), "2026-11-04");
         completed.last_completion = Some(crate::model::LastCompletion {
             moved_to: "2026-11-04".into(),
@@ -311,14 +318,16 @@ mod tests {
             repeats(task("Due", Some("P"), 0), "2026-11-03"),
             completed,
         ];
-        let hidden = detail(&id("P"), &all, false).unwrap();
+        let hidden = detail(&id("P"), &all, false, some_day()).unwrap();
         let ids: Vec<_> = hidden.visible.iter().map(|r| r.task.id.clone()).collect();
         assert_eq!(ids, vec![id("Due")]);
         assert!(!hidden.visible[0].done);
-        let shown = detail(&id("P"), &all, true).unwrap();
+        let shown = detail(&id("P"), &all, true, some_day()).unwrap();
         let done: Vec<_> = shown.visible.iter().map(|r| (r.task.id.clone(), r.done)).collect();
         assert_eq!(done, vec![(id("Due"), false), (id("Done"), true)]);
         assert_eq!(hidden.progress, Some(Progress { done: 1, total: 2 }));
+        assert!(detail(&id("Done"), &all, false, some_day()).unwrap().done);
+        assert!(!detail(&id("Due"), &all, false, some_day()).unwrap().done);
     }
 
     #[test]
@@ -326,35 +335,35 @@ mod tests {
         let mut c = task("C", Some("P"), 0);
         c.checked = true;
         let all = vec![task("P", None, 0), c];
-        assert!(detail(&id("P"), &all, true).unwrap().visible[0].done);
+        assert!(detail(&id("P"), &all, true, some_day()).unwrap().visible[0].done);
     }
 
     #[test]
     fn detail_reflects_reloaded_tasks() {
         let before = vec![task("P", None, 0), task("C", Some("P"), 0), task("S", Some("P"), 1)];
-        assert_eq!(detail(&id("P"), &before, false).unwrap().progress, Some(Progress { done: 0, total: 2 }));
+        assert_eq!(detail(&id("P"), &before, false, some_day()).unwrap().progress, Some(Progress { done: 0, total: 2 }));
         let mut after = before.clone();
         after[1].checked = true;
-        assert_eq!(detail(&id("P"), &after, false).unwrap().progress, Some(Progress { done: 1, total: 2 }));
+        assert_eq!(detail(&id("P"), &after, false, some_day()).unwrap().progress, Some(Progress { done: 1, total: 2 }));
     }
 
     #[test]
     fn detail_none_for_missing() {
-        assert!(detail(&id("X"), &[task("A", None, 0)], false).is_none());
+        assert!(detail(&id("X"), &[task("A", None, 0)], false, some_day()).is_none());
     }
 
     #[test]
     fn detail_has_parent() {
         let all = vec![task("P", None, 0), task("C", Some("P"), 0)];
-        let d = detail(&id("C"), &all, false).unwrap();
+        let d = detail(&id("C"), &all, false, some_day()).unwrap();
         assert_eq!(d.parent.unwrap().id, id("P"));
-        assert!(detail(&id("P"), &all, false).unwrap().parent.is_none());
+        assert!(detail(&id("P"), &all, false, some_day()).unwrap().parent.is_none());
     }
 
     #[test]
     fn visible_rows_carry_their_own_progress() {
         let all = vec![task("P", None, 0), task("C", Some("P"), 0), task("G", Some("C"), 0)];
-        let d = detail(&id("P"), &all, false).unwrap();
+        let d = detail(&id("P"), &all, false, some_day()).unwrap();
         assert_eq!(d.visible[0].progress, Some(Progress { done: 0, total: 1 }));
     }
 
@@ -371,6 +380,6 @@ mod tests {
     fn completed_elsewhere_still_has_detail() {
         let mut a = task("A", None, 0);
         a.checked = true;
-        assert!(detail(&id("A"), &[a], false).unwrap().task.checked);
+        assert!(detail(&id("A"), &[a], false, some_day()).unwrap().task.checked);
     }
 }

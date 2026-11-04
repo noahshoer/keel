@@ -4,7 +4,7 @@
 
 use chrono::NaiveDate;
 
-use crate::model::Task;
+use crate::model::{LastCompletion, Task};
 use crate::recurrence::Recurrence;
 
 fn rule(task: &Task) -> Option<Recurrence> {
@@ -54,6 +54,30 @@ pub fn credit_completion(task: &mut Task, today: NaiveDate) {
     }
     task.streak_best = task.streak_best.max(task.streak_current);
     task.streak_last_period = Some(today.format("%Y-%m-%d").to_string());
+}
+
+/// The completion that undoing would put back, if there is one. One from before
+/// completions were saved is worked out from its streak, while it's still today's.
+pub fn undoable_completion(task: &Task, today: NaiveDate) -> Option<LastCompletion> {
+    let due = task.due.as_ref().filter(|_| !task.checked)?;
+    if let Some(saved) = task.last_completion.as_ref() {
+        if saved.moved_to == due.date {
+            return Some(saved.clone());
+        }
+    }
+    let rule = due.recurrence.as_ref()?;
+    let moved_to = NaiveDate::parse_from_str(due.date.get(..10)?, "%Y-%m-%d").ok()?;
+    if !task.streak_enabled || last_period(task) != Some(today) || rule.next_after(today) != moved_to {
+        return None;
+    }
+    let streak_current = (task.streak_current - 1).max(0);
+    Some(LastCompletion {
+        moved_to: due.date.clone(),
+        date: format!("{}{}", today.format("%Y-%m-%d"), due.date.get(10..).unwrap_or("")),
+        streak_current,
+        streak_best: if task.streak_best == task.streak_current { streak_current } else { task.streak_best },
+        streak_last_period: (streak_current > 0).then(|| rule.prev_before(today).format("%Y-%m-%d").to_string()),
+    })
 }
 
 /// Hard reset to 0 once the occurrence after the last credited one is strictly

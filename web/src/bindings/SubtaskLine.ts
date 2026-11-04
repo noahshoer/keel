@@ -7,6 +7,6 @@ import type { Task } from "./Task";
  */
 export type SubtaskLine = { task: Task, progress: Progress | null, 
 /**
- * See [`views::subtask_done`].
+ * See [`views::is_done`].
  */
 done: boolean, };

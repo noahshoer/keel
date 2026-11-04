@@ -10,6 +10,7 @@ import type { Loaded } from "../app/load";
 import { useLoaded } from "../app/load";
 import type { View } from "../app/view";
 import type { Action, Id } from "../bindings";
+import { localToday } from "../clock";
 import { taskDetail } from "../core";
 import { setStreak } from "../ipc/actions";
 import { invoke } from "../ipc/invoke";
@@ -62,7 +63,7 @@ function Stack({
       <output data-testid="close-asked">{String(nav.closeAsked)}</output>
       <button type="button" data-testid="ask-close" onClick={nav.askClose} />
       {shown.map((id, i) => {
-        const detail = taskDetail(id, loaded.all, nav.showCompleted);
+        const detail = taskDetail(id, loaded.all, nav.showCompleted, localToday());
         if (detail === null) return null;
         // `under` with one level shows it inactive on its own.
         const active = i === shown.length - 1 && !(under && shown.length === 1);
@@ -363,6 +364,43 @@ it("a double tap on the title circle completes once and goes back", async () => 
   await waitFor(() => expect(stack()).toBe("t-trip"));
   expect(sent.filter((a) => a.type === "task_complete")).toHaveLength(1);
   expect((await task("t-bag"))?.checked).toBe(true);
+});
+
+it("a repeating sub-task done for today shows done in its own view, and its circle undoes it", async () => {
+  const next = new Date(`${localToday()}T12:00:00`);
+  next.setDate(next.getDate() + 1);
+  const tomorrow = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+  const real = mockHandlers.all_tasks;
+  vi.spyOn(mockHandlers, "all_tasks").mockImplementation(async (args) =>
+    (await real(args)).map((t) =>
+      t.id === "t-bag"
+        ? {
+            ...t,
+            due: {
+              date: tomorrow,
+              timezone: null,
+              string: "every day",
+              lang: "en",
+              is_recurring: true,
+              recurrence: "Daily",
+            },
+            last_completion: {
+              moved_to: tomorrow,
+              date: localToday(),
+              streak_current: 0,
+              streak_best: 0,
+              streak_last_period: null,
+            },
+          }
+        : t,
+    ),
+  );
+  await show(["t-trip", "t-bag"]);
+  const sent = spyActions();
+  const circle = top().querySelector(".tv-titleline button.check.done") as HTMLButtonElement;
+  expect(circle.title).toBe("Mark as not done");
+  fireEvent.click(circle);
+  await waitFor(() => expect(sent).toEqual([{ type: "task_uncomplete", id: "t-bag" }]));
 });
 
 it("a sub-task's circle completes it and the view stays", async () => {

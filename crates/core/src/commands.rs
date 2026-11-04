@@ -593,7 +593,7 @@ pub fn apply_at<R: Repository>(
         Action::TaskUncomplete { id } => {
             if let Some(mut task) = repo.get_task(&id)? {
                 // A repeating task was never checked: put back what completing it changed.
-                if let Some(undo) = task.undoable_completion().cloned() {
+                if let Some(undo) = streak::undoable_completion(&task, today) {
                     if let Some(d) = task.due.as_mut() {
                         d.date = undo.date;
                     }

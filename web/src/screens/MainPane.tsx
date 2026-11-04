@@ -178,7 +178,7 @@ export function MainPane({
   );
   const list = (tasks: Task[]) => (
     <CardList
-      cards={cards(tasks, loaded.all, mode)}
+      cards={cards(tasks, loaded.all, mode, today)}
       today={today}
       locations={locations}
       labels={loaded.labels}

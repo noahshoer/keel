@@ -139,13 +139,6 @@ pub struct LastCompletion {
 }
 
 impl Task {
-    /// The completion that can still be undone, if there is one.
-    pub fn undoable_completion(&self) -> Option<&LastCompletion> {
-        let due = self.due.as_ref()?;
-        self.last_completion.as_ref().filter(|c| !self.checked && c.moved_to == due.date)
-    }
-
-
     /// A new task in `project_id` with sensible defaults (streaks off).
     pub fn new(content: impl Into<String>, project_id: Id) -> Task {
         let now = Utc::now();

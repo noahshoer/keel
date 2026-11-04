@@ -3,7 +3,9 @@ use keel_core::commands::{Action, Command};
 use keel_core::ids::Id;
 use keel_core::model::Task;
 use keel_core::recurrence::Recurrence;
+use keel_core::views::{is_done, progress, Progress};
 use keel_service::AppService;
+use keel_storage::SqliteRepo;
 
 const FRIDAY: u8 = 4;
 
@@ -11,8 +13,13 @@ fn today() -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, 1, 5).unwrap()
 }
 
+fn tomorrow() -> NaiveDate {
+    today().succ_opt().unwrap()
+}
+
 struct Fx {
     _dir: tempfile::TempDir,
+    path: String,
     svc: AppService,
     inbox: Id,
     n: u32,
@@ -21,9 +28,10 @@ struct Fx {
 impl Fx {
     fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
-        let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
+        let path = dir.path().join("keel.db").to_str().unwrap().to_string();
+        let svc = AppService::open(&path).unwrap();
         let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap().id;
-        Fx { _dir: dir, svc, inbox, n: 0 }
+        Fx { _dir: dir, path, svc, inbox, n: 0 }
     }
 
     fn run_on(&mut self, action: Action, day: NaiveDate) -> Option<Id> {
@@ -212,4 +220,63 @@ fn undoing_twice_steps_back_only_once() {
     f.run_on(Action::TaskUncomplete { id: task.clone() }, today());
     f.run_on(Action::TaskUncomplete { id: task.clone() }, today());
     assert_eq!(f.date(&task), "2026-01-05");
+}
+
+#[test]
+fn a_completed_sub_task_stays_completed_until_its_next_date() {
+    let mut f = Fx::new();
+    let parent = f.add(None, Some(Recurrence::Daily));
+    let child = f.add(Some(&parent), Some(Recurrence::Daily));
+    f.complete(&child);
+    assert!(is_done(&f.get(&child), today()));
+    assert!(!is_done(&f.get(&child), tomorrow()));
+}
+
+#[test]
+fn completing_a_repeating_parent_leaves_its_sub_tasks_completed_for_today() {
+    let mut f = Fx::new();
+    let parent = f.add(None, Some(Recurrence::Daily));
+    let a = f.add(Some(&parent), Some(Recurrence::Daily));
+    let b = f.add(Some(&parent), Some(Recurrence::Daily));
+    f.streak(&a);
+    f.complete(&parent);
+
+    let all = f.svc.all_tasks_at(today()).unwrap();
+    assert_eq!(progress(&parent, &all, today()), Some(Progress { done: 2, total: 2 }));
+    assert_eq!(progress(&parent, &all, tomorrow()), Some(Progress { done: 0, total: 2 }));
+
+    // And tapping one reopens just it, for today.
+    f.run_on(Action::TaskUncomplete { id: a.clone() }, today());
+    assert_eq!(f.date(&a), "2026-01-05");
+    assert!(!is_done(&f.get(&a), today()));
+    assert!(is_done(&f.get(&b), today()));
+}
+
+#[test]
+fn a_sub_task_just_not_due_yet_is_not_completed() {
+    let mut f = Fx::new();
+    let parent = f.add(None, Some(Recurrence::Daily));
+    let child = f.add(Some(&parent), Some(Recurrence::Weekly(vec![FRIDAY])));
+    assert!(!is_done(&f.get(&child), today()));
+}
+
+#[test]
+fn a_sub_task_completed_before_completions_were_saved_shows_done_and_undoes() {
+    let mut f = Fx::new();
+    let parent = f.add(None, Some(Recurrence::Daily));
+    let child = f.add(Some(&parent), Some(Recurrence::Daily));
+    f.streak(&child);
+    f.complete(&child);
+    // As the older build left it: moved and credited, nothing saved.
+    let mut old = f.get(&child);
+    old.last_completion = None;
+    keel_core::repository::Repository::upsert_task(&SqliteRepo::open(&f.path).unwrap(), &old).unwrap();
+
+    assert!(is_done(&f.get(&child), today()));
+    f.run_on(Action::TaskUncomplete { id: child.clone() }, today());
+
+    let t = f.get(&child);
+    assert_eq!(f.date(&child), "2026-01-05");
+    assert!(!is_done(&t, today()));
+    assert_eq!((t.streak_current, t.streak_best, t.streak_last_period), (0, 0, None));
 }

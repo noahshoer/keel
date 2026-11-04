@@ -80,7 +80,7 @@ describe("keel-core over wasm", () => {
     const parent = makeTask({ id: "t-parent", project_id: "p-home", content: "Pack" });
     const child = makeTask({ id: "t-child", project_id: "p-home", content: "Socks", parent_id: "t-parent" });
     const all = [parent, child];
-    const out = cards(all, all, "TopLevel");
+    const out = cards(all, all, "TopLevel", "2026-11-03");
     expect(out).toHaveLength(1);
     expect(out[0]?.head.task.id).toBe("t-parent");
     expect(out[0]?.head.progress).toEqual({ done: 0, total: 1 });
@@ -93,8 +93,8 @@ describe("keel-core over wasm", () => {
     const parent = makeTask({ id: "a", project_id: "p", content: "A" });
     const done = makeTask({ id: "b", project_id: "p", content: "B", parent_id: "a", checked: true });
     const open = makeTask({ id: "c", project_id: "p", content: "C", parent_id: "a" });
-    expect(progress("a", [parent, done, open])).toEqual({ done: 1, total: 2 });
-    expect(progress("b", [parent, done, open])).toBeNull();
+    expect(progress("a", [parent, done, open], "2026-11-03")).toEqual({ done: 1, total: 2 });
+    expect(progress("b", [parent, done, open], "2026-11-03")).toBeNull();
   });
 
   // The cases below are the Rust tests' (views.rs date_group_tests,
@@ -218,11 +218,11 @@ describe("keel-core over wasm", () => {
       child_order: 1,
     });
     const all = [parent, a, b];
-    const hidden = taskDetail("a", all, false);
+    const hidden = taskDetail("a", all, false, "2026-11-03");
     expect(hidden?.parent?.id).toBe("p");
-    expect(taskDetail("p", all, false)?.visible).toHaveLength(1);
-    expect(taskDetail("p", all, true)?.visible).toHaveLength(2);
-    expect(taskDetail("nope", all, false)).toBeNull();
+    expect(taskDetail("p", all, false, "2026-11-03")?.visible).toHaveLength(1);
+    expect(taskDetail("p", all, true, "2026-11-03")?.visible).toHaveLength(2);
+    expect(taskDetail("nope", all, false, "2026-11-03")).toBeNull();
   });
 
   it("chain runs from the top parent down", () => {

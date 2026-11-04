@@ -6,6 +6,7 @@
 import { useMemo } from "react";
 import type { Loaded } from "../app/load";
 import type { Id, Task, TaskDetail } from "../bindings";
+import { localToday } from "../clock";
 import { taskDetail } from "../core";
 import { slideClose } from "../gestures/sheet";
 import { useTaskNav } from "./nav-context";
@@ -26,7 +27,7 @@ function useDetails(all: Task[], showCompleted: boolean): (id: Id | null) => Tas
     if (id === null) return null;
     let d = cache.byId.get(id);
     if (d === undefined) {
-      d = taskDetail(id, cache.all, cache.showCompleted);
+      d = taskDetail(id, cache.all, cache.showCompleted, localToday());
       cache.byId.set(id, d);
     }
     return d;
