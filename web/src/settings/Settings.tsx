@@ -303,7 +303,9 @@ export function Settings({
             <div className="setting-row">
               <div className="setting-text">
                 <div className="setting-name">Tasks without a time</div>
-                <div className="setting-hint">Sent on the due day, and for deadlines that day with no due time.</div>
+                <div className="setting-hint">
+                  Sent on the due day, and for deadlines that day with no due time.
+                </div>
               </div>
               {menu("allday", "AllDay", "Tasks without a time", menus.all_day, <CalendarSmallIcon />)}
             </div>
