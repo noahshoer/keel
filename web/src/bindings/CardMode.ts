@@ -3,4 +3,4 @@
 /**
  * How [`cards`] groups a view's matches.
  */
-export type CardMode = "TopLevel" | "Grouped";
+export type CardMode = "TopLevel" | "Grouped" | "Heads";

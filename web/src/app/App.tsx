@@ -3,13 +3,14 @@
 // drawer on narrow layouts (swipes open and close it), the Search push / pop
 // motion, and the task view's sheet. Liquid Glass is parked, so there are no
 // glass buttons; the header's menu button opens the drawer.
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { localToday } from "../clock";
 import { installLongPress } from "../gestures/long-press";
 import { installSheet } from "../gestures/sheet";
 import { drawerSwipe } from "../gestures/sheet-rules";
 import { installSwipe } from "../gestures/swipe";
 import { CompletionIconContext, savedIcon } from "../lists/completion";
+import { ShowSubtasksContext, savedShowSubtasks } from "../lists/showSubtasks";
 import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
 import { SearchPane } from "../screens/SearchPane";
@@ -31,6 +32,8 @@ export function App() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [icon, setIcon] = useState(savedIcon);
+  const [showSubtasks, setShowSubtasks] = useState(savedShowSubtasks);
+  const subtasks = useMemo(() => ({ show: showSubtasks, setShow: setShowSubtasks }), [showSubtasks]);
   const [theme, setTheme] = useState<Theme>(savedTheme);
   // Applied and remembered on every change (main.tsx applies the saved one before the first paint).
   useEffect(() => applyTheme(theme), [theme]);
@@ -199,11 +202,13 @@ export function App() {
 
   return (
     <CompletionIconContext.Provider value={icon}>
-      <TaskNavProvider all={loaded?.all ?? []}>
-        <Frame loaded={loaded} drawer={drawer} onCloseDrawer={() => setDrawer(false)}>
-          {body}
-        </Frame>
-      </TaskNavProvider>
+      <ShowSubtasksContext.Provider value={subtasks}>
+        <TaskNavProvider all={loaded?.all ?? []}>
+          <Frame loaded={loaded} drawer={drawer} onCloseDrawer={() => setDrawer(false)}>
+            {body}
+          </Frame>
+        </TaskNavProvider>
+      </ShowSubtasksContext.Provider>
     </CompletionIconContext.Provider>
   );
 }

@@ -4,6 +4,7 @@ import type { PlannedReminder, ReminderSettings } from "../bindings";
 import type { CommandName } from "../ipc/commands";
 import { mockHandlers } from "../ipc/mock";
 import { savedIcon } from "../lists/completion";
+import { ShowSubtasksContext, savedShowSubtasks } from "../lists/showSubtasks";
 import { loadCoreForTests } from "../test/wasm";
 import { Settings } from "./Settings";
 
@@ -224,6 +225,23 @@ it("a completion mark choice is stored and passed up", async () => {
   fireEvent.click(screen.getByTitle("Pine"));
   expect(setIcon).toHaveBeenCalledWith("pine");
   expect(savedIcon()).toBe("pine");
+});
+
+it("the sub-tasks switch is off by default, and is stored and passed up", async () => {
+  backend();
+  const setShow = vi.fn();
+  render(
+    <ShowSubtasksContext.Provider value={{ show: false, setShow }}>
+      <Settings onClose={vi.fn()} onImported={vi.fn()} icon="wave" setIcon={vi.fn()} />
+    </ShowSubtasksContext.Provider>,
+  );
+  await screen.findByText("Task reminders");
+  expect(savedShowSubtasks()).toBe(false);
+  const toggle = screen.getByTitle("Show sub-tasks in lists");
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  fireEvent.click(toggle);
+  expect(setShow).toHaveBeenCalledWith(true);
+  expect(savedShowSubtasks()).toBe(true);
 });
 
 it("the diag switch saves, and flips back when that fails", async () => {

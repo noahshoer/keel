@@ -1,6 +1,8 @@
 //! Pure date helpers shared by the service views and the UI (Todoist-style
 //! due chips and grouping). `today` is always injected.
 
+use std::collections::HashSet;
+
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
@@ -215,26 +217,33 @@ pub struct SidebarCounts {
 }
 
 /// Counts what each view lists: Today has what's due or overdue, Upcoming also
-/// has the next `upcoming_days` days (both with matching sub-tasks, which they
-/// show), and a project has its open top-level tasks (its sub-tasks are hidden
-/// under their parents).
-pub fn sidebar_counts(all: &[Task], today: NaiveDate, upcoming_days: i64) -> SidebarCounts {
+/// has the next `upcoming_days` days, and a project has its open tasks. With
+/// `show_subtasks` off, a sub-task counts as its top-level parent's one row and
+/// a project counts only its top-level tasks.
+pub fn sidebar_counts(all: &[Task], today: NaiveDate, upcoming_days: i64, show_subtasks: bool) -> SidebarCounts {
     let end = today + chrono::Duration::days(upcoming_days);
-    let mut counts = SidebarCounts { today: 0, upcoming: 0, projects: Vec::new() };
+    let mut due_today = HashSet::new();
+    let mut upcoming = HashSet::new();
+    let mut projects: Vec<ProjectCount> = Vec::new();
     for t in all.iter().filter(|t| !t.checked && !t.is_deleted) {
         if let Some(d) = due_date_of(t) {
-            counts.today += usize::from(d <= today);
-            counts.upcoming += usize::from(d < end);
+            let row = if show_subtasks { &t.id } else { &root(t, all).id };
+            if d <= today {
+                due_today.insert(row);
+            }
+            if d < end {
+                upcoming.insert(row);
+            }
         }
-        if t.parent_id.is_some() {
+        if t.parent_id.is_some() && !show_subtasks {
             continue;
         }
-        match counts.projects.iter_mut().find(|c| c.project_id == t.project_id) {
+        match projects.iter_mut().find(|c| c.project_id == t.project_id) {
             Some(c) => c.count += 1,
-            None => counts.projects.push(ProjectCount { project_id: t.project_id.clone(), count: 1 }),
+            None => projects.push(ProjectCount { project_id: t.project_id.clone(), count: 1 }),
         }
     }
-    counts
+    SidebarCounts { today: due_today.len(), upcoming: upcoming.len(), projects }
 }
 
 /// A row of the labels picker.
@@ -308,6 +317,9 @@ pub enum CardMode {
     TopLevel,
     /// Every match, grouped under its top-level ancestor.
     Grouped,
+    /// Like `Grouped` without the rows: one card per top-level ancestor, whose
+    /// count stands for its sub-tasks.
+    Heads,
 }
 
 /// The top-level ancestor of `task`. The walk stops at a parent that is
@@ -374,7 +386,14 @@ pub fn cards(matched: Vec<Task>, all: &[Task], mode: CardMode) -> Vec<Card> {
             card.rows.push(row(task));
         }
     }
-    out.into_iter().map(|(_, c)| c).collect()
+    out.into_iter()
+        .map(|(_, mut c)| {
+            if mode == CardMode::Heads {
+                c.rows.clear();
+            }
+            c
+        })
+        .collect()
 }
 
 /// The time of day of a task's due, when it has one (`…THH:MM:SS`).
@@ -657,6 +676,57 @@ mod time_tests {
 }
 
 #[cfg(test)]
+mod sidebar_count_mode_tests {
+    use super::sidebar_counts;
+    use crate::ids::Id;
+    use crate::model::{Due, Task};
+    use chrono::NaiveDate;
+
+    fn task(name: &str, parent: Option<&Task>, date: Option<&str>) -> Task {
+        let mut t = Task::new(name, Id::from("P"));
+        t.parent_id = parent.map(|p| p.id.clone());
+        t.due = date.map(|d| Due {
+            date: d.into(),
+            timezone: None,
+            string: d.into(),
+            lang: "en".into(),
+            is_recurring: false,
+            recurrence: None,
+        });
+        t
+    }
+
+    fn fixture() -> Vec<Task> {
+        let parent = task("parent", None, Some("2026-11-03"));
+        let child = task("child", Some(&parent), Some("2026-11-03"));
+        let other = task("other", Some(&parent), None);
+        let lone_parent = task("undated", None, None);
+        let lone_child = task("due", Some(&lone_parent), Some("2026-11-03"));
+        vec![parent, child, other, lone_parent, lone_child]
+    }
+
+    fn today() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 11, 3).unwrap()
+    }
+
+    #[test]
+    fn hidden_subtasks_count_the_rows_a_view_shows() {
+        let c = sidebar_counts(&fixture(), today(), 14, false);
+        assert_eq!(c.today, 2);
+        assert_eq!(c.upcoming, 2);
+        assert_eq!(c.projects[0].count, 2);
+    }
+
+    #[test]
+    fn shown_subtasks_all_count() {
+        let c = sidebar_counts(&fixture(), today(), 14, true);
+        assert_eq!(c.today, 3);
+        assert_eq!(c.upcoming, 3);
+        assert_eq!(c.projects[0].count, 5);
+    }
+}
+
+#[cfg(test)]
 mod progress_tests {
     use super::{children, progress, Progress};
     use crate::ids::Id;
@@ -819,6 +889,25 @@ mod card_tests {
 
     fn rows(c: &Card) -> Vec<String> {
         c.rows.iter().map(|r| r.task.content.clone()).collect()
+    }
+
+    #[test]
+    fn heads_keep_only_top_level_rows() {
+        let f = fx();
+        let m = vec![f.pack.clone(), f.chargers.clone(), f.call.clone()];
+        let cs = cards(m, &all(&f), CardMode::Heads);
+        assert_eq!(heads(&cs), ["Pack", "Call"]);
+        assert!(cs.iter().all(|c| c.rows.is_empty() && c.head_matches));
+        assert_eq!(cs[0].head.progress, Some(Progress { done: 0, total: 3 }));
+    }
+
+    #[test]
+    fn heads_show_the_parent_of_a_lone_matching_subtask_as_context() {
+        let f = fx();
+        let cs = cards(vec![f.chargers.clone()], &all(&f), CardMode::Heads);
+        assert_eq!(heads(&cs), ["Pack"]);
+        assert!(!cs[0].head_matches);
+        assert!(cs[0].rows.is_empty());
     }
 
     #[test]
@@ -1251,7 +1340,7 @@ mod sidebar_count_tests {
             task("next", "a", Some("2026-11-02")),
             task("none", "a", None),
         ];
-        assert_eq!(sidebar_counts(&all, today(), 7).today, 2);
+        assert_eq!(sidebar_counts(&all, today(), 7, false).today, 2);
     }
 
     #[test]
@@ -1263,7 +1352,7 @@ mod sidebar_count_tests {
             task("past_window", "a", Some("2026-11-08")),
             task("none", "a", None),
         ];
-        assert_eq!(sidebar_counts(&all, today(), 7).upcoming, 3);
+        assert_eq!(sidebar_counts(&all, today(), 7, false).upcoming, 3);
     }
 
     #[test]
@@ -1274,7 +1363,7 @@ mod sidebar_count_tests {
         let mut done = task("done", "a", None);
         done.checked = true;
         let other = task("other", "b", None);
-        let counts = sidebar_counts(&[parent, sub, done, other], today(), 7);
+        let counts = sidebar_counts(&[parent, sub, done, other], today(), 7, false);
         assert_eq!(of(&counts.projects, "a"), 1);
         assert_eq!(of(&counts.projects, "b"), 1);
         assert_eq!(of(&counts.projects, "none"), 0);
@@ -1289,10 +1378,10 @@ mod sidebar_count_tests {
         done.checked = true;
         let mut gone = task("gone", "a", Some(TODAY));
         gone.is_deleted = true;
-        let counts = sidebar_counts(&[parent, sub, done, gone], today(), 7);
+        let counts = sidebar_counts(&[parent, sub, done, gone], today(), 7, true);
         assert_eq!(counts.today, 2);
         assert_eq!(counts.upcoming, 2);
-        assert_eq!(of(&counts.projects, "a"), 1);
+        assert_eq!(of(&counts.projects, "a"), 2);
     }
 }
 

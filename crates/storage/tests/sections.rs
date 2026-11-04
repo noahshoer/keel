@@ -148,18 +148,15 @@ fn update_project_clears_section_and_moves_children() {
 }
 
 #[test]
-fn complete_cascades_to_nonrecurring_children() {
+fn complete_cascades_to_every_child() {
     let mut h = H::new();
     let parent = h.task("parent", &p("P"), None, None, None);
     let child = h.task("child", &p("P"), None, Some(&parent), None);
     let habit = h.task("habit", &p("P"), None, Some(&parent), Some(Recurrence::Daily));
-    let habit_due = h.get(&habit).due;
     h.run(Action::TaskComplete { id: parent.clone() });
     assert!(h.get(&parent).checked);
     assert!(h.get(&child).checked, "non-recurring child completes with its parent");
-    let habit_after = h.get(&habit);
-    assert!(!habit_after.checked, "recurring child is left alone");
-    assert_eq!(habit_after.due, habit_due, "and not rescheduled");
+    assert!(h.get(&habit).checked, "so does a recurring child");
 }
 
 #[test]

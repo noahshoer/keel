@@ -2,7 +2,7 @@
 // "+ Add section" below the last one (crates/ui/src/main.rs `SectionBlock`,
 // `AddSection`). Forms opened by a tap focus their field inside the tap, so
 // iOS raises the keyboard.
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useContext, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { Loaded } from "../app/load";
 import type { Id, Reminder, Section, Task } from "../bindings";
@@ -11,6 +11,7 @@ import { AddTask } from "../editor/AddTask";
 import { addSection, deleteSection, renameSection } from "../ipc/actions";
 import { CardList } from "../lists/CardList";
 import { locationsOf } from "../lists/rowLayout";
+import { ShowSubtasksContext } from "../lists/showSubtasks";
 import { PencilIcon, TrashSmallIcon } from "../shell/icons";
 
 type Mode = "normal" | "renaming" | "confirm";
@@ -37,7 +38,8 @@ export function SectionBlock({
   const [mode, setMode] = useState<Mode>("normal");
   const [draft, setDraft] = useState("");
   const input = useRef<HTMLInputElement>(null);
-  const list = cards(tasks, all, "TopLevel");
+  const { show: showSubtasks } = useContext(ShowSubtasksContext);
+  const list = cards(tasks, all, showSubtasks ? "Grouped" : "TopLevel");
   // What the section shows: its top-level tasks (sub-tasks go with them).
   const count = list.length;
 

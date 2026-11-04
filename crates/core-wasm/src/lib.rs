@@ -116,10 +116,11 @@ pub fn sidebar_counts(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] all: JsValue,
     today: &str,
     upcoming_days: i32,
+    show_subtasks: bool,
 ) -> Result<JsValue, JsError> {
     let all: Vec<Task> = input("all", all)?;
     let today = parse_date(today).map_err(|e| JsError::new(&e))?;
-    output(&views::sidebar_counts(&all, today, i64::from(upcoming_days)))
+    output(&views::sidebar_counts(&all, today, i64::from(upcoming_days), show_subtasks))
 }
 
 /// `views::label_choices`: the labels picker's rows.

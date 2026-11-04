@@ -108,9 +108,14 @@ export function streakText(task: Task): string {
 }
 
 /** The numbers beside the sidebar's rows: how many tasks each view lists. */
-export function sidebarCounts(all: Task[], today: string, upcomingDays: number): SidebarCounts {
+export function sidebarCounts(
+  all: Task[],
+  today: string,
+  upcomingDays: number,
+  showSubtasks: boolean,
+): SidebarCounts {
   ready();
-  return core.sidebarCounts(all, today, upcomingDays);
+  return core.sidebarCounts(all, today, upcomingDays, showSubtasks);
 }
 
 /** The labels picker's rows: those matching `query`, each marked if chosen. */

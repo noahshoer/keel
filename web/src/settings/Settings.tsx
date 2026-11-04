@@ -2,7 +2,7 @@
 // preferences, the completion mark, the Todoist import and diagnostics
 // logging. A full screen on the phone, a dialog on desktop. Notifications are
 // per device, so these never sync.
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useContext, useEffect, useRef, useState } from "react";
 import type { MenuKind, PlannedReminder, ReminderSettings, SettingMenu } from "../bindings";
 import { localToday } from "../clock";
 import { importLine, pickSetting, reminderMenus, upcomingWhen } from "../core";
@@ -11,6 +11,7 @@ import { Menu } from "../editor/Menu";
 import type { Pop } from "../editor/pop";
 import { invoke } from "../ipc/invoke";
 import { COMPLETION_ICONS, type CompletionIcon, iconLabel, saveIcon } from "../lists/completion";
+import { ShowSubtasksContext, saveShowSubtasks } from "../lists/showSubtasks";
 import {
   BellSmallIcon,
   CalendarSmallIcon,
@@ -106,6 +107,7 @@ export function Settings({
   const [whenClosed, setWhenClosed] = useState<boolean | null>(null);
   const [diagOn, setDiagOn] = useState(false);
   const [upcoming, setUpcoming] = useState<PlannedReminder[]>([]);
+  const subtasks = useContext(ShowSubtasksContext);
   const [message, setMessage] = useState<string | null>(null);
   const [open, setOpen] = useState<Pop>(null);
   const modal = useRef<HTMLDivElement>(null);
@@ -339,6 +341,20 @@ export function Settings({
         <h3 className="modal-section">Appearance</h3>
         <div className="settings-card">
           <CompletionSetting icon={icon} setIcon={setIcon} />
+          <div className="setting-row">
+            <div className="setting-text">
+              <div className="setting-name">Show sub-tasks in lists</div>
+              <div className="setting-hint">Off shows a task with its sub-task count</div>
+            </div>
+            <Switch
+              on={subtasks.show}
+              title="Show sub-tasks in lists"
+              onClick={() => {
+                saveShowSubtasks(!subtasks.show);
+                subtasks.setShow(!subtasks.show);
+              }}
+            />
+          </div>
         </div>
         <h3 className="modal-section">Import</h3>
         <div className="settings-card">

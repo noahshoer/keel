@@ -149,11 +149,13 @@ fn sidebar_counts_match_what_each_view_lists() {
     f.task("undated", &work, None, Priority::None);
 
     let days = 14;
-    let counts = keel_core::views::sidebar_counts(&f.svc.all_tasks_at(today()).unwrap(), today(), days);
+    let all = f.svc.all_tasks_at(today()).unwrap();
+    let counts = keel_core::views::sidebar_counts(&all, today(), days, true);
     let today_view = f.svc.today_view_at(today()).unwrap();
     assert_eq!(counts.today, today_view.len());
     let window = f.svc.upcoming_view_at(today(), days).unwrap();
     assert_eq!(counts.upcoming, keel_core::views::upcoming_tasks(today_view, window, today()).len());
+    let counts = keel_core::views::sidebar_counts(&all, today(), days, false);
     for project in [&work, &inbox] {
         let listed = f.svc.project_view_at(project.as_str(), today()).unwrap();
         let top_level = listed.iter().filter(|t| t.parent_id.is_none()).count();

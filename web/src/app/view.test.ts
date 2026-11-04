@@ -32,10 +32,13 @@ it("search pushes in and pops out; everything else fades", () => {
   expect(viewMotion(search, search)).toBe("fade");
 });
 
-it("project views are top level; dated views group", () => {
-  expect(viewMode(inbox)).toBe("TopLevel");
-  expect(viewMode(project)).toBe("TopLevel");
-  for (const v of [today, upcoming, label, filter, search]) expect(viewMode(v)).toBe("Grouped");
+it("sub-tasks hide unless the setting shows them, in every view", () => {
+  expect(viewMode(inbox, false)).toBe("TopLevel");
+  expect(viewMode(project, false)).toBe("TopLevel");
+  for (const v of [today, upcoming, label, filter, search]) expect(viewMode(v, false)).toBe("Heads");
+  for (const v of [inbox, project, today, upcoming, label, filter, search]) {
+    expect(viewMode(v, true)).toBe("Grouped");
+  }
 });
 
 it("titles, subtitles and what each view shows", () => {
