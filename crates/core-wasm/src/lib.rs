@@ -95,10 +95,12 @@ pub fn time_label(time: &str) -> Result<String, JsError> {
 pub fn progress(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id")] parent: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] all: JsValue,
+    today: &str,
 ) -> Result<JsValue, JsError> {
     let parent: Id = input("parent", parent)?;
     let all: Vec<Task> = input("all", all)?;
-    output(&views::progress(&parent, &all))
+    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    output(&views::progress(&parent, &all, today))
 }
 
 /// `streak::streak_text`: a streak in words, in its repeat's unit.
@@ -116,10 +118,11 @@ pub fn sidebar_counts(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] all: JsValue,
     today: &str,
     upcoming_days: i32,
+    show_subtasks: bool,
 ) -> Result<JsValue, JsError> {
     let all: Vec<Task> = input("all", all)?;
     let today = parse_date(today).map_err(|e| JsError::new(&e))?;
-    output(&views::sidebar_counts(&all, today, i64::from(upcoming_days)))
+    output(&views::sidebar_counts(&all, today, i64::from(upcoming_days), show_subtasks))
 }
 
 /// `views::label_choices`: the labels picker's rows.
@@ -161,11 +164,13 @@ pub fn cards(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] matched: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] all: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').CardMode")] mode: JsValue,
+    today: &str,
 ) -> Result<JsValue, JsError> {
     let matched: Vec<Task> = input("matched", matched)?;
     let all: Vec<Task> = input("all", all)?;
     let mode: CardMode = input("mode", mode)?;
-    output(&views::cards(matched, &all, mode))
+    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    output(&views::cards(matched, &all, mode, today))
 }
 
 /// `views::due_bucket`: which coloured chip a `YYYY-MM-DD` due gets.
@@ -270,9 +275,11 @@ pub fn task_detail(
     id: String,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] all: JsValue,
     show_completed: bool,
+    today: &str,
 ) -> Result<JsValue, JsError> {
     let all: Vec<Task> = input("all", all)?;
-    output(&task_view::detail(&Id::from(id), &all, show_completed))
+    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    output(&task_view::detail(&Id::from(id), &all, show_completed, today))
 }
 
 /// `views::chain`: a task's ancestors from the top, then the task itself.

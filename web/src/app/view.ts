@@ -42,9 +42,13 @@ export function sameView(a: View, b: View): boolean {
   return viewKey(a) === viewKey(b);
 }
 
-/** Project views show top-level tasks; the others group every match under its top-level parent. */
-export function viewMode(v: View): CardMode {
-  return v.kind === "inbox" || v.kind === "project" ? "TopLevel" : "Grouped";
+/**
+ * With sub-tasks shown, every view groups each match under its top-level parent.
+ * Otherwise project views show top-level tasks, and the others those tasks' parents too.
+ */
+export function viewMode(v: View, showSubtasks: boolean): CardMode {
+  if (showSubtasks) return "Grouped";
+  return v.kind === "inbox" || v.kind === "project" ? "TopLevel" : "Heads";
 }
 
 /** Search slides in over the page and back out, like an iOS push / pop; everything else fades. */

@@ -4,7 +4,7 @@ use chrono::{Local, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
-use crate::model::{Due, Filter, Label, Priority, Project, Reminder, Section, Task};
+use crate::model::{Due, Filter, Label, LastCompletion, Priority, Project, Reminder, Section, Task};
 use crate::recurrence::Recurrence;
 use crate::repository::{RepoError, Repository};
 use crate::streak;
@@ -333,40 +333,43 @@ pub fn apply_at<R: Repository>(
                     .as_ref()
                     .and_then(|d| d.recurrence.clone().zip(due_date(d)));
                 match recurring {
-                    // Recurring: credit the occurrence being completed, then
-                    // reschedule past it; the task stays active. Re-completing
-                    // an already-credited occurrence is a no-op.
+                    // Recurring: the task stays active, past the occurrence
+                    // being completed. Re-completing an already-credited
+                    // occurrence is a no-op.
                     Some((rule, current)) => {
-                        let occurrence = completed_occurrence(&rule, current, today);
-                        if already_credited(&task, occurrence) {
+                        let Some(passed) = complete_occurrence(&mut task, &rule, current, today) else {
                             return finish(repo, &cmd.uuid, type_name, &args_json, result);
-                        }
-                        let next = rule.next_after(occurrence.max(current));
-                        if let Some(d) = task.due.as_mut() {
-                            let suffix = d.date.get(10..).unwrap_or("").to_string();
-                            d.date = format!("{}{}", iso(next), suffix);
-                        }
-                        streak::credit_completion(&mut task, occurrence);
-                        // A new occurrence starts with its sub-tasks unchecked
-                        // (repeating sub-tasks keep their own schedule).
+                        };
+                        // Sub-tasks complete with it. Plain ones stay checked until
+                        // its next date; repeating ones move on, unless they're
+                        // already past this occurrence.
+                        let reopens_on = task.due.as_ref().and_then(|d| d.date.get(..10)).map(str::to_string);
                         for mut child in descendants(repo, &task.id)? {
                             let child_recurring = child.due.as_ref().is_some_and(|d| d.is_recurring);
-                            if child.checked && !child_recurring {
-                                child.checked = false;
-                                child.completed_at = None;
+                            if !child_recurring {
+                                if !child.checked {
+                                    child.checked = true;
+                                    child.completed_at = Some(now);
+                                }
+                                child.reopens_on = reopens_on.clone();
                                 child.updated_at = now;
                                 repo.upsert_task(&child)?;
+                            }
+                            let rule = child.due.as_ref().and_then(|d| d.recurrence.clone().zip(due_date(d)));
+                            if let Some((rule, due)) = rule.filter(|(_, due)| !child.checked && *due <= passed) {
+                                if complete_occurrence(&mut child, &rule, due, today).is_some() {
+                                    child.updated_at = now;
+                                    repo.upsert_task(&child)?;
+                                }
                             }
                         }
                     }
                     None => {
                         task.checked = true;
                         task.completed_at = Some(now);
-                        // Sub-tasks complete with their parent (recurring ones
-                        // are left as they are).
+                        // Sub-tasks complete with their parent, repeating ones too.
                         for mut child in descendants(repo, &task.id)? {
-                            let child_recurring = child.due.as_ref().is_some_and(|d| d.is_recurring);
-                            if !child.checked && !child_recurring {
+                            if !child.checked {
                                 child.checked = true;
                                 child.completed_at = Some(now);
                                 child.updated_at = now;
@@ -455,6 +458,7 @@ pub fn apply_at<R: Repository>(
                     if new_rule != old_rule {
                         task.streak_current = 0;
                         task.streak_last_period = None;
+                        task.last_completion = None;
                     }
                 }
                 task.updated_at = Utc::now();
@@ -498,6 +502,7 @@ pub fn apply_at<R: Repository>(
             if let Some(mut task) = repo.get_task(&id)? {
                 task.streak_enabled = enabled;
                 task.streak_goal = goal;
+                task.last_completion = None;
                 task.updated_at = Utc::now();
                 repo.upsert_task(&task)?;
             }
@@ -591,6 +596,17 @@ pub fn apply_at<R: Repository>(
         }
         Action::TaskUncomplete { id } => {
             if let Some(mut task) = repo.get_task(&id)? {
+                // A repeating task was never checked: put back what completing it changed.
+                if let Some(undo) = streak::undoable_completion(&task, today) {
+                    if let Some(d) = task.due.as_mut() {
+                        d.date = undo.date;
+                    }
+                    task.streak_current = undo.streak_current;
+                    task.streak_best = undo.streak_best;
+                    task.streak_last_period = undo.streak_last_period;
+                }
+                task.last_completion = None;
+                task.reopens_on = None;
                 task.checked = false;
                 task.completed_at = None;
                 task.updated_at = Utc::now();
@@ -685,6 +701,37 @@ fn finish<R: Repository>(
 ) -> Result<ApplyResult, RepoError> {
     repo.record_command(uuid, type_name, args_json)?;
     Ok(result)
+}
+
+/// Credits the occurrence being completed and reschedules past it. Returns the
+/// last date that's now behind the task, or `None` when that occurrence was
+/// already credited.
+fn complete_occurrence(
+    task: &mut Task,
+    rule: &Recurrence,
+    current: NaiveDate,
+    today: NaiveDate,
+) -> Option<NaiveDate> {
+    let occurrence = completed_occurrence(rule, current, today);
+    if already_credited(task, occurrence) {
+        return None;
+    }
+    let passed = occurrence.max(current);
+    let mut undo = None;
+    if let Some(d) = task.due.as_mut() {
+        let suffix = d.date.get(10..).unwrap_or("").to_string();
+        let before = std::mem::replace(&mut d.date, format!("{}{}", iso(rule.next_after(passed)), suffix));
+        undo = Some(LastCompletion {
+            moved_to: d.date.clone(),
+            date: before,
+            streak_current: task.streak_current,
+            streak_best: task.streak_best,
+            streak_last_period: task.streak_last_period.clone(),
+        });
+    }
+    task.last_completion = undo;
+    streak::credit_completion(task, occurrence);
+    Some(passed)
 }
 
 /// Which occurrence a completion on `today` is for: today's when today is a

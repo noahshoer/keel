@@ -179,6 +179,11 @@ fn row_to_task(row: &Row<'_>) -> rusqlite::Result<Task> {
         streak_best: row.get("streak_best")?,
         streak_goal: row.get("streak_goal")?,
         streak_last_period: row.get("streak_last_period")?,
+        last_completion: match row.get::<_, Option<String>>("last_completion_json")? {
+            Some(json) => serde_json::from_str(&json).map_err(map_json)?,
+            None => None,
+        },
+        reopens_on: row.get("reopens_on")?,
     })
 }
 
@@ -216,7 +221,7 @@ fn row_to_project(row: &Row<'_>) -> rusqlite::Result<Project> {
 const TASK_COLS: &str = "id, project_id, section_id, parent_id, content, description, priority, \
     due_json, deadline, duration_json, labels_json, child_order, order_key, day_order, \
     is_collapsed, checked, is_deleted, added_at, completed_at, updated_at, \
-    streak_enabled, streak_current, streak_best, streak_goal, streak_last_period";
+    streak_enabled, streak_current, streak_best, streak_goal, streak_last_period, last_completion_json, reopens_on";
 
 const PROJECT_COLS: &str = "id, name, color, icon, parent_id, child_order, order_key, view_style, \
     is_favorite, is_collapsed, is_archived, is_inbox, is_deleted, added_at, updated_at";
@@ -227,12 +232,13 @@ impl Repository for SqliteRepo {
         let due_json = serde_json::to_string(&t.due).map_err(backend)?;
         let duration_json = serde_json::to_string(&t.duration).map_err(backend)?;
         let labels_json = serde_json::to_string(&t.labels).map_err(backend)?;
+        let last_completion_json = t.last_completion.as_ref().map(serde_json::to_string).transpose().map_err(backend)?;
         conn.execute(
             "INSERT INTO task (id, project_id, section_id, parent_id, content, description, priority, \
                 due_json, deadline, duration_json, labels_json, child_order, order_key, day_order, \
                 is_collapsed, checked, is_deleted, added_at, completed_at, updated_at, \
-                streak_enabled, streak_current, streak_best, streak_goal, streak_last_period) \
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25) \
+                streak_enabled, streak_current, streak_best, streak_goal, streak_last_period, last_completion_json, reopens_on) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27) \
              ON CONFLICT(id) DO UPDATE SET \
                 project_id=excluded.project_id, section_id=excluded.section_id, parent_id=excluded.parent_id, \
                 content=excluded.content, description=excluded.description, priority=excluded.priority, \
@@ -242,7 +248,8 @@ impl Repository for SqliteRepo {
                 is_deleted=excluded.is_deleted, added_at=excluded.added_at, completed_at=excluded.completed_at, \
                 updated_at=excluded.updated_at, streak_enabled=excluded.streak_enabled, \
                 streak_current=excluded.streak_current, streak_best=excluded.streak_best, \
-                streak_goal=excluded.streak_goal, streak_last_period=excluded.streak_last_period",
+                streak_goal=excluded.streak_goal, streak_last_period=excluded.streak_last_period, \
+                last_completion_json=excluded.last_completion_json, reopens_on=excluded.reopens_on",
             params![
                 t.id.as_str(),
                 t.project_id.as_str(),
@@ -269,6 +276,8 @@ impl Repository for SqliteRepo {
                 t.streak_best,
                 t.streak_goal,
                 t.streak_last_period,
+                last_completion_json,
+                t.reopens_on,
             ],
         )
         .map_err(backend)?;

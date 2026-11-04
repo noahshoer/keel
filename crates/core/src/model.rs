@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
@@ -118,9 +118,44 @@ pub struct Task {
     #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub streak_goal: Option<i64>,
     pub streak_last_period: Option<String>,
+    /// What undoing the last completion of a repeating task puts back.
+    #[serde(default)]
+    pub last_completion: Option<LastCompletion>,
+    /// When a plain sub-task completed with its repeating parent reopens: the
+    /// parent's next date (`YYYY-MM-DD`).
+    #[serde(default)]
+    pub reopens_on: Option<String>,
+}
+
+/// What a repeating task's completion changed. It stays active, so this is all
+/// there is to undo it with.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct LastCompletion {
+    /// The date it moved to. Once the due date is anything else, it can't be undone.
+    pub moved_to: String,
+    pub date: String,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub streak_current: i64,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub streak_best: i64,
+    pub streak_last_period: Option<String>,
 }
 
 impl Task {
+    /// Reopens the task if its `reopens_on` has come. True when it changed.
+    pub fn reopen_if_due(&mut self, today: NaiveDate) -> bool {
+        let date = self.reopens_on.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+        if !date.is_some_and(|d| d <= today) {
+            return false;
+        }
+        self.checked = false;
+        self.completed_at = None;
+        self.reopens_on = None;
+        self.updated_at = Utc::now();
+        true
+    }
+
     /// A new task in `project_id` with sensible defaults (streaks off).
     pub fn new(content: impl Into<String>, project_id: Id) -> Task {
         let now = Utc::now();
@@ -150,6 +185,8 @@ impl Task {
             streak_best: 0,
             streak_goal: None,
             streak_last_period: None,
+            last_completion: None,
+            reopens_on: None,
         }
     }
 }

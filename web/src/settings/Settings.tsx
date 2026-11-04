@@ -2,7 +2,7 @@
 // preferences, the completion mark, the Todoist import and diagnostics
 // logging. A full screen on the phone, a dialog on desktop. Notifications are
 // per device, so these never sync.
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useContext, useEffect, useRef, useState } from "react";
 import type { MenuKind, PlannedReminder, ReminderSettings, SettingMenu } from "../bindings";
 import { localToday } from "../clock";
 import { importLine, pickSetting, reminderMenus, upcomingWhen } from "../core";
@@ -11,6 +11,7 @@ import { Menu } from "../editor/Menu";
 import type { Pop } from "../editor/pop";
 import { invoke } from "../ipc/invoke";
 import { COMPLETION_ICONS, type CompletionIcon, iconLabel, saveIcon } from "../lists/completion";
+import { ShowSubtasksContext, saveShowSubtasks } from "../lists/showSubtasks";
 import {
   BellSmallIcon,
   CalendarSmallIcon,
@@ -106,6 +107,7 @@ export function Settings({
   const [whenClosed, setWhenClosed] = useState<boolean | null>(null);
   const [diagOn, setDiagOn] = useState(false);
   const [upcoming, setUpcoming] = useState<PlannedReminder[]>([]);
+  const subtasks = useContext(ShowSubtasksContext);
   const [message, setMessage] = useState<string | null>(null);
   const [open, setOpen] = useState<Pop>(null);
   const modal = useRef<HTMLDivElement>(null);
@@ -290,17 +292,27 @@ export function Settings({
           {message !== null ? <div className="setting-warning">{message}</div> : null}
           <div className={enabled ? "setting-group" : "setting-group disabled"}>
             <div className="setting-row">
-              <div className="setting-name">Remind me</div>
-              {menu("offset", "Offset", "Remind me", menus.offset, <ClockSmallIcon />)}
+              <div className="setting-text">
+                <div className="setting-name">Default reminder</div>
+                <div className="setting-hint">
+                  Sent for each task with a due time. A task can add its own reminders too.
+                </div>
+              </div>
+              {menu("offset", "Offset", "Default reminder", menus.offset, <ClockSmallIcon />)}
             </div>
             <div className="setting-row">
-              <div className="setting-name">Tasks without a time</div>
+              <div className="setting-text">
+                <div className="setting-name">Tasks without a time</div>
+                <div className="setting-hint">
+                  Sent on the due day, and for deadlines that day with no due time.
+                </div>
+              </div>
               {menu("allday", "AllDay", "Tasks without a time", menus.all_day, <CalendarSmallIcon />)}
             </div>
             <div className="setting-row">
               <div className="setting-text">
                 <div className="setting-name">Daily summary</div>
-                <div className="setting-hint">How many tasks are due that day</div>
+                <div className="setting-hint">Send how many tasks are due that day at this time.</div>
               </div>
               {menu("summary", "Summary", "Daily summary", menus.summary, <SunIcon />)}
             </div>
@@ -339,6 +351,20 @@ export function Settings({
         <h3 className="modal-section">Appearance</h3>
         <div className="settings-card">
           <CompletionSetting icon={icon} setIcon={setIcon} />
+          <div className="setting-row">
+            <div className="setting-text">
+              <div className="setting-name">Show sub-tasks in lists</div>
+              <div className="setting-hint">Off shows a task with its sub-task count</div>
+            </div>
+            <Switch
+              on={subtasks.show}
+              title="Show sub-tasks in lists"
+              onClick={() => {
+                saveShowSubtasks(!subtasks.show);
+                subtasks.setShow(!subtasks.show);
+              }}
+            />
+          </div>
         </div>
         <h3 className="modal-section">Import</h3>
         <div className="settings-card">

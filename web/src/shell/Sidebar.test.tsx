@@ -106,7 +106,7 @@ it("rows show how many tasks each view lists", async () => {
     within(sidebar()).getByText(name).closest(".nav-item")?.querySelector(".count")?.textContent;
   // From the mock's tasks, through keel-core's rule (its own tests cover the rule).
   const all = await invoke("all_tasks", {});
-  const counts = sidebarCounts(all, localToday(), UPCOMING_DAYS);
+  const counts = sidebarCounts(all, localToday(), UPCOMING_DAYS, false);
   const ofProject = (id: string) => String(counts.projects.find((c) => c.project_id === id)?.count ?? "");
   expect(count("Today")).toBe(String(counts.today));
   expect(count("Upcoming")).toBe(String(counts.upcoming));

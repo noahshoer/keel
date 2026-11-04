@@ -3,7 +3,7 @@
 // date groups, filters into their comma groups, projects into sections.
 // Each list ends with its "+ Add task" row, as in Dioxus.
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useContext, useLayoutEffect, useRef, useState } from "react";
 import type { Loaded } from "../app/load";
 import {
   canShowCompleted,
@@ -24,6 +24,7 @@ import { AddTask } from "../editor/AddTask";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
+import { ShowSubtasksContext } from "../lists/showSubtasks";
 import { openAndFocus } from "../shell/focus";
 import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, SearchIcon } from "../shell/icons";
 import { type ListContext, type PageEditing, pageActions } from "../shell/listActions";
@@ -77,7 +78,8 @@ export function MainPane({
 }) {
   const { view } = loaded;
   const today = localToday();
-  const mode = viewMode(view);
+  const { show: showSubtasks } = useContext(ShowSubtasksContext);
+  const mode = viewMode(view, showSubtasks);
   const toggle = canShowCompleted(view);
   const heldTitle = useHeldText(viewTitle(view));
   const fullTitle = heldTitle.text;
@@ -176,7 +178,7 @@ export function MainPane({
   );
   const list = (tasks: Task[]) => (
     <CardList
-      cards={cards(tasks, loaded.all, mode)}
+      cards={cards(tasks, loaded.all, mode, today)}
       today={today}
       locations={locations}
       labels={loaded.labels}

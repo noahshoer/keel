@@ -1,11 +1,14 @@
 //! Pure date helpers shared by the service views and the UI (Todoist-style
 //! due chips and grouping). `today` is always injected.
 
+use std::collections::HashSet;
+
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
 use crate::model::{Label, Task};
+use crate::streak;
 
 /// Which colored due chip a date gets, relative to today.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -156,16 +159,36 @@ pub fn chain(id: &Id, all: &[Task]) -> Vec<Id> {
     chain
 }
 
-/// Counts a task's direct, non-deleted sub-tasks. Repeating sub-tasks are
-/// left out (they never stay complete). `None` when nothing is counted.
-pub fn progress(parent: &Id, all: &[Task]) -> Option<Progress> {
+/// Whether a task repeats.
+fn repeats(t: &Task) -> bool {
+    t.due.as_ref().is_some_and(|d| d.is_recurring)
+}
+
+/// A repeating sub-task is done from its completion until its next date comes,
+/// though it never stays checked. It's left out of lists, like a checked task.
+fn repeating_done(t: &Task, today: NaiveDate) -> bool {
+    t.parent_id.is_some()
+        && repeats(t)
+        && due_date_of(t).is_some_and(|d| d > today)
+        && streak::undoable_completion(t, today).is_some()
+}
+
+/// Whether a task shows as completed (see [`repeating_done`]).
+pub fn is_done(t: &Task, today: NaiveDate) -> bool {
+    t.checked || repeating_done(t, today)
+}
+
+/// Counts a task's direct, non-deleted sub-tasks. Repeating sub-tasks count
+/// only under a repeating parent. `None` when nothing is counted.
+pub fn progress(parent: &Id, all: &[Task], today: NaiveDate) -> Option<Progress> {
+    let parent_repeats = all.iter().any(|t| &t.id == parent && repeats(t));
     let mut p = Progress { done: 0, total: 0 };
-    for t in all {
-        if t.is_deleted || t.parent_id.as_ref() != Some(parent) || t.due.as_ref().is_some_and(|d| d.is_recurring) {
+    for t in all.iter().filter(|t| !t.is_deleted && t.parent_id.as_ref() == Some(parent)) {
+        if repeats(t) && !parent_repeats {
             continue;
         }
         p.total += 1;
-        if t.checked {
+        if is_done(t, today) {
             p.done += 1;
         }
     }
@@ -210,26 +233,33 @@ pub struct SidebarCounts {
 }
 
 /// Counts what each view lists: Today has what's due or overdue, Upcoming also
-/// has the next `upcoming_days` days (both with matching sub-tasks, which they
-/// show), and a project has its open top-level tasks (its sub-tasks are hidden
-/// under their parents).
-pub fn sidebar_counts(all: &[Task], today: NaiveDate, upcoming_days: i64) -> SidebarCounts {
+/// has the next `upcoming_days` days, and a project has its open tasks. With
+/// `show_subtasks` off, a sub-task counts as its top-level parent's one row and
+/// a project counts only its top-level tasks.
+pub fn sidebar_counts(all: &[Task], today: NaiveDate, upcoming_days: i64, show_subtasks: bool) -> SidebarCounts {
     let end = today + chrono::Duration::days(upcoming_days);
-    let mut counts = SidebarCounts { today: 0, upcoming: 0, projects: Vec::new() };
-    for t in all.iter().filter(|t| !t.checked && !t.is_deleted) {
+    let mut due_today = HashSet::new();
+    let mut upcoming = HashSet::new();
+    let mut projects: Vec<ProjectCount> = Vec::new();
+    for t in all.iter().filter(|t| !t.is_deleted && !is_done(t, today)) {
         if let Some(d) = due_date_of(t) {
-            counts.today += usize::from(d <= today);
-            counts.upcoming += usize::from(d < end);
+            let row = if show_subtasks { &t.id } else { &root(t, all).id };
+            if d <= today {
+                due_today.insert(row);
+            }
+            if d < end {
+                upcoming.insert(row);
+            }
         }
-        if t.parent_id.is_some() {
+        if t.parent_id.is_some() && !show_subtasks {
             continue;
         }
-        match counts.projects.iter_mut().find(|c| c.project_id == t.project_id) {
+        match projects.iter_mut().find(|c| c.project_id == t.project_id) {
             Some(c) => c.count += 1,
-            None => counts.projects.push(ProjectCount { project_id: t.project_id.clone(), count: 1 }),
+            None => projects.push(ProjectCount { project_id: t.project_id.clone(), count: 1 }),
         }
     }
-    counts
+    SidebarCounts { today: due_today.len(), upcoming: upcoming.len(), projects }
 }
 
 /// A row of the labels picker.
@@ -303,6 +333,9 @@ pub enum CardMode {
     TopLevel,
     /// Every match, grouped under its top-level ancestor.
     Grouped,
+    /// Like `Grouped` without the rows: one card per top-level ancestor, whose
+    /// count stands for its sub-tasks.
+    Heads,
 }
 
 /// The top-level ancestor of `task`. The walk stops at a parent that is
@@ -330,9 +363,10 @@ fn root_where<'a>(task: &'a Task, all: &'a [Task], keep: impl Fn(&Task) -> bool)
 
 /// Groups a view's matched tasks into cards (see `CardMode`). Cards keep the
 /// order of their first matched member; rows keep the input order.
-pub fn cards(matched: Vec<Task>, all: &[Task], mode: CardMode) -> Vec<Card> {
+pub fn cards(mut matched: Vec<Task>, all: &[Task], mode: CardMode, today: NaiveDate) -> Vec<Card> {
+    matched.retain(|t| !repeating_done(t, today));
     let row = |task: Task| {
-        let progress = progress(&task.id, all);
+        let progress = progress(&task.id, all, today);
         CardRow { task, progress }
     };
     if mode == CardMode::TopLevel {
@@ -369,7 +403,14 @@ pub fn cards(matched: Vec<Task>, all: &[Task], mode: CardMode) -> Vec<Card> {
             card.rows.push(row(task));
         }
     }
-    out.into_iter().map(|(_, c)| c).collect()
+    out.into_iter()
+        .map(|(_, mut c)| {
+            if mode == CardMode::Heads {
+                c.rows.clear();
+            }
+            c
+        })
+        .collect()
 }
 
 /// The time of day of a task's due, when it has one (`…THH:MM:SS`).
@@ -440,7 +481,7 @@ pub fn day_subtitle(today: NaiveDate) -> String {
 /// Upcoming's day groups.
 pub fn date_groups(mode: DateGroupMode, tasks: Vec<Task>, today: NaiveDate) -> Vec<DateGroup> {
     let (overdue, rest): (Vec<Task>, Vec<Task>) =
-        tasks.into_iter().partition(|t| due_date_of(t).is_some_and(|d| d < today));
+        tasks.into_iter().filter(|t| !repeating_done(t, today)).partition(|t| due_date_of(t).is_some_and(|d| d < today));
     let mut out = Vec::new();
     let split = !overdue.is_empty();
     if split {
@@ -652,6 +693,57 @@ mod time_tests {
 }
 
 #[cfg(test)]
+mod sidebar_count_mode_tests {
+    use super::sidebar_counts;
+    use crate::ids::Id;
+    use crate::model::{Due, Task};
+    use chrono::NaiveDate;
+
+    fn task(name: &str, parent: Option<&Task>, date: Option<&str>) -> Task {
+        let mut t = Task::new(name, Id::from("P"));
+        t.parent_id = parent.map(|p| p.id.clone());
+        t.due = date.map(|d| Due {
+            date: d.into(),
+            timezone: None,
+            string: d.into(),
+            lang: "en".into(),
+            is_recurring: false,
+            recurrence: None,
+        });
+        t
+    }
+
+    fn fixture() -> Vec<Task> {
+        let parent = task("parent", None, Some("2026-11-03"));
+        let child = task("child", Some(&parent), Some("2026-11-03"));
+        let other = task("other", Some(&parent), None);
+        let lone_parent = task("undated", None, None);
+        let lone_child = task("due", Some(&lone_parent), Some("2026-11-03"));
+        vec![parent, child, other, lone_parent, lone_child]
+    }
+
+    fn today() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 11, 3).unwrap()
+    }
+
+    #[test]
+    fn hidden_subtasks_count_the_rows_a_view_shows() {
+        let c = sidebar_counts(&fixture(), today(), 14, false);
+        assert_eq!(c.today, 2);
+        assert_eq!(c.upcoming, 2);
+        assert_eq!(c.projects[0].count, 2);
+    }
+
+    #[test]
+    fn shown_subtasks_all_count() {
+        let c = sidebar_counts(&fixture(), today(), 14, true);
+        assert_eq!(c.today, 3);
+        assert_eq!(c.upcoming, 3);
+        assert_eq!(c.projects[0].count, 5);
+    }
+}
+
+#[cfg(test)]
 mod progress_tests {
     use super::{children, progress, Progress};
     use crate::ids::Id;
@@ -677,7 +769,7 @@ mod progress_tests {
     #[test]
     fn progress_none_without_children() {
         let p = t("p", None, false, false);
-        assert_eq!(progress(&p.id, &[p.clone()]), None);
+        assert_eq!(progress(&p.id, &[p.clone()], some_day()), None);
     }
 
     #[test]
@@ -689,8 +781,8 @@ mod progress_tests {
         let a1 = t("a1", Some(&a), false, false);
         let a2 = t("a2", Some(&a), false, false);
         let all = vec![p.clone(), a.clone(), b, c, a1, a2];
-        assert_eq!(progress(&p.id, &all), Some(Progress { done: 1, total: 3 }));
-        assert_eq!(progress(&a.id, &all), Some(Progress { done: 0, total: 2 }));
+        assert_eq!(progress(&p.id, &all, some_day()), Some(Progress { done: 1, total: 3 }));
+        assert_eq!(progress(&a.id, &all, some_day()), Some(Progress { done: 0, total: 2 }));
     }
 
     #[test]
@@ -698,7 +790,7 @@ mod progress_tests {
         let p = t("p", None, false, false);
         let a = t("a", Some(&p), true, false);
         let h = t("h", Some(&p), false, true);
-        let pr = progress(&p.id, &[p.clone(), a, h]).unwrap();
+        let pr = progress(&p.id, &[p.clone(), a, h], some_day()).unwrap();
         assert_eq!(pr, Progress { done: 1, total: 1 });
         assert!(pr.all_done());
     }
@@ -707,7 +799,53 @@ mod progress_tests {
     fn progress_none_when_only_repeating_children() {
         let p = t("p", None, false, false);
         let h = t("h", Some(&p), false, true);
-        assert_eq!(progress(&p.id, &[p.clone(), h]), None);
+        assert_eq!(progress(&p.id, &[p.clone(), h], some_day()), None);
+    }
+
+    fn some_day() -> chrono::NaiveDate {
+        chrono::NaiveDate::from_ymd_opt(2026, 11, 3).unwrap()
+    }
+
+    fn dated(mut task: Task, date: &str) -> Task {
+        task.due = Some(Due {
+            date: date.into(),
+            timezone: None,
+            string: "every day".into(),
+            lang: "en".into(),
+            is_recurring: true,
+            recurrence: None,
+        });
+        task
+    }
+
+    fn completed(mut task: Task) -> Task {
+        task.last_completion = Some(crate::model::LastCompletion {
+            moved_to: task.due.as_ref().unwrap().date.clone(),
+            date: "2026-11-03".into(),
+            streak_current: 0,
+            streak_best: 0,
+            streak_last_period: None,
+        });
+        task
+    }
+
+    #[test]
+    fn a_repeating_sub_task_counts_as_done_until_its_next_date() {
+        let p = dated(t("p", None, false, false), "2026-11-04");
+        let open = dated(t("open", Some(&p), false, false), "2026-11-03");
+        let done = completed(dated(t("done", Some(&p), false, false), "2026-11-04"));
+        let not_due_yet = dated(t("later", Some(&p), false, false), "2026-11-09");
+        let plain = t("plain", Some(&p), false, false);
+        let all = [p.clone(), open, done, not_due_yet, plain];
+        assert_eq!(progress(&p.id, &all, some_day()), Some(Progress { done: 1, total: 4 }));
+        let next_day = some_day().succ_opt().unwrap();
+        assert_eq!(progress(&p.id, &all, next_day), Some(Progress { done: 0, total: 4 }));
+    }
+
+    #[test]
+    fn a_repeating_top_level_task_is_never_done() {
+        let task = completed(dated(t("p", None, false, false), "2026-11-04"));
+        assert!(!super::is_done(&task, some_day()));
     }
 
     #[test]
@@ -716,7 +854,7 @@ mod progress_tests {
         let a = t("a", Some(&p), false, false);
         let mut d = t("d", Some(&p), true, false);
         d.is_deleted = true;
-        assert_eq!(progress(&p.id, &[p.clone(), a, d]), Some(Progress { done: 0, total: 1 }));
+        assert_eq!(progress(&p.id, &[p.clone(), a, d], some_day()), Some(Progress { done: 0, total: 1 }));
     }
 
     #[test]
@@ -753,6 +891,9 @@ mod progress_tests {
 #[cfg(test)]
 mod card_tests {
     use super::{cards, progress, root, Card, CardMode, Progress};
+    fn some_day() -> chrono::NaiveDate {
+        chrono::NaiveDate::from_ymd_opt(2026, 11, 3).unwrap()
+    }
     use crate::ids::Id;
     use crate::model::{Due, Priority, Task};
 
@@ -795,10 +936,56 @@ mod card_tests {
     }
 
     #[test]
+    fn heads_keep_only_top_level_rows() {
+        let f = fx();
+        let m = vec![f.pack.clone(), f.chargers.clone(), f.call.clone()];
+        let cs = cards(m, &all(&f), CardMode::Heads, some_day());
+        assert_eq!(heads(&cs), ["Pack", "Call"]);
+        assert!(cs.iter().all(|c| c.rows.is_empty() && c.head_matches));
+        assert_eq!(cs[0].head.progress, Some(Progress { done: 0, total: 3 }));
+    }
+
+    #[test]
+    fn heads_show_the_parent_of_a_lone_matching_subtask_as_context() {
+        let f = fx();
+        let cs = cards(vec![f.chargers.clone()], &all(&f), CardMode::Heads, some_day());
+        assert_eq!(heads(&cs), ["Pack"]);
+        assert!(!cs[0].head_matches);
+        assert!(cs[0].rows.is_empty());
+    }
+
+    #[test]
+    fn a_repeating_sub_task_done_until_its_next_date_leaves_the_lists() {
+        let f = fx();
+        let mut done = f.chargers.clone();
+        done.due = Some(Due {
+            date: "2026-11-04".into(),
+            timezone: None,
+            string: "every day".into(),
+            lang: "en".into(),
+            is_recurring: true,
+            recurrence: None,
+        });
+        done.last_completion = Some(crate::model::LastCompletion {
+            moved_to: "2026-11-04".into(),
+            date: "2026-11-03".into(),
+            streak_current: 0,
+            streak_best: 0,
+            streak_last_period: None,
+        });
+        let cs = cards(vec![f.pack.clone(), done.clone()], &all(&f), CardMode::Grouped, some_day());
+        assert_eq!(heads(&cs), ["Pack"]);
+        assert!(cs[0].rows.is_empty());
+        let next_day = some_day().succ_opt().unwrap();
+        let cs = cards(vec![f.pack.clone(), done], &all(&f), CardMode::Grouped, next_day);
+        assert_eq!(rows(&cs[0]), ["Chargers"]);
+    }
+
+    #[test]
     fn toplevel_hides_subtasks() {
         let f = fx();
         let m = vec![f.call.clone(), f.pack.clone(), f.chargers.clone(), f.passport.clone(), f.clothes.clone()];
-        let cs = cards(m, &all(&f), CardMode::TopLevel);
+        let cs = cards(m, &all(&f), CardMode::TopLevel, some_day());
         assert_eq!(heads(&cs), ["Call", "Pack"]);
         assert!(cs.iter().all(|c| c.head_matches && c.rows.is_empty()));
     }
@@ -810,14 +997,14 @@ mod card_tests {
         orphan.parent_id = Some(Id::from("gone"));
         let mut a = all(&f);
         a.push(orphan.clone());
-        let cs = cards(vec![orphan], &a, CardMode::TopLevel);
+        let cs = cards(vec![orphan], &a, CardMode::TopLevel, some_day());
         assert_eq!(heads(&cs), ["Orphan"]);
     }
 
     #[test]
     fn grouped_subtask_under_unmatched_parent() {
         let f = fx();
-        let cs = cards(vec![f.call.clone(), f.chargers.clone()], &all(&f), CardMode::Grouped);
+        let cs = cards(vec![f.call.clone(), f.chargers.clone()], &all(&f), CardMode::Grouped, some_day());
         assert_eq!(heads(&cs), ["Call", "Pack"]);
         assert!(cs[0].head_matches);
         assert!(!cs[1].head_matches);
@@ -828,7 +1015,7 @@ mod card_tests {
     fn grouped_siblings_share_card() {
         let f = fx();
         let m = vec![f.chargers.clone(), f.call.clone(), f.passport.clone()];
-        let cs = cards(m, &all(&f), CardMode::Grouped);
+        let cs = cards(m, &all(&f), CardMode::Grouped, some_day());
         assert_eq!(heads(&cs), ["Pack", "Call"]);
         assert_eq!(rows(&cs[0]), ["Chargers", "Passport"]);
     }
@@ -837,7 +1024,7 @@ mod card_tests {
     fn grouped_parent_also_matches() {
         let f = fx();
         let m = vec![f.chargers.clone(), f.pack.clone(), f.passport.clone()];
-        let cs = cards(m, &all(&f), CardMode::Grouped);
+        let cs = cards(m, &all(&f), CardMode::Grouped, some_day());
         assert_eq!(cs.len(), 1);
         assert_eq!(cs[0].head.task.content, "Pack");
         assert!(cs[0].head_matches);
@@ -850,7 +1037,7 @@ mod card_tests {
         let tooth = task("Toothbrush", Some(&f.chargers));
         let mut a = all(&f);
         a.push(tooth.clone());
-        let cs = cards(vec![tooth], &a, CardMode::Grouped);
+        let cs = cards(vec![tooth], &a, CardMode::Grouped, some_day());
         assert_eq!(heads(&cs), ["Pack"]);
         assert_eq!(rows(&cs[0]), ["Toothbrush"]);
     }
@@ -870,7 +1057,7 @@ mod card_tests {
         });
         let mut a = all(&f);
         a.push(h.clone());
-        let cs = cards(vec![h], &a, CardMode::Grouped);
+        let cs = cards(vec![h], &a, CardMode::Grouped, some_day());
         assert_eq!(cs.len(), 1);
         assert_eq!(cs[0].head.task.content, "Pack");
         assert!(!cs[0].head_matches);
@@ -881,7 +1068,7 @@ mod card_tests {
     fn cards_group_across_projects() {
         let mut f = fx();
         f.chargers.project_id = Id::from("other");
-        let cs = cards(vec![f.chargers.clone()], &all(&f), CardMode::Grouped);
+        let cs = cards(vec![f.chargers.clone()], &all(&f), CardMode::Grouped, some_day());
         assert_eq!(heads(&cs), ["Pack"]);
         assert_eq!(rows(&cs[0]), ["Chargers"]);
     }
@@ -895,10 +1082,10 @@ mod card_tests {
         let mut a = all(&f);
         a.push(tooth.clone());
         // The other project's list: Chargers heads it, its child stays under it.
-        let cs = cards(vec![f.chargers.clone(), tooth], &a, CardMode::TopLevel);
+        let cs = cards(vec![f.chargers.clone(), tooth], &a, CardMode::TopLevel, some_day());
         assert_eq!(heads(&cs), ["Chargers"]);
         // Pack's own project still hides its same-project sub-tasks.
-        let cs = cards(vec![f.pack.clone(), f.passport.clone()], &a, CardMode::TopLevel);
+        let cs = cards(vec![f.pack.clone(), f.passport.clone()], &a, CardMode::TopLevel, some_day());
         assert_eq!(heads(&cs), ["Pack"]);
     }
 
@@ -911,7 +1098,7 @@ mod card_tests {
         let all = vec![a.clone(), b.clone()];
         assert_eq!(root(&a, &all).content, "A");
         for mode in [CardMode::TopLevel, CardMode::Grouped] {
-            let cs = cards(vec![a.clone(), b.clone()], &all, mode);
+            let cs = cards(vec![a.clone(), b.clone()], &all, mode, some_day());
             let mut seen: Vec<String> = Vec::new();
             for c in &cs {
                 seen.push(c.head.task.content.clone());
@@ -925,14 +1112,14 @@ mod card_tests {
     #[test]
     fn card_rows_carry_progress() {
         let mut f = fx();
-        let cs = cards(vec![f.pack.clone()], &all(&f), CardMode::Grouped);
+        let cs = cards(vec![f.pack.clone()], &all(&f), CardMode::Grouped, some_day());
         assert_eq!(cs[0].head.progress, Some(Progress { done: 0, total: 3 }));
         f.chargers.checked = true;
         f.passport.checked = true;
         let a = all(&f);
-        let cs = cards(vec![f.pack.clone(), f.clothes.clone()], &a, CardMode::Grouped);
+        let cs = cards(vec![f.pack.clone(), f.clothes.clone()], &a, CardMode::Grouped, some_day());
         assert_eq!(cs[0].head.progress, Some(Progress { done: 2, total: 3 }));
-        assert_eq!(cs[0].rows[0].progress, progress(&f.clothes.id, &a));
+        assert_eq!(cs[0].rows[0].progress, progress(&f.clothes.id, &a, some_day()));
     }
 
     #[test]
@@ -941,7 +1128,7 @@ mod card_tests {
         f.chargers.checked = true;
         f.passport.checked = true;
         f.clothes.checked = true;
-        let cs = cards(vec![f.pack.clone()], &all(&f), CardMode::Grouped);
+        let cs = cards(vec![f.pack.clone()], &all(&f), CardMode::Grouped, some_day());
         assert!(cs[0].head.progress.unwrap().all_done());
         assert!(cs[0].rows.is_empty());
     }
@@ -949,6 +1136,10 @@ mod card_tests {
 
 #[cfg(test)]
 mod date_group_tests {
+    fn some_day() -> chrono::NaiveDate {
+        chrono::NaiveDate::from_ymd_opt(2026, 11, 3).unwrap()
+    }
+
     use super::{cards, date_groups, deadline_urgent, upcoming_tasks, CardMode, DateGroupMode, Progress};
     use crate::ids::Id;
     use crate::model::{Due, Task};
@@ -1019,7 +1210,7 @@ mod date_group_tests {
         let groups = date_groups(DateGroupMode::Upcoming, vec![sub.clone(), parent.clone()], today);
         assert_eq!(groups.len(), 2);
 
-        let thursday = cards(groups[0].tasks.clone(), &all, CardMode::Grouped);
+        let thursday = cards(groups[0].tasks.clone(), &all, CardMode::Grouped, some_day());
         assert_eq!(groups[0].title.as_deref(), Some("22 Oct"));
         assert_eq!(thursday.len(), 1);
         assert_eq!(thursday[0].head.task.id, parent.id);
@@ -1028,7 +1219,7 @@ mod date_group_tests {
         assert_eq!(rows, vec![sub.id.clone()]);
         assert_eq!(thursday[0].head.progress, Some(Progress { done: 0, total: 1 }));
 
-        let friday = cards(groups[1].tasks.clone(), &all, CardMode::Grouped);
+        let friday = cards(groups[1].tasks.clone(), &all, CardMode::Grouped, some_day());
         assert_eq!(groups[1].title.as_deref(), Some("23 Oct"));
         assert_eq!(friday.len(), 1);
         assert_eq!(friday[0].head.task.id, parent.id);
@@ -1224,7 +1415,7 @@ mod sidebar_count_tests {
             task("next", "a", Some("2026-11-02")),
             task("none", "a", None),
         ];
-        assert_eq!(sidebar_counts(&all, today(), 7).today, 2);
+        assert_eq!(sidebar_counts(&all, today(), 7, false).today, 2);
     }
 
     #[test]
@@ -1236,7 +1427,7 @@ mod sidebar_count_tests {
             task("past_window", "a", Some("2026-11-08")),
             task("none", "a", None),
         ];
-        assert_eq!(sidebar_counts(&all, today(), 7).upcoming, 3);
+        assert_eq!(sidebar_counts(&all, today(), 7, false).upcoming, 3);
     }
 
     #[test]
@@ -1247,7 +1438,7 @@ mod sidebar_count_tests {
         let mut done = task("done", "a", None);
         done.checked = true;
         let other = task("other", "b", None);
-        let counts = sidebar_counts(&[parent, sub, done, other], today(), 7);
+        let counts = sidebar_counts(&[parent, sub, done, other], today(), 7, false);
         assert_eq!(of(&counts.projects, "a"), 1);
         assert_eq!(of(&counts.projects, "b"), 1);
         assert_eq!(of(&counts.projects, "none"), 0);
@@ -1262,10 +1453,10 @@ mod sidebar_count_tests {
         done.checked = true;
         let mut gone = task("gone", "a", Some(TODAY));
         gone.is_deleted = true;
-        let counts = sidebar_counts(&[parent, sub, done, gone], today(), 7);
+        let counts = sidebar_counts(&[parent, sub, done, gone], today(), 7, true);
         assert_eq!(counts.today, 2);
         assert_eq!(counts.upcoming, 2);
-        assert_eq!(of(&counts.projects, "a"), 1);
+        assert_eq!(of(&counts.projects, "a"), 2);
     }
 }
 

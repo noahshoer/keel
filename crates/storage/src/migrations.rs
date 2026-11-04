@@ -121,5 +121,15 @@ pub fn run(conn: &Connection) -> rusqlite::Result<()> {
             at         TEXT NOT NULL
         );
         "#,
-    )
+    )?;
+    // Added after the first release: `task` may already exist without them.
+    for column in ["last_completion_json", "reopens_on"] {
+        let has_column = conn
+            .prepare("SELECT 1 FROM pragma_table_info('task') WHERE name = ?1")?
+            .exists([column])?;
+        if !has_column {
+            conn.execute(&format!("ALTER TABLE task ADD COLUMN {column} TEXT"), [])?;
+        }
+    }
+    Ok(())
 }

@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Loaded } from "../app/load";
 import type { SearchResults, Task } from "../bindings";
+import { progress } from "../core";
 import { invoke } from "../ipc/invoke";
 import { CompletedRow } from "../lists/CompletedRow";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
@@ -102,7 +103,7 @@ export function SearchPane({
             {r.open.map((task) => (
               <TaskRow
                 key={task.id}
-                row={{ task, progress: null }}
+                row={{ task, progress: progress(task.id, loaded.all, today) }}
                 today={today}
                 location={where(task)}
                 labels={loaded.labels}

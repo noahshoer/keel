@@ -34,6 +34,8 @@ it("typing shows the open results with their project", async () => {
     "Wash the sheets",
   ]);
   expect(container.querySelector("main.main .task-project")?.textContent).toBe("Home / Chores");
+  // As in the mockup, a result with sub-tasks shows their count.
+  expect(container.querySelector("main.main .task-count")?.textContent).toBe("0 of 1");
 });
 
 it("counts the results above one card of the list's own rows", async () => {

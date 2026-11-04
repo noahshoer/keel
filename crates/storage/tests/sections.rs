@@ -148,18 +148,15 @@ fn update_project_clears_section_and_moves_children() {
 }
 
 #[test]
-fn complete_cascades_to_nonrecurring_children() {
+fn complete_cascades_to_every_child() {
     let mut h = H::new();
     let parent = h.task("parent", &p("P"), None, None, None);
     let child = h.task("child", &p("P"), None, Some(&parent), None);
     let habit = h.task("habit", &p("P"), None, Some(&parent), Some(Recurrence::Daily));
-    let habit_due = h.get(&habit).due;
     h.run(Action::TaskComplete { id: parent.clone() });
     assert!(h.get(&parent).checked);
     assert!(h.get(&child).checked, "non-recurring child completes with its parent");
-    let habit_after = h.get(&habit);
-    assert!(!habit_after.checked, "recurring child is left alone");
-    assert_eq!(habit_after.due, habit_due, "and not rescheduled");
+    assert!(h.get(&habit).checked, "so does a recurring child");
 }
 
 #[test]
@@ -197,15 +194,15 @@ fn checked_tree(h: &mut H) -> (Id, Id, Id, Id) {
 }
 
 #[test]
-fn repeating_parent_resets_all_nonrepeating_descendants() {
+fn repeating_parent_marks_nonrepeating_descendants_to_reopen_on_its_next_date() {
     let mut h = H::new();
     let (parent, a, b, a1) = checked_tree(&mut h);
     h.run_on(DAY, Action::TaskSetStreak { id: parent.clone(), enabled: true, goal: None });
     h.run_on(DAY, Action::TaskComplete { id: parent.clone() });
     for id in [&a, &b, &a1] {
         let t = h.get(id);
-        assert!(!t.checked);
-        assert_eq!(t.completed_at, None);
+        assert!(t.checked);
+        assert_eq!(t.reopens_on.as_deref(), Some("2026-10-24"));
     }
     let pt = h.get(&parent);
     assert_eq!(pt.due.unwrap().date, "2026-10-24");
@@ -240,17 +237,15 @@ fn reset_ignores_other_trees() {
 }
 
 #[test]
-fn already_credited_does_not_reset() {
+fn already_credited_changes_nothing() {
     let mut h = H::new();
     let (parent, a, ..) = checked_tree(&mut h);
     h.run_on(DAY, Action::TaskSetStreak { id: parent.clone(), enabled: true, goal: None });
     h.run_on(DAY, Action::TaskComplete { id: parent.clone() });
-    assert!(!h.get(&a).checked);
-    h.run_on(DAY, Action::TaskComplete { id: a.clone() });
-    assert!(h.get(&a).checked);
-    // Same occurrence again: a no-op, so A stays checked.
+    h.run_on(DAY, Action::TaskUncomplete { id: a.clone() });
+    // Same occurrence again: a no-op, so A stays open.
     h.run_on(DAY, Action::TaskComplete { id: parent.clone() });
-    assert!(h.get(&a).checked);
+    assert!(!h.get(&a).checked);
     assert_eq!(h.get(&parent).streak_current, 1);
 }
 

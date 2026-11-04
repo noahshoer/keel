@@ -4,6 +4,7 @@ import type { PlannedReminder, ReminderSettings } from "../bindings";
 import type { CommandName } from "../ipc/commands";
 import { mockHandlers } from "../ipc/mock";
 import { savedIcon } from "../lists/completion";
+import { ShowSubtasksContext, savedShowSubtasks } from "../lists/showSubtasks";
 import { loadCoreForTests } from "../test/wasm";
 import { Settings } from "./Settings";
 
@@ -61,7 +62,7 @@ it("shows every section with the stored values", async () => {
   expect(reminderSwitch().className).toBe("switch on");
   expect(reminderSwitch().getAttribute("aria-checked")).toBe("true");
   expect(screen.getByText("On")).toBeTruthy();
-  expect(screen.getByTitle("Remind me").textContent).toContain("At the due time");
+  expect(screen.getByTitle("Default reminder").textContent).toContain("At the due time");
   expect(screen.getByTitle("Tasks without a time").textContent).toContain("9 AM");
   expect(screen.getByTitle("Daily summary").textContent).toContain("Off");
   expect(diagSwitch().getAttribute("aria-checked")).toBe("false");
@@ -157,7 +158,7 @@ it("turning on asks the system, then saves them on", async () => {
 it("two picks in a row each save the latest settings", async () => {
   const calls = backend();
   await open();
-  fireEvent.click(screen.getByTitle("Remind me"));
+  fireEvent.click(screen.getByTitle("Default reminder"));
   fireEvent.click(screen.getByText("5 minutes before"));
   fireEvent.click(screen.getByTitle("Daily summary"));
   fireEvent.click(screen.getByText("7:30 AM"));
@@ -226,6 +227,23 @@ it("a completion mark choice is stored and passed up", async () => {
   expect(savedIcon()).toBe("pine");
 });
 
+it("the sub-tasks switch is off by default, and is stored and passed up", async () => {
+  backend();
+  const setShow = vi.fn();
+  render(
+    <ShowSubtasksContext.Provider value={{ show: false, setShow }}>
+      <Settings onClose={vi.fn()} onImported={vi.fn()} icon="wave" setIcon={vi.fn()} />
+    </ShowSubtasksContext.Provider>,
+  );
+  await screen.findByText("Task reminders");
+  expect(savedShowSubtasks()).toBe(false);
+  const toggle = screen.getByTitle("Show sub-tasks in lists");
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  fireEvent.click(toggle);
+  expect(setShow).toHaveBeenCalledWith(true);
+  expect(savedShowSubtasks()).toBe(true);
+});
+
 it("the diag switch saves, and flips back when that fails", async () => {
   const calls = backend();
   await open();
@@ -286,7 +304,7 @@ it("imports each file in order, one line each, then reloads once", async () => {
 it("Escape closes an open menu first, then the dialog", async () => {
   backend();
   const { onClose } = await open();
-  fireEvent.click(screen.getByTitle("Remind me"));
+  fireEvent.click(screen.getByTitle("Default reminder"));
   expect(document.querySelector(".popover.menu")).toBeTruthy();
   expect(document.querySelector(".pop-backdrop")).toBeTruthy();
   const modal = document.querySelector(".modal") as HTMLElement;

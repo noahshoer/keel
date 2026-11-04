@@ -5,6 +5,7 @@ import { useLoaded } from "../app/load";
 import type { View } from "../app/view";
 import { localToday } from "../clock";
 import { invoke } from "../ipc/invoke";
+import { ShowSubtasksContext } from "../lists/showSubtasks";
 import { TaskNavProvider } from "../taskview/nav";
 import { loadCoreForTests } from "../test/wasm";
 import { MainPane } from "./MainPane";
@@ -15,33 +16,43 @@ beforeAll(() => {
 
 /** The pane over the real loader, reloading on every change (as App does). */
 // biome-ignore lint/style/useComponentExportOnlyModules: a test harness, never hot-reloaded.
-function Harness({ view, showCompleted = false }: { view: View; showCompleted?: boolean }) {
+function Harness({
+  view,
+  showCompleted = false,
+  showSubtasks = false,
+}: {
+  view: View;
+  showCompleted?: boolean;
+  showSubtasks?: boolean;
+}) {
   const [reloadKey, setReloadKey] = useState(0);
   const [completed, setCompleted] = useState(showCompleted);
   const { loaded } = useLoaded(view, completed, reloadKey);
   if (loaded === null) return null;
   return (
-    <TaskNavProvider all={loaded.all}>
-      <MainPane
-        loaded={loaded}
-        showCompleted={completed}
-        onToggleCompleted={() => setCompleted((c) => !c)}
-        onOpenDrawer={() => {}}
-        onLeaveSearch={() => {}}
-        setView={() => {}}
-        renameView={() => {}}
-        holdName={() => {}}
-        onOpenSearch={() => {}}
-        motion="fade"
-        swap={0}
-        onChanged={() => setReloadKey((k) => k + 1)}
-      />
-    </TaskNavProvider>
+    <ShowSubtasksContext.Provider value={{ show: showSubtasks, setShow: () => {} }}>
+      <TaskNavProvider all={loaded.all}>
+        <MainPane
+          loaded={loaded}
+          showCompleted={completed}
+          onToggleCompleted={() => setCompleted((c) => !c)}
+          onOpenDrawer={() => {}}
+          onLeaveSearch={() => {}}
+          setView={() => {}}
+          renameView={() => {}}
+          holdName={() => {}}
+          onOpenSearch={() => {}}
+          motion="fade"
+          swap={0}
+          onChanged={() => setReloadKey((k) => k + 1)}
+        />
+      </TaskNavProvider>
+    </ShowSubtasksContext.Provider>
   );
 }
 
-const show = async (view: View, showCompleted = false) => {
-  const r = render(<Harness view={view} showCompleted={showCompleted} />);
+const show = async (view: View, showCompleted = false, showSubtasks = false) => {
+  const r = render(<Harness view={view} showCompleted={showCompleted} showSubtasks={showSubtasks} />);
   await waitFor(() => expect(r.container.querySelector(".view-title")).not.toBeNull());
   return r;
 };
@@ -53,12 +64,25 @@ it("today splits overdue from today, rows name their project", async () => {
   const { container } = await show({ kind: "today" });
   expect(container.querySelector(".view-title")?.textContent).toBe("Today");
   expect(titles(container)).toEqual(["Overdue", "Today"]);
-  expect(contents(container)).toEqual(["File the taxes", "Do laundry", "Wash the sheets"]);
+  expect(contents(container)).toEqual(["File the taxes", "Do laundry"]);
   // Classes Demo.swift and the sim checks query.
-  expect(container.querySelectorAll(".task-row")).toHaveLength(3);
+  expect(container.querySelectorAll(".task-row")).toHaveLength(2);
   const laundry = screen.getByText("Do laundry").closest(".task-row");
   expect(laundry?.querySelector(".task-count")?.textContent).toBe("0 of 1");
   expect(laundry?.querySelector(".task-project")?.textContent).toBe("Home / Chores");
+});
+
+it("the setting shows sub-tasks under their parents, in dated and project lists", async () => {
+  const today = await show({ kind: "today" }, false, true);
+  expect(contents(today.container)).toEqual(["File the taxes", "Do laundry", "Wash the sheets"]);
+  today.unmount();
+  const off = await show({ kind: "project", id: "p-trip", name: "Trip" });
+  await screen.findByText("Pack for the trip");
+  expect(contents(off.container)).toEqual(["Pack for the trip"]);
+  off.unmount();
+  const on = await show({ kind: "project", id: "p-trip", name: "Trip" }, false, true);
+  await screen.findByText("Print the tickets");
+  expect(contents(on.container)).toEqual(["Pack for the trip", "Pack the bag", "Socks", "Print the tickets"]);
 });
 
 it("upcoming shows the overdue task first, then a group per day", async () => {

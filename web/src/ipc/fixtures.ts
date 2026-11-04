@@ -51,6 +51,8 @@ export const makeTask = (t: Partial<Task> & Pick<Task, "id" | "project_id" | "co
   streak_best: 0,
   streak_goal: null,
   streak_last_period: null,
+  last_completion: null,
+  reopens_on: null,
   ...t,
 });
 

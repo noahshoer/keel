@@ -84,15 +84,15 @@ export function timeLabel(time: string): string {
 }
 
 /** A parent's direct sub-task counts; `null` when nothing is counted. */
-export function progress(parent: Id, all: Task[]): Progress | null {
+export function progress(parent: Id, all: Task[], today: string): Progress | null {
   ready();
-  return core.progress(parent, all);
+  return core.progress(parent, all, today);
 }
 
 /** Groups a view's matched tasks into cards (sub-tasks under their parent). */
-export function cards(matched: Task[], all: Task[], mode: CardMode): Card[] {
+export function cards(matched: Task[], all: Task[], mode: CardMode, today: string): Card[] {
   ready();
-  return core.cards(matched, all, mode);
+  return core.cards(matched, all, mode, today);
 }
 
 /** Which coloured due chip a `YYYY-MM-DD` due gets relative to `today`. */
@@ -108,9 +108,14 @@ export function streakText(task: Task): string {
 }
 
 /** The numbers beside the sidebar's rows: how many tasks each view lists. */
-export function sidebarCounts(all: Task[], today: string, upcomingDays: number): SidebarCounts {
+export function sidebarCounts(
+  all: Task[],
+  today: string,
+  upcomingDays: number,
+  showSubtasks: boolean,
+): SidebarCounts {
   ready();
-  return core.sidebarCounts(all, today, upcomingDays);
+  return core.sidebarCounts(all, today, upcomingDays, showSubtasks);
 }
 
 /** The labels picker's rows: those matching `query`, each marked if chosen. */
@@ -188,9 +193,9 @@ export function fieldLayout(v: EditorValues, inboxId: Id): FieldLayout {
 }
 
 /** What one level of the task view renders; null for an unknown id. */
-export function taskDetail(id: Id, all: Task[], showCompleted: boolean): TaskDetail | null {
+export function taskDetail(id: Id, all: Task[], showCompleted: boolean, today: string): TaskDetail | null {
   ready();
-  return core.taskDetail(id, all, showCompleted);
+  return core.taskDetail(id, all, showCompleted, today);
 }
 
 /** A task's ancestors from the top, then the task itself. */
