@@ -2,9 +2,14 @@
 import type { Due } from "./Due";
 import type { Duration } from "./Duration";
 import type { Id } from "./Id";
+import type { LastCompletion } from "./LastCompletion";
 import type { Priority } from "./Priority";
 
 /**
  * A task (item).
  */
-export type Task = { id: Id, project_id: Id, section_id: Id | null, parent_id: Id | null, content: string, description: string, priority: Priority, due: Due | null, deadline: string | null, duration: Duration | null, labels: Array<string>, child_order: number, order_key: string | null, day_order: number, is_collapsed: boolean, checked: boolean, is_deleted: boolean, added_at: string, completed_at: string | null, updated_at: string, streak_enabled: boolean, streak_current: number, streak_best: number, streak_goal: number | null, streak_last_period: string | null, };
+export type Task = { id: Id, project_id: Id, section_id: Id | null, parent_id: Id | null, content: string, description: string, priority: Priority, due: Due | null, deadline: string | null, duration: Duration | null, labels: Array<string>, child_order: number, order_key: string | null, day_order: number, is_collapsed: boolean, checked: boolean, is_deleted: boolean, added_at: string, completed_at: string | null, updated_at: string, streak_enabled: boolean, streak_current: number, streak_best: number, streak_goal: number | null, streak_last_period: string | null, 
+/**
+ * What undoing the last completion of a repeating task puts back.
+ */
+last_completion: LastCompletion | null, };

@@ -4,7 +4,7 @@ use chrono::{Local, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
-use crate::model::{Due, Filter, Label, Priority, Project, Reminder, Section, Task};
+use crate::model::{Due, Filter, Label, LastCompletion, Priority, Project, Reminder, Section, Task};
 use crate::recurrence::Recurrence;
 use crate::repository::{RepoError, Repository};
 use crate::streak;
@@ -454,6 +454,7 @@ pub fn apply_at<R: Repository>(
                     if new_rule != old_rule {
                         task.streak_current = 0;
                         task.streak_last_period = None;
+                        task.last_completion = None;
                     }
                 }
                 task.updated_at = Utc::now();
@@ -497,6 +498,7 @@ pub fn apply_at<R: Repository>(
             if let Some(mut task) = repo.get_task(&id)? {
                 task.streak_enabled = enabled;
                 task.streak_goal = goal;
+                task.last_completion = None;
                 task.updated_at = Utc::now();
                 repo.upsert_task(&task)?;
             }
@@ -590,6 +592,16 @@ pub fn apply_at<R: Repository>(
         }
         Action::TaskUncomplete { id } => {
             if let Some(mut task) = repo.get_task(&id)? {
+                // A repeating task was never checked: put back what completing it changed.
+                if let Some(undo) = task.undoable_completion().cloned() {
+                    if let Some(d) = task.due.as_mut() {
+                        d.date = undo.date;
+                    }
+                    task.streak_current = undo.streak_current;
+                    task.streak_best = undo.streak_best;
+                    task.streak_last_period = undo.streak_last_period;
+                }
+                task.last_completion = None;
                 task.checked = false;
                 task.completed_at = None;
                 task.updated_at = Utc::now();
@@ -700,10 +712,19 @@ fn complete_occurrence(
         return None;
     }
     let passed = occurrence.max(current);
+    let mut undo = None;
     if let Some(d) = task.due.as_mut() {
         let suffix = d.date.get(10..).unwrap_or("").to_string();
-        d.date = format!("{}{}", iso(rule.next_after(passed)), suffix);
+        let before = std::mem::replace(&mut d.date, format!("{}{}", iso(rule.next_after(passed)), suffix));
+        undo = Some(LastCompletion {
+            moved_to: d.date.clone(),
+            date: before,
+            streak_current: task.streak_current,
+            streak_best: task.streak_best,
+            streak_last_period: task.streak_last_period.clone(),
+        });
     }
+    task.last_completion = undo;
     streak::credit_completion(task, occurrence);
     Some(passed)
 }

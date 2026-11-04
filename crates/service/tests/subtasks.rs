@@ -140,3 +140,76 @@ fn completing_a_repeating_parent_still_resets_plain_sub_tasks() {
 
     assert!(!f.get(&plain).checked);
 }
+
+#[test]
+fn undoing_a_repeating_completion_restores_its_date_and_streak() {
+    let mut f = Fx::new();
+    let parent = f.add(None, Some(Recurrence::Daily));
+    let child = f.add(Some(&parent), Some(Recurrence::Daily));
+    f.streak(&child);
+    // Two days running, so the undo has a streak to step back to.
+    let tomorrow = NaiveDate::from_ymd_opt(2026, 1, 6).unwrap();
+    f.complete(&child);
+    f.run_on(Action::TaskComplete { id: child.clone() }, tomorrow);
+    assert_eq!(f.date(&child), "2026-01-07");
+    let t = f.get(&child);
+    assert_eq!((t.streak_current, t.streak_best), (2, 2));
+
+    f.run_on(Action::TaskUncomplete { id: child.clone() }, tomorrow);
+
+    let t = f.get(&child);
+    assert_eq!(f.date(&child), "2026-01-06");
+    assert_eq!((t.streak_current, t.streak_best), (1, 1));
+    assert_eq!(t.streak_last_period.as_deref(), Some("2026-01-05"));
+    assert!(!t.checked);
+}
+
+#[test]
+fn undo_returns_an_overdue_task_to_its_overdue_date() {
+    let mut f = Fx::new();
+    let task = f.add(None, Some(Recurrence::Weekly(vec![FRIDAY])));
+    let first = f.date(&task);
+    let later = NaiveDate::parse_from_str(&first, "%Y-%m-%d").unwrap() + chrono::Duration::days(10);
+    f.run_on(Action::TaskComplete { id: task.clone() }, later);
+    assert_ne!(f.date(&task), first);
+
+    f.run_on(Action::TaskUncomplete { id: task.clone() }, later);
+
+    assert_eq!(f.date(&task), first);
+}
+
+#[test]
+fn undo_leaves_a_task_whose_date_was_changed_since() {
+    let mut f = Fx::new();
+    let task = f.add(None, Some(Recurrence::Daily));
+    f.complete(&task);
+    let due = keel_core::commands::DueEdit { date: Some("2026-02-01".into()), recurrence: Some(Recurrence::Daily) };
+    f.run_on(
+        Action::TaskUpdate {
+            id: task.clone(),
+            content: None,
+            description: None,
+            priority: None,
+            project_id: None,
+            labels: None,
+            due: Some(due),
+            is_collapsed: None,
+            deadline: None,
+        },
+        today(),
+    );
+
+    f.run_on(Action::TaskUncomplete { id: task.clone() }, today());
+
+    assert_eq!(f.date(&task), "2026-02-01");
+}
+
+#[test]
+fn undoing_twice_steps_back_only_once() {
+    let mut f = Fx::new();
+    let task = f.add(None, Some(Recurrence::Daily));
+    f.complete(&task);
+    f.run_on(Action::TaskUncomplete { id: task.clone() }, today());
+    f.run_on(Action::TaskUncomplete { id: task.clone() }, today());
+    assert_eq!(f.date(&task), "2026-01-05");
+}

@@ -7,7 +7,8 @@ Plain sub-tasks already complete with their parent. Repeating ones were skipped 
 - Parent that doesn't repeat: every sub-task is checked, repeating ones too (no streak credit; they're finished with the parent).
 - Repeating parent: plain sub-tasks uncheck for the new occurrence, as before. A repeating sub-task due on or before the occurrence being completed completes one occurrence of its own: its date moves on and its streak is credited. One already ahead of that occurrence is left alone, so a sub-task done earlier is never credited twice and a weekly sub-task isn't pulled forward by a daily parent.
 - The counter counts a repeating parent's repeating sub-tasks, done when their date is past the parent's. Otherwise such a parent would have no counter once its sub-tasks are hidden.
-- The task view uses the same rule (`views::subtask_done`): such a sub-task is hidden until "Show completed" and shows a done circle, which is disabled because there's no check to undo. It comes back when the parent's next round catches up with it.
+- The task view uses the same rule (`views::subtask_done`): a repeating sub-task completed and now past the parent's date is hidden until "Show completed" and shows a done circle. It comes back when the parent's next round catches up with it. One that's simply not due yet isn't done.
+- That circle undoes the completion, through `TaskUncomplete`. A repeating completion saves what it changed (`Task::last_completion`, the additive `last_completion_json` column): the date and the streak's current, best and last period. Undo puts those back. It's one step, and it's off once the date or the schedule is edited or the streak is toggled.
 
 ## 2. Sub-tasks in lists are a setting
 

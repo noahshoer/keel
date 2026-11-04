@@ -298,10 +298,18 @@ mod tests {
 
     #[test]
     fn a_repeating_sub_task_past_its_parents_date_counts_as_completed() {
+        let mut completed = repeats(task("Done", Some("P"), 1), "2026-11-04");
+        completed.last_completion = Some(crate::model::LastCompletion {
+            moved_to: "2026-11-04".into(),
+            date: "2026-11-03".into(),
+            streak_current: 0,
+            streak_best: 0,
+            streak_last_period: None,
+        });
         let all = vec![
             repeats(task("P", None, 0), "2026-11-03"),
             repeats(task("Due", Some("P"), 0), "2026-11-03"),
-            repeats(task("Done", Some("P"), 1), "2026-11-04"),
+            completed,
         ];
         let hidden = detail(&id("P"), &all, false).unwrap();
         let ids: Vec<_> = hidden.visible.iter().map(|r| r.task.id.clone()).collect();

@@ -29,13 +29,16 @@ const show = (t: Task, done: boolean) =>
     </TaskNavProvider>,
   ).container;
 
-it("a repeating sub-task done this round shows done, with nothing for its circle to undo", () => {
+const sent = () =>
+  (vi.mocked(invoke).mock.lastCall as unknown as [string, { cmd: { action: unknown } }])[1].cmd.action;
+
+it("a repeating sub-task done this round shows done, and its circle undoes it", () => {
   const c = show(task(), true);
   expect(c.querySelector(".tv-sub.done")).not.toBeNull();
   const circle = c.querySelector("button.check.done") as HTMLButtonElement;
-  expect(circle.disabled).toBe(true);
+  expect(circle.title).toBe("Mark as not done");
   fireEvent.click(circle);
-  expect(invoke).not.toHaveBeenCalled();
+  expect(sent()).toEqual({ type: "task_uncomplete", id: "s" });
 });
 
 it("a checked sub-task's circle reopens it", () => {
@@ -50,5 +53,6 @@ it("an open sub-task's circle completes it", () => {
   const c = show(task(), false);
   const circle = c.querySelector("button.check") as HTMLButtonElement;
   expect(circle.title).toBe("Complete sub-task");
-  expect(circle.disabled).toBe(false);
+  fireEvent.click(circle);
+  expect(sent()).toEqual({ type: "task_complete", id: "s" });
 });

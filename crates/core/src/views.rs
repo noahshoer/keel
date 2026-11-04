@@ -170,13 +170,13 @@ fn round_of(parent: &Id, all: &[Task]) -> Option<NaiveDate> {
 }
 
 /// Whether a sub-task is done: checked, or, since a repeating one never stays
-/// checked, repeating and past the date of its repeating parent's round.
+/// checked, completed and now past the date of its repeating parent's round.
 pub fn subtask_done(sub: &Task, all: &[Task]) -> bool {
-    sub.checked
-        || (repeats(sub)
-            && sub.parent_id.as_ref().and_then(|p| round_of(p, all)).is_some_and(|round| {
-                due_date_of(sub).is_some_and(|d| d > round)
-            }))
+    let past_round = || {
+        let round = sub.parent_id.as_ref().and_then(|p| round_of(p, all));
+        round.zip(due_date_of(sub)).is_some_and(|(round, due)| due > round)
+    };
+    sub.checked || (repeats(sub) && sub.undoable_completion().is_some() && past_round())
 }
 
 /// Counts a task's direct, non-deleted sub-tasks. Repeating sub-tasks count
@@ -818,10 +818,19 @@ mod progress_tests {
     fn progress_counts_a_repeating_parents_repeating_children() {
         let p = dated(t("p", None, false, false), "2026-11-03");
         let due = dated(t("due", Some(&p), false, false), "2026-11-03");
-        let ahead = dated(t("ahead", Some(&p), false, false), "2026-11-04");
+        let mut ahead = dated(t("ahead", Some(&p), false, false), "2026-11-04");
+        // Only a completion counts: this one is just not due yet.
+        let later = dated(t("later", Some(&p), false, false), "2026-11-09");
+        ahead.last_completion = Some(crate::model::LastCompletion {
+            moved_to: "2026-11-04".into(),
+            date: "2026-11-03".into(),
+            streak_current: 0,
+            streak_best: 0,
+            streak_last_period: None,
+        });
         let plain = t("plain", Some(&p), false, false);
-        let pr = progress(&p.id, &[p.clone(), due, ahead, plain]);
-        assert_eq!(pr, Some(Progress { done: 1, total: 3 }));
+        let pr = progress(&p.id, &[p.clone(), due, ahead, later, plain]);
+        assert_eq!(pr, Some(Progress { done: 1, total: 4 }));
     }
 
     #[test]

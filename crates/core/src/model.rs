@@ -118,9 +118,34 @@ pub struct Task {
     #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub streak_goal: Option<i64>,
     pub streak_last_period: Option<String>,
+    /// What undoing the last completion of a repeating task puts back.
+    #[serde(default)]
+    pub last_completion: Option<LastCompletion>,
+}
+
+/// What a repeating task's completion changed. It stays active, so this is all
+/// there is to undo it with.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct LastCompletion {
+    /// The date it moved to. Once the due date is anything else, it can't be undone.
+    pub moved_to: String,
+    pub date: String,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub streak_current: i64,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub streak_best: i64,
+    pub streak_last_period: Option<String>,
 }
 
 impl Task {
+    /// The completion that can still be undone, if there is one.
+    pub fn undoable_completion(&self) -> Option<&LastCompletion> {
+        let due = self.due.as_ref()?;
+        self.last_completion.as_ref().filter(|c| !self.checked && c.moved_to == due.date)
+    }
+
+
     /// A new task in `project_id` with sensible defaults (streaks off).
     pub fn new(content: impl Into<String>, project_id: Id) -> Task {
         let now = Utc::now();
@@ -150,6 +175,7 @@ impl Task {
             streak_best: 0,
             streak_goal: None,
             streak_last_period: None,
+            last_completion: None,
         }
     }
 }

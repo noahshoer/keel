@@ -37,6 +37,7 @@ export type * from "./Label";
 export type * from "./LabelChoice";
 export type * from "./LabelGroup";
 export type * from "./LabelViewArgs";
+export type * from "./LastCompletion";
 export type * from "./ListSectionsArgs";
 export type * from "./ListTasksArgs";
 export type * from "./LocationChoice";

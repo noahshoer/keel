@@ -125,3 +125,23 @@ fn list_all_tasks_spans_projects_and_excludes_deleted() {
     want.sort_by(|x, y| x.as_str().cmp(y.as_str()));
     assert_eq!(ids, want);
 }
+
+#[test]
+fn opening_a_store_from_before_last_completion_keeps_its_tasks() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("keel.db");
+    let path = path.to_str().unwrap();
+    let id = {
+        let repo = SqliteRepo::open(path).unwrap();
+        let task = Task::new("kept", Id::from("P"));
+        repo.upsert_task(&task).unwrap();
+        task.id
+    };
+    rusqlite::Connection::open(path).unwrap().execute("ALTER TABLE task DROP COLUMN last_completion_json", []).unwrap();
+
+    let repo = SqliteRepo::open(path).unwrap();
+    let task = repo.get_task(&id).unwrap().unwrap();
+    assert_eq!(task.content, "kept");
+    assert_eq!(task.last_completion, None);
+    repo.upsert_task(&task).unwrap();
+}
