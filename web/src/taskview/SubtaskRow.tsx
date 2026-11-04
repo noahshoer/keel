@@ -1,7 +1,8 @@
 // One direct sub-task in the task view (crates/ui/src/task_view/view.rs
 // `SubtaskRow`): its circle (complete, or reopen when checked), its name, its
-// own "x/y", and a ›. The rest of the row opens its view.
-import type { CardRow, Id } from "../bindings";
+// own "x/y", and a ›. The rest of the row opens its view. A repeating sub-task
+// done this round has moved to its next date, so its circle has nothing to reopen.
+import type { Id, SubtaskLine } from "../bindings";
 import { completeTask, uncompleteTask } from "../ipc/actions";
 import { CHECK_CLASS } from "../lists/chips";
 import { SubtaskProgress } from "../lists/SubtaskProgress";
@@ -13,19 +14,21 @@ export function SubtaskRow({
   onOpen,
   onChanged,
 }: {
-  row: CardRow;
+  row: SubtaskLine;
   onOpen: (id: Id) => void;
   onChanged: () => void;
 }) {
   const nav = useTaskNav();
   const t = row.task;
   const checked = t.checked;
+  const doneThisRound = row.done && !checked;
   return (
-    <div className={checked ? "tv-sub done" : "tv-sub"}>
+    <div className={row.done ? "tv-sub done" : "tv-sub"}>
       <button
         type="button"
-        className={checked ? "check done" : CHECK_CLASS[t.priority]}
-        title={checked ? "Mark as not done" : "Complete sub-task"}
+        className={row.done ? "check done" : CHECK_CLASS[t.priority]}
+        title={doneThisRound ? "Done for now" : checked ? "Mark as not done" : "Complete sub-task"}
+        disabled={doneThisRound}
         onClick={() => {
           if (!nav.holdCircles()) return;
           // Not tied to the row: it goes once the task is done.

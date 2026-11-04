@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::editor::EditorValues;
 use crate::ids::Id;
 use crate::model::Task;
-use crate::views::{self, CardRow, Progress};
+use crate::views::{self, Progress};
 
 /// The fields card's rows, in their fixed order. Repeat lives in Date's row.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
@@ -98,6 +98,16 @@ pub fn field_layout(v: &EditorValues, inbox_id: &Id) -> FieldLayout {
     FieldLayout { fields, missing }
 }
 
+/// A direct sub-task in the view.
+#[derive(Clone, PartialEq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct SubtaskLine {
+    pub task: Task,
+    pub progress: Option<Progress>,
+    /// See [`views::subtask_done`].
+    pub done: bool,
+}
+
 /// Everything one level of the view renders.
 #[derive(Clone, PartialEq, Debug, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -105,8 +115,8 @@ pub struct TaskDetail {
     pub task: Task,
     pub parent: Option<Task>,
     pub progress: Option<Progress>,
-    /// Direct sub-tasks in child order; checked ones only when `show_completed`.
-    pub visible: Vec<CardRow>,
+    /// Direct sub-tasks in child order; done ones only when `show_completed`.
+    pub visible: Vec<SubtaskLine>,
 }
 
 pub fn detail(id: &Id, all: &[Task], show_completed: bool) -> Option<TaskDetail> {
@@ -114,8 +124,12 @@ pub fn detail(id: &Id, all: &[Task], show_completed: bool) -> Option<TaskDetail>
     let parent = task.parent_id.as_ref().and_then(|p| all.iter().find(|t| &t.id == p)).cloned();
     let visible = views::children(id, all)
         .into_iter()
-        .filter(|c| show_completed || !c.checked)
-        .map(|c| CardRow { task: c.clone(), progress: views::progress(&c.id, all) })
+        .map(|c| SubtaskLine {
+            task: c.clone(),
+            progress: views::progress(&c.id, all),
+            done: views::subtask_done(c, all),
+        })
+        .filter(|line| show_completed || !line.done)
         .collect();
     Some(TaskDetail { progress: views::progress(id, all), task, parent, visible })
 }
@@ -268,6 +282,43 @@ mod tests {
         let shown = detail(&id("P"), &all, true).unwrap();
         let ids: Vec<_> = shown.visible.iter().map(|r| r.task.id.clone()).collect();
         assert_eq!(ids, vec![id("C"), id("S")]);
+    }
+
+    fn repeats(mut t: Task, date: &str) -> Task {
+        t.due = Some(crate::model::Due {
+            date: date.into(),
+            timezone: None,
+            string: "every day".into(),
+            lang: "en".into(),
+            is_recurring: true,
+            recurrence: None,
+        });
+        t
+    }
+
+    #[test]
+    fn a_repeating_sub_task_past_its_parents_date_counts_as_completed() {
+        let all = vec![
+            repeats(task("P", None, 0), "2026-11-03"),
+            repeats(task("Due", Some("P"), 0), "2026-11-03"),
+            repeats(task("Done", Some("P"), 1), "2026-11-04"),
+        ];
+        let hidden = detail(&id("P"), &all, false).unwrap();
+        let ids: Vec<_> = hidden.visible.iter().map(|r| r.task.id.clone()).collect();
+        assert_eq!(ids, vec![id("Due")]);
+        assert!(!hidden.visible[0].done);
+        let shown = detail(&id("P"), &all, true).unwrap();
+        let done: Vec<_> = shown.visible.iter().map(|r| (r.task.id.clone(), r.done)).collect();
+        assert_eq!(done, vec![(id("Due"), false), (id("Done"), true)]);
+        assert_eq!(hidden.progress, Some(Progress { done: 1, total: 2 }));
+    }
+
+    #[test]
+    fn a_checked_sub_task_is_done() {
+        let mut c = task("C", Some("P"), 0);
+        c.checked = true;
+        let all = vec![task("P", None, 0), c];
+        assert!(detail(&id("P"), &all, true).unwrap().visible[0].done);
     }
 
     #[test]

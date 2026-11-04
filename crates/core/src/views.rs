@@ -158,21 +158,38 @@ pub fn chain(id: &Id, all: &[Task]) -> Vec<Id> {
     chain
 }
 
-/// Counts a task's direct, non-deleted sub-tasks. Repeating sub-tasks never
-/// stay complete, so they count only under a repeating parent, where one is
-/// done once its date is past the parent's. `None` when nothing is counted.
+/// Whether a task repeats.
+fn repeats(t: &Task) -> bool {
+    t.due.as_ref().is_some_and(|d| d.is_recurring)
+}
+
+/// The date of a repeating task's current round, which its repeating sub-tasks
+/// are measured against.
+fn round_of(parent: &Id, all: &[Task]) -> Option<NaiveDate> {
+    all.iter().find(|t| &t.id == parent).filter(|t| repeats(t)).and_then(due_date_of)
+}
+
+/// Whether a sub-task is done: checked, or, since a repeating one never stays
+/// checked, repeating and past the date of its repeating parent's round.
+pub fn subtask_done(sub: &Task, all: &[Task]) -> bool {
+    sub.checked
+        || (repeats(sub)
+            && sub.parent_id.as_ref().and_then(|p| round_of(p, all)).is_some_and(|round| {
+                due_date_of(sub).is_some_and(|d| d > round)
+            }))
+}
+
+/// Counts a task's direct, non-deleted sub-tasks. Repeating sub-tasks count
+/// only under a repeating parent. `None` when nothing is counted.
 pub fn progress(parent: &Id, all: &[Task]) -> Option<Progress> {
-    let repeating = |t: &Task| t.due.as_ref().is_some_and(|d| d.is_recurring);
-    let round = all.iter().find(|t| &t.id == parent).filter(|t| repeating(t)).and_then(due_date_of);
+    let round = round_of(parent, all);
     let mut p = Progress { done: 0, total: 0 };
     for t in all.iter().filter(|t| !t.is_deleted && t.parent_id.as_ref() == Some(parent)) {
-        let ahead = match (repeating(t), round) {
-            (false, _) => false,
-            (true, None) => continue,
-            (true, Some(round)) => due_date_of(t).is_some_and(|d| d > round),
-        };
+        if repeats(t) && round.is_none() {
+            continue;
+        }
         p.total += 1;
-        if t.checked || ahead {
+        if subtask_done(t, all) {
             p.done += 1;
         }
     }

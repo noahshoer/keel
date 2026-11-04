@@ -69,6 +69,7 @@ export type * from "./SettingMenu";
 export type * from "./SidebarCounts";
 export type * from "./Span";
 export type * from "./SpanKind";
+export type * from "./SubtaskLine";
 export type * from "./Task";
 export type * from "./TaskDetail";
 export type * from "./TaskPatch";
