@@ -323,11 +323,11 @@ fn match_date(t: &[Token], i: usize, today: NaiveDate) -> Option<(usize, NaiveDa
     Some((if year.is_some() { 3 } else { 2 }, date))
 }
 
-/// `5pm`, `5:30pm`, `12am` → time.
+/// `5pm`, `5:30pm`, `12am`, `9a`, `10p` → time.
 fn clock_ampm(word: &str) -> Option<NaiveTime> {
-    let (num, pm) = if let Some(n) = word.strip_suffix("pm") {
+    let (num, pm) = if let Some(n) = word.strip_suffix("pm").or(word.strip_suffix('p')) {
         (n, true)
-    } else if let Some(n) = word.strip_suffix("am") {
+    } else if let Some(n) = word.strip_suffix("am").or(word.strip_suffix('a')) {
         (n, false)
     } else {
         return None;
@@ -899,6 +899,27 @@ mod tests {
     }
 
     #[test]
+    fn short_am_pm() {
+        let q = p("x tomorrow at 9a");
+        assert_eq!(q.due_string().as_deref(), Some("2026-10-20T09:00:00"));
+        assert_eq!(q.content, "x");
+        assert_eq!(p("x 10p").time, Some(t(22, 0)));
+        assert_eq!(p("x 5:30p").time, Some(t(17, 30)));
+        assert_eq!(p("x 12a").time, Some(t(0, 0)));
+        assert_eq!(p("x 12p").time, Some(t(12, 0)));
+        assert_eq!(p("x 9A").time, Some(t(9, 0)));
+    }
+
+    #[test]
+    fn short_am_pm_stays_text_unless_attached_to_a_valid_hour() {
+        for input in ["x 5 a", "x 5 p", "x 13p", "x 0a", "x a", "x map"] {
+            let q = p(input);
+            assert_eq!(q.time, None, "{input}");
+            assert_eq!(q.content, input, "{input}");
+        }
+    }
+
+    #[test]
     fn streak_counts_only_beside_a_repeat() {
         let q = p("Run every day streak");
         assert!(q.streak);
@@ -1198,6 +1219,8 @@ mod tests {
         assert_eq!(parse_time("17:45"), Some(t(17, 45)));
         assert_eq!(parse_time("noon"), Some(t(12, 0)));
         assert_eq!(parse_time("12am"), Some(t(0, 0)));
+        assert_eq!(parse_time("9a"), Some(t(9, 0)));
+        assert_eq!(parse_time("10p"), Some(t(22, 0)));
         assert_eq!(parse_time("5"), None, "bare hour is ambiguous");
         assert_eq!(parse_time("5pm tomorrow"), None, "only a time");
         assert_eq!(parse_time(""), None);
