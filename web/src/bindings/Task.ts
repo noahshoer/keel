@@ -12,4 +12,9 @@ export type Task = { id: Id, project_id: Id, section_id: Id | null, parent_id: I
 /**
  * What undoing the last completion of a repeating task puts back.
  */
-last_completion: LastCompletion | null, };
+last_completion: LastCompletion | null, 
+/**
+ * When a plain sub-task completed with its repeating parent reopens: the
+ * parent's next date (`YYYY-MM-DD`).
+ */
+reopens_on: string | null, };

@@ -137,16 +137,65 @@ fn a_repeating_parent_does_not_pull_a_later_sub_task_forward() {
 }
 
 #[test]
-fn completing_a_repeating_parent_still_resets_plain_sub_tasks() {
+fn completing_a_repeating_parent_keeps_plain_sub_tasks_completed_until_its_next_date() {
     let mut f = Fx::new();
     let parent = f.add(None, Some(Recurrence::Daily));
-    let plain = f.add(Some(&parent), None);
-    f.complete(&plain);
-    assert!(f.get(&plain).checked);
+    let done_first = f.add(Some(&parent), None);
+    let still_open = f.add(Some(&parent), None);
+    let grandchild = f.add(Some(&still_open), None);
+    f.complete(&done_first);
 
     f.complete(&parent);
 
-    assert!(!f.get(&plain).checked);
+    for id in [&done_first, &still_open, &grandchild] {
+        assert!(f.get(id).checked, "{id:?} completes with its parent");
+    }
+    let today_all = f.svc.all_tasks_at(today()).unwrap();
+    assert_eq!(progress(&parent, &today_all, today()), Some(Progress { done: 2, total: 2 }));
+
+    let next_all = f.svc.all_tasks_at(tomorrow()).unwrap();
+    for id in [&done_first, &still_open, &grandchild] {
+        let t = next_all.iter().find(|t| &t.id == id).unwrap();
+        assert!(!t.checked, "{id:?} reopens for the next round");
+        assert_eq!(t.completed_at, None);
+    }
+    assert_eq!(progress(&parent, &next_all, tomorrow()), Some(Progress { done: 0, total: 2 }));
+    // And it's saved, not just how that read looked.
+    assert!(!f.svc.project_view_at(f.inbox.as_str(), tomorrow()).unwrap().iter().any(|t| t.checked));
+}
+
+#[test]
+fn a_plain_sub_task_reopened_by_hand_stays_open_and_the_rest_stay_completed() {
+    let mut f = Fx::new();
+    let parent = f.add(None, Some(Recurrence::Daily));
+    let a = f.add(Some(&parent), None);
+    let b = f.add(Some(&parent), None);
+    f.complete(&parent);
+
+    f.run_on(Action::TaskUncomplete { id: a.clone() }, today());
+
+    assert!(!f.get(&a).checked);
+    assert!(f.get(&b).checked);
+}
+
+#[test]
+fn a_plain_sub_task_completed_by_hand_does_not_reopen_on_its_own() {
+    let mut f = Fx::new();
+    let parent = f.add(None, Some(Recurrence::Daily));
+    let a = f.add(Some(&parent), None);
+    f.complete(&a);
+    let next_all = f.svc.all_tasks_at(tomorrow()).unwrap();
+    assert!(next_all.iter().find(|t| t.id == a).unwrap().checked);
+}
+
+#[test]
+fn a_sub_task_of_a_parent_that_does_not_repeat_never_reopens() {
+    let mut f = Fx::new();
+    let parent = f.add(None, None);
+    let a = f.add(Some(&parent), None);
+    f.complete(&parent);
+    let next_all = f.svc.all_tasks_at(tomorrow()).unwrap();
+    assert!(next_all.iter().find(|t| t.id == a).unwrap().checked);
 }
 
 #[test]

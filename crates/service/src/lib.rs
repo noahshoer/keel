@@ -60,17 +60,19 @@ impl AppService {
     }
 
     /// Lists a project's tasks, first applying lazy streak-miss detection to
-    /// streak-enabled tasks and persisting any reset (design §7).
+    /// streak-enabled tasks and reopening sub-tasks whose date has come, and
+    /// persisting either (design §7).
     pub fn list_tasks_at(&self, project_id: &str, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
         let tasks = self.repo.list_tasks(&Id::from(project_id))?;
         self.recompute_streaks(tasks, today)
     }
 
     fn recompute_streaks(&self, mut tasks: Vec<Task>, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
-        for task in tasks.iter_mut().filter(|t| t.streak_enabled) {
+        for task in tasks.iter_mut() {
+            let reopened = task.reopen_if_due(today);
             let before = task.streak_current;
             streak::recompute_miss(task, today);
-            if task.streak_current != before {
+            if reopened || task.streak_current != before {
                 self.repo.upsert_task(task)?;
             }
         }
@@ -152,8 +154,7 @@ impl AppService {
     /// Completed (checked) tasks matching `keep`, newest first.
     fn completed(&self, keep: impl Fn(&Task) -> bool) -> Result<Vec<Task>, RepoError> {
         let mut tasks: Vec<Task> = self
-            .repo
-            .list_all_tasks()?
+            .recompute_streaks(self.repo.list_all_tasks()?, today())?
             .into_iter()
             .filter(|t| t.checked && keep(t))
             .collect();

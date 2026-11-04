@@ -340,14 +340,18 @@ pub fn apply_at<R: Repository>(
                         let Some(passed) = complete_occurrence(&mut task, &rule, current, today) else {
                             return finish(repo, &cmd.uuid, type_name, &args_json, result);
                         };
-                        // A new occurrence starts with its sub-tasks unchecked.
-                        // Repeating ones complete too, unless they're already
-                        // past this occurrence.
+                        // Sub-tasks complete with it. Plain ones stay checked until
+                        // its next date; repeating ones move on, unless they're
+                        // already past this occurrence.
+                        let reopens_on = task.due.as_ref().and_then(|d| d.date.get(..10)).map(str::to_string);
                         for mut child in descendants(repo, &task.id)? {
                             let child_recurring = child.due.as_ref().is_some_and(|d| d.is_recurring);
-                            if child.checked && !child_recurring {
-                                child.checked = false;
-                                child.completed_at = None;
+                            if !child_recurring {
+                                if !child.checked {
+                                    child.checked = true;
+                                    child.completed_at = Some(now);
+                                }
+                                child.reopens_on = reopens_on.clone();
                                 child.updated_at = now;
                                 repo.upsert_task(&child)?;
                             }
@@ -602,6 +606,7 @@ pub fn apply_at<R: Repository>(
                     task.streak_last_period = undo.streak_last_period;
                 }
                 task.last_completion = None;
+                task.reopens_on = None;
                 task.checked = false;
                 task.completed_at = None;
                 task.updated_at = Utc::now();
