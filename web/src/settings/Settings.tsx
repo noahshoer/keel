@@ -292,17 +292,25 @@ export function Settings({
           {message !== null ? <div className="setting-warning">{message}</div> : null}
           <div className={enabled ? "setting-group" : "setting-group disabled"}>
             <div className="setting-row">
-              <div className="setting-name">Remind me</div>
-              {menu("offset", "Offset", "Remind me", menus.offset, <ClockSmallIcon />)}
+              <div className="setting-text">
+                <div className="setting-name">Default reminder</div>
+                <div className="setting-hint">
+                  Sent for each task with a due time. A task can add its own reminders too.
+                </div>
+              </div>
+              {menu("offset", "Offset", "Default reminder", menus.offset, <ClockSmallIcon />)}
             </div>
             <div className="setting-row">
-              <div className="setting-name">Tasks without a time</div>
+              <div className="setting-text">
+                <div className="setting-name">Tasks without a time</div>
+                <div className="setting-hint">Sent on the due day, and for deadlines that day with no due time.</div>
+              </div>
               {menu("allday", "AllDay", "Tasks without a time", menus.all_day, <CalendarSmallIcon />)}
             </div>
             <div className="setting-row">
               <div className="setting-text">
                 <div className="setting-name">Daily summary</div>
-                <div className="setting-hint">How many tasks are due that day</div>
+                <div className="setting-hint">Send how many tasks are due that day at this time.</div>
               </div>
               {menu("summary", "Summary", "Daily summary", menus.summary, <SunIcon />)}
             </div>

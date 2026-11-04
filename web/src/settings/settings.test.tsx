@@ -62,7 +62,7 @@ it("shows every section with the stored values", async () => {
   expect(reminderSwitch().className).toBe("switch on");
   expect(reminderSwitch().getAttribute("aria-checked")).toBe("true");
   expect(screen.getByText("On")).toBeTruthy();
-  expect(screen.getByTitle("Remind me").textContent).toContain("At the due time");
+  expect(screen.getByTitle("Default reminder").textContent).toContain("At the due time");
   expect(screen.getByTitle("Tasks without a time").textContent).toContain("9 AM");
   expect(screen.getByTitle("Daily summary").textContent).toContain("Off");
   expect(diagSwitch().getAttribute("aria-checked")).toBe("false");
@@ -158,7 +158,7 @@ it("turning on asks the system, then saves them on", async () => {
 it("two picks in a row each save the latest settings", async () => {
   const calls = backend();
   await open();
-  fireEvent.click(screen.getByTitle("Remind me"));
+  fireEvent.click(screen.getByTitle("Default reminder"));
   fireEvent.click(screen.getByText("5 minutes before"));
   fireEvent.click(screen.getByTitle("Daily summary"));
   fireEvent.click(screen.getByText("7:30 AM"));
@@ -304,7 +304,7 @@ it("imports each file in order, one line each, then reloads once", async () => {
 it("Escape closes an open menu first, then the dialog", async () => {
   backend();
   const { onClose } = await open();
-  fireEvent.click(screen.getByTitle("Remind me"));
+  fireEvent.click(screen.getByTitle("Default reminder"));
   expect(document.querySelector(".popover.menu")).toBeTruthy();
   expect(document.querySelector(".pop-backdrop")).toBeTruthy();
   const modal = document.querySelector(".modal") as HTMLElement;
