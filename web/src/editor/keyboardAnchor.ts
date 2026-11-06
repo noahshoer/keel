@@ -118,9 +118,12 @@ export function rideCard(
   card.getBoundingClientRect();
   card.style.transition = transition;
   card.style.transform = "";
+  // iOS draws the caret where the layout is, not where the card is yet.
+  card.classList.add("riding");
   return setTimeout(
     () => {
       card.style.transition = "";
+      card.classList.remove("riding");
     },
     pace.secs * 1000 + 50,
   );

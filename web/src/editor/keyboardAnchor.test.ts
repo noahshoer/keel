@@ -232,6 +232,8 @@ describe("useKeyboard with the pace", () => {
     stub.mockImplementation(() => ({ bottom: 508 }) as DOMRect);
     send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
     expect(result.current.inset).toBe(328);
+    // The caret is drawn where the layout is, not where the card is yet: hidden meanwhile.
+    expect(card.classList.contains("riding")).toBe(true);
     expect(stages).toEqual([
       "transition=none",
       "transform=translateY(328px)",
@@ -243,6 +245,7 @@ describe("useKeyboard with the pace", () => {
       vi.advanceTimersByTime(451);
     });
     expect(stages.at(-1)).toBe("transition=");
+    expect(card.classList.contains("riding")).toBe(false);
     card.remove();
   });
 
