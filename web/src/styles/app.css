@@ -409,6 +409,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .add-section-r
 /* A long-pressed task: lifted out of a dimmed page (the huge shadow dims what's around it), with its menu beside it. */
 .task.lifted { z-index: 2; box-shadow: 0 0 0 100vmax rgba(0,0,0,.55); }
 .task.lifted .task-actions { opacity: 0; pointer-events: none; }
+/* A sidebar row or a section's header whose popup is open (RowMenu): lifted the same way. */
+.nav-item[data-lifted], .section-row[data-lifted] { position: relative; z-index: 2; border-radius: var(--r-item); box-shadow: 0 0 0 100vmax rgba(0,0,0,.55); }
+.nav-item[data-lifted]:not(.active) { background: var(--bg); }
+.section-row[data-lifted] { background: var(--page-bg); }
 /* Dragging a task to another section (gestures/drag.ts): its ghost follows the finger, its place stays as an outline, and the zone it will land in is outlined. */
 .drag-ghost { background: var(--bg); border-radius: var(--r-card); box-shadow: 0 14px 30px rgba(0,0,0,.45); transform: rotate(-1.5deg); opacity: .96; }
 .drag-ghost .task-row, .drag-ghost .task-actions { border-radius: var(--r-card); }
@@ -794,8 +798,11 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
     background: transparent; border: 2px dotted color-mix(in srgb, var(--text) 35%, transparent); }
   .add-task-row .plus svg, .add-section-row .plus svg { display: none; }
 }
-/* Touch: a long press shows a task's actions; no text selection or callout. */
-@media (hover: none) { .task-row, .nav-item, .tv-scrim, .editor-scrim, .drawer-scrim, .modal-scrim { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
+/* Touch: no text selection or callout from a long press anywhere in the lists or the sidebar (a hold on "Add task" selected across the page); fields still select. */
+@media (hover: none) {
+  .list-scroll, .view-head, .sidebar, .tv-scrim, .editor-scrim, .drawer-scrim, .modal-scrim { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .list-scroll :is(input, textarea, [contenteditable]), .view-head :is(input, textarea, [contenteditable]), .sidebar :is(input, textarea, [contenteditable]) { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+}
 /* One line: titleFit.ts cuts between words, the ellipsis is for one huge word. */
 .view-head .view-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* Editing on the page: the title is the field, with its own type and place. */
