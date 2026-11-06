@@ -1,6 +1,6 @@
 // Dragging a task to another section. A touch drag starts from a hold
 // (`ROW_HOLD`, long-press.ts): the finger moves on and the task's ghost follows
-// it. A mouse drag starts from a press on a row that moves a few pixels. Either
+// it, even when the hold has opened the task's menu (the drag closes it). A mouse drag starts from a press on a row that moves a few pixels. Either
 // way, `[data-drop-zone]` elements are where it can land: the one under the
 // finger (unless it's where the task already is) is the `drop-target`, and letting
 // go sends it `TASK_DROP`; its component does the move. The page scrolls under a
@@ -16,7 +16,7 @@ import {
   type Place,
   TOUCH_SLOP,
 } from "./drag-rules";
-import { ROW_DRAG, ROW_HOLD, ROW_PRESS } from "./long-press";
+import { ROW_DRAG, ROW_HOLD } from "./long-press";
 
 /** Sent to the drop zone a task is let go over (detail: `{ taskId }`). */
 export const TASK_DROP = "keel-task-drop";
@@ -154,13 +154,11 @@ export function installDrag(doc: Document, win: Window, options: Options = {}): 
   const onTouchMove = (e: TouchEvent) => {
     const t = e.touches[0];
     if (!t || !press || press.mouse) return;
+    // The page doesn't scroll under a held finger: a scroll would close the menu and take the touch.
+    e.preventDefault();
     if (!drag && movedBeyond(t.clientX - press.x, t.clientY - press.y, TOUCH_SLOP))
       begin(press, t.clientX, t.clientY);
-    if (drag) {
-      // The page doesn't scroll under a dragging finger.
-      e.preventDefault();
-      move(drag, t.clientX, t.clientY);
-    }
+    if (drag) move(drag, t.clientX, t.clientY);
   };
   const onTouchEnd = () => end(true);
   const onTouchCancel = () => end(false);
@@ -212,22 +210,12 @@ export function installDrag(doc: Document, win: Window, options: Options = {}): 
     e.preventDefault();
   };
 
-  // The task's menu is open: the finger still holding it doesn't drag it.
-  const onMenu = () => {
-    if (press && !drag && !press.mouse) {
-      press = null;
-      detach();
-    }
-  };
-
   doc.addEventListener(ROW_HOLD, onHold);
-  doc.addEventListener(ROW_PRESS, onMenu);
   doc.addEventListener("pointerdown", onPointerDown);
   doc.addEventListener("click", onClick, true);
   return () => {
     end(false);
     doc.removeEventListener(ROW_HOLD, onHold);
-    doc.removeEventListener(ROW_PRESS, onMenu);
     doc.removeEventListener("pointerdown", onPointerDown);
     doc.removeEventListener("click", onClick, true);
   };

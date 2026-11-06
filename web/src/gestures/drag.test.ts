@@ -79,10 +79,17 @@ it("a held task that has moved past the slop is dragged: its ghost follows and t
   expect(g.style.top).toBe("160px");
 });
 
-it("once the task's menu is open the held finger no longer drags it", () => {
+it("a task whose menu is open is still dragged by the finger that held it", () => {
   hold();
   el("task").dispatchEvent(new Event(ROW_PRESS, { bubbles: true }));
   touch("touchmove", 80, 400);
+  expect(ghost()).not.toBeNull();
+  expect(el("chores").classList.contains("drop-target")).toBe(true);
+});
+
+it("the page doesn't scroll under a held finger, even before it has moved past the slop", () => {
+  hold();
+  expect(touch("touchmove", 53, 123).defaultPrevented).toBe(true);
   expect(ghost()).toBeNull();
 });
 

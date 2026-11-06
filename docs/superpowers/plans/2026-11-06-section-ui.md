@@ -25,7 +25,7 @@ Decisions:
 
 ## Moving tasks between sections (added 2026-11-06, mocks approved)
 
-- Drag: a touch drag starts from a hold on a task (`ROW_HOLD`, sent at 450 ms
+- Drag: a touch drag starts from a hold on a task (`ROW_HOLD`, sent at 500 ms
   to `.task`) and begins once the finger has moved past the slop; a mouse drag is
   a press on a row that moves 6 px. `drag.ts` (rules in `drag-rules.ts`) makes the
   ghost, outlines the `[data-drop-zone]` under the finger (a project's own tasks,
@@ -33,9 +33,13 @@ Decisions:
   which sends `task_move` (the end of that section; no order within a section).
   The page scrolls near the list's top and bottom. Only top-level tasks
   (`data-draggable`) and only where a drop zone exists.
-- The task's menu no longer opens at the hold: the hold lifts the row, and
-  `ROW_PRESS` comes when the finger lifts unless the task was dragged (`ROW_DRAG`) or
-  the touch was cancelled (`ROW_RELEASE`). A right click still opens it at once.
+- Timing (Noah, 2026-11-06): a half-second hold (`HOLD_MS`) lifts the row and opens
+  its menu together (`ROW_HOLD`, then `ROW_PRESS`), finger still down. The lifted
+  task can still be dragged: moving past the slop starts the drag, and `ROW_DRAG`
+  closes the menu. Lifting without moving leaves the menu open. While a task is
+  held, its touchmoves are `preventDefault`ed, so a few pixels of page scroll can't
+  close the menu or take the touch. A right click still opens the menu at once.
+  (Replaces the earlier menu-on-lift and menu-after-another-500-ms versions.)
 - "Move to…" in the task's menu lists the projects with their sections
   (`location_choices`, exported from the wasm build) and sends the same `task_move`;
   it moves a task to another project too.
