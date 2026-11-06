@@ -24,6 +24,7 @@ import { AddTask } from "../editor/AddTask";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
 import { DropZone } from "../lists/DropZone";
+import { EmptyState } from "../lists/EmptyState";
 import { LocationsContext } from "../lists/locations";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
@@ -363,7 +364,8 @@ export function MainPane({
             )}
           </div>
           <div ref={listScroll} className="list-scroll">
-            <div className="list-body">
+            {/* Keyed by the view, so a view lands as it is: only later changes animate (lists/presence.ts). */}
+            <div key={viewKey(view)} className="list-body">
               {editing?.kind === "filter" ? (
                 <div ref={setQuerySlot} className="view-edit-query" />
               ) : subtitle ? (
@@ -371,12 +373,9 @@ export function MainPane({
               ) : null}
               {loaded.filterError !== null ? (
                 <div className="filter-problem big-problem">{`This filter can’t run: ${loaded.filterError}`}</div>
-              ) : empty && projectSections.length === 0 && !search ? (
-                <div className="empty">
-                  <div className="big">{big}</div>
-                  <div>{small}</div>
-                </div>
-              ) : null}
+              ) : search ? null : (
+                <EmptyState show={empty && projectSections.length === 0} big={big} small={small} />
+              )}
               {body}
               {/* Room under the last row of the page, so the floating add button doesn't cover it. */}
               {search ? null : <div className="fab-spacer" />}

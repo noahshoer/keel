@@ -1,9 +1,11 @@
 // Lists as cards (crates/ui/src/cards.rs): each top-level task is a card,
 // and in dated views the sub-tasks that match sit inside their parent's card.
+import { type ReactNode, useRef } from "react";
 import type { Card, CardRow, Id, Label, Reminder } from "../bindings";
 import { ChevronRightIcon, FlagFilledIcon } from "../shell/icons";
 import { useTaskNav } from "../taskview/nav-context";
 import { dueChip, FLAG_CLASS } from "./chips";
+import { useFreshIds, useGrowIn } from "./presence";
 import { INBOX_LOCATION, type RowLocation } from "./rowLayout";
 import { SubtaskProgress } from "./SubtaskProgress";
 import { TaskRow } from "./TaskRow";
@@ -53,8 +55,10 @@ export function CardList({
   onChanged: () => void;
 }) {
   const where = (id: Id) => locations.get(id) ?? INBOX_LOCATION;
+  // A card that wasn't here last time (a new task, one moved in) grows in.
+  const fresh = useFreshIds(cards.map((c) => c.head.task.id));
   return cards.map((card) => (
-    <div key={card.head.task.id} className="task-card">
+    <CardBox key={card.head.task.id} fresh={fresh.has(card.head.task.id)}>
       {card.head_matches ? (
         <TaskRow
           row={card.head}
@@ -78,6 +82,17 @@ export function CardList({
           onChanged={onChanged}
         />
       ))}
-    </div>
+    </CardBox>
   ));
+}
+
+/** A card's box; one that's `fresh` when it mounts opens from nothing. */
+function CardBox({ fresh, children }: { fresh: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useGrowIn(ref, fresh);
+  return (
+    <div ref={ref} className="task-card">
+      {children}
+    </div>
+  );
 }

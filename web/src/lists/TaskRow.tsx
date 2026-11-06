@@ -33,6 +33,7 @@ import { CHECK_CLASS, dueChip } from "./chips";
 import { CompletionIconContext, FILL_MS, nextOnTap, OFF_MS, type Phase, sleep } from "./completion";
 import { LocationsContext } from "./locations";
 import { MovePicker } from "./MovePicker";
+import { markCollapse } from "./presence";
 import { bottomLayout, type RowLocation } from "./rowLayout";
 import { StreakPanel } from "./StreakPanel";
 import { SubtaskProgress } from "./SubtaskProgress";
@@ -150,6 +151,7 @@ export function TaskRow({
     setPhase(1);
     await sleep(FILL_MS);
     if (gen.current !== mine) return;
+    if (root.current) markCollapse(root.current);
     setPhase(2);
     await sleep(OFF_MS);
     if (gen.current !== mine) return;

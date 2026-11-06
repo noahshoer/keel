@@ -1132,6 +1132,12 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 
 .empty { text-align: center; color: var(--muted); padding: 56px 0 24px; }
 .empty .big { font-size: 15px; color: var(--text); font-weight: 600; margin-bottom: 4px; }
+/* Comes and goes by collapsing its row while it fades (lists/presence.ts; .28s is LEAVE_MS). */
+.presence { display: grid; grid-template-rows: 1fr; opacity: 1;
+  transition: grid-template-rows .28s cubic-bezier(.2,.8,.2,1), opacity .2s ease; }
+.presence.entering, .presence.leaving { grid-template-rows: 0fr; opacity: 0; }
+.presence-inner { min-height: 0; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .presence { transition: opacity .2s ease; } }
 .error { color: var(--due-overdue); padding: 24px; }
 
 /* Deadlines + task reminders */
@@ -1309,7 +1315,8 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
   80%  { transform: scale(.25, .03); filter: brightness(3);   opacity: .9; }
   100% { transform: scale(0, .03);   filter: brightness(3);   opacity: 0; }
 }
-@keyframes row-collapse { from { max-height: 400px; } to { max-height: 0; margin-top: 0; margin-bottom: 0; } }
+/* From the row's own height (`markCollapse`), so what's below rises the whole time. */
+@keyframes row-collapse { from { max-height: var(--collapse-from, 400px); } to { max-height: 0; margin-top: 0; margin-bottom: 0; } }
 /* A card that goes with its row switches off whole: the row is its head (its
    sub-tasks complete with it) or the only row under a head that's just
    context. A sub-task with others beside it goes alone. */
