@@ -100,7 +100,8 @@ export function installDrag(doc: Document, win: Window, options: Options = {}): 
       zIndex: "1000",
     });
     doc.body.appendChild(ghost);
-    p.task.classList.add("drag-source");
+    // An attribute, not a class: the row's component owns its `className` and resets it when the hold ends.
+    p.task.setAttribute("data-drag-source", "");
     doc.body.classList.add("dragging");
     const d: Drag = {
       task: p.task,
@@ -129,7 +130,7 @@ export function installDrag(doc: Document, win: Window, options: Options = {}): 
     if (!d) return;
     win.cancelAnimationFrame(d.frame);
     d.ghost.remove();
-    d.task.classList.remove("drag-source");
+    d.task.removeAttribute("data-drag-source");
     d.target?.classList.remove("drop-target");
     doc.body.classList.remove("dragging");
     if (commit && d.target) {

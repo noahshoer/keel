@@ -69,7 +69,7 @@ it("a held task that has moved past the slop is dragged: its ghost follows and t
   expect(drag).toHaveBeenCalledTimes(1);
   expect(ghost()).not.toBeNull();
   expect(ghost()?.getAttribute("data-menu-id")).toBeNull();
-  expect(el("task").classList.contains("drag-source")).toBe(true);
+  expect(el("task").hasAttribute("data-drag-source")).toBe(true);
   expect(ev.defaultPrevented).toBe(true);
   // The ghost keeps the grip: the finger is 40 px in and 20 px down the row.
   const g = ghost() as HTMLElement;
@@ -107,7 +107,7 @@ it("letting go over another zone drops the task there, and clears the drag", () 
   expect(dropped).toHaveBeenCalledTimes(1);
   expect((dropped.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail).toEqual({ taskId: "t1" });
   expect(ghost()).toBeNull();
-  expect(el("task").classList.contains("drag-source")).toBe(false);
+  expect(el("task").hasAttribute("data-drag-source")).toBe(false);
   expect(el("chores").classList.contains("drop-target")).toBe(false);
 });
 

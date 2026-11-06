@@ -22,3 +22,23 @@ Decisions:
   same popup (`ROW_PRESS`, via `RowMenu`; `.section-row` joins the long-press
   rows).
 - Sections still go at the end of the project (`section_add` has no position).
+
+## Moving tasks between sections (added 2026-11-06, mocks approved)
+
+- Drag: a touch drag starts from a hold on a task (`ROW_HOLD`, sent at 450 ms
+  to `.task`) and begins once the finger has moved past the slop; a mouse drag is
+  a press on a row that moves 6 px. `drag.ts` (rules in `drag-rules.ts`) makes the
+  ghost, outlines the `[data-drop-zone]` under the finger (a project's own tasks,
+  and each `SectionBlock`, via `DropZone`) and sends it `TASK_DROP` on release,
+  which sends `task_move` (the end of that section; no order within a section).
+  The page scrolls near the list's top and bottom. Only top-level tasks
+  (`data-draggable`) and only where a drop zone exists.
+- The task's menu no longer opens at the hold: the hold lifts the row, and
+  `ROW_PRESS` comes when the finger lifts unless the task was dragged (`ROW_DRAG`) or
+  the touch was cancelled (`ROW_RELEASE`). A right click still opens it at once.
+- "Move to…" in the task's menu lists the projects with their sections
+  (`location_choices`, exported from the wasm build) and sends the same `task_move`;
+  it moves a task to another project too.
+- Rows are `user-select: none`, or iOS's text selection takes the hold over.
+- The dragged row's place is marked with `data-drag-source`, not a class: the
+  row's component resets its `className` when the hold ends.
