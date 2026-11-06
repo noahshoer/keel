@@ -1106,6 +1106,19 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 .add-section-row { margin-top: 37px; border-top: 1px solid var(--border); border-radius: 0; color: var(--accent-text); font-weight: 500; }
 /* A task dragged over it: the zone is a rounded box like the others, with no hairline across it. */
 .add-section-row.drop-target { border-radius: var(--r-card); border-top-color: transparent; }
+/* On touch the header is the size of the rows under it: 17px like a task, a 22px •••
+   in a 44px target. It has no padding above (the block's margin is the space), so a
+   lifted header's card holds just the name and its •••. The rename field takes the
+   same place and height, so nothing moves. */
+@media (pointer: coarse) {
+  .section-title.section-row { padding-top: 0; font-size: 17px; }
+  .section-title.section-row .muted { font-size: 15px; }
+  .section-more { width: 44px; height: 44px; margin-right: -8px; }
+  .section-more svg { width: 22px; height: 22px; }
+  .section-name:not(.section-name-new) { padding-top: 0; }
+  .section-name:not(.section-name-new) .section-name-input { height: 44px; }
+  .section-name-input { font-size: 17px; }
+}
 
 /* Filters */
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace; font-size: 12px; }
