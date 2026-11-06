@@ -67,7 +67,7 @@ export type KeyboardMove = {
 type Pace = { secs: number; ease: string; lead: number };
 
 /** A frame for the page to draw the card's first step, on top of the hop from Swift. */
-export const FRAME_LEAD_SECS = 0.02;
+export const FRAME_LEAD_SECS = 0.05;
 /** The most the card starts ahead for the hop: a stale stamp mustn't throw it forward. */
 const MAX_HOP_SECS = 0.15;
 

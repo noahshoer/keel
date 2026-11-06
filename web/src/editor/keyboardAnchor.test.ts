@@ -235,7 +235,7 @@ describe("useKeyboard with the pace", () => {
     expect(stages).toEqual([
       "transition=none",
       "transform=translateY(328px)",
-      "transition=transform 0.4s ease -0.02s",
+      "transition=transform 0.4s ease -0.05s",
       "transform=",
     ]);
     // Back to plain once the move is over.
