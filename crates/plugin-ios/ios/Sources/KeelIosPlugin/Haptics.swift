@@ -2,8 +2,7 @@ import CoreHaptics
 import UIKit
 
 /// Keel's vibrations, played with Core Haptics, where an event's sharpness
-/// is its pitch: `complete` is one quick tap; `press` is one short, deep
-/// thump. The engine is made on first use and started again after
+/// is its pitch: `complete` is one quick tap; `press` is one deep pop. The engine is made on first use and started again after
 /// iOS stops or resets it. Without Core Haptics, UIKit's impact taps stand in.
 enum Haptics {
   private static var engine: CHHapticEngine?
@@ -55,16 +54,7 @@ enum Haptics {
     let events: [CHHapticEvent]
     switch kind {
     case "press":
-      events = [
-        tap(at: 0, intensity: 1, sharpness: 0),
-        CHHapticEvent(
-          eventType: .hapticContinuous,
-          parameters: [
-            CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
-            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0),
-          ],
-          relativeTime: 0, duration: 0.04),
-      ]
+      events = [tap(at: 0, intensity: 1, sharpness: 0.2)]
     default:
       events = [tap(at: 0, intensity: 0.8, sharpness: 0.5)]
     }

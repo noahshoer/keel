@@ -1,6 +1,6 @@
 // Vibrations (keel-ios Haptics.swift; nothing off iOS): `complete` is one quick
-// tap, on the tap that completes a task; `press` is one short, deep thump when a
-// long press registers. Never awaited, and a failure is ignored.
+// tap, on the tap that completes a task; `press` is one deep pop when a long
+// press registers. Never awaited, and a failure is ignored.
 import type { HapticKind } from "../bindings/HapticKind";
 import { invoke } from "../ipc/invoke";
 

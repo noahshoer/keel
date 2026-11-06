@@ -114,7 +114,7 @@ pub struct HoldPageScrollArgs {
 pub enum HapticKind {
     /// A task was completed: one quick tap.
     Complete,
-    /// A long press registered: one short, deep thump.
+    /// A long press registered: one deep pop.
     Press,
 }
 
