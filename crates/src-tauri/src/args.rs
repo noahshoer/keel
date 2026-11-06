@@ -112,9 +112,9 @@ pub struct HoldPageScrollArgs {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum HapticKind {
-    /// A task was completed: two quick taps, lower then higher.
+    /// A task was completed: one quick tap.
     Complete,
-    /// A long press registered: one deep thump.
+    /// A long press registered: one short, deep thump.
     Press,
 }
 

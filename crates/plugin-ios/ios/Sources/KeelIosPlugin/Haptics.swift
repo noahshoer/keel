@@ -2,8 +2,8 @@ import CoreHaptics
 import UIKit
 
 /// Keel's vibrations, played with Core Haptics, where an event's sharpness
-/// is its pitch: `complete` is two quick taps, lower then higher; `press` is
-/// one deep thump. The engine is made on first use and started again after
+/// is its pitch: `complete` is one quick tap; `press` is one short, deep
+/// thump. The engine is made on first use and started again after
 /// iOS stops or resets it. Without Core Haptics, UIKit's impact taps stand in.
 enum Haptics {
   private static var engine: CHHapticEngine?
@@ -56,20 +56,17 @@ enum Haptics {
     switch kind {
     case "press":
       events = [
-        tap(at: 0, intensity: 1, sharpness: 0.1),
+        tap(at: 0, intensity: 1, sharpness: 0),
         CHHapticEvent(
           eventType: .hapticContinuous,
           parameters: [
-            CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.9),
-            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.05),
+            CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
+            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0),
           ],
-          relativeTime: 0, duration: 0.09),
+          relativeTime: 0, duration: 0.04),
       ]
     default:
-      events = [
-        tap(at: 0, intensity: 0.75, sharpness: 0.15),
-        tap(at: 0.07, intensity: 0.85, sharpness: 0.85),
-      ]
+      events = [tap(at: 0, intensity: 0.8, sharpness: 0.5)]
     }
     return try CHHapticPattern(events: events, parameters: [])
   }
@@ -79,9 +76,6 @@ enum Haptics {
       UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
       return
     }
-    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
-      UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-    }
+    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
   }
 }

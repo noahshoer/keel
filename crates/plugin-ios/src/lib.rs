@@ -86,8 +86,8 @@ struct HapticArgs<'a> {
     kind: &'a str,
 }
 
-/// Plays a vibration: `complete` (two quick taps, lower then higher) or
-/// `press` (one deep thump). iOS only; a no-op elsewhere. Call it from an
+/// Plays a vibration: `complete` (one quick tap) or `press` (one short,
+/// deep thump). iOS only; a no-op elsewhere. Call it from an
 /// async command: it waits for Swift.
 pub fn haptic<R: Runtime>(_app: &tauri::AppHandle<R>, _kind: &str) -> Result<(), String> {
     #[cfg(target_os = "ios")]
