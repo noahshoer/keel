@@ -19,6 +19,7 @@ export const COMMAND_TYPES: { [K in CommandName]: true } = {
   dispatch: true,
   filter_view: true,
   get_reminder_settings: true,
+  haptic: true,
   hold_page_scroll: true,
   import_todoist_csv: true,
   label_view: true,

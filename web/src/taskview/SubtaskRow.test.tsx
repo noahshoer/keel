@@ -46,6 +46,7 @@ it("a checked sub-task's circle reopens it", () => {
   const circle = c.querySelector("button.check.done") as HTMLButtonElement;
   expect(circle.title).toBe("Mark as not done");
   fireEvent.click(circle);
+  // Reopening plays no vibration.
   expect(invoke).toHaveBeenCalledOnce();
 });
 
@@ -55,4 +56,5 @@ it("an open sub-task's circle completes it", () => {
   expect(circle.title).toBe("Complete sub-task");
   fireEvent.click(circle);
   expect(sent()).toEqual({ type: "task_complete", id: "s" });
+  expect(invoke).toHaveBeenCalledWith("haptic", { kind: "complete" });
 });

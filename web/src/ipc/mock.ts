@@ -19,6 +19,7 @@ function fresh() {
     reminderSettings: structuredClone(fx.reminderSettings),
     diag: false,
     pageScrollHeld: false,
+    haptics: [] as string[],
     nextId: 1,
   };
 }
@@ -33,6 +34,11 @@ export function resetMock(): void {
 /** Whether the page's scroll is held (`hold_page_scroll`), for tests. */
 export function mockPageScrollHeld(): boolean {
   return state.pageScrollHeld;
+}
+
+/** The vibrations played (`haptic`), oldest first, for tests. */
+export function mockHaptics(): string[] {
+  return [...state.haptics];
 }
 
 const live = (t: Task) => !t.is_deleted;
@@ -305,6 +311,10 @@ const handlers: Handlers = {
   diag_log: async () => null,
   hold_page_scroll: async ({ on }) => {
     state.pageScrollHeld = on;
+    return null;
+  },
+  haptic: async ({ kind }) => {
+    state.haptics.push(kind);
     return null;
   },
 };

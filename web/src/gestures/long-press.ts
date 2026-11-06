@@ -7,6 +7,8 @@
 // parked). A sidebar row is highlighted only while the finger is down. A plain tap
 // opens the row, as on desktop; hover reveals are mouse-only (app.css).
 
+import { haptic } from "../shell/haptics";
+
 /** How long a finger holds still on a row before it is a long press (ms). */
 export const HOLD_MS = 500;
 const SLOP = 10;
@@ -56,6 +58,7 @@ export function installLongPress(doc: Document): () => void {
     timer = setTimeout(() => {
       timer = null;
       clear();
+      haptic("press");
       const task = row.closest(".task");
       if (task) {
         task.dispatchEvent(new CustomEvent(ROW_HOLD, { bubbles: true, detail: { ...origin } }));

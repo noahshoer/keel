@@ -5,6 +5,7 @@ import type { Id, SubtaskLine } from "../bindings";
 import { completeTask, uncompleteTask } from "../ipc/actions";
 import { CHECK_CLASS } from "../lists/chips";
 import { SubtaskProgress } from "../lists/SubtaskProgress";
+import { haptic } from "../shell/haptics";
 import { CheckIcon, ChevronRightIcon } from "../shell/icons";
 import { useTaskNav } from "./nav-context";
 
@@ -28,6 +29,7 @@ export function SubtaskRow({
         title={done ? "Mark as not done" : "Complete sub-task"}
         onClick={() => {
           if (!nav.holdCircles()) return;
+          if (!done) haptic("complete");
           // Not tied to the row: it goes once the task is done.
           const sent = done ? uncompleteTask(t.id) : completeTask(t.id);
           void sent.then(onChanged, onChanged).then(() => nav.releaseCircles());

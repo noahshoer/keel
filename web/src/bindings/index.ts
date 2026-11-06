@@ -29,6 +29,8 @@ export type * from "./FieldLayout";
 export type * from "./Filter";
 export type * from "./FilterGroup";
 export type * from "./FilterViewArgs";
+export type * from "./HapticArgs";
+export type * from "./HapticKind";
 export type * from "./HoldPageScrollArgs";
 export type * from "./Id";
 export type * from "./ImportSummary";

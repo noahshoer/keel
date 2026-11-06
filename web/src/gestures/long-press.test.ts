@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { haptic } from "../shell/haptics";
 import { HOLD_MS, installLongPress, ROW_HOLD, ROW_PRESS } from "./long-press";
+
+vi.mock("../shell/haptics", () => ({ haptic: vi.fn() }));
 
 let uninstall: () => void;
 
@@ -20,6 +23,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.mocked(haptic).mockClear();
   uninstall();
   vi.useRealTimers();
   document.body.innerHTML = "";
@@ -184,4 +188,15 @@ it("a long press or a right click on a section's header asks for its menu at onc
   expect(opened).toHaveBeenCalledTimes(1);
   el("section").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
   expect(opened).toHaveBeenCalledTimes(2);
+});
+
+it("a long press thumps once when it registers; a hold cut short doesn't", () => {
+  touch("touchstart", el("body"));
+  vi.advanceTimersByTime(HOLD_MS - 1);
+  touch("touchend", el("body"));
+  vi.advanceTimersByTime(HOLD_MS);
+  expect(haptic).not.toHaveBeenCalled();
+  touch("touchstart", el("section"));
+  vi.advanceTimersByTime(HOLD_MS);
+  expect(haptic).toHaveBeenCalledExactlyOnceWith("press");
 });
