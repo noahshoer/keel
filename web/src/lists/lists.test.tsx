@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import type { CardRow, Label, Reminder, Task } from "../bindings";
 import { localToday } from "../clock";
-import { ROW_PRESS } from "../gestures/long-press";
+import { ROW_DRAG, ROW_HOLD, ROW_PRESS, ROW_RELEASE } from "../gestures/long-press";
 import * as fx from "../ipc/fixtures";
 import { invoke } from "../ipc/invoke";
 import { TaskNavProvider } from "../taskview/nav";
@@ -468,6 +468,10 @@ const press = (container: HTMLElement) =>
   act(() => {
     container.querySelector(".task")?.dispatchEvent(new Event(ROW_PRESS));
   });
+const send = (container: HTMLElement, type: string) =>
+  act(() => {
+    container.querySelector(".task")?.dispatchEvent(new Event(type, { bubbles: true }));
+  });
 const taskMenu = () => {
   const menu = document.body.querySelector<HTMLElement>(".task-menu");
   return menu === null ? null : within(menu);
@@ -490,6 +494,27 @@ const picker = () => {
   const el = document.body.querySelector<HTMLElement>(".move-picker");
   return el === null ? null : within(el);
 };
+
+it("a held task lifts with no menu; letting go without a menu or a drag puts it back", () => {
+  const { container } = renderRow(fixture("t-laundry"));
+  send(container, ROW_HOLD);
+  expect(taskEl(container)?.classList.contains("lifted")).toBe(true);
+  expect(taskMenu()).toBeNull();
+  send(container, ROW_RELEASE);
+  expect(taskEl(container)?.classList.contains("lifted")).toBe(false);
+  send(container, ROW_HOLD);
+  send(container, ROW_DRAG);
+  expect(taskEl(container)?.classList.contains("lifted")).toBe(false);
+  expect(taskMenu()).toBeNull();
+});
+
+it("the menu comes when the finger lifts after the hold, and keeps the row lifted", () => {
+  const { container } = renderRow(fixture("t-laundry"));
+  send(container, ROW_HOLD);
+  send(container, ROW_PRESS);
+  expect(taskMenu()).not.toBeNull();
+  expect(taskEl(container)?.classList.contains("lifted")).toBe(true);
+});
 
 it("the menu lists Add sub-task, Move to…, then Delete", () => {
   const { container } = renderRow(fixture("t-laundry"));

@@ -15,7 +15,7 @@ import {
 import type { CardRow, Label, LabelGroup, Reminder } from "../bindings";
 import { deadlineUrgent, dueLabel, labelGroups, reminderLabel } from "../core";
 import { labelColorVar } from "../editor/labelColors";
-import { ROW_PRESS } from "../gestures/long-press";
+import { ROW_DRAG, ROW_HOLD, ROW_PRESS, ROW_RELEASE } from "../gestures/long-press";
 import { completeTask, deleteTask, moveTask } from "../ipc/actions";
 import {
   BellRingingIcon,
@@ -100,15 +100,30 @@ export function TaskRow({
   const root = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState(false);
   const [moving, setMoving] = useState(false);
+  // Held by a finger that is still down: lifted until it is a menu, a drag or nothing.
+  const [held, setHeld] = useState(false);
   const locations = useContext(LocationsContext);
   const closeMenu = useCallback(() => setMenu(false), []);
   const closeMover = useCallback(() => setMoving(false), []);
   useEffect(() => {
     const el = root.current;
     if (!el) return;
-    const open = () => setMenu(true);
+    const hold = () => setHeld(true);
+    const release = () => setHeld(false);
+    const open = () => {
+      setHeld(false);
+      setMenu(true);
+    };
+    el.addEventListener(ROW_HOLD, hold);
+    el.addEventListener(ROW_DRAG, release);
+    el.addEventListener(ROW_RELEASE, release);
     el.addEventListener(ROW_PRESS, open);
-    return () => el.removeEventListener(ROW_PRESS, open);
+    return () => {
+      el.removeEventListener(ROW_HOLD, hold);
+      el.removeEventListener(ROW_DRAG, release);
+      el.removeEventListener(ROW_RELEASE, release);
+      el.removeEventListener(ROW_PRESS, open);
+    };
   }, []);
   // A tap while filled cancels: each start bumps `gen`, and pending steps
   // stop when it has moved on.
@@ -207,7 +222,7 @@ export function TaskRow({
     // One root per row (keyed rows reorder cleanly when a priority changes).
     <div
       ref={root}
-      className={menu || moving ? `${PHASE_CLASS[phase]} lifted` : PHASE_CLASS[phase]}
+      className={menu || moving || held ? `${PHASE_CLASS[phase]} lifted` : PHASE_CLASS[phase]}
       data-menu-id={task.id}
     >
       <div className="task-row">

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { installLongPress, ROW_PRESS } from "./long-press";
+import { installLongPress, ROW_DRAG, ROW_HOLD, ROW_PRESS, ROW_RELEASE } from "./long-press";
 
 let uninstall: () => void;
 
@@ -35,16 +35,53 @@ function touch(type: "touchstart" | "touchmove" | "touchend", target: HTMLElemen
   target.dispatchEvent(ev);
 }
 
-it("a 450 ms hold asks the task for its menu, once", () => {
-  const opened = vi.fn();
-  el("task").addEventListener(ROW_PRESS, opened);
+it("a 450 ms hold lifts the task, and the menu comes when the finger lifts", () => {
+  const held = vi.fn();
+  const pressed = vi.fn();
+  el("task").addEventListener(ROW_HOLD, held);
+  el("task").addEventListener(ROW_PRESS, pressed);
   touch("touchstart", el("body"));
   vi.advanceTimersByTime(449);
-  expect(opened).not.toHaveBeenCalled();
+  expect(held).not.toHaveBeenCalled();
   vi.advanceTimersByTime(1);
-  expect(opened).toHaveBeenCalledTimes(1);
-  // The menu lifts the row itself; the press adds no class to it.
+  expect(held).toHaveBeenCalledTimes(1);
+  // Holding is not asking for the menu: it might become a drag.
+  expect(pressed).not.toHaveBeenCalled();
+  touch("touchend", el("body"));
+  expect(pressed).toHaveBeenCalledTimes(1);
+  // The hold says where the finger is.
+  const event = held.mock.calls[0]?.[0] as CustomEvent | undefined;
+  expect(event?.detail).toEqual({ x: 10, y: 10 });
   expect(el("task").classList.contains("pressed")).toBe(false);
+});
+
+it("a drag after the hold takes the menu's place: lifting the finger doesn't open it", () => {
+  const pressed = vi.fn();
+  el("task").addEventListener(ROW_PRESS, pressed);
+  touch("touchstart", el("body"));
+  vi.advanceTimersByTime(450);
+  el("task").dispatchEvent(new Event(ROW_DRAG, { bubbles: true }));
+  touch("touchend", el("body"));
+  expect(pressed).not.toHaveBeenCalled();
+  // The next hold is a new one.
+  touch("touchstart", el("body"));
+  vi.advanceTimersByTime(450);
+  touch("touchend", el("body"));
+  expect(pressed).toHaveBeenCalledTimes(1);
+});
+
+it("a touch that is cancelled after the hold puts the task back without a menu", () => {
+  const pressed = vi.fn();
+  const released = vi.fn();
+  el("task").addEventListener(ROW_PRESS, pressed);
+  el("task").addEventListener(ROW_RELEASE, released);
+  touch("touchstart", el("body"));
+  vi.advanceTimersByTime(450);
+  const cancel = new Event("touchcancel", { bubbles: true });
+  Object.defineProperty(cancel, "touches", { value: [] });
+  el("body").dispatchEvent(cancel);
+  expect(pressed).not.toHaveBeenCalled();
+  expect(released).toHaveBeenCalledTimes(1);
 });
 
 it("a sidebar row without a task marks itself", () => {
@@ -151,7 +188,7 @@ it("the click after lifting a long held press is swallowed for every listener", 
   expect(later).not.toHaveBeenCalled();
 });
 
-it("a long press or a right click on a section's header asks for its menu", () => {
+it("a long press or a right click on a section's header asks for its menu at once", () => {
   const opened = vi.fn();
   el("section").addEventListener(ROW_PRESS, opened);
   touch("touchstart", el("section"));
