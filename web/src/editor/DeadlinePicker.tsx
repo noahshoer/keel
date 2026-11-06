@@ -1,6 +1,6 @@
 // The Deadline chip and its date-only scheduler
 // (crates/ui/src/pickers.rs `DeadlinePicker`).
-import { TargetSmallIcon } from "../shell/icons";
+import { FlagCheckeredSmallIcon } from "../shell/icons";
 import { cx, DEADLINE_TITLE, type Face, type PopProps } from "./pop";
 import { type CalendarActions, Scheduler } from "./Scheduler";
 
@@ -44,7 +44,7 @@ export function DeadlinePicker({
         title={DEADLINE_TITLE}
         onClick={() => setOpen(isOpen ? null : "deadline")}
       >
-        {face === undefined || face.icon ? <TargetSmallIcon /> : null}
+        {face === undefined || face.icon ? <FlagCheckeredSmallIcon /> : null}
         {face?.text ?? text}
       </button>
       {isOpen ? (

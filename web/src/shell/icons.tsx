@@ -16,6 +16,7 @@ import { Clock } from "@phosphor-icons/react/dist/csr/Clock";
 import { DotsThree } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { Fire } from "@phosphor-icons/react/dist/csr/Fire";
 import { Flag } from "@phosphor-icons/react/dist/csr/Flag";
+import { FlagCheckered } from "@phosphor-icons/react/dist/csr/FlagCheckered";
 import { Funnel } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Gear } from "@phosphor-icons/react/dist/csr/Gear";
 import { Hash } from "@phosphor-icons/react/dist/csr/Hash";
@@ -267,6 +268,10 @@ export function CheckCircleIcon() {
 
 export function TargetSmallIcon() {
   return <Ph icon={Target} size={12} />;
+}
+
+export function FlagCheckeredSmallIcon() {
+  return <Ph icon={FlagCheckered} size={12} />;
 }
 
 export function BellSmallIcon() {
