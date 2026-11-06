@@ -129,9 +129,12 @@ it("the header has Close and More, with no name and no Back at the top", async (
   expect(top().getAttribute("aria-hidden")).toBe("false");
 });
 
-it("a sub-task's view has Back", async () => {
+it("a sub-task's view has a round Back in place of Close", async () => {
   await show(["t-trip", "t-bag"]);
-  expect(top().querySelector(".tv-back")?.textContent).toBe("Back");
+  const back = top().querySelector(".tv-head .tv-back.tv-round");
+  expect(back?.getAttribute("aria-label")).toBe("Back");
+  expect(back?.textContent).toBe("");
+  expect(top().querySelector(".tv-close")).toBeNull();
 });
 
 it("the sub-task card counts, toggles completed, and strikes the checked row", async () => {
@@ -492,7 +495,7 @@ it("the active view closes when asked (scrim or drag), saving its title first", 
 });
 
 it("Close closes at once outside the phone sheet", async () => {
-  await show(["t-trip", "t-bag"]);
+  await show(["t-trip"]);
   fireEvent.click(top().querySelector(".tv-close") as HTMLElement);
   expect(stack()).toBe("");
 });

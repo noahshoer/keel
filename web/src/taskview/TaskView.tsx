@@ -244,24 +244,30 @@ export function TaskView({
       ) : null}
       {active ? (
         <div className="tv-head">
-          <button
-            type="button"
-            className="tv-close tv-round"
-            title="Close"
-            aria-label="Close"
-            // On the phone layout the sheet slides down first.
-            onClick={() => {
-              if (!slideClose(document, window)) navigate("close");
-            }}
-          >
-            <XIcon />
-          </button>
           {depth > 1 ? (
-            <button type="button" className="tv-back icon-btn" title="Back" onClick={() => navigate("back")}>
+            <button
+              type="button"
+              className="tv-back tv-round"
+              title="Back"
+              aria-label="Back"
+              onClick={() => navigate("back")}
+            >
               <ChevronLeftIcon />
-              <span>Back</span>
             </button>
-          ) : null}
+          ) : (
+            <button
+              type="button"
+              className="tv-close tv-round"
+              title="Close"
+              aria-label="Close"
+              // On the phone layout the sheet slides down first.
+              onClick={() => {
+                if (!slideClose(document, window)) navigate("close");
+              }}
+            >
+              <XIcon />
+            </button>
+          )}
           <div className="chip-wrap tv-head-actions">
             <button
               type="button"
