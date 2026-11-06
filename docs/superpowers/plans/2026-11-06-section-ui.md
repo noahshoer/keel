@@ -55,13 +55,14 @@ Decisions:
   Noah 2026-11-06): a dashed copy with "Moves here" sits under the field (`.move-preview`,
   inside the form so a tap on it keeps the field open), and the task's own row stays
   dashed (`data-move-waiting`). Both go when the field closes or the move is done.
-- After a drop on Add section the field has focus but iOS doesn't raise the keyboard:
-  the focus comes at the end of a drag, which WebKit doesn't count as the user
-  interacting. One tap on the field brings it up. Tried and dropped (2026-11-06): a hook
-  on `WKContentView`'s `_elementDidFocus:userIsInteracting:…` with the page asking first
-  through a `keelFocus` message. WebKit never calls that method for this focus (it does for
-  a tap), so the hook can't help. Once, a drop did raise it (WebKit reported interaction
-  as the field focused): most likely a release with little movement, read as a tap on the
-  field that had opened under the finger. Noah's two later drops didn't.
+- The keyboard after a drop on Add section (confirmed by Noah in the simulator,
+  2026-11-06): the field is focused inside the drop's touchend. The first drop after the
+  app starts gets the cursor and no keyboard. Once any field has been focused by a tap
+  since the page loaded, later drops raise the keyboard (WebKit treats a programmatic
+  focus more generously after the person has focused something themselves; this is from
+  the logs, not WebKit's source). One tap on the field always brings it up. A hook on
+  `WKContentView`'s `_elementDidFocus:userIsInteracting:…` was tried and removed: it
+  never changed what WebKit decided. Drops injected by the simulator tool's `touch_path`
+  behave like a first drop.
 - A highlighted zone's label (`::after`) is laid over its top edge: a label that took
   room moved the zones below it out from under the finger, which flickered the target.
