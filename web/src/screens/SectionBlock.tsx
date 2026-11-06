@@ -8,7 +8,8 @@ import type { Loaded } from "../app/load";
 import type { Id, Reminder, Section, Task } from "../bindings";
 import { blankValues, cards } from "../core";
 import { AddTask } from "../editor/AddTask";
-import { addSection, deleteSection, renameSection } from "../ipc/actions";
+import { TASK_DROP } from "../gestures/drag";
+import { addSection, addSectionGetId, deleteSection, moveTask, renameSection } from "../ipc/actions";
 import { CardList } from "../lists/CardList";
 import { DropZone } from "../lists/DropZone";
 import { locationsOf } from "../lists/rowLayout";
@@ -134,12 +135,16 @@ export function AddSection({
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  // A task dropped on the row waits for its section to be named, then moves into it.
+  const [waiting, setWaiting] = useState<Id | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
+  const row = useRef<HTMLDivElement>(null);
   // A click outside the field puts the row back, and drops what was typed.
   useCloseOnClickOutside(form, () => {
     setOpen(false);
     setName("");
+    setWaiting(null);
   });
   // Inside the tap, so iOS raises the keyboard.
   const openField = () => {
@@ -149,6 +154,18 @@ export function AddSection({
   };
   const latest = useRef(openField);
   latest.current = openField;
+  // The row is where a dragged task starts a new section: letting go opens the name field.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the row is a new element each time it comes back, so `open` is what it listens for.
+  useEffect(() => {
+    const el = row.current;
+    if (!el) return;
+    const dropped = (e: Event) => {
+      setWaiting((e as CustomEvent<{ taskId: string }>).detail.taskId);
+      latest.current();
+    };
+    el.addEventListener(TASK_DROP, dropped);
+    return () => el.removeEventListener(TASK_DROP, dropped);
+  }, [open]);
   useEffect(() => {
     if (!opener) return;
     opener.current = () => latest.current();
@@ -160,7 +177,14 @@ export function AddSection({
     return (
       // biome-ignore lint/a11y/useKeyWithClickEvents: the Dioxus divider is a plain div; keyboard users have the section forms.
       // biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI (app.css styles it).
-      <div className="add-section-row" onClick={openField}>
+      <div
+        ref={row}
+        className="add-section-row"
+        data-drop-zone=""
+        data-drop-new=""
+        data-drop-project={projectId}
+        onClick={openField}
+      >
         <span className="plus">
           <PlusIcon size={14} />
         </span>
@@ -176,9 +200,15 @@ export function AddSection({
         e.preventDefault();
         const n = name.trim();
         if (!n) return;
-        addSection(projectId, n).then(() => {
+        const task = waiting;
+        const made =
+          task === null
+            ? addSection(projectId, n)
+            : addSectionGetId(projectId, n).then((id) => moveTask(task, projectId, id));
+        made.then(() => {
           setName("");
           setOpen(false);
+          setWaiting(null);
           onChanged();
         }, onChanged);
       }}
@@ -186,11 +216,14 @@ export function AddSection({
       <input
         ref={input}
         className="section-name-input"
-        placeholder="Name this section, then Enter"
+        placeholder={waiting === null ? "Name this section, then Enter" : "Name the new section, then Enter"}
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
+          if (e.key === "Escape") {
+            setOpen(false);
+            setWaiting(null);
+          }
         }}
       />
     </form>

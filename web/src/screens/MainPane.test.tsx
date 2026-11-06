@@ -241,7 +241,7 @@ const drop = (zone: Element | null, taskId: string) =>
 
 it("a project's sections and its unsectioned tasks are drop zones that move a task in and out", async () => {
   const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
-  const zones = [...container.querySelectorAll("[data-drop-zone]")];
+  const zones = [...container.querySelectorAll("[data-drop-zone]:not([data-drop-new])")];
   expect(
     zones.map((z) => [
       z.getAttribute("data-drop-project"),
@@ -267,15 +267,52 @@ it("a project's sections and its unsectioned tasks are drop zones that move a ta
   });
 });
 
-it("a task is draggable at the top level only, and a project without sections has no zones", async () => {
+it("a dragged task dropped on Add section opens the name field; naming it creates the section and moves the task in", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const row = container.querySelector(".add-section-row");
+  expect(row?.hasAttribute("data-drop-zone")).toBe(true);
+  expect(row?.hasAttribute("data-drop-new")).toBe(true);
+  expect(row?.getAttribute("data-drop-project")).toBe("p-home");
+  drop(row, "t-groceries");
+  const input = screen.getByPlaceholderText("Name the new section, then Enter");
+  expect(document.activeElement).toBe(input);
+  // Nothing has moved yet.
+  expect((await allTasks()).find((t) => t.id === "t-groceries")?.section_id).toBeNull();
+  fireEvent.change(input, { target: { value: "Garden" } });
+  fireEvent.submit(input);
+  await waitFor(async () => {
+    const garden = (await invoke("list_sections", { project_id: "p-home" })).find((s) => s.name === "Garden");
+    expect(garden).toBeDefined();
+    expect((await allTasks()).find((t) => t.id === "t-groceries")?.section_id).toBe(garden?.id);
+  });
+  await waitFor(() => expect(titles(container)).toContain("Garden"));
+});
+
+it("a field opened by a drop that is closed again leaves the task where it was and makes no section", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  drop(container.querySelector(".add-section-row"), "t-groceries");
+  fireEvent.keyDown(screen.getByPlaceholderText("Name the new section, then Enter"), { key: "Escape" });
+  expect(container.querySelector(".add-section-row")).not.toBeNull();
+  // A plain tap on the row afterwards is an ordinary Add section, with nothing waiting to move.
+  fireEvent.click(screen.getByText("Add section"));
+  const input = screen.getByPlaceholderText("Name this section, then Enter");
+  fireEvent.change(input, { target: { value: "Later" } });
+  fireEvent.submit(input);
+  await waitFor(() => expect(titles(container)).toContain("Later"));
+  expect((await allTasks()).find((t) => t.id === "t-groceries")?.section_id).toBeNull();
+});
+
+it("a task is draggable at the top level only, and a project without sections has only Add section to drop on", async () => {
   const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
   const draggable = [...container.querySelectorAll(".task[data-draggable]")].map((t) =>
     t.getAttribute("data-menu-id"),
   );
   expect(draggable).toContain("t-groceries");
   expect(draggable).not.toContain("t-sheets");
+  // With no sections, the only place to drop is Add section: it starts the first one.
   const none = await show({ kind: "project", id: "p-trip", name: "Trip" });
-  expect(none.container.querySelector("[data-drop-zone]")).toBeNull();
+  const zones = [...none.container.querySelectorAll("[data-drop-zone]")];
+  expect(zones.map((z) => z.className)).toEqual(["add-section-row"]);
 });
 
 it("a filter with two comma groups titles both", async () => {

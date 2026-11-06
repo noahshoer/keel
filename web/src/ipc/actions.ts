@@ -36,6 +36,14 @@ export const deleteLabel = (id: Id) => send({ type: "label_delete", id });
 
 export const addSection = (projectId: Id, name: string) =>
   send({ type: "section_add", project_id: projectId, name }, true);
+/** Adds a section and gives its id (to move a task into it). */
+export async function addSectionGetId(projectId: Id, name: string): Promise<Id> {
+  const cmd = command({ type: "section_add", project_id: projectId, name }, true);
+  const result = await invoke("dispatch", { cmd });
+  const id = cmd.temp_id ? result.id_mapping[cmd.temp_id] : undefined;
+  if (id === undefined) throw new Error("the new section has no id");
+  return id;
+}
 export const renameSection = (id: Id, name: string) => send({ type: "section_update", id, name });
 export const deleteSection = (id: Id) => send({ type: "section_delete", id });
 

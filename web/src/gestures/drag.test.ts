@@ -18,11 +18,13 @@ beforeEach(() => {
         </div>
       </div>
       <div id="chores" data-drop-zone data-drop-project="p" data-drop-section="s" data-drop-name="Chores"></div>
+      <div id="new" data-drop-zone data-drop-project="p" data-drop-new="" data-drop-name=""></div>
     </div>`;
   hit = { y: 0 };
   // Rows above 300 are in Home, below it in Chores; above 0 or past 900 is nothing.
   uninstall = installDrag(document, window, {
-    at: (_x, y) => (y < 0 || y > 900 ? null : document.getElementById(y < 300 ? "home" : "chores")),
+    at: (_x, y) =>
+      y < 0 || y > 900 ? null : document.getElementById(y < 300 ? "home" : y >= 700 ? "new" : "chores"),
   });
   const scroll = document.getElementById("scroll") as HTMLElement;
   scroll.getBoundingClientRect = () =>
@@ -109,6 +111,18 @@ it("letting go over another zone drops the task there, and clears the drag", () 
   expect(ghost()).toBeNull();
   expect(el("task").hasAttribute("data-drag-source")).toBe(false);
   expect(el("chores").classList.contains("drop-target")).toBe(false);
+});
+
+it("the new-section zone takes a drop from any task, also in its own project", () => {
+  const dropped = vi.fn();
+  el("new").addEventListener(TASK_DROP, dropped);
+  hold();
+  touch("touchmove", 80, 750);
+  expect(el("new").classList.contains("drop-target")).toBe(true);
+  touch("touchend", 80, 750);
+  expect(dropped).toHaveBeenCalledTimes(1);
+  expect((dropped.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail).toEqual({ taskId: "t1" });
+  expect(el("new").classList.contains("drop-target")).toBe(false);
 });
 
 it("letting go over its own zone or over nothing drops nothing", () => {

@@ -5,8 +5,17 @@
 // finger (unless it's where the task already is) is the `drop-target`, and letting
 // go sends it `TASK_DROP`; its component does the move. The page scrolls under a
 // finger near the list's top or bottom. Only a task marked `data-draggable` goes
-// (a sub-task doesn't), and only on a page that has a drop zone.
-import { edgeScroll, isMove, MOUSE_SLOP, movedBeyond, type Place, TOUCH_SLOP } from "./drag-rules";
+// (a sub-task doesn't), and only on a page that has a drop zone. A zone marked
+// `data-drop-new` starts a new section: it takes a drop from any task.
+import {
+  edgeScroll,
+  isMove,
+  MOUSE_SLOP,
+  movedBeyond,
+  NEW_SECTION,
+  type Place,
+  TOUCH_SLOP,
+} from "./drag-rules";
 import { ROW_DRAG, ROW_HOLD } from "./long-press";
 
 /** Sent to the drop zone a task is let go over (detail: `{ taskId }`). */
@@ -46,9 +55,10 @@ export function installDrag(doc: Document, win: Window, options: Options = {}): 
     project: task.dataset["project"] ?? "",
     section: task.dataset["section"] ?? "",
   });
+  // A zone that starts a new section is never where a task already is.
   const zonePlace = (zone: HTMLElement): Place => ({
     project: zone.dataset["dropProject"] ?? "",
-    section: zone.dataset["dropSection"] ?? "",
+    section: zone.dataset["dropNew"] !== undefined ? NEW_SECTION : (zone.dataset["dropSection"] ?? ""),
   });
   const canDrag = (task: HTMLElement) =>
     task.hasAttribute("data-draggable") && doc.querySelector(ZONE) !== null;

@@ -27,6 +27,9 @@ export function edgeScroll(y: number, top: number, bottom: number): number {
   return 0;
 }
 
+/** The section of a zone that starts a new one: no task is there already. */
+export const NEW_SECTION = "+new";
+
 /** Where a task is, or where a drop zone puts one: a project, and a section ("" for none). */
 export type Place = { project: string; section: string };
 
