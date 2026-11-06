@@ -1064,7 +1064,9 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .add-section-r
 .section-title.section-row { align-items: center; padding-top: 14px; padding-bottom: 0; }
 /* A new or renamed section's name: borderless, in the header's own type and place, so what's typed lands where its title will be. */
 .section-name { padding: 14px 10px 0; }
-.section-name-new { margin-top: 18px; }
+/* A new section's field takes the "Add section" row's place: its green bar is where the row's hairline was, and the field is the row's height, so nothing moves. */
+.section-name-new { margin-top: 37px; padding: 14px 16px; border-top: 1.5px solid var(--accent); }
+.section-name-new .section-name-input { height: 26px; border-bottom: none; }
 .section-name-input { display: block; width: 100%; height: 34px; padding: 0; border: none; border-bottom: 1.5px solid var(--accent); border-radius: 0;
   outline: none; background: none; color: var(--text); font: inherit; font-weight: 650; font-size: 14px; }
 .section-name-input::placeholder { color: var(--muted); font-weight: 400; }
