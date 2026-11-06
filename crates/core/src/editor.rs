@@ -685,12 +685,17 @@ pub struct TitleSegment {
     /// A priority phrase's level (its last digit: "p2", "!!2"), 4 when it
     /// has none; 0 for anything else.
     pub level: u8,
+    /// A date or time phrase's due bucket (the date chip's): its color.
+    /// `None` for anything else.
+    pub bucket: Option<DueBucket>,
+    /// A deadline phrase falls on today or earlier (see [`views::deadline_urgent`]).
+    pub urgent: bool,
 }
 
 /// The title cut into plain and recognized stretches, covering all of it
 /// (overlapping or misaligned spans are skipped).
 pub fn title_segments(value: &str, spans: &[Span]) -> Vec<TitleSegment> {
-    let plain = |text: &str| TitleSegment { text: text.to_string(), kind: None, level: 0 };
+    let plain = |text: &str| TitleSegment { text: text.to_string(), kind: None, level: 0, bucket: None, urgent: false };
     let mut segments = Vec::new();
     let mut at = 0;
     for s in spans.iter().filter(|s| s.end <= value.len() && value.is_char_boundary(s.start) && value.is_char_boundary(s.end)) {
@@ -705,7 +710,7 @@ pub fn title_segments(value: &str, spans: &[Span]) -> Vec<TitleSegment> {
             SpanKind::Priority => text.chars().rev().find_map(|c| c.to_digit(10)).filter(|d| (1..=3).contains(d)).unwrap_or(4) as u8,
             _ => 0,
         };
-        segments.push(TitleSegment { text: text.to_string(), kind: Some(s.kind), level });
+        segments.push(TitleSegment { text: text.to_string(), kind: Some(s.kind), level, bucket: None, urgent: false });
         at = s.end;
     }
     if at < value.len() {
@@ -801,9 +806,19 @@ pub fn editor_view(
     let date = NaiveDate::parse_from_str(&shown.date, "%Y-%m-%d").ok();
     let time = NaiveTime::parse_from_str(&shown.time, "%H:%M").ok();
     let deadline = NaiveDate::parse_from_str(&shown.deadline, "%Y-%m-%d").ok();
+    let date_chip = date_chip(date, time, today);
+    let deadline_urgent = deadline.map(|d| views::deadline_urgent(d, today));
+    let mut segments = title_segments(&v.content, spans);
+    for s in &mut segments {
+        match s.kind {
+            Some(SpanKind::Date | SpanKind::Time) => s.bucket = date_chip.1,
+            Some(SpanKind::Deadline) => s.urgent = deadline_urgent == Some(true),
+            _ => {}
+        }
+    }
     EditorView {
         can_submit,
-        segments: title_segments(&v.content, spans),
+        segments,
         repeat_rule,
         streak_offered,
         has_due,
@@ -814,9 +829,9 @@ pub fn editor_view(
         labels_text: labels_text(&shown.labels),
         repeat_chip_text: typed_repeat.as_ref().map(repeat_text).unwrap_or_else(|| repeat_chip_text(&v.repeat, &opts)),
         repeat_options: opts,
-        date_chip: date_chip(date, time, today),
+        date_chip,
         deadline_text: deadline_text(deadline, today),
-        deadline_urgent: deadline.map(|d| views::deadline_urgent(d, today)),
+        deadline_urgent,
         reminders_text: reminders_text(&v.reminders, today),
         reminder_labels: v.reminders.iter().map(|r| r.label(today)).collect(),
         shown,
@@ -1072,6 +1087,27 @@ mod tests {
         assert_eq!(segs[1].kind, Some(SpanKind::Date));
         assert_eq!((segs[3].kind, segs[3].level), (Some(SpanKind::Priority), 2));
         assert_eq!((segs[0].kind, segs[0].level), (None, 0));
+    }
+
+    #[test]
+    fn date_and_time_segments_carry_the_chips_bucket() {
+        let view = view_of(&typed("Call mom tomorrow 5pm"), true);
+        let buckets: Vec<_> = view.segments.iter().filter(|s| s.kind.is_some()).map(|s| (s.kind, s.bucket)).collect();
+        assert_eq!(buckets, [(Some(SpanKind::Date), Some(DueBucket::Tomorrow)), (Some(SpanKind::Time), Some(DueBucket::Tomorrow))]);
+        let view = view_of(&typed("Pay rent next week p1"), true);
+        let date = view.segments.iter().find(|s| s.kind == Some(SpanKind::Date)).unwrap();
+        assert_eq!(date.bucket, Some(DueBucket::ThisWeek));
+        // Other phrases and plain text have no bucket.
+        assert!(view.segments.iter().filter(|s| s.kind != Some(SpanKind::Date)).all(|s| s.bucket.is_none()));
+    }
+
+    #[test]
+    fn deadline_segments_say_whether_they_are_urgent() {
+        let urgent = view_of(&typed("File taxes {oct 30}"), true);
+        let seg = |view: &EditorView| view.segments.iter().find(|s| s.kind == Some(SpanKind::Deadline)).map(|s| s.urgent);
+        assert_eq!(seg(&urgent), Some(true));
+        let later = view_of(&typed("File taxes {nov 20}"), true);
+        assert_eq!(seg(&later), Some(false));
     }
 
     #[test]
