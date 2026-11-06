@@ -3,7 +3,9 @@
 // Single-line: Enter leaves the field (the keyboard goes), and line breaks are
 // typed as spaces. Multiline: Enter is a new line.
 import { useLayoutEffect, useRef } from "react";
+import type { TitleSegment } from "../bindings";
 import { log } from "../diag";
+import { highlightEndsAt, markClass } from "../editor/titleMarks";
 import { typedText } from "./drafts";
 
 export function GrowingText({
@@ -12,6 +14,8 @@ export function GrowingText({
   placeholder,
   multiline = false,
   autoFocus = false,
+  segments,
+  onUnhighlight,
   onInput,
   onCommit,
 }: {
@@ -21,6 +25,10 @@ export function GrowingText({
   multiline?: boolean;
   /** Focus on mount. A tap that opens the field renders it in `flushSync`, so this lands inside the tap and iOS raises the keyboard. */
   autoFocus?: boolean;
+  /** The phrases quick add recognized, painted behind the text. */
+  segments?: TitleSegment[];
+  /** Backspace right after a highlight turns it back into text. */
+  onUnhighlight?: (caret: number) => void;
   onInput: (text: string) => void;
   onCommit: () => void;
 }) {
@@ -42,6 +50,22 @@ export function GrowingText({
       <div className="tv-grow-mirror" aria-hidden="true">
         {`${value}​`}
       </div>
+      {segments !== undefined ? (
+        <div className="tv-grow-marks" aria-hidden="true">
+          {segments.map((s, i) =>
+            s.kind === null ? (
+              // biome-ignore lint/suspicious/noArrayIndexKey: segments are positional pieces of one string.
+              <span key={i}>{s.text}</span>
+            ) : (
+              // biome-ignore lint/suspicious/noArrayIndexKey: segments are positional pieces of one string.
+              <mark key={i} className={markClass(s.kind, s.level)}>
+                {s.text}
+              </mark>
+            ),
+          )}
+          {"​"}
+        </div>
+      ) : null}
       <textarea
         ref={field}
         rows={1}
@@ -60,6 +84,19 @@ export function GrowingText({
             log(`${className}: Enter keydown`);
             e.preventDefault();
             leave();
+            return;
+          }
+          const ta = e.currentTarget;
+          if (
+            e.key === "Backspace" &&
+            segments !== undefined &&
+            onUnhighlight &&
+            ta.selectionStart === ta.selectionEnd
+          ) {
+            if (highlightEndsAt(segments, ta.selectionStart)) {
+              e.preventDefault();
+              onUnhighlight(ta.selectionStart);
+            }
           }
         }}
         onBlur={onCommit}

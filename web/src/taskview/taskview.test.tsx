@@ -338,6 +338,33 @@ it("a typed title saves on Back, once, and the stack pops", async () => {
   expect(sent).toEqual([expect.objectContaining({ type: "task_update", id: "t-bag", content: "Pack bag" })]);
 });
 
+it("a retyped title applies what it says and loses those words", async () => {
+  await show(["t-trip"]);
+  fireEvent.change(titleField(), { target: { value: "Pack for the trip p1 tomorrow" } });
+  expect(top().querySelector(".tv-grow-marks mark")).not.toBeNull();
+  fireEvent.blur(titleField());
+  await waitFor(async () => expect((await task("t-trip"))?.content).toBe("Pack for the trip"));
+  const saved = await task("t-trip");
+  expect(saved?.priority).toBe("P1");
+  expect(saved?.due?.date).not.toBe(undefined);
+});
+
+it("backspacing a phrase to plain keeps it as text and leaves the fields alone", async () => {
+  await show(["t-trip"]);
+  const sent = spyActions();
+  const field = titleField();
+  fireEvent.change(field, { target: { value: "Pack for the trip p1" } });
+  field.setSelectionRange(field.value.length, field.value.length);
+  fireEvent.keyDown(field, { key: "Backspace" });
+  expect(top().querySelector(".tv-grow-marks mark")).toBeNull();
+  fireEvent.blur(field);
+  await waitFor(async () => expect((await task("t-trip"))?.content).toBe("Pack for the trip p1"));
+  expect(sent).toEqual([
+    expect.objectContaining({ type: "task_update", id: "t-trip", content: "Pack for the trip p1" }),
+  ]);
+  expect((sent[0] as { priority?: unknown }).priority ?? null).toBeNull();
+});
+
 it("an emptied title goes back to the saved one and sends nothing", async () => {
   await show(["t-trip"]);
   const sent = spyActions();

@@ -6,17 +6,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { Loaded } from "../app/load";
-import type { EditorPick, EditorValues, Id, TaskDetail } from "../bindings";
+import type { EditorPick, EditorValues, Id, Recurrence, TaskDetail } from "../bindings";
 import { localToday } from "../clock";
 import {
   applyPick,
+  applyTitle,
   editorView,
   fieldLayout,
   reminderDraftOf,
   repeatText,
   streakText,
   toggleLabel,
+  unhighlightAt,
   valuesFromTask,
+  withStoredPlain,
+  withTitle,
 } from "../core";
 import { isTouch } from "../editor/locale";
 import { usePillFade } from "../editor/pillFade";
@@ -97,9 +101,28 @@ export function TaskView({
   const seen = useRef(stored);
   const [title, setTitleState] = useState(stored.content);
   const titleRef = useRef(stored.content);
+  // The phrases in the title that stay text: all of the stored title's, until
+  // they're retyped, and any backspaced to plain (so they don't apply).
+  const plainOf = (content: string) =>
+    withStoredPlain({ ...stored, content, plain: [] }, projects, sections, today).plain;
+  const plainRef = useRef(plainOf(stored.content));
+  const [plain, setPlainState] = useState(plainRef.current);
+  const setPlain = (p: Array<[number, number]>) => {
+    plainRef.current = p;
+    setPlainState(p);
+  };
+  // The title replaced by the stored one or a save.
   const setTitle = (s: string) => {
     titleRef.current = s;
     setTitleState(s);
+    setPlain(plainOf(s));
+  };
+  // The title typed: the kept-plain phrases follow the text.
+  const typeTitle = (s: string) => {
+    const typed = withTitle({ ...baseRef.current, content: titleRef.current, plain: plainRef.current }, s);
+    titleRef.current = s;
+    setTitleState(s);
+    setPlain(typed.plain);
   };
   const [desc, setDescState] = useState(stored.description);
   const descRef = useRef(stored.description);
@@ -126,13 +149,35 @@ export function TaskView({
   const [moreOpen, setMoreOpen] = useState(false);
   const [open, setOpen] = useState<Pop>(null);
 
-  const save = (pair: { before: EditorValues; after: EditorValues }) =>
-    saveEdit(id, pair.before, pair.after, rule, localToday());
+  type Pair = { before: EditorValues; after: EditorValues; rule: Recurrence | null };
+  const save = (pair: Pair) => saveEdit(id, pair.before, pair.after, pair.rule, localToday());
   // The title / description edit to save, if any (`base` moves ahead). An
-  // emptied title goes back to the saved one.
-  const commit = () => {
-    const { title: shown, save: pair } = commitDrafts(baseRef.current, titleRef.current, descRef.current);
-    if (shown !== titleRef.current) setTitle(shown);
+  // emptied title goes back to the saved one. A retyped title applies what it
+  // says (a date, a priority, ...) and loses those words; one with nothing
+  // else in it goes back too.
+  const commit = (): Pair | null => {
+    const before = baseRef.current;
+    const typed = titleRef.current.trim();
+    const retyped = typed !== "" && typed !== before.content;
+    const applied = retyped
+      ? applyTitle(
+          { ...before, content: titleRef.current, description: descRef.current, plain: plainRef.current },
+          rule,
+          projects,
+          sections,
+          today,
+        )
+      : null;
+    let pair: Pair | null;
+    if (applied !== null) {
+      const after = { ...applied.values, description: descRef.current };
+      pair = sameValues(before, after) ? null : { before, after, rule: applied.rule };
+      setTitle(after.content);
+    } else {
+      const drafts = commitDrafts(before, retyped ? before.content : titleRef.current, descRef.current);
+      if (drafts.title !== titleRef.current) setTitle(drafts.title);
+      pair = drafts.save === null ? null : { ...drafts.save, rule };
+    }
     if (pair !== null) setBase(pair.after);
     return pair;
   };
@@ -171,7 +216,7 @@ export function TaskView({
     const before = baseRef.current;
     if (sameValues(before, after)) return;
     setBase(after);
-    void settle(save({ before, after })).then(onChanged);
+    void settle(save({ before, after, rule })).then(onChanged);
   };
   // Today at pick time, as Dioxus reads it: a view left open past midnight.
   const pick = (p: EditorPick) =>
@@ -204,8 +249,11 @@ export function TaskView({
     })();
   };
 
-  const v: EditorValues = { ...base, description: desc };
-  const view = editorView(v, false, keepLabel, rule, projects, sections, today);
+  // The fields show what the title being typed says (and the stored values
+  // again once a phrase is backspaced to plain).
+  const draft: EditorValues = { ...base, content: title, description: desc, plain };
+  const view = editorView(draft, true, keepLabel, rule, projects, sections, today);
+  const v: EditorValues = { ...view.shown, content: base.content, description: desc };
   const { fields, missing } = fieldsShown(fieldLayout(v, loaded.inbox.id), descOpen);
   const rows = fields.filter((f) => f !== "Description");
   const pillRow = usePillFade(missing.length);
@@ -310,7 +358,12 @@ export function TaskView({
               className="tv-title"
               value={title}
               placeholder="Task name"
-              onInput={setTitle}
+              segments={view.segments}
+              onUnhighlight={(caret) => {
+                const next = unhighlightAt(draft, projects, sections, today, caret);
+                if (next !== null) setPlain(next.plain);
+              }}
+              onInput={typeTitle}
               onCommit={saveDrafts}
             />
           </div>

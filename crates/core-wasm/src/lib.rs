@@ -366,6 +366,44 @@ pub fn with_title(
     output(&editor::with_title(&v, text))
 }
 
+/// `editor::with_stored_plain`: the values with every phrase in the title marked plain.
+#[wasm_bindgen(js_name = withStoredPlain, unchecked_return_type = "import('../../bindings').EditorValues")]
+pub fn with_stored_plain(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] values: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
+    today: &str,
+) -> Result<JsValue, JsError> {
+    let v: EditorValues = input("values", values)?;
+    let projects: Vec<Project> = input("projects", projects)?;
+    let sections: Vec<Section> = input("sections", sections)?;
+    output(&editor::with_stored_plain(&v, &projects, &sections, date(today)?))
+}
+
+#[derive(serde::Serialize)]
+struct AppliedTitle {
+    values: EditorValues,
+    rule: Option<Recurrence>,
+}
+
+/// `editor::apply_title`: an edited title applied; `null` when it has no name besides its phrases.
+#[wasm_bindgen(js_name = applyTitle, unchecked_return_type = "{ values: import('../../bindings').EditorValues; rule: import('../../bindings').Recurrence | null } | null")]
+pub fn apply_title(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] values: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")] existing: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
+    today: &str,
+) -> Result<JsValue, JsError> {
+    let v: EditorValues = input("values", values)?;
+    let existing: Option<Recurrence> = input("existing", existing)?;
+    let projects: Vec<Project> = input("projects", projects)?;
+    let sections: Vec<Section> = input("sections", sections)?;
+    let applied = editor::apply_title(&v, existing, &projects, &sections, date(today)?)
+        .map(|(values, rule)| AppliedTitle { values, rule });
+    output(&applied)
+}
+
 /// `editor::apply_pick`.
 #[wasm_bindgen(js_name = applyPick, unchecked_return_type = "import('../../bindings').EditorValues")]
 pub fn apply_pick(

@@ -282,6 +282,29 @@ export function unhighlightAt(
   return core.unhighlightAt(v, projects, sections, today, caret);
 }
 
+/** The values with every phrase the title says marked plain (a stored title's words stay text). */
+export function withStoredPlain(
+  v: EditorValues,
+  projects: Project[],
+  sections: Section[],
+  today: string,
+): EditorValues {
+  ready();
+  return core.withStoredPlain(v, projects, sections, today);
+}
+
+/** An edited title applied for saving; `null` when it has no name besides its phrases. */
+export function applyTitle(
+  v: EditorValues,
+  existing: Recurrence | null,
+  projects: Project[],
+  sections: Section[],
+  today: string,
+): { values: EditorValues; rule: Recurrence | null } | null {
+  ready();
+  return core.applyTitle(v, existing, projects, sections, today);
+}
+
 /** The location menu's value (`project` or `project|section`) as a pick. */
 export function locationPick(value: string): EditorPick {
   ready();

@@ -823,6 +823,44 @@ pub fn editor_view(
     }
 }
 
+/// `v` with every phrase its title says marked plain: a stored title's words
+/// stay text until they're retyped.
+pub fn with_stored_plain(v: &EditorValues, projects: &[Project], sections: &[Section], today: NaiveDate) -> EditorValues {
+    let spans = parse_title(v, projects, sections, today).spans;
+    let mut v = v.clone();
+    v.plain.extend(spans.iter().map(|s| (s.start, s.end)));
+    v
+}
+
+/// An edited title applied, for saving it: the values with what the title
+/// says on top (text wins, as in quick add) and the phrases cut out of the
+/// name, plus the rule the task repeats by. `None` when the title has no name
+/// besides its phrases.
+pub fn apply_title(
+    v: &EditorValues,
+    existing: Option<Recurrence>,
+    projects: &[Project],
+    sections: &[Section],
+    today: NaiveDate,
+) -> Option<(EditorValues, Option<Recurrence>)> {
+    let qa = parse_title(v, projects, sections, today);
+    let name = qa.content.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let mut after = shown_values(v, &qa);
+    after.content = name.to_string();
+    after.plain = Vec::new();
+    let rule = match qa.recurrence {
+        Some(r) => {
+            after.repeat = repeat_choice(&Some(r.clone())).to_string();
+            Some(r)
+        }
+        None => existing,
+    };
+    Some((after, rule))
+}
+
 /// [`unhighlight`] at a browser caret (UTF-16 units).
 pub fn unhighlight_at(v: &mut EditorValues, projects: &[Project], sections: &[Section], today: NaiveDate, caret: usize) -> bool {
     let end = byte_at_utf16(&v.content, caret);
@@ -1367,5 +1405,55 @@ mod tests {
         let v = typed("x");
         let plan = edit_plan(&Id::from("T-1"), &v, &v, None, day30());
         assert_eq!(plan, EditPlan { moved: None, reminders: Vec::new(), update: None });
+    }
+
+    #[test]
+    fn an_edited_title_applies_what_it_says() {
+        let mut v = typed("Call mom tomorrow p1");
+        v.date = "2026-10-23".into();
+        v.priority = "4".into();
+        let (after, rule) = apply_title(&v, None, &[], &[], day19()).unwrap();
+        assert_eq!((after.content.as_str(), after.date.as_str(), after.priority.as_str()), ("Call mom", "2026-10-20", "1"));
+        assert!(after.plain.is_empty());
+        assert_eq!(rule, None);
+    }
+
+    #[test]
+    fn a_phrase_backspaced_to_plain_leaves_the_stored_values() {
+        let mut v = typed("Call mom fri");
+        v.date = "2026-10-23".into();
+        assert_eq!(parse_title(&v, &[], &[], day19()).date, Some(NaiveDate::from_ymd_opt(2026, 10, 23).unwrap()));
+        v.date = "2026-11-02".into();
+        assert!(unhighlight(&mut v, &[], &[], day19(), "Call mom fri".len()));
+        let (after, _) = apply_title(&v, None, &[], &[], day19()).unwrap();
+        assert_eq!((after.content.as_str(), after.date.as_str()), ("Call mom fri", "2026-11-02"));
+    }
+
+    #[test]
+    fn phrases_already_in_a_stored_title_stay_text_until_retyped() {
+        let v = with_stored_plain(&typed("Review Friday report"), &[], &[], day19());
+        let (after, _) = apply_title(&v, None, &[], &[], day19()).unwrap();
+        assert_eq!((after.content.as_str(), after.date.as_str()), ("Review Friday report", ""));
+        // Editing elsewhere in the title keeps the phrase plain.
+        let v = with_title(&v, "Review the Friday report".into());
+        let (after, _) = apply_title(&v, None, &[], &[], day19()).unwrap();
+        assert_eq!(after.date, "");
+        // Retyping the phrase itself parses it.
+        let v = with_title(&v, "Review the Saturday report".into());
+        let (after, _) = apply_title(&v, None, &[], &[], day19()).unwrap();
+        assert_eq!((after.content.as_str(), after.date.as_str()), ("Review the report", "2026-10-24"));
+    }
+
+    #[test]
+    fn a_title_that_is_only_a_phrase_has_no_name_to_save() {
+        assert_eq!(apply_title(&typed("tomorrow"), None, &[], &[], day19()), None);
+    }
+
+    #[test]
+    fn a_typed_repeat_becomes_the_tasks_rule() {
+        let (after, rule) = apply_title(&typed("Water plants every 3 months"), None, &[], &[], day19()).unwrap();
+        assert_eq!(after.content, "Water plants");
+        assert!(matches!(rule, Some(Recurrence::EveryNMonths { n: 3, .. })));
+        assert_eq!(after.repeat, "keep");
     }
 }
