@@ -3,7 +3,7 @@
 // it near the bottom; the row is lifted out of the dimmed page (`.lifted`).
 import { type RefObject, useRef } from "react";
 import { createPortal } from "react-dom";
-import { FireIcon, SubtaskIcon, TrashSmallIcon } from "../shell/icons";
+import { ArrowRightIcon, FireIcon, SubtaskIcon, TrashSmallIcon } from "../shell/icons";
 import { useAnchoredPopup } from "../shell/useAnchoredPopup";
 
 export function TaskMenu({
@@ -11,6 +11,7 @@ export function TaskMenu({
   recurring,
   onAddSubtask,
   onStreak,
+  onMove,
   onDelete,
   close,
 }: {
@@ -19,6 +20,8 @@ export function TaskMenu({
   recurring: boolean;
   onAddSubtask: () => void;
   onStreak: () => void;
+  /** Opens the Move to… list. */
+  onMove: (() => void) | undefined;
   onDelete: () => void;
   /** Must keep its identity. */
   close: () => void;
@@ -45,6 +48,14 @@ export function TaskMenu({
             <FireIcon />
           </span>
           <span className="menu-label">Streak</span>
+        </button>
+      ) : null}
+      {onMove ? (
+        <button type="button" className="menu-item" onClick={choose(onMove)}>
+          <span className="menu-icon">
+            <ArrowRightIcon />
+          </span>
+          <span className="menu-label">Move to…</span>
         </button>
       ) : null}
       <button type="button" className="menu-item danger" onClick={choose(onDelete)}>

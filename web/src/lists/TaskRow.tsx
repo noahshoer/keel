@@ -16,7 +16,7 @@ import type { CardRow, Label, LabelGroup, Reminder } from "../bindings";
 import { deadlineUrgent, dueLabel, labelGroups, reminderLabel } from "../core";
 import { labelColorVar } from "../editor/labelColors";
 import { ROW_PRESS } from "../gestures/long-press";
-import { completeTask, deleteTask } from "../ipc/actions";
+import { completeTask, deleteTask, moveTask } from "../ipc/actions";
 import {
   BellRingingIcon,
   CalendarSmallIcon,
@@ -31,6 +31,8 @@ import {
 import { useTaskNav } from "../taskview/nav-context";
 import { CHECK_CLASS, dueChip } from "./chips";
 import { CompletionIconContext, FILL_MS, nextOnTap, OFF_MS, type Phase, sleep } from "./completion";
+import { LocationsContext } from "./locations";
+import { MovePicker } from "./MovePicker";
 import { bottomLayout, type RowLocation } from "./rowLayout";
 import { StreakPanel } from "./StreakPanel";
 import { SubtaskProgress } from "./SubtaskProgress";
@@ -97,7 +99,10 @@ export function TaskRow({
   // A long press or a right click opens the task's menu, with the row lifted out of the dimmed page.
   const root = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const locations = useContext(LocationsContext);
   const closeMenu = useCallback(() => setMenu(false), []);
+  const closeMover = useCallback(() => setMoving(false), []);
   useEffect(() => {
     const el = root.current;
     if (!el) return;
@@ -202,7 +207,7 @@ export function TaskRow({
     // One root per row (keyed rows reorder cleanly when a priority changes).
     <div
       ref={root}
-      className={menu ? `${PHASE_CLASS[phase]} lifted` : PHASE_CLASS[phase]}
+      className={menu || moving ? `${PHASE_CLASS[phase]} lifted` : PHASE_CLASS[phase]}
       data-menu-id={task.id}
     >
       <div className="task-row">
@@ -283,10 +288,22 @@ export function TaskRow({
           recurring={recurring}
           onAddSubtask={() => nav.openAdding(task.id)}
           onStreak={() => setPanel(true)}
+          onMove={locations.projects.length > 0 ? () => setMoving(true) : undefined}
           onDelete={() => {
             deleteTask(task.id).then(onChanged, onChanged);
           }}
           close={closeMenu}
+        />
+      ) : null}
+      {moving ? (
+        <MovePicker
+          anchor={root}
+          locations={locations}
+          current={task.section_id ? `${task.project_id}|${task.section_id}` : task.project_id}
+          onPick={(projectId, sectionId) => {
+            moveTask(task.id, projectId, sectionId).then(onChanged, onChanged);
+          }}
+          close={closeMover}
         />
       ) : null}
     </div>

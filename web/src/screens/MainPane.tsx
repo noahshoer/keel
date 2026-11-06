@@ -3,7 +3,7 @@
 // date groups, filters into their comma groups, projects into sections.
 // Each list ends with its "+ Add task" row, as in Dioxus.
 
-import { useContext, useLayoutEffect, useRef, useState } from "react";
+import { useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Loaded } from "../app/load";
 import {
   canShowCompleted,
@@ -23,6 +23,7 @@ import { blankValues, cards, dateGroups } from "../core";
 import { AddTask } from "../editor/AddTask";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
+import { LocationsContext } from "../lists/locations";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
 import { openAndFocus } from "../shell/focus";
@@ -149,6 +150,10 @@ export function MainPane({
   // What the project's ••• calls to open the "Add section" field at the end of the page.
   const addSectionOpener = useRef<(() => void) | null>(null);
   const [querySlot, setQuerySlot] = useState<HTMLElement | null>(null);
+  const locationsValue = useMemo(
+    () => ({ projects: loaded.projects, sections: loaded.sections }),
+    [loaded.projects, loaded.sections],
+  );
   const locations = locationsOf([...loaded.all, ...loaded.completed], loaded.projects, loaded.sections);
   const namesProject = showsProject(view);
   const search = view.kind === "search";
@@ -263,122 +268,128 @@ export function MainPane({
   }
 
   return (
-    <main className={motion === "push" ? "main view-push" : "main"}>
-      <div className={contentClass(motion, swap)}>
-        <div ref={head} className="view-head">
-          {search ? (
-            <button type="button" className="icon-btn back-btn" aria-label="Back" onClick={onLeaveSearch}>
-              <ChevronLeftIcon />
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="icon-btn menu-btn"
-              title="Open menu"
-              aria-label="Open menu"
-              onClick={onOpenDrawer}
+    <LocationsContext.Provider value={locationsValue}>
+      <main className={motion === "push" ? "main view-push" : "main"}>
+        <div className={contentClass(motion, swap)}>
+          <div ref={head} className="view-head">
+            {search ? (
+              <button type="button" className="icon-btn back-btn" aria-label="Back" onClick={onLeaveSearch}>
+                <ChevronLeftIcon />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="icon-btn menu-btn"
+                title="Open menu"
+                aria-label="Open menu"
+                onClick={onOpenDrawer}
+              >
+                <MenuIcon />
+              </button>
+            )}
+            <h1
+              ref={title.ref}
+              className="view-title"
+              hidden={editing !== null}
+              aria-label={title.text === fullTitle ? undefined : fullTitle}
             >
-              <MenuIcon />
-            </button>
-          )}
-          <h1
-            ref={title.ref}
-            className="view-title"
-            hidden={editing !== null}
-            aria-label={title.text === fullTitle ? undefined : fullTitle}
-          >
-            {title.text}
-          </h1>
-          {editing ? (
-            <PageEdit editing={editing} field={titleField} querySlot={querySlot} onClose={stopEditing} />
-          ) : null}
-          {toggle ? (
-            <button
-              type="button"
-              className="view-toggle"
-              title="Completed tasks are hidden by default"
-              aria-label={showCompleted ? "Hide completed" : "Show completed"}
-              aria-pressed={showCompleted}
-              onClick={onToggleCompleted}
-            >
-              <CheckCircleIcon />
-              <span className="view-toggle-label">{showCompleted ? "Hide completed" : "Show completed"}</span>
-            </button>
-          ) : null}
-          {actions ? (
-            <ViewMenu
-              warning={actions.warning}
-              onEdit={() => {
-                // At the top, where the title is at its full size on the phone.
-                if (listScroll.current) listScroll.current.scrollTop = 0;
-                openAndFocus(() => setEditingPlace(place), titleField);
-              }}
-              onDelete={actions.remove}
-              lead={
-                view.kind === "project"
-                  ? {
-                      label: "Add section",
-                      icon: <PlusIcon size={20} />,
-                      run: () => addSectionOpener.current?.(),
-                    }
-                  : undefined
-              }
-            />
-          ) : null}
-          {search ? null : (
-            <button
-              type="button"
-              className="icon-btn search-btn"
-              title={searchTooltip(currentPlatform())}
-              aria-label="Search"
-              onClick={onOpenSearch}
-            >
-              <SearchIcon />
-            </button>
-          )}
-        </div>
-        <div ref={listScroll} className="list-scroll">
-          <div className="list-body">
-            {editing?.kind === "filter" ? (
-              <div ref={setQuerySlot} className="view-edit-query" />
-            ) : subtitle ? (
-              <p className={view.kind === "filter" ? "view-sub mono" : "view-sub"}>{subtitle}</p>
+              {title.text}
+            </h1>
+            {editing ? (
+              <PageEdit editing={editing} field={titleField} querySlot={querySlot} onClose={stopEditing} />
             ) : null}
-            {loaded.filterError !== null ? (
-              <div className="filter-problem big-problem">{`This filter can’t run: ${loaded.filterError}`}</div>
-            ) : empty && projectSections.length === 0 && !search ? (
-              <div className="empty">
-                <div className="big">{big}</div>
-                <div>{small}</div>
-              </div>
+            {toggle ? (
+              <button
+                type="button"
+                className="view-toggle"
+                title="Completed tasks are hidden by default"
+                aria-label={showCompleted ? "Hide completed" : "Show completed"}
+                aria-pressed={showCompleted}
+                onClick={onToggleCompleted}
+              >
+                <CheckCircleIcon />
+                <span className="view-toggle-label">
+                  {showCompleted ? "Hide completed" : "Show completed"}
+                </span>
+              </button>
             ) : null}
-            {body}
-            {/* Room under the last row of the page, so the floating add button doesn't cover it. */}
-            {search ? null : <div className="fab-spacer" />}
-            {showCompleted && toggle && !search ? (
-              <>
-                <div className="section-title">
-                  Completed
-                  <span className="muted">{loaded.completed.length}</span>
+            {actions ? (
+              <ViewMenu
+                warning={actions.warning}
+                onEdit={() => {
+                  // At the top, where the title is at its full size on the phone.
+                  if (listScroll.current) listScroll.current.scrollTop = 0;
+                  openAndFocus(() => setEditingPlace(place), titleField);
+                }}
+                onDelete={actions.remove}
+                lead={
+                  view.kind === "project"
+                    ? {
+                        label: "Add section",
+                        icon: <PlusIcon size={20} />,
+                        run: () => addSectionOpener.current?.(),
+                      }
+                    : undefined
+                }
+              />
+            ) : null}
+            {search ? null : (
+              <button
+                type="button"
+                className="icon-btn search-btn"
+                title={searchTooltip(currentPlatform())}
+                aria-label="Search"
+                onClick={onOpenSearch}
+              >
+                <SearchIcon />
+              </button>
+            )}
+          </div>
+          <div ref={listScroll} className="list-scroll">
+            <div className="list-body">
+              {editing?.kind === "filter" ? (
+                <div ref={setQuerySlot} className="view-edit-query" />
+              ) : subtitle ? (
+                <p className={view.kind === "filter" ? "view-sub mono" : "view-sub"}>{subtitle}</p>
+              ) : null}
+              {loaded.filterError !== null ? (
+                <div className="filter-problem big-problem">{`This filter can’t run: ${loaded.filterError}`}</div>
+              ) : empty && projectSections.length === 0 && !search ? (
+                <div className="empty">
+                  <div className="big">{big}</div>
+                  <div>{small}</div>
                 </div>
-                {loaded.completed.length === 0 ? (
-                  <p className="view-sub">No completed tasks here yet.</p>
-                ) : null}
-                {loaded.completed.map((task) => (
-                  <div key={`done-${task.id}`} className="task-card">
-                    <CompletedRow
-                      task={task}
-                      today={today}
-                      location={namesProject ? locationText(locations.get(task.id) ?? INBOX_LOCATION) : null}
-                      onChanged={onChanged}
-                    />
+              ) : null}
+              {body}
+              {/* Room under the last row of the page, so the floating add button doesn't cover it. */}
+              {search ? null : <div className="fab-spacer" />}
+              {showCompleted && toggle && !search ? (
+                <>
+                  <div className="section-title">
+                    Completed
+                    <span className="muted">{loaded.completed.length}</span>
                   </div>
-                ))}
-              </>
-            ) : null}
+                  {loaded.completed.length === 0 ? (
+                    <p className="view-sub">No completed tasks here yet.</p>
+                  ) : null}
+                  {loaded.completed.map((task) => (
+                    <div key={`done-${task.id}`} className="task-card">
+                      <CompletedRow
+                        task={task}
+                        today={today}
+                        location={
+                          namesProject ? locationText(locations.get(task.id) ?? INBOX_LOCATION) : null
+                        }
+                        onChanged={onChanged}
+                      />
+                    </div>
+                  ))}
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </LocationsContext.Provider>
   );
 }

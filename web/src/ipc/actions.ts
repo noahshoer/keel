@@ -19,6 +19,9 @@ const send = dispatchAction;
 export const completeTask = (id: Id) => send({ type: "task_complete", id });
 export const uncompleteTask = (id: Id) => send({ type: "task_uncomplete", id });
 export const deleteTask = (id: Id) => send({ type: "task_delete", id });
+/** Moves a task (and its sub-tasks) to a project, into a section or out of any. */
+export const moveTask = (id: Id, projectId: Id, sectionId: Id | null) =>
+  send({ type: "task_move", id, project_id: projectId, section_id: sectionId });
 export const setStreak = (id: Id, enabled: boolean, goal: number | null) =>
   send({ type: "task_set_streak", id, enabled, goal });
 

@@ -456,6 +456,17 @@ pub fn unhighlight_at(
     output(&changed.then_some(v))
 }
 
+/// `editor::location_choices`: the project / section menu's items.
+#[wasm_bindgen(js_name = locationChoices, unchecked_return_type = "import('../../bindings').LocationChoice[]")]
+pub fn location_choices(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
+) -> Result<JsValue, JsError> {
+    let projects: Vec<Project> = input("projects", projects)?;
+    let sections: Vec<Section> = input("sections", sections)?;
+    output(&editor::location_choices(&projects, &sections))
+}
+
 /// `editor::location_pick`.
 #[wasm_bindgen(js_name = locationPick, unchecked_return_type = "import('../../bindings').EditorPick")]
 pub fn location_pick(value: &str) -> Result<JsValue, JsError> {
