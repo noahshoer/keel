@@ -303,12 +303,14 @@ fn match_date(t: &[Token], i: usize, today: NaiveDate) -> Option<(usize, NaiveDa
         return Some((1, d));
     }
     // "oct 20 [2027]" or "20 oct [2027]".
-    let (m, day) = match (month(w(0)), day_number(w(1)), day_number(w(0)), month(w(1))) {
-        (Some(m), Some(day), _, _) => (m, day),
-        (_, _, Some(day), Some(m)) => (m, day),
+    let (m, day, used) = match (month(w(0)), day_number(w(1)), day_number(w(0)), month(w(1))) {
+        (Some(m), Some(day), _, _) => (m, day, 2),
+        (_, _, Some(day), Some(m)) => (m, day, 2),
+        // A bare month is its 1st ("dec", "dec 2028"); "may" is too often a verb.
+        (Some(m), None, _, _) if w(0) != "may" => (m, 1, 1),
         _ => return None,
     };
-    let year = w(2).parse::<i32>().ok().filter(|y| (1000..=9999).contains(y));
+    let year = w(used).parse::<i32>().ok().filter(|y| (1000..=9999).contains(y));
     let date = match year {
         Some(y) => NaiveDate::from_ymd_opt(y, m, day)?,
         None => {
@@ -320,7 +322,7 @@ fn match_date(t: &[Token], i: usize, today: NaiveDate) -> Option<(usize, NaiveDa
             }
         }
     };
-    Some((if year.is_some() { 3 } else { 2 }, date))
+    Some((if year.is_some() { used + 1 } else { used }, date))
 }
 
 /// `5pm`, `5:30pm`, `12am`, `9a`, `10p` → time.
@@ -880,6 +882,18 @@ mod tests {
         assert_eq!(date_of("x oct 1 2028"), Some(d(2028, 10, 1)));
         assert_eq!(date_of("x 2026-12-31"), Some(d(2026, 12, 31)));
         assert_eq!(p("x oct 25").content, "x");
+    }
+
+    #[test]
+    fn bare_month_is_the_first() {
+        assert_eq!(date_of("x dec"), Some(d(2026, 12, 1)));
+        assert_eq!(date_of("x Sep"), Some(d(2027, 9, 1)), "past date rolls to next year");
+        assert_eq!(date_of("x oct"), Some(d(2027, 10, 1)));
+        assert_eq!(date_of("x dec 2028"), Some(d(2028, 12, 1)));
+        assert_eq!(date_of("x dec 25"), Some(d(2026, 12, 25)), "a day still wins");
+        assert_eq!(p("x dec").content, "x");
+        assert_eq!(date_of("x may"), None, "a verb, not a month");
+        assert_eq!(date_of("x may 5"), Some(d(2027, 5, 5)));
     }
 
     #[test]
