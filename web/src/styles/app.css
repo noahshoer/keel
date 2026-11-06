@@ -385,7 +385,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .subtask-ring { width: 15px; height: 15px; }
 .subtask-ring-track { stroke: var(--border-strong); }
 .subtask-ring-fill { stroke: var(--accent); }
-.task-repeat { display: inline-flex; color: var(--icon); }
+.task-repeat { display: inline-flex; color: var(--c-repeat); }
 .task-labels { display: flex; align-items: center; gap: 4px; overflow: hidden; }
 .task-label-items { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-label-group { color: var(--tint, var(--secondary)); }
@@ -1072,7 +1072,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .deadline { display: inline-flex; align-items: center; gap: 4px; }
 .deadline.set { color: var(--due-week); }
 .deadline.urgent { color: var(--due-overdue); font-weight: 500; }
-.reminder-tag { display: inline-flex; align-items: center; color: var(--icon); }
+.reminder-tag { display: inline-flex; align-items: center; color: var(--c-reminder); }
 .deadline-chip.set { color: var(--text); }
 .deadline-chip.urgent { color: var(--due-overdue); }
 .chip-btn.reminder-chip { color: var(--c-reminder); }
