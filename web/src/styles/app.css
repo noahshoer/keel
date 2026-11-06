@@ -875,6 +875,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .native-glass .tv-sheet.glass-head .tv-head .tv-round { will-change: opacity; background: transparent; }
 .native-glass .tv-sheet.glass-head .tv-head .tv-round > * { visibility: hidden; }
 .menu-item.danger, .menu-item.danger .menu-icon { color: var(--p1); }
+.icon-btn.danger, .icon-btn.danger .icon { color: var(--p1); }
 /* Over the drawer, and sized for its confirm as well as its two items. */
 .row-menu { z-index: 60; width: 240px; min-width: 0; border: 1px solid var(--border); }
 .row-menu .confirm-text { padding: 4px 4px 0; line-height: 1.35; }

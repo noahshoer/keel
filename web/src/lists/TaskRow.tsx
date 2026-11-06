@@ -240,7 +240,7 @@ export function TaskRow({
           ) : null}
           <button
             type="button"
-            className="icon-btn"
+            className="icon-btn danger"
             title="Delete task"
             onClick={() => {
               deleteTask(task.id).then(onChanged, onChanged);
