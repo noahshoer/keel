@@ -26,7 +26,7 @@ import { CompletedRow } from "../lists/CompletedRow";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
 import { openAndFocus } from "../shell/focus";
-import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, SearchIcon } from "../shell/icons";
+import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, PlusIcon, SearchIcon } from "../shell/icons";
 import { type ListContext, type PageEditing, pageActions } from "../shell/listActions";
 import { currentPlatform, searchTooltip } from "../shell/platform";
 import { attachHeadScroll } from "./headScroll";
@@ -146,6 +146,8 @@ export function MainPane({
         : null;
   const stopEditing = () => setEditingPlace(null);
   const titleField = useRef<HTMLInputElement>(null);
+  // What the project's ••• calls to open the "Add section" field at the end of the page.
+  const addSectionOpener = useRef<(() => void) | null>(null);
   const [querySlot, setQuerySlot] = useState<HTMLElement | null>(null);
   const locations = locationsOf([...loaded.all, ...loaded.completed], loaded.projects, loaded.sections);
   const namesProject = showsProject(view);
@@ -249,7 +251,12 @@ export function MainPane({
           />
         ))}
         {projectId !== null ? (
-          <AddSection key={`add-section-${projectId}`} projectId={projectId} onChanged={onChanged} />
+          <AddSection
+            key={`add-section-${projectId}`}
+            projectId={projectId}
+            onChanged={onChanged}
+            opener={addSectionOpener}
+          />
         ) : null}
       </>
     );
@@ -307,6 +314,15 @@ export function MainPane({
                 openAndFocus(() => setEditingPlace(place), titleField);
               }}
               onDelete={actions.remove}
+              lead={
+                view.kind === "project"
+                  ? {
+                      label: "Add section",
+                      icon: <PlusIcon size={20} />,
+                      run: () => addSectionOpener.current?.(),
+                    }
+                  : undefined
+              }
             />
           ) : null}
           {search ? null : (

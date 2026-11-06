@@ -233,7 +233,7 @@ body {
   font-feature-settings: "cv11", "ss03"; font-optical-sizing: auto;
 }
 button, input, select { font-family: inherit; color: inherit; }
-button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, .label-opt, .task-row {
+button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .add-section-row, .view-toggle, .label-opt, .task-row {
   transition: background-color .16s var(--ease), color .16s var(--ease), border-color .16s var(--ease),
     box-shadow .16s var(--ease), transform .12s var(--ease), opacity .16s var(--ease);
 }
@@ -429,14 +429,14 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   width: 58px; height: 58px; padding: 0; border: none; border-radius: 50%; background: var(--accent); color: #fff; cursor: pointer;
   box-shadow: 0 8px 20px rgba(0,0,0,.35); transition: transform .12s var(--ease); }
 .fab:active { transform: scale(.94); }
-.add-task-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--muted);
+.add-task-row, .add-section-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--muted);
   cursor: pointer; border-radius: var(--r-md); }
-.add-task-row .plus { width: 22px; height: 22px; border-radius: 50%; color: var(--accent);
+.add-task-row .plus, .add-section-row .plus { width: 22px; height: 22px; border-radius: 50%; color: var(--accent);
   display: flex; align-items: center; justify-content: center; transition: background-color .16s, color .16s; }
 /* Mouse only: on iPhone a hover style makes WebKit spend the first tap on hover. */
 @media (hover: hover) {
-  .add-task-row:hover { color: var(--accent-text); background: var(--row-hover); }
-  .add-task-row:hover .plus { background: var(--accent); color: #fff; }
+  .add-task-row:hover, .add-section-row:hover { color: var(--accent-text); background: var(--row-hover); }
+  .add-task-row:hover .plus, .add-section-row:hover .plus { background: var(--accent); color: #fff; }
 }
 .editor { border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 12px 0; margin: 8px 0;
   background: var(--bg); box-shadow: var(--shadow-md); animation: pop-in .18s var(--ease);
@@ -776,10 +776,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .search-input { height: 44px; border-radius: 14px; }
   /* The add row, Reminders-style: a blank next task with a dotted circle,
      lined up with the task circles above it. */
-  .add-task-row { padding: 14px 16px; gap: 12px; font-size: 17px; }
-  .add-task-row .plus { box-sizing: border-box; width: 26px; height: 26px; min-width: 26px;
+  .add-task-row, .add-section-row { padding: 14px 16px; gap: 12px; font-size: 17px; }
+  .add-task-row .plus, .add-section-row .plus { box-sizing: border-box; width: 26px; height: 26px; min-width: 26px;
     background: transparent; border: 2px dotted color-mix(in srgb, var(--text) 35%, transparent); }
-  .add-task-row .plus svg { display: none; }
+  .add-task-row .plus svg, .add-section-row .plus svg { display: none; }
 }
 /* Touch: a long press shows a task's actions; no text selection or callout. */
 @media (hover: none) { .task-row, .nav-item, .tv-scrim, .editor-scrim, .drawer-scrim, .modal-scrim { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
@@ -896,6 +896,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .native-glass .tv-sheet.glass-head .tv-head .tv-round { will-change: opacity; background: transparent; }
 .native-glass .tv-sheet.glass-head .tv-head .tv-round > * { visibility: hidden; }
 .menu-item.danger, .menu-item.danger .menu-icon { color: var(--p1); }
+.menu-item.lead, .menu-item.lead .menu-icon { color: var(--accent-text); font-weight: 600; }
 .icon-btn.danger, .icon-btn.danger .icon { color: var(--p1); }
 /* Over the drawer, and sized for its confirm as well as its two items. */
 .row-menu { z-index: 60; width: 240px; min-width: 0; border: 1px solid var(--border); }
@@ -1058,14 +1059,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Sections */
 .section-block { margin-top: 18px; }
 .section-row { position: relative; }
-.section-actions { display: none; margin-left: auto; gap: 2px; }
-.section-row:hover .section-actions { display: inline-flex; }
+.section-more { margin-left: auto; align-self: center; }
+.section-row { min-height: 36px; align-items: center; }
 .section-rename { padding: 14px 0 6px; }
-.add-section-row { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding: 6px 10px;
-  color: var(--accent); cursor: pointer; opacity: 0; transition: opacity .16s var(--ease); }
-.add-section-row:hover { opacity: 1; }
-.add-section-line { flex: 1; height: 1px; background: var(--accent); border-radius: 1px; }
-.add-section-label { font-size: 13px; font-weight: 600; }
+/* Like "+ Add task", in the accent, under a hairline at the end of the project. */
+.add-section-row { margin-top: 18px; border-top: 1px solid var(--border); border-radius: 0; color: var(--accent-text); font-weight: 500; }
 
 /* Filters */
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace; font-size: 12px; }

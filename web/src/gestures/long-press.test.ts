@@ -12,6 +12,7 @@ beforeEach(() => {
         <div class="task-actions"><button id="delete">Delete</button></div>
       </div>
     </div>
+    <div class="section-row" id="section">Chores</div>
     <div class="nav-item" id="nav">Home</div>
     <div class="nav-item" id="fixed">Inbox</div>
     <div id="elsewhere">elsewhere</div>`;
@@ -148,4 +149,14 @@ it("the click after lifting a long held press is swallowed for every listener", 
   el("nav").click();
   document.removeEventListener("click", later, true);
   expect(later).not.toHaveBeenCalled();
+});
+
+it("a long press or a right click on a section's header asks for its menu", () => {
+  const opened = vi.fn();
+  el("section").addEventListener(ROW_PRESS, opened);
+  touch("touchstart", el("section"));
+  vi.advanceTimersByTime(450);
+  expect(opened).toHaveBeenCalledTimes(1);
+  el("section").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+  expect(opened).toHaveBeenCalledTimes(2);
 });

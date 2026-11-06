@@ -4,6 +4,7 @@ import { beforeAll, expect, it, vi } from "vitest";
 import { useLoaded } from "../app/load";
 import type { View } from "../app/view";
 import { localToday } from "../clock";
+import { ROW_PRESS } from "../gestures/long-press";
 import { invoke } from "../ipc/invoke";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
 import { TaskNavProvider } from "../taskview/nav";
@@ -104,12 +105,22 @@ it("a project shows unsectioned tasks, then its sections with counts", async () 
   expect(head?.querySelector(".muted")?.textContent).toBe("1");
   expect(contents(container)).toEqual(["Buy groceries", "Do laundry"]);
   expect(container.querySelector(".task-project")?.textContent).toContain("Home");
-  expect(container.querySelector(".add-section-row")).not.toBeNull();
+  // Always drawn, like "+ Add task": a plus and its label, no hover-only divider.
+  const add = container.querySelector(".add-section-row");
+  expect(add?.textContent).toBe("Add section");
+  expect(add?.querySelector(".plus")).not.toBeNull();
+  expect(container.querySelector(".add-section-line")).toBeNull();
 });
 
-it("renaming a section changes its head", async () => {
+const popup = () => document.body.querySelector<HTMLElement>(".row-menu");
+
+it("a section's ••• opens the project's popup; Edit renames it in place", async () => {
   const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
-  fireEvent.click(screen.getByTitle("Rename section"));
+  expect(container.querySelector(".section-actions")).toBeNull();
+  fireEvent.click(screen.getByLabelText("Section actions"));
+  expect(within(popup() as HTMLElement).queryByText("Add section")).toBeNull();
+  fireEvent.click(within(popup() as HTMLElement).getByText("Edit"));
+  expect(popup()).toBeNull();
   const input = container.querySelector<HTMLInputElement>(".section-rename input");
   expect(document.activeElement).toBe(input);
   fireEvent.change(input as HTMLInputElement, { target: { value: "Weekly" } });
@@ -117,16 +128,20 @@ it("renaming a section changes its head", async () => {
   await waitFor(() => expect(titles(container)).toContain("Weekly"));
 });
 
-it("deleting a section asks first", async () => {
+it("deleting a section asks first, in the popup", async () => {
   const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
-  fireEvent.click(screen.getByTitle("Delete section"));
-  expect(container.querySelector(".confirm-text")?.textContent).toBe(
+  fireEvent.click(screen.getByLabelText("Section actions"));
+  fireEvent.click(within(popup() as HTMLElement).getByText("Delete"));
+  expect(popup()?.querySelector(".confirm-text")?.textContent).toBe(
     "Delete section “Chores” and its 1 task?",
   );
-  fireEvent.click(screen.getByText("Cancel"));
   expect(container.querySelector(".confirm-box")).toBeNull();
-  fireEvent.click(screen.getByTitle("Delete section"));
-  fireEvent.click(screen.getByText("Delete"));
+  fireEvent.click(within(popup() as HTMLElement).getByText("Cancel"));
+  expect(popup()).toBeNull();
+  expect(container.querySelector(".section-block")).not.toBeNull();
+  fireEvent.click(screen.getByLabelText("Section actions"));
+  fireEvent.click(within(popup() as HTMLElement).getByText("Delete"));
+  fireEvent.click(within(popup() as HTMLElement).getByText("Delete", { selector: "button.btn-danger" }));
   await waitFor(() => expect(container.querySelector(".section-block")).toBeNull());
   expect(await invoke("list_sections", { project_id: "p-home" })).toEqual([]);
 });
@@ -143,6 +158,36 @@ it("adding a section from the divider", async () => {
   fireEvent.change(again, { target: { value: "Garden" } });
   fireEvent.submit(again);
   await waitFor(() => expect(titles(container)).toContain("Garden"));
+});
+
+it("a long press or right click on a section's header opens the same popup", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  act(() => {
+    container.querySelector(".section-row")?.dispatchEvent(new Event(ROW_PRESS));
+  });
+  expect(within(popup() as HTMLElement).getByText("Edit")).toBeTruthy();
+  expect(within(popup() as HTMLElement).getByText("Delete")).toBeTruthy();
+});
+
+it("the project's ••• has Add section first, which opens the name field", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  fireEvent.click(screen.getByLabelText("More"));
+  const entries = [...(popup() as HTMLElement).querySelectorAll(".menu-label")].map((e) => e.textContent);
+  expect(entries).toEqual(["Add section", "Edit", "Delete"]);
+  fireEvent.click(within(popup() as HTMLElement).getByText("Add section"));
+  expect(popup()).toBeNull();
+  const input = screen.getByPlaceholderText("Name this section, then Enter");
+  expect(document.activeElement).toBe(input);
+  fireEvent.change(input, { target: { value: "Garden" } });
+  fireEvent.submit(input);
+  await waitFor(() => expect(titles(container)).toContain("Garden"));
+});
+
+it("a label or filter page's ••• has no Add section", async () => {
+  await show({ kind: "label", name: "errand" });
+  fireEvent.click(screen.getByLabelText("More"));
+  const entries = [...(popup() as HTMLElement).querySelectorAll(".menu-label")].map((e) => e.textContent);
+  expect(entries).toEqual(["Edit", "Delete"]);
 });
 
 it("a filter with two comma groups titles both", async () => {

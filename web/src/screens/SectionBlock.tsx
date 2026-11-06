@@ -2,7 +2,7 @@
 // "+ Add section" below the last one (crates/ui/src/main.rs `SectionBlock`,
 // `AddSection`). Forms opened by a tap focus their field inside the tap, so
 // iOS raises the keyboard.
-import { type FormEvent, useContext, useRef, useState } from "react";
+import { type FormEvent, type MutableRefObject, useContext, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { Loaded } from "../app/load";
 import type { Id, Reminder, Section, Task } from "../bindings";
@@ -12,9 +12,11 @@ import { addSection, deleteSection, renameSection } from "../ipc/actions";
 import { CardList } from "../lists/CardList";
 import { locationsOf } from "../lists/rowLayout";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
-import { PencilIcon, TrashSmallIcon } from "../shell/icons";
+import { PlusIcon } from "../shell/icons";
+import { RowMenu } from "../shell/RowMenu";
+import { ViewMenu } from "./ViewMenu";
 
-type Mode = "normal" | "renaming" | "confirm";
+type Mode = "normal" | "renaming";
 
 export function SectionBlock({
   section,
@@ -43,6 +45,11 @@ export function SectionBlock({
   // What the section shows: its top-level tasks (sub-tasks go with them).
   const count = list.length;
 
+  const row = useRef<HTMLDivElement>(null);
+  const warning = `Delete section “${section.name}” and its ${count} ${count === 1 ? "task" : "tasks"}?`;
+  const remove = () => {
+    deleteSection(section.id).then(onChanged, onChanged);
+  };
   const startRename = () => {
     flushSync(() => {
       setDraft(section.name);
@@ -71,42 +78,18 @@ export function SectionBlock({
             }}
           />
         </form>
-      ) : mode === "confirm" ? (
-        <div className="confirm-box">
-          <div className="confirm-text">{`Delete section “${section.name}” and its ${count} ${count === 1 ? "task" : "tasks"}?`}</div>
-          <div className="confirm-actions">
-            <button type="button" className="btn btn-cancel" onClick={() => setMode("normal")}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn btn-add"
-              onClick={() => {
-                setMode("normal");
-                deleteSection(section.id).then(onChanged, onChanged);
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        </div>
       ) : (
-        <div className="section-title section-row">
+        <div ref={row} className="section-title section-row">
           {section.name}
           <span className="muted">{count}</span>
-          <span className="section-actions">
-            <button type="button" className="icon-btn" title="Rename section" onClick={startRename}>
-              <PencilIcon />
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              title="Delete section"
-              onClick={() => setMode("confirm")}
-            >
-              <TrashSmallIcon />
-            </button>
-          </span>
+          <ViewMenu
+            className="icon-btn section-more"
+            label="Section actions"
+            warning={warning}
+            onEdit={startRename}
+            onDelete={remove}
+          />
+          <RowMenu row={row} warning={warning} onEdit={startRename} onDelete={remove} />
         </div>
       )}
       <CardList
@@ -128,25 +111,46 @@ export function SectionBlock({
   );
 }
 
-/** "+ Add section" at the bottom of a project. */
-export function AddSection({ projectId, onChanged }: { projectId: Id; onChanged: () => void }) {
+/**
+ * "+ Add section" at the bottom of a project, a row like "+ Add task". `opener`
+ * is given the function that opens its name field (the project's ••• calls it).
+ */
+export function AddSection({
+  projectId,
+  onChanged,
+  opener,
+}: {
+  projectId: Id;
+  onChanged: () => void;
+  opener?: MutableRefObject<(() => void) | null>;
+}) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const input = useRef<HTMLInputElement>(null);
+  // Inside the tap, so iOS raises the keyboard.
+  const openField = () => {
+    flushSync(() => setOpen(true));
+    input.current?.focus();
+    input.current?.scrollIntoView?.({ block: "nearest" });
+  };
+  const latest = useRef(openField);
+  latest.current = openField;
+  useEffect(() => {
+    if (!opener) return;
+    opener.current = () => latest.current();
+    return () => {
+      opener.current = null;
+    };
+  }, [opener]);
   if (!open) {
     return (
       // biome-ignore lint/a11y/useKeyWithClickEvents: the Dioxus divider is a plain div; keyboard users have the section forms.
       // biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI (app.css styles it).
-      <div
-        className="add-section-row"
-        onClick={() => {
-          flushSync(() => setOpen(true));
-          input.current?.focus();
-        }}
-      >
-        <span className="add-section-line" />
-        <span className="add-section-label">Add section</span>
-        <span className="add-section-line" />
+      <div className="add-section-row" onClick={openField}>
+        <span className="plus">
+          <PlusIcon size={14} />
+        </span>
+        Add section
       </div>
     );
   }

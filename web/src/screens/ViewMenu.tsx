@@ -1,17 +1,25 @@
 // The ••• in a project, label or filter page's header: the same popup as a long
 // press on its sidebar row. Edit happens on the page (PageEdit).
 import { useRef, useState } from "react";
-import { ActionPopup, type PopupStep } from "../shell/ActionPopup";
+import { ActionPopup, type PopupLead, type PopupStep } from "../shell/ActionPopup";
 import { MoreIcon } from "../shell/icons";
 
 export function ViewMenu({
   warning,
   onEdit,
   onDelete,
+  lead,
+  label = "More",
+  className = "icon-btn view-more",
 }: {
   warning: string;
   onEdit: () => void;
   onDelete: () => void;
+  /** An action ahead of Edit and Delete. */
+  lead?: PopupLead | undefined;
+  /** The button's name. */
+  label?: string;
+  className?: string;
 }) {
   const [step, setStep] = useState<PopupStep>("closed");
   const button = useRef<HTMLButtonElement>(null);
@@ -20,9 +28,9 @@ export function ViewMenu({
       <button
         ref={button}
         type="button"
-        className="icon-btn view-more"
-        title="More"
-        aria-label="More"
+        className={className}
+        title={label}
+        aria-label={label}
         onClick={() => setStep((s) => (s === "closed" ? "menu" : "closed"))}
       >
         <MoreIcon />
@@ -31,6 +39,15 @@ export function ViewMenu({
         <ActionPopup
           anchor={button}
           toggle={button}
+          lead={
+            lead && {
+              ...lead,
+              run: () => {
+                setStep("closed");
+                lead.run();
+              },
+            }
+          }
           step={step}
           setStep={setStep}
           warning={warning}

@@ -2,16 +2,20 @@
 // first in the same place. It opens under what it belongs to, or above it near
 // the bottom. Portaled, since a sidebar row scales while pressed and a fixed
 // element inside it would move with it.
-import { type RefObject, useCallback, useRef } from "react";
+import { type ReactNode, type RefObject, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { PencilIcon, TrashSmallIcon } from "./icons";
 import { useAnchoredPopup } from "./useAnchoredPopup";
 
 export type PopupStep = "closed" | "menu" | "confirm";
 
+/** An action ahead of Edit and Delete, in the accent color (a project's "Add section"). */
+export type PopupLead = { label: string; icon: ReactNode; run: () => void };
+
 export function ActionPopup({
   anchor,
   toggle,
+  lead,
   step,
   setStep,
   warning,
@@ -22,6 +26,7 @@ export function ActionPopup({
   anchor: RefObject<HTMLElement | null>;
   /** The button that opens it, which closes it by itself. */
   toggle?: RefObject<HTMLElement | null>;
+  lead?: PopupLead | undefined;
   step: Exclude<PopupStep, "closed">;
   setStep: (step: PopupStep) => void;
   warning: string;
@@ -39,6 +44,12 @@ export function ActionPopup({
     <div ref={popup} className="popover menu row-menu" onClick={(e) => e.stopPropagation()}>
       {step === "menu" ? (
         <>
+          {lead ? (
+            <button type="button" className="menu-item lead" onClick={lead.run}>
+              <span className="menu-icon">{lead.icon}</span>
+              <span className="menu-label">{lead.label}</span>
+            </button>
+          ) : null}
           <button type="button" className="menu-item" onClick={onEdit}>
             <span className="menu-icon">
               <PencilIcon />

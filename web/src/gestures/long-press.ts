@@ -1,4 +1,4 @@
-// Long press on a task row or a sidebar row (touch only). Either is sent
+// Long press on a task row, a section's header or a sidebar row (touch only). Each is sent
 // `ROW_PRESS`, which opens its menu (a task's is `TaskMenu`); a right click sends
 // it too (crates/ui/src/gestures.rs `LONG_PRESS_JS`, without the glass menu,
 // which is parked). A sidebar row is highlighted only while the finger is down.
@@ -6,7 +6,7 @@
 
 const HOLD_MS = 450;
 const SLOP = 10;
-const ROWS = ".task-row, .nav-item";
+const ROWS = ".task-row, .nav-item, .section-row";
 const ACTIONS = ".task-actions, .row-menu";
 
 /** Sent to a task or a sidebar row by a long press or a right click. */
