@@ -87,10 +87,11 @@ enum KeyboardPace {
       return
     }
     // The keyboard is drawn in another process, so its window has nothing to
-    // read; what hosts it here may. Only logged, until it's known to be its curve.
+    // read; what hosts it here may, and its spring is used as the keyboard's.
     for w in windows() where NSStringFromClass(type(of: w)).contains("TextEffects") {
       guard let (key, anim) = slide(in: w.layer) else { continue }
       if let s = anim as? CASpringAnimation {
+        ease = linear(s)
         Diag.log("KB host curve \(key) spring m \(s.mass) k \(s.stiffness) c \(s.damping) v \(s.initialVelocity) dur \(s.duration) settle \(s.settlingDuration)")
       } else {
         Diag.log("KB host curve \(key) \(type(of: anim)) dur \(anim.duration) timing \(String(describing: anim.timingFunction))")
