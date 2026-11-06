@@ -3,11 +3,12 @@
 // `HighlightedTitle`). Enter submits (titles are one line). Backspace right
 // where a highlight ends turns it back into text, as in Todoist.
 import type { RefObject } from "react";
-import type { TitleSegment } from "../bindings";
-import { highlightEndsAt, markClass } from "./titleMarks";
+import type { Label, TitleSegment } from "../bindings";
+import { highlightEndsAt, markClass, markStyle } from "./titleMarks";
 
 export function HighlightedTitle({
   segments,
+  labels = [],
   value,
   placeholder,
   onInput,
@@ -16,6 +17,8 @@ export function HighlightedTitle({
   inputRef,
 }: {
   segments: TitleSegment[];
+  /** For a label phrase's color. */
+  labels?: Label[];
   value: string;
   placeholder: string;
   onInput: (text: string) => void;
@@ -33,7 +36,7 @@ export function HighlightedTitle({
             <span key={i}>{s.text}</span>
           ) : (
             // biome-ignore lint/suspicious/noArrayIndexKey: segments are positional pieces of one string.
-            <mark key={i} className={markClass(s.kind, s.level)}>
+            <mark key={i} className={markClass(s)} style={markStyle(s, labels)}>
               {s.text}
             </mark>
           ),

@@ -276,7 +276,7 @@ export function TaskEditor({
         selected={view.location}
         open={open}
         setOpen={setPop}
-        chipClass={locationChosen(view.locations, view.location) ? "pill-set" : ""}
+        chipClass={locationChosen(view.locations, view.location) ? "pill-set pill-project" : ""}
         onSelect={(value) => pick(locationPick(value))}
       />
       <LabelPicker
@@ -307,7 +307,7 @@ export function TaskEditor({
         selected={values.repeat}
         open={open}
         setOpen={setPop}
-        chipClass={view.repeat_rule !== null ? "pill-set" : ""}
+        chipClass={view.repeat_rule !== null ? "pill-set pill-repeat" : ""}
         onSelect={(value) => pick({ type: "repeat", value })}
       />
       {view.streak_offered ? (
@@ -365,6 +365,7 @@ export function TaskEditor({
       <div className="editor-text">
         <HighlightedTitle
           segments={view.segments}
+          labels={labels}
           value={values.content}
           placeholder={quickAdd ? "Task name — try “Call mom tomorrow 5pm p1 #Home @phone”" : "Task name"}
           onInput={(text) => {
