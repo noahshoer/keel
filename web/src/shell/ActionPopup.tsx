@@ -2,10 +2,10 @@
 // first in the same place. It opens under what it belongs to, or above it near
 // the bottom. Portaled, since a sidebar row scales while pressed and a fixed
 // element inside it would move with it.
-import { type RefObject, useEffect, useLayoutEffect, useRef } from "react";
+import { type RefObject, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { PencilIcon, TrashSmallIcon } from "./icons";
-import { placeRowMenu } from "./placeRowMenu";
+import { useAnchoredPopup } from "./useAnchoredPopup";
 
 export type PopupStep = "closed" | "menu" | "confirm";
 
@@ -30,44 +30,8 @@ export function ActionPopup({
 }) {
   const popup = useRef<HTMLDivElement>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: each step is a different size.
-  useLayoutEffect(() => {
-    const at = anchor.current;
-    const pop = popup.current;
-    if (!at || !pop) return;
-    const vh = window.visualViewport?.height ?? innerHeight;
-    const place = placeRowMenu(at.getBoundingClientRect(), pop.getBoundingClientRect(), innerWidth, vh);
-    Object.assign(pop.style, {
-      position: "fixed",
-      right: "auto",
-      top: `${place.top}px`,
-      left: `${place.left}px`,
-    });
-  }, [anchor, step]);
-
-  useEffect(() => {
-    const close = () => setStep("closed");
-    const outside = (e: Event) => {
-      const t = e.target;
-      if (t instanceof Node && !popup.current?.contains(t) && !toggle?.current?.contains(t)) close();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    // A touch, not just a click: a scroll or a swipe that closes the drawer sends no click.
-    document.addEventListener("click", outside, true);
-    document.addEventListener("contextmenu", outside, true);
-    document.addEventListener("touchstart", outside, { capture: true, passive: true });
-    document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", close, true);
-    return () => {
-      document.removeEventListener("click", outside, true);
-      document.removeEventListener("contextmenu", outside, true);
-      document.removeEventListener("touchstart", outside, { capture: true });
-      document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", close, true);
-    };
-  }, [setStep, toggle]);
+  const close = useCallback(() => setStep("closed"), [setStep]);
+  useAnchoredPopup({ anchor, popup, toggle, close, layoutKey: step });
 
   return createPortal(
     // biome-ignore lint/a11y/useKeyWithClickEvents: only keeps a click in the portal from reaching the row.

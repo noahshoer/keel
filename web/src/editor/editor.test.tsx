@@ -156,7 +156,7 @@ describe("the Streak pill", () => {
     type(title, "Run every day streak 30");
     expect(pill()?.textContent).toBe("Streak 30");
     expect(pill()?.className).toContain("pill-set");
-    expect(marks()).toContain("hl hl-date:streak 30");
+    expect(marks()).toContain("hl hl-streak:streak 30");
   });
 
   const goal = () => document.querySelector<HTMLInputElement>(".streak-goal-pop input");
@@ -724,7 +724,7 @@ describe("on touch", () => {
 it("highlights what quick add understood and fills its pills, with no row of its own", () => {
   const title = adding();
   type(title, "Call mom tomorrow p1");
-  expect(marks()).toEqual(["hl hl-date:tomorrow", "hl hl-p1:p1"]);
+  expect(marks()).toEqual(["hl hl-due-tomorrow:tomorrow", "hl hl-p1:p1"]);
   expect(screen.getByTitle("Date").textContent).toBe("Tomorrow");
   expect(screen.getByTitle("Priority").textContent).toBe("P1");
   expect(screen.getByTitle("Priority").className).toContain("pill-p1");
@@ -776,7 +776,7 @@ it("Backspace right after a highlight turns it plain", () => {
 it("un-highlights after non-ASCII text", () => {
   const title = adding();
   type(title, "Café tomorrow 🍰");
-  expect(marks()).toEqual(["hl hl-date:tomorrow"]);
+  expect(marks()).toEqual(["hl hl-due-tomorrow:tomorrow"]);
   expect(backspaceAt(title, "Café tomorrow".length)).toBe(false);
   expect(marks()).toEqual([]);
 });

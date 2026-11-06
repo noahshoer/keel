@@ -2,10 +2,20 @@
 // `TaskRow` without its glass parts (Liquid Glass is parked). Tapping the
 // circle completes the task after the fill and switch-off; the body opens
 // the task view, and Add sub-task opens it adding.
-import { type CSSProperties, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  Fragment,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { CardRow, Label, LabelGroup, Reminder } from "../bindings";
 import { deadlineUrgent, dueLabel, labelGroups, reminderLabel } from "../core";
 import { labelColorVar } from "../editor/labelColors";
+import { ROW_PRESS } from "../gestures/long-press";
 import { completeTask, deleteTask } from "../ipc/actions";
 import {
   BellRingingIcon,
@@ -24,6 +34,7 @@ import { CompletionIconContext, FILL_MS, nextOnTap, OFF_MS, type Phase, sleep } 
 import { bottomLayout, type RowLocation } from "./rowLayout";
 import { StreakPanel } from "./StreakPanel";
 import { SubtaskProgress } from "./SubtaskProgress";
+import { TaskMenu } from "./TaskMenu";
 import { useHiddenCount } from "./useHiddenCount";
 
 /** The labels on a row: one tag per color, then "+N" for any cut off. */
@@ -83,6 +94,17 @@ export function TaskRow({
   const nav = useTaskNav();
   const [phase, setPhase] = useState<Phase>(0);
   const [panel, setPanel] = useState(false);
+  // A long press or a right click opens the task's menu, with the row lifted out of the dimmed page.
+  const root = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState(false);
+  const closeMenu = useCallback(() => setMenu(false), []);
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const open = () => setMenu(true);
+    el.addEventListener(ROW_PRESS, open);
+    return () => el.removeEventListener(ROW_PRESS, open);
+  }, []);
   // A tap while filled cancels: each start bumps `gen`, and pending steps
   // stop when it has moved on.
   const gen = useRef(0);
@@ -178,7 +200,11 @@ export function TaskRow({
 
   return (
     // One root per row (keyed rows reorder cleanly when a priority changes).
-    <div className={PHASE_CLASS[phase]} data-menu-id={task.id}>
+    <div
+      ref={root}
+      className={menu ? `${PHASE_CLASS[phase]} lifted` : PHASE_CLASS[phase]}
+      data-menu-id={task.id}
+    >
       <div className="task-row">
         <button
           type="button"
@@ -240,7 +266,7 @@ export function TaskRow({
           ) : null}
           <button
             type="button"
-            className="icon-btn"
+            className="icon-btn danger"
             title="Delete task"
             onClick={() => {
               deleteTask(task.id).then(onChanged, onChanged);
@@ -251,6 +277,18 @@ export function TaskRow({
         </div>
       </div>
       {panel && recurring ? <StreakPanel task={task} onChanged={onChanged} /> : null}
+      {menu ? (
+        <TaskMenu
+          anchor={root}
+          recurring={recurring}
+          onAddSubtask={() => nav.openAdding(task.id)}
+          onStreak={() => setPanel(true)}
+          onDelete={() => {
+            deleteTask(task.id).then(onChanged, onChanged);
+          }}
+          close={closeMenu}
+        />
+      ) : null}
     </div>
   );
 }

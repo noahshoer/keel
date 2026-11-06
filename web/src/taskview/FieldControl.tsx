@@ -70,7 +70,7 @@ export function FieldControl({
     />
   );
 
-  if (field === "Repeat") return repeat(rowFace("", view.repeat_chip_text));
+  if (field === "Repeat") return repeat(rowFace("tv-c-repeat", view.repeat_chip_text));
   if (missing?.missing.kind === "Repeat") return repeat(pillFace(missing));
   switch (which) {
     case "Description":
@@ -129,7 +129,10 @@ export function FieldControl({
           items={PRIORITY_ITEMS}
           selected={v.priority}
           {...pop}
-          face={face("", `Priority ${v.priority}`)}
+          face={face(
+            ["1", "2", "3"].includes(v.priority) ? `tv-c-p${v.priority}` : "",
+            `Priority ${v.priority}`,
+          )}
           onSelect={(value) => onPick({ type: "priority", value })}
         />
       );
@@ -154,7 +157,7 @@ export function FieldControl({
           hasDue={view.has_due}
           today={today}
           {...pop}
-          face={face("", view.reminders_text)}
+          face={face("tv-c-reminder", view.reminders_text)}
           onChange={(drafts) => onPick({ type: "reminders", drafts })}
         />
       );
@@ -168,7 +171,7 @@ export function FieldControl({
           items={locationItems(view.locations)}
           selected={view.location}
           {...pop}
-          face={face("", view.location_text)}
+          face={face("tv-c-project", view.location_text)}
           onSelect={(value) => onPick(locationPick(value))}
         />
       );

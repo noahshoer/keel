@@ -34,12 +34,16 @@ function touch(type: "touchstart" | "touchmove" | "touchend", target: HTMLElemen
   target.dispatchEvent(ev);
 }
 
-it("a 450 ms hold marks the task pressed", () => {
+it("a 450 ms hold asks the task for its menu, once", () => {
+  const opened = vi.fn();
+  el("task").addEventListener(ROW_PRESS, opened);
   touch("touchstart", el("body"));
   vi.advanceTimersByTime(449);
-  expect(el("task").classList.contains("pressed")).toBe(false);
+  expect(opened).not.toHaveBeenCalled();
   vi.advanceTimersByTime(1);
-  expect(el("task").classList.contains("pressed")).toBe(true);
+  expect(opened).toHaveBeenCalledTimes(1);
+  // The menu lifts the row itself; the press adds no class to it.
+  expect(el("task").classList.contains("pressed")).toBe(false);
 });
 
 it("a sidebar row without a task marks itself", () => {
@@ -49,17 +53,21 @@ it("a sidebar row without a task marks itself", () => {
 });
 
 it("moving more than 10 px cancels the hold", () => {
+  const opened = vi.fn();
+  el("task").addEventListener(ROW_PRESS, opened);
   touch("touchstart", el("body"), 10, 10);
   touch("touchmove", el("body"), 22, 10);
   vi.advanceTimersByTime(500);
-  expect(el("task").classList.contains("pressed")).toBe(false);
+  expect(opened).not.toHaveBeenCalled();
 });
 
 it("lifting early cancels the hold", () => {
+  const opened = vi.fn();
+  el("task").addEventListener(ROW_PRESS, opened);
   touch("touchstart", el("body"));
   touch("touchend", el("body"));
   vi.advanceTimersByTime(500);
-  expect(el("task").classList.contains("pressed")).toBe(false);
+  expect(opened).not.toHaveBeenCalled();
 });
 
 it("the click right after a long press is swallowed, except on the row's actions", () => {
@@ -81,11 +89,11 @@ it("the click right after a long press is swallowed, except on the row's actions
   expect(deleted).toHaveBeenCalledTimes(1);
 });
 
-it("touching elsewhere clears the pressed row", () => {
-  touch("touchstart", el("body"));
+it("touching elsewhere clears a pressed sidebar row", () => {
+  touch("touchstart", el("nav"));
   vi.advanceTimersByTime(450);
   touch("touchstart", el("elsewhere"));
-  expect(el("task").classList.contains("pressed")).toBe(false);
+  expect(el("nav").classList.contains("pressed")).toBe(false);
 });
 
 it("the context menu is suppressed on rows only", () => {
@@ -97,7 +105,7 @@ it("the context menu is suppressed on rows only", () => {
   expect(off.defaultPrevented).toBe(false);
 });
 
-it("a sidebar row's highlight goes when the finger lifts; a task's stays", () => {
+it("a sidebar row's highlight goes when the finger lifts", () => {
   touch("touchstart", el("nav"));
   vi.advanceTimersByTime(450);
   expect(el("nav").classList.contains("pressed")).toBe(true);
@@ -108,22 +116,17 @@ it("a sidebar row's highlight goes when the finger lifts; a task's stays", () =>
   vi.advanceTimersByTime(450);
   touch("touchend", el("fixed"));
   expect(el("fixed").classList.contains("pressed")).toBe(false);
-
-  touch("touchstart", el("body"));
-  vi.advanceTimersByTime(450);
-  touch("touchend", el("body"));
-  expect(el("task").classList.contains("pressed")).toBe(true);
 });
 
-it("a right click on a sidebar row asks for its menu; on a task it doesn't", () => {
+it("a right click on a sidebar row or a task asks for its menu", () => {
   const opened = vi.fn();
   el("nav").addEventListener(ROW_PRESS, opened);
   el("nav").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
   expect(opened).toHaveBeenCalledTimes(1);
   const onTask = vi.fn();
-  el("row").addEventListener(ROW_PRESS, onTask);
+  el("task").addEventListener(ROW_PRESS, onTask);
   el("body").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
-  expect(onTask).not.toHaveBeenCalled();
+  expect(onTask).toHaveBeenCalledTimes(1);
 });
 
 it("a long press on a sidebar row asks for its menu, once", () => {

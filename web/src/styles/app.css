@@ -8,8 +8,8 @@
 @font-face { font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("../assets/fonts/inter-latin-wght-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 :root {
   color-scheme: light;
-  --hl-a: .22; --hl-date: 5,133,39; --hl-repeat: 105,47,194; --hl-project: 36,111,224; --hl-label: 235,137,9;
-  --hl-p1: 209,69,59; --hl-p2: 235,137,9; --hl-p3: 36,111,224; --hl-p4: 120,120,120;
+  --hl-a: 22%;
+  --c-project: var(--label-blue); --c-reminder: var(--label-teal); --c-repeat: var(--label-purple);
   --app-bg: #f5f3f0;
   --page: #f5f3f0;
   --page-wide: #fbfaf8;
@@ -80,8 +80,7 @@
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   color-scheme: dark;
-  --hl-a: .36; --hl-date: 46,190,96; --hl-repeat: 160,110,240; --hl-project: 82,151,255; --hl-label: 255,170,60;
-  --hl-p1: 255,112,102; --hl-p2: 255,154,20; --hl-p3: 82,151,255; --hl-p4: 160,160,160;
+  --hl-a: 36%;
   --app-bg: #161616;
   --page: #1a1a1a;
   --page-wide: #1c1c1c;
@@ -152,8 +151,7 @@
 } }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --hl-a: .36; --hl-date: 46,190,96; --hl-repeat: 160,110,240; --hl-project: 82,151,255; --hl-label: 255,170,60;
-  --hl-p1: 255,112,102; --hl-p2: 255,154,20; --hl-p3: 82,151,255; --hl-p4: 160,160,160;
+  --hl-a: 36%;
   --app-bg: #161616;
   --page: #1a1a1a;
   --page-wide: #1c1c1c;
@@ -346,7 +344,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 
 /* Task rows: a soft list, rounded highlight on hover */
 .task { border-radius: var(--r-md); }
-.task-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-radius: var(--r-md); }
+.task-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px 8px; border-radius: var(--r-md); }
 @media (hover: hover) { .task:not(.completed) .task-row:hover { background: var(--row-hover); } }
 .task.pressed .task-row { background: var(--row-hover); }
 .check { width: 22px; height: 22px; min-width: 22px; margin-top: 0; border-radius: 50%; padding: 0;
@@ -406,6 +404,12 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
    a hover reveal on iPhone would cost every tap on a task an extra tap. */
 @media (hover: hover) { .task:hover .task-actions { opacity: 1; transform: none; pointer-events: auto; } }
 .task.pressed .task-actions, .task-actions:focus-within { opacity: 1; transform: none; pointer-events: auto; }
+/* A long-pressed task: lifted out of a dimmed page (the huge shadow dims what's around it), with its menu beside it. */
+.task.lifted { z-index: 2; box-shadow: 0 0 0 100vmax rgba(0,0,0,.55); }
+.task.lifted .task-actions { opacity: 0; pointer-events: none; }
+.task-menu { min-width: 232px; }
+.task-menu .menu-item { min-height: 52px; font-size: 17px; }
+.task-menu .menu-icon svg { width: 22px; height: 22px; }
 /* Three columns: each stat's number or field over its name (`column-reverse`,
    so the name still reads first), the rest of the panel below them, centered. */
 .streak-panel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; margin: 2px 0 10px 40px;
@@ -420,6 +424,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .streak-panel input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
 
 /* Add task */
+.fab-spacer { height: 88px; }
+.fab { position: absolute; z-index: 5; right: 18px; bottom: calc(26px + env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: center;
+  width: 58px; height: 58px; padding: 0; border: none; border-radius: 50%; background: var(--accent); color: #fff; cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0,0,0,.35); transition: transform .12s var(--ease); }
+.fab:active { transform: scale(.94); }
 .add-task-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--muted);
   cursor: pointer; border-radius: var(--r-md); }
 .add-task-row .plus { width: 22px; height: 22px; border-radius: 50%; color: var(--accent);
@@ -480,12 +489,15 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .on-keyboard .chip-btn.pill-streak .icon { display: inline-flex; }
 .on-keyboard .chip-btn.pill-streak svg { width: 16px; height: 16px; }
 .chip-btn.pill-set .chip-icon:not(.pill-tag) .icon, .chip-btn.pill-set .pill-tag .icon { color: inherit; }
-.on-keyboard .chip-btn .icon, .on-keyboard .chip-caret { display: none; }
+.on-keyboard .chip-caret { display: none; }
+.on-keyboard .chip-btn svg { width: 16px; height: 16px; }
 .on-keyboard .chip-btn .chip-icon[class*="pri-"] .icon, .on-keyboard .chip-btn .chip-icon[class*="loc-"] .icon, .on-keyboard .chip-btn .pill-tag .icon { display: inline-flex; }
 .on-keyboard .chip-btn .chip-icon[class*="pri-"] svg, .on-keyboard .chip-btn .chip-icon[class*="loc-"] svg, .on-keyboard .chip-btn .pill-tag svg { width: 16px; height: 16px; }
 .chip-btn.pill-p1 { color: var(--p1); }
 .chip-btn.pill-p2 { color: var(--p2-text); }
 .chip-btn.pill-p3 { color: var(--p3-text); }
+.chip-btn.pill-project { color: var(--c-project); }
+.chip-btn.pill-repeat { color: var(--c-repeat); }
 .on-keyboard .chip-btn.chip-open .chip-icon { color: inherit; }
 .on-keyboard .chip-btn.chip-open { background: var(--accent); color: var(--on-fill); font-weight: 600; }
 .on-keyboard .chip-wrap { position: static; flex: none; }
@@ -607,6 +619,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .cal-day { width: 36px; height: 36px; border: none; background: none; border-radius: 50%; cursor: pointer; font-size: 14px;
   color: var(--text); font-variant-numeric: tabular-nums; }
 @media (hover: hover) { .cal-day:hover { background: var(--hover); } }
+.cal-day:not(.other) { font-weight: 600; }
 .cal-day.other { color: var(--cal-other); }
 .cal-day.is-today { color: var(--accent-text); font-weight: 700; }
 .cal-day.selected { background: var(--accent); color: var(--on-fill); font-weight: 600; opacity: 1; }
@@ -631,17 +644,23 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .title-input { resize: none; overflow: hidden; background: transparent; outline: none; color: var(--text); }
 /* Quick-add highlights, Todoist-style: a strong tint with rounded ends
    (colors per theme in LIGHT/DARK; priorities use their flag colors). */
-.hl { --hl-bg: rgba(var(--hl-rgb), var(--hl-a)); color: transparent; border-radius: 6px;
+.hl { --hl-color: var(--accent); --hl-bg: color-mix(in srgb, var(--hl-color) var(--hl-a), transparent); color: transparent; border-radius: 6px;
   box-shadow: 0 0 0 1.5px var(--hl-bg); background: var(--hl-bg);
   -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-.hl-date { --hl-rgb: var(--hl-date); }
-.hl-repeat { --hl-rgb: var(--hl-repeat); }
-.hl-p1 { --hl-rgb: var(--hl-p1); }
-.hl-p2 { --hl-rgb: var(--hl-p2); }
-.hl-p3 { --hl-rgb: var(--hl-p3); }
-.hl-p4 { --hl-rgb: var(--hl-p4); }
-.hl-project { --hl-rgb: var(--hl-project); }
-.hl-label { --hl-rgb: var(--hl-label); }
+.hl-due-overdue { --hl-color: var(--due-overdue); }
+.hl-due-today { --hl-color: var(--due-today); }
+.hl-due-tomorrow { --hl-color: var(--due-tomorrow); }
+.hl-due-week { --hl-color: var(--due-week); }
+.hl-due-later { --hl-color: var(--due-later); }
+.hl-repeat { --hl-color: var(--c-repeat); }
+.hl-p1 { --hl-color: var(--p1); }
+.hl-p2 { --hl-color: var(--p2-text); }
+.hl-p3 { --hl-color: var(--p3-text); }
+.hl-p4 { --hl-color: var(--p4); }
+.hl-project { --hl-color: var(--c-project); }
+/* A label's own color comes inline (`--hl-color`); a label without one keeps the accent. */
+.hl-deadline { --hl-color: var(--p4); }
+.hl-deadline.hl-urgent { --hl-color: var(--due-overdue); }
 .label-opt { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border-radius: var(--r-item); cursor: pointer; font-size: 14px; }
 @media (hover: hover) { .label-opt:hover { background: var(--hover); } }
 .label-empty { color: var(--muted); font-size: 12px; padding: 6px 8px; }
@@ -694,7 +713,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Touch: Todoist-sized rows (a little shorter) with a bigger check circle,
    whose tap area reaches past it to ~44px. */
 @media (pointer: coarse) {
-  .task-row { gap: 12px; padding: 14px 16px; }
+  .task-row { gap: 12px; padding: 14px 16px 10px; }
   .view-title { font-size: 34px; line-height: 40px; }
   .view-sub { font-size: 14px; line-height: 19px; }
   .task-content { font-size: 17px; line-height: 23px; }
@@ -875,6 +894,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .native-glass .tv-sheet.glass-head .tv-head .tv-round { will-change: opacity; background: transparent; }
 .native-glass .tv-sheet.glass-head .tv-head .tv-round > * { visibility: hidden; }
 .menu-item.danger, .menu-item.danger .menu-icon { color: var(--p1); }
+.icon-btn.danger, .icon-btn.danger .icon { color: var(--p1); }
 /* Over the drawer, and sized for its confirm as well as its two items. */
 .row-menu { z-index: 60; width: 240px; min-width: 0; border: 1px solid var(--border); }
 .row-menu .confirm-text { padding: 4px 4px 0; line-height: 1.35; }
@@ -916,7 +936,12 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-field-btn .tv-streak-stat svg { width: 16px; height: 16px; }
 .tv-field-btn svg { width: 20px; height: 20px; }
 .tv-field-btn .pill-tag, .tv-field-btn .pill-tag .icon { color: inherit; }
-.tv-field-btn.deadline-chip.set, .tv-field-btn.deadline-chip.urgent { color: var(--due-overdue); }
+.tv-field-btn.deadline-chip.urgent { color: var(--due-overdue); }
+/* A row reads in its field's color, as its pill and title highlight do. */
+.tv-field-btn.tv-c-p1 { color: var(--p1); } .tv-field-btn.tv-c-p2 { color: var(--p2-text); } .tv-field-btn.tv-c-p3 { color: var(--p3-text); }
+.tv-field-btn.tv-c-reminder { color: var(--c-reminder); } .tv-field-btn.tv-c-project { color: var(--c-project); }
+.tv-field-btn.tv-c-repeat { color: var(--c-repeat); }
+.tv-field-btn[class*="tv-c-"] .icon, .tv-field-btn[class*="tv-c-"] .chip-icon { color: inherit; }
 .tv-row-icon { display: inline-flex; width: 28px; justify-content: center; color: var(--icon); flex: none; }
 .tv-row .chip-wrap { min-width: 0; }
 .tv-row .chip-wrap:first-child { flex: 0 1 auto; }
@@ -929,6 +954,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-field-btn .pri-2, .tv-field-btn .pri-2 .icon { color: var(--p2); }
 .tv-field-btn .pri-3, .tv-field-btn .pri-3 .icon { color: var(--p3); }
 .tv-field-btn.due-chip .icon, .tv-field-btn.due-chip .chip-icon { color: inherit; }
+/* The icons of a colored row follow it (the card's icon rules are more specific, so these repeat them). */
+.tv-field-btn[class*="tv-c-"] .chip-icon:not([class*="pri-"]), .tv-field-btn[class*="tv-c-"] .chip-icon:not([class*="pri-"]) .icon,
+.tv-field-btn[style*="color"] .chip-icon, .tv-field-btn[style*="color"] .chip-icon .icon,
+.tv-field-btn.deadline-chip.urgent .icon { color: inherit; }
 @media (hover: hover) { .tv-field-btn:hover { background: var(--hover); } }
 .tv-pills-wrap { position: relative; margin: -6px 0 16px; --pill-fade: var(--app-bg); }
 .tv-pills-wrap::before, .tv-pills-wrap::after { top: 0; }
@@ -1054,11 +1083,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .deadline { display: inline-flex; align-items: center; gap: 4px; }
 .deadline.set { color: var(--due-week); }
 .deadline.urgent { color: var(--due-overdue); font-weight: 500; }
-.reminder-tag { display: inline-flex; align-items: center; color: var(--icon); }
-.deadline-chip.set { color: var(--accent-text); }
+.reminder-tag { display: inline-flex; align-items: center; color: var(--c-reminder); }
+.deadline-chip.set { color: var(--text); }
 .deadline-chip.urgent { color: var(--due-overdue); }
-.reminder-chip { color: var(--accent-text); }
-.hl-deadline { --hl-rgb: var(--hl-repeat); }
+.chip-btn.reminder-chip { color: var(--c-reminder); }
 .reminder-item { display: flex; align-items: center; flex: none; gap: 10px; min-height: 36px; padding: 0 4px 0 12px; font-size: 14px; }
 .reminder-item .icon-btn { font-size: 16px; line-height: 1; width: 26px; height: 26px; }
 .menu-divider { height: 1px; background: var(--divider); margin: 6px 2px; }

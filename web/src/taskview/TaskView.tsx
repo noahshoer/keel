@@ -359,6 +359,7 @@ export function TaskView({
               value={title}
               placeholder="Task name"
               segments={view.segments}
+              labels={labels}
               onUnhighlight={(caret) => {
                 const next = unhighlightAt(draft, projects, sections, today, caret);
                 if (next !== null) setPlain(next.plain);
