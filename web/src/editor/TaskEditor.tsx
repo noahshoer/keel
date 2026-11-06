@@ -346,8 +346,6 @@ export function TaskEditor({
           ? ({
               bottom: keyboard.inset + CARD_GAP,
               "--card-room": `${keyboard.room}px`,
-              // Rises and falls with the keyboard (and only then).
-              transition: keyboard.slide ?? undefined,
             } as CSSProperties)
           : undefined
       }

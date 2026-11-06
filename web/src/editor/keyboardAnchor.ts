@@ -49,29 +49,58 @@ export function textRoomUnderPicker(
   return Math.max(MIN_TEXT, Math.min(MAX_TEXT, left));
 }
 
-/**
- * `room` is the height of what's visible, which the task card has to fit in.
- * `slide` is the transition for the card's move while the keyboard is
- * moving, `null` otherwise.
- */
-export type KeyboardState = { inset: number; up: boolean; room: number; slide: string | null };
+/** `room` is the height of what's visible, which the task card has to fit in. */
+export type KeyboardState = { inset: number; up: boolean; room: number };
 
 /** The keyboard as Swift reports it starting to move (`window.keelKeyboard`), as `KEYBOARD_EVENT` carries it. */
 export type KeyboardMove = { kb: number; secs: number; ease: string; reduced: boolean };
+
+type Pace = { secs: number; ease: string };
 
 /** The first keyboard after launch comes with no pace (iOS reports 0 s): the pace of every other one, 10% slower than iOS. */
 export const FALLBACK_SECS = 0.426;
 
 /** How long a move takes and its curve: the keyboard's own, `FALLBACK_SECS` when iOS gave none, none under reduced motion. */
-export function paceOf(m: KeyboardMove): { secs: number; ease: string } {
+export function paceOf(m: KeyboardMove): Pace {
   if (m.reduced) return { secs: 0, ease: m.ease };
   return { secs: m.secs > 0 ? m.secs : FALLBACK_SECS, ease: m.ease };
 }
 
-/** The card's bottom and its margin moving together at `pace`; `null` when it doesn't move. */
-export function slideTransition(pace: { secs: number; ease: string }): string | null {
+/**
+ * The card's move at `pace`, on its transform: the compositor's, so it keeps up
+ * with the keyboard (`bottom` is layout, on the page's thread). `null` when it
+ * doesn't move.
+ */
+export function riseTransition(pace: Pace): string | null {
   if (pace.secs <= 0) return null;
-  return `bottom ${pace.secs}s ${pace.ease}, margin-bottom ${pace.secs}s ${pace.ease}`;
+  return `transform ${pace.secs}s ${pace.ease}`;
+}
+
+/**
+ * Starts `card` from where it was shown (`from`, its bottom edge before the
+ * layout changed) and has it ride its transform to where the layout now puts
+ * it, at `pace`. Returns the timer that puts its style back afterwards.
+ */
+export function rideCard(
+  card: HTMLElement,
+  from: number,
+  pace: Pace,
+): ReturnType<typeof setTimeout> | undefined {
+  const transition = riseTransition(pace);
+  const delta = from - card.getBoundingClientRect().bottom;
+  if (transition === null || delta === 0) return undefined;
+  card.style.transition = "none";
+  card.style.transform = `translateY(${delta}px)`;
+  // The place it starts from has to be laid out before the transition is set.
+  card.getBoundingClientRect();
+  card.style.transition = transition;
+  card.style.transform = "";
+  return setTimeout(
+    () => {
+      card.style.transition = "";
+    },
+    pace.secs * 1000 + 50,
+  );
 }
 
 /** Whether the visible area is shorter than the page: the keyboard is up. */
@@ -92,30 +121,26 @@ export function readKeyboard(
 ): KeyboardState {
   const inset = keyboardInset(clientH, vvTop, vvH, held);
   const resized = vvH < clientH - 0.5;
-  if (held !== null && !resized) return { inset, up: true, room: vvH - inset, slide: null };
-  return { inset, up: resized, room: vvH, slide: null };
+  if (held !== null && !resized) return { inset, up: true, room: vvH - inset };
+  return { inset, up: resized, room: vvH };
 }
 
 /**
  * The keyboard's reach while `enabled`, updated as the visual viewport moves.
  * `paced` (the task card) also follows the keyboard's own start, which comes
  * about 420 ms before the viewport resizes: the inset is its height at once,
- * moving at its pace (`slide`), until the viewport has caught up.
+ * and the card rides to it at the keyboard's pace (`rideCard`).
  */
 export function useKeyboard(enabled: boolean, paced = false): KeyboardState {
   const held = useRef<{ kb: number; until: number } | null>(null);
-  const slide = useRef<string | null>(null);
   const read = (): KeyboardState => {
     const v = window.visualViewport;
-    if (!v) return { inset: 0, up: false, room: innerHeight, slide: null };
+    if (!v) return { inset: 0, up: false, room: innerHeight };
     const kb = held.current !== null && Date.now() < held.current.until ? held.current.kb : null;
-    return {
-      ...readKeyboard(document.documentElement.clientHeight, v.offsetTop, v.height, kb),
-      slide: slide.current,
-    };
+    return readKeyboard(document.documentElement.clientHeight, v.offsetTop, v.height, kb);
   };
   const [state, setState] = useState<KeyboardState>(read);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `read` only reads refs and the window.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `read` only reads a ref and the window.
   useEffect(() => {
     const v = window.visualViewport;
     if (!enabled || !v) return;
@@ -125,19 +150,14 @@ export function useKeyboard(enabled: boolean, paced = false): KeyboardState {
       const m = (e as CustomEvent<KeyboardMove>).detail;
       const pace = paceOf(m);
       held.current = m.kb > 0 ? { kb: m.kb, until: Date.now() + pace.secs * 1000 + 500 } : null;
-      slide.current = slideTransition(pace);
-      clearTimeout(timer);
-      if (slide.current !== null) {
-        timer = setTimeout(
-          () => {
-            slide.current = null;
-            update();
-          },
-          pace.secs * 1000 + 50,
-        );
-      }
+      const card = document.querySelector<HTMLElement>(".editor.on-keyboard");
+      const from = card?.getBoundingClientRect().bottom;
       // Now, not with the next render: the card has to start with the keyboard.
       flushSync(update);
+      if (card && from !== undefined) {
+        clearTimeout(timer);
+        timer = rideCard(card, from, pace);
+      }
     };
     update();
     v.addEventListener("resize", update);
@@ -146,7 +166,6 @@ export function useKeyboard(enabled: boolean, paced = false): KeyboardState {
     return () => {
       clearTimeout(timer);
       held.current = null;
-      slide.current = null;
       v.removeEventListener("resize", update);
       v.removeEventListener("scroll", update);
       window.removeEventListener(KEYBOARD_EVENT, onMove);

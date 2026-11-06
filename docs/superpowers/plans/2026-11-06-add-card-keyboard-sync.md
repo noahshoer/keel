@@ -18,10 +18,15 @@ Decisions:
   `keyboardInset` rule). While held it reads as up, and `room` is the
   height left above it, so the card doesn't change class or height when the
   viewport resizes.
-- The card's `bottom` and `margin-bottom` transition at `secs` and `ease`
-  (`KeyboardState.slide`) for as long as the move lasts, so a later move of
-  the viewport (a scroll, a picker's height) stays instant. Going down is the
-  same move to 0.
+- The card moves by `transform`, not `bottom`: animating `bottom` is layout on
+  the page's thread and trailed the keyboard on the phone (the log showed the
+  start reaching the page within 5-14 ms, so it wasn't the hop). The layout
+  jumps to the final place at once; `rideCard` starts the card from where it
+  was (`translateY(delta)` with no transition), then transitions the
+  transform away at `secs` and `ease`, and puts its style back afterwards. The
+  same trick the sheet and `.keyboard-card` use.
+- The curve is the keyboard's real spring, which Swift reads off the text
+  effects window's animation (it used to log it and send an approximation).
 - The drawer's `useKeyboard` call doesn't pass `paced`: unchanged.
 - Reduced motion arrives as `secs: 0`: no transition.
 

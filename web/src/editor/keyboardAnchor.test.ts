@@ -7,7 +7,8 @@ import {
   paceOf,
   placeAboveCard,
   readKeyboard,
-  slideTransition,
+  rideCard,
+  riseTransition,
   textRoomUnderPicker,
   useKeyboard,
 } from "./keyboardAnchor";
@@ -106,17 +107,17 @@ describe("nextHeld", () => {
 
 describe("the keyboard as the card reads it", () => {
   it("is the viewport's, with no keyboard still coming up", () => {
-    expect(readKeyboard(844, 0, 844, null)).toEqual({ inset: 0, up: false, room: 844, slide: null });
-    expect(readKeyboard(844, 0, 544, null)).toEqual({ inset: 300, up: true, room: 544, slide: null });
+    expect(readKeyboard(844, 0, 844, null)).toEqual({ inset: 0, up: false, room: 844 });
+    expect(readKeyboard(844, 0, 544, null)).toEqual({ inset: 300, up: true, room: 544 });
   });
 
   it("is the held height while the viewport hasn't resized: up, with the room left above it", () => {
-    expect(readKeyboard(844, 0, 844, 328)).toEqual({ inset: 328, up: true, room: 516, slide: null });
+    expect(readKeyboard(844, 0, 844, 328)).toEqual({ inset: 328, up: true, room: 516 });
   });
 
   it("goes back to the viewport once it has resized", () => {
-    expect(readKeyboard(844, 0, 516, 328)).toEqual({ inset: 328, up: true, room: 516, slide: null });
-    expect(readKeyboard(844, 20, 500, 328)).toEqual({ inset: 324, up: true, room: 500, slide: null });
+    expect(readKeyboard(844, 0, 516, 328)).toEqual({ inset: 328, up: true, room: 516 });
+    expect(readKeyboard(844, 20, 500, 328)).toEqual({ inset: 324, up: true, room: 500 });
   });
 });
 
@@ -133,9 +134,9 @@ describe("the pace of a keyboard move", () => {
     expect(paceOf({ kb: 328, secs: 0.38, ease: "ease", reduced: true })).toEqual({ secs: 0, ease: "ease" });
   });
 
-  it("moves the card's bottom and its margin together, or not at all", () => {
-    expect(slideTransition({ secs: 0.4, ease: "ease" })).toBe("bottom 0.4s ease, margin-bottom 0.4s ease");
-    expect(slideTransition({ secs: 0, ease: "ease" })).toBeNull();
+  it("moves the card by transform (the compositor's, as the sheet's), or not at all", () => {
+    expect(riseTransition({ secs: 0.4, ease: "ease" })).toBe("transform 0.4s ease");
+    expect(riseTransition({ secs: 0, ease: "ease" })).toBeNull();
   });
 });
 
@@ -155,20 +156,14 @@ describe("useKeyboard with the pace", () => {
     vi.unstubAllGlobals();
   });
 
-  it("sits on the keyboard at once, slides at its pace, and lets the viewport take over", () => {
+  it("sits on the keyboard at once, and lets the viewport take over", () => {
     const { result } = renderHook(() => useKeyboard(true, true));
-    expect(result.current).toMatchObject({ inset: 0, up: false, slide: null });
+    expect(result.current).toMatchObject({ inset: 0, up: false });
     send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
-    expect(result.current).toMatchObject({
-      inset: 328,
-      up: true,
-      slide: "bottom 0.4s ease, margin-bottom 0.4s ease",
-    });
-    // The move over, the card moves with the viewport again, at once.
+    expect(result.current).toMatchObject({ inset: 328, up: true });
     act(() => {
       vi.advanceTimersByTime(451);
     });
-    expect(result.current.slide).toBeNull();
     expect(result.current.inset).toBe(328);
   });
 
@@ -184,16 +179,50 @@ describe("useKeyboard with the pace", () => {
     send({ kb: 0, secs: 0.4, ease: "ease", reduced: false });
     (window.visualViewport as unknown as { height: number }).height = 844;
     act(() => window.visualViewport?.dispatchEvent(new Event("resize")));
-    expect(result.current).toMatchObject({
-      inset: 0,
-      up: false,
-      slide: "bottom 0.4s ease, margin-bottom 0.4s ease",
+    expect(result.current).toMatchObject({ inset: 0, up: false });
+  });
+
+  it("starts the card from where it was shown, riding on its transform", () => {
+    document.body.insertAdjacentHTML("beforeend", '<form class="editor on-keyboard" id="card"></form>');
+    const card = document.getElementById("card") as HTMLElement;
+    // Low on the screen before the move, 328 up after it.
+    let bottom = 836;
+    card.getBoundingClientRect = () => ({ bottom }) as DOMRect;
+    const { result } = renderHook(() => useKeyboard(true, true));
+    bottom = 836;
+    const stages: string[] = [];
+    const real = card.style;
+    Object.defineProperty(card, "style", {
+      value: new Proxy(real, {
+        set(target, key, value) {
+          if (key === "transform" || key === "transition") stages.push(`${String(key)}=${value}`);
+          return Reflect.set(target, key, value);
+        },
+      }),
     });
+    // The layout the keyboard's move leads to.
+    const stub = vi.spyOn(card, "getBoundingClientRect");
+    stub.mockImplementationOnce(() => ({ bottom: 836 }) as DOMRect);
+    stub.mockImplementation(() => ({ bottom: 508 }) as DOMRect);
+    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
+    expect(result.current.inset).toBe(328);
+    expect(stages).toEqual([
+      "transition=none",
+      "transform=translateY(328px)",
+      "transition=transform 0.4s ease",
+      "transform=",
+    ]);
+    // Back to plain once the move is over.
+    act(() => {
+      vi.advanceTimersByTime(451);
+    });
+    expect(stages.at(-1)).toBe("transition=");
+    card.remove();
   });
 
   it("ignores the move when not paced (the drawer's)", () => {
     const { result } = renderHook(() => useKeyboard(true));
     send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
-    expect(result.current).toMatchObject({ inset: 0, up: false, slide: null });
+    expect(result.current).toMatchObject({ inset: 0, up: false });
   });
 });
