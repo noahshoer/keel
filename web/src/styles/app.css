@@ -385,7 +385,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .subtask-ring { width: 15px; height: 15px; }
 .subtask-ring-track { stroke: var(--border-strong); }
 .subtask-ring-fill { stroke: var(--accent); }
-.task-repeat { display: inline-flex; color: var(--c-repeat); }
+.task-repeat { display: inline-flex; color: var(--icon); }
 .task-labels { display: flex; align-items: center; gap: 4px; overflow: hidden; }
 .task-label-items { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-label-group { color: var(--tint, var(--secondary)); }
