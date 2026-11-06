@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import type { CardRow, Label, Reminder, Task } from "../bindings";
 import { localToday } from "../clock";
-import { ROW_PRESS } from "../gestures/long-press";
+import { ROW_DRAG, ROW_HOLD, ROW_PRESS } from "../gestures/long-press";
 import * as fx from "../ipc/fixtures";
 import { invoke } from "../ipc/invoke";
 import { TaskNavProvider } from "../taskview/nav";
@@ -11,6 +11,7 @@ import { useTaskNav } from "../taskview/nav-context";
 import { loadCoreForTests } from "../test/wasm";
 import { CardList } from "./CardList";
 import { CompletedRow } from "./CompletedRow";
+import { LocationsContext } from "./locations";
 import type { RowLocation } from "./rowLayout";
 import { TaskRow } from "./TaskRow";
 
@@ -39,10 +40,12 @@ function NavProbe() {
   return <output data-testid="nav">{`${nav.stack.join(",")}|${nav.addSub ? "add" : ""}`}</output>;
 }
 const wrapper = ({ children }: { children: ReactNode }) => (
-  <TaskNavProvider all={fx.tasks}>
-    {children}
-    <NavProbe />
-  </TaskNavProvider>
+  <LocationsContext.Provider value={{ projects: fx.projects, sections: fx.sections }}>
+    <TaskNavProvider all={fx.tasks}>
+      {children}
+      <NavProbe />
+    </TaskNavProvider>
+  </LocationsContext.Provider>
 );
 const opened = () => screen.getByTestId("nav").textContent;
 const row = (task: Task, progress: CardRow["progress"] = null): CardRow => ({ task, progress });
@@ -465,6 +468,10 @@ const press = (container: HTMLElement) =>
   act(() => {
     container.querySelector(".task")?.dispatchEvent(new Event(ROW_PRESS));
   });
+const send = (container: HTMLElement, type: string) =>
+  act(() => {
+    container.querySelector(".task")?.dispatchEvent(new Event(type, { bubbles: true }));
+  });
 const taskMenu = () => {
   const menu = document.body.querySelector<HTMLElement>(".task-menu");
   return menu === null ? null : within(menu);
@@ -479,6 +486,73 @@ it("a long press lifts the row and opens its menu: add sub-task, delete", () => 
   expect(taskMenu()?.getByText("Delete").closest(".menu-item")?.classList.contains("danger")).toBe(true);
   // Streak is for repeating tasks.
   expect(taskMenu()?.queryByText("Streak")).toBeNull();
+});
+
+const menuLabels = () =>
+  [...(document.body.querySelectorAll(".task-menu .menu-label") ?? [])].map((e) => e.textContent);
+const picker = () => {
+  const el = document.body.querySelector<HTMLElement>(".move-picker");
+  return el === null ? null : within(el);
+};
+
+it("dragging a task whose menu is open closes the menu", () => {
+  const { container } = renderRow(fixture("t-laundry"));
+  send(container, ROW_HOLD);
+  send(container, ROW_PRESS);
+  expect(taskMenu()).not.toBeNull();
+  expect(taskEl(container)?.classList.contains("lifted")).toBe(true);
+  send(container, ROW_DRAG);
+  expect(taskMenu()).toBeNull();
+  expect(taskEl(container)?.classList.contains("lifted")).toBe(false);
+});
+
+it("the menu lists Add sub-task, Move to…, then Delete", () => {
+  const { container } = renderRow(fixture("t-laundry"));
+  press(container);
+  expect(menuLabels()).toEqual(["Add sub-task", "Move to…", "Delete"]);
+});
+
+it("Move to… lists the projects and their sections, with where the task is checked", () => {
+  const { container } = renderRow(fixture("t-groceries"));
+  press(container);
+  fireEvent.click(taskMenu()?.getByText("Move to…") as HTMLElement);
+  expect(taskMenu()).toBeNull();
+  const names = [...document.body.querySelectorAll(".move-picker .menu-label")].map((e) => e.textContent);
+  expect(names).toEqual(["Inbox", "Home", "Chores", "Trip"]);
+  const checked = [...document.body.querySelectorAll(".move-picker .menu-item.checked .menu-label")].map(
+    (e) => e.textContent,
+  );
+  expect(checked).toEqual(["Home"]);
+  expect(taskEl(container)?.classList.contains("lifted")).toBe(true);
+});
+
+it("picking a section moves the task into it, and picking a project moves it out", async () => {
+  const { container, onChanged } = renderRow(fixture("t-groceries"));
+  press(container);
+  fireEvent.click(taskMenu()?.getByText("Move to…") as HTMLElement);
+  fireEvent.click(picker()?.getByText("Chores") as HTMLElement);
+  await tick(0);
+  let saved = (await invoke("all_tasks", {})).find((t) => t.id === "t-groceries");
+  expect([saved?.project_id, saved?.section_id]).toEqual(["p-home", "s-chores"]);
+  expect(onChanged).toHaveBeenCalled();
+  expect(picker()).toBeNull();
+  expect(taskEl(container)?.classList.contains("lifted")).toBe(false);
+
+  press(container);
+  fireEvent.click(taskMenu()?.getByText("Move to…") as HTMLElement);
+  fireEvent.click(picker()?.getByText("Trip") as HTMLElement);
+  await tick(0);
+  saved = (await invoke("all_tasks", {})).find((t) => t.id === "t-groceries");
+  expect([saved?.project_id, saved?.section_id]).toEqual(["p-trip", null]);
+});
+
+it("Escape closes the Move to… list and puts the row back", () => {
+  const { container } = renderRow(fixture("t-groceries"));
+  press(container);
+  fireEvent.click(taskMenu()?.getByText("Move to…") as HTMLElement);
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(picker()).toBeNull();
+  expect(taskEl(container)?.classList.contains("lifted")).toBe(false);
 });
 
 it("the menu's Add sub-task opens the task's sub-task editor and closes the menu", () => {

@@ -19,6 +19,9 @@ const send = dispatchAction;
 export const completeTask = (id: Id) => send({ type: "task_complete", id });
 export const uncompleteTask = (id: Id) => send({ type: "task_uncomplete", id });
 export const deleteTask = (id: Id) => send({ type: "task_delete", id });
+/** Moves a task (and its sub-tasks) to a project, into a section or out of any. */
+export const moveTask = (id: Id, projectId: Id, sectionId: Id | null) =>
+  send({ type: "task_move", id, project_id: projectId, section_id: sectionId });
 export const setStreak = (id: Id, enabled: boolean, goal: number | null) =>
   send({ type: "task_set_streak", id, enabled, goal });
 
@@ -33,6 +36,14 @@ export const deleteLabel = (id: Id) => send({ type: "label_delete", id });
 
 export const addSection = (projectId: Id, name: string) =>
   send({ type: "section_add", project_id: projectId, name }, true);
+/** Adds a section and gives its id (to move a task into it). */
+export async function addSectionGetId(projectId: Id, name: string): Promise<Id> {
+  const cmd = command({ type: "section_add", project_id: projectId, name }, true);
+  const result = await invoke("dispatch", { cmd });
+  const id = cmd.temp_id ? result.id_mapping[cmd.temp_id] : undefined;
+  if (id === undefined) throw new Error("the new section has no id");
+  return id;
+}
 export const renameSection = (id: Id, name: string) => send({ type: "section_update", id, name });
 export const deleteSection = (id: Id) => send({ type: "section_delete", id });
 

@@ -3,6 +3,7 @@
 // `span.icon`. Logo and DoneMark are Keel's own marks, and the tag, trophy, inbox
 // and calendars are Keel's own rounder drawings of Phosphor's (see `Drawn`).
 import { ArrowBendDownRight } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
+import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { ArrowUp } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { Bell } from "@phosphor-icons/react/dist/csr/Bell";
 import { BellRinging } from "@phosphor-icons/react/dist/csr/BellRinging";
@@ -240,6 +241,10 @@ export function ChevronLeftIcon() {
 
 export function ChevronDownSmallIcon() {
   return <Ph icon={CaretDown} size={12} />;
+}
+
+export function ArrowRightIcon() {
+  return <Ph icon={ArrowRight} size={20} />;
 }
 
 export function ArrowUpIcon() {

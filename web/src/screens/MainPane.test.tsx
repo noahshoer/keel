@@ -4,6 +4,8 @@ import { beforeAll, expect, it, vi } from "vitest";
 import { useLoaded } from "../app/load";
 import type { View } from "../app/view";
 import { localToday } from "../clock";
+import { TASK_DROP } from "../gestures/drag";
+import { ROW_PRESS } from "../gestures/long-press";
 import { invoke } from "../ipc/invoke";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
 import { TaskNavProvider } from "../taskview/nav";
@@ -104,31 +106,60 @@ it("a project shows unsectioned tasks, then its sections with counts", async () 
   expect(head?.querySelector(".muted")?.textContent).toBe("1");
   expect(contents(container)).toEqual(["Buy groceries", "Do laundry"]);
   expect(container.querySelector(".task-project")?.textContent).toContain("Home");
-  expect(container.querySelector(".add-section-row")).not.toBeNull();
+  // Always drawn, like "+ Add task": a plus and its label, no hover-only divider.
+  const add = container.querySelector(".add-section-row");
+  expect(add?.textContent).toBe("Add section");
+  expect(add?.querySelector(".plus")).not.toBeNull();
+  expect(container.querySelector(".add-section-line")).toBeNull();
 });
 
-it("renaming a section changes its head", async () => {
+const popup = () => document.body.querySelector<HTMLElement>(".row-menu");
+
+it("a section's ••• opens the project's popup; Edit renames it in place", async () => {
   const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
-  fireEvent.click(screen.getByTitle("Rename section"));
-  const input = container.querySelector<HTMLInputElement>(".section-rename input");
+  expect(container.querySelector(".section-actions")).toBeNull();
+  fireEvent.click(screen.getByLabelText("Section actions"));
+  expect(within(popup() as HTMLElement).queryByText("Add section")).toBeNull();
+  fireEvent.click(within(popup() as HTMLElement).getByText("Edit"));
+  expect(popup()).toBeNull();
+  const input = container.querySelector<HTMLInputElement>(".section-name input");
   expect(document.activeElement).toBe(input);
   fireEvent.change(input as HTMLInputElement, { target: { value: "Weekly" } });
   fireEvent.submit(input as HTMLInputElement);
   await waitFor(() => expect(titles(container)).toContain("Weekly"));
 });
 
-it("deleting a section asks first", async () => {
+it("deleting a section asks first, in the popup", async () => {
   const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
-  fireEvent.click(screen.getByTitle("Delete section"));
-  expect(container.querySelector(".confirm-text")?.textContent).toBe(
+  fireEvent.click(screen.getByLabelText("Section actions"));
+  fireEvent.click(within(popup() as HTMLElement).getByText("Delete"));
+  expect(popup()?.querySelector(".confirm-text")?.textContent).toBe(
     "Delete section “Chores” and its 1 task?",
   );
-  fireEvent.click(screen.getByText("Cancel"));
   expect(container.querySelector(".confirm-box")).toBeNull();
-  fireEvent.click(screen.getByTitle("Delete section"));
-  fireEvent.click(screen.getByText("Delete"));
+  fireEvent.click(within(popup() as HTMLElement).getByText("Cancel"));
+  expect(popup()).toBeNull();
+  expect(container.querySelector(".section-block")).not.toBeNull();
+  fireEvent.click(screen.getByLabelText("Section actions"));
+  fireEvent.click(within(popup() as HTMLElement).getByText("Delete"));
+  fireEvent.click(within(popup() as HTMLElement).getByText("Delete", { selector: "button.btn-danger" }));
   await waitFor(() => expect(container.querySelector(".section-block")).toBeNull());
   expect(await invoke("list_sections", { project_id: "p-home" })).toEqual([]);
+});
+
+it("the name fields of a new and a renamed section are the header's own style, not a boxed input", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  fireEvent.click(screen.getByText("Add section"));
+  const add = screen.getByPlaceholderText("Name this section, then Enter");
+  expect(add.className).toBe("section-name-input");
+  expect(add.closest("form")?.className).toBe("section-name section-name-new");
+  expect(container.querySelector(".project-input")).toBeNull();
+  fireEvent.keyDown(add, { key: "Escape" });
+  fireEvent.click(screen.getByLabelText("Section actions"));
+  fireEvent.click(within(popup() as HTMLElement).getByText("Edit"));
+  const rename = container.querySelector(".section-name input");
+  expect(rename?.className).toBe("section-name-input");
+  expect(rename?.closest("form")?.className).toBe("section-name");
 });
 
 it("adding a section from the divider", async () => {
@@ -143,6 +174,181 @@ it("adding a section from the divider", async () => {
   fireEvent.change(again, { target: { value: "Garden" } });
   fireEvent.submit(again);
   await waitFor(() => expect(titles(container)).toContain("Garden"));
+});
+
+it("a long press or right click on a section's header opens the same popup", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  act(() => {
+    container.querySelector(".section-row")?.dispatchEvent(new Event(ROW_PRESS));
+  });
+  expect(within(popup() as HTMLElement).getByText("Edit")).toBeTruthy();
+  expect(within(popup() as HTMLElement).getByText("Delete")).toBeTruthy();
+});
+
+it("the project's ••• has Add section first, which opens the name field", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  fireEvent.click(screen.getByLabelText("More"));
+  const entries = [...(popup() as HTMLElement).querySelectorAll(".menu-label")].map((e) => e.textContent);
+  expect(entries).toEqual(["Add section", "Edit", "Delete"]);
+  fireEvent.click(within(popup() as HTMLElement).getByText("Add section"));
+  expect(popup()).toBeNull();
+  const input = screen.getByPlaceholderText("Name this section, then Enter");
+  expect(document.activeElement).toBe(input);
+  fireEvent.change(input, { target: { value: "Garden" } });
+  fireEvent.submit(input);
+  await waitFor(() => expect(titles(container)).toContain("Garden"));
+});
+
+it("a label or filter page's ••• has no Add section", async () => {
+  await show({ kind: "label", name: "errand" });
+  fireEvent.click(screen.getByLabelText("More"));
+  const entries = [...(popup() as HTMLElement).querySelectorAll(".menu-label")].map((e) => e.textContent);
+  expect(entries).toEqual(["Edit", "Delete"]);
+});
+
+it("the room for the floating add button is at the end of the page, not between the view's add row and its sections", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const spacers = container.querySelectorAll(".fab-spacer");
+  expect(spacers).toHaveLength(1);
+  const spacer = spacers[0] as Element;
+  const follows = (el: Element | null) =>
+    el !== null && Boolean(el.compareDocumentPosition(spacer) & Node.DOCUMENT_POSITION_FOLLOWING);
+  expect(follows(container.querySelector(".view-add"))).toBe(true);
+  expect(follows(container.querySelector(".section-block"))).toBe(true);
+  expect(follows(container.querySelector(".add-section-row"))).toBe(true);
+});
+
+it("tapping outside the Add section field closes it and brings the row back, dropping what was typed", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  fireEvent.click(screen.getByText("Add section"));
+  const input = screen.getByPlaceholderText("Name this section, then Enter");
+  fireEvent.change(input, { target: { value: "Garden" } });
+  // Inside it: it stays.
+  fireEvent.click(input);
+  expect(screen.queryByPlaceholderText("Name this section, then Enter")).not.toBeNull();
+  fireEvent.click(container.querySelector(".view-title") as HTMLElement);
+  expect(screen.queryByPlaceholderText("Name this section, then Enter")).toBeNull();
+  expect(container.querySelector(".add-section-row")?.textContent).toBe("Add section");
+  fireEvent.click(screen.getByText("Add section"));
+  expect((screen.getByPlaceholderText("Name this section, then Enter") as HTMLInputElement).value).toBe("");
+  expect(titles(container)).not.toContain("Garden");
+});
+
+const drop = (zone: Element | null, taskId: string) =>
+  act(() => {
+    zone?.dispatchEvent(new CustomEvent(TASK_DROP, { bubbles: true, detail: { taskId } }));
+  });
+
+it("a project's sections and its unsectioned tasks are drop zones that move a task in and out", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const zones = [...container.querySelectorAll("[data-drop-zone]:not([data-drop-new])")];
+  expect(
+    zones.map((z) => [
+      z.getAttribute("data-drop-project"),
+      z.getAttribute("data-drop-section"),
+      z.getAttribute("data-drop-name"),
+    ]),
+  ).toEqual([
+    ["p-home", "", "Home"],
+    ["p-home", "s-chores", "Chores"],
+  ]);
+  drop(zones[1] ?? null, "t-groceries");
+  await waitFor(async () => {
+    const t = (await allTasks()).find((x) => x.id === "t-groceries");
+    expect(t?.section_id).toBe("s-chores");
+  });
+  await waitFor(() =>
+    expect(container.querySelector(".section-block")?.textContent).toContain("Buy groceries"),
+  );
+  drop(container.querySelectorAll("[data-drop-zone]")[0] ?? null, "t-groceries");
+  await waitFor(async () => {
+    const t = (await allTasks()).find((x) => x.id === "t-groceries");
+    expect(t?.section_id).toBeNull();
+  });
+});
+
+it("a dragged task dropped on Add section opens the name field; naming it creates the section and moves the task in", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const row = container.querySelector(".add-section-row");
+  expect(row?.hasAttribute("data-drop-zone")).toBe(true);
+  expect(row?.hasAttribute("data-drop-new")).toBe(true);
+  expect(row?.getAttribute("data-drop-project")).toBe("p-home");
+  drop(row, "t-groceries");
+  const input = screen.getByPlaceholderText("Name the new section, then Enter");
+  expect(document.activeElement).toBe(input);
+  // Nothing has moved yet.
+  expect((await allTasks()).find((t) => t.id === "t-groceries")?.section_id).toBeNull();
+  fireEvent.change(input, { target: { value: "Garden" } });
+  fireEvent.submit(input);
+  await waitFor(async () => {
+    const garden = (await invoke("list_sections", { project_id: "p-home" })).find((s) => s.name === "Garden");
+    expect(garden).toBeDefined();
+    expect((await allTasks()).find((t) => t.id === "t-groceries")?.section_id).toBe(garden?.id);
+  });
+  await waitFor(() => expect(titles(container)).toContain("Garden"));
+});
+
+it("a field opened by a drop that is closed again leaves the task where it was and makes no section", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  drop(container.querySelector(".add-section-row"), "t-groceries");
+  fireEvent.keyDown(screen.getByPlaceholderText("Name the new section, then Enter"), { key: "Escape" });
+  expect(container.querySelector(".add-section-row")).not.toBeNull();
+  // A plain tap on the row afterwards is an ordinary Add section, with nothing waiting to move.
+  fireEvent.click(screen.getByText("Add section"));
+  const input = screen.getByPlaceholderText("Name this section, then Enter");
+  fireEvent.change(input, { target: { value: "Later" } });
+  fireEvent.submit(input);
+  await waitFor(() => expect(titles(container)).toContain("Later"));
+  expect((await allTasks()).find((t) => t.id === "t-groceries")?.section_id).toBeNull();
+});
+
+const waitingCard = (container: HTMLElement) => container.querySelector<HTMLElement>(".move-preview");
+const waitingMark = (container: HTMLElement, id: string) =>
+  container.querySelector(`.task[data-menu-id="${id}"]`)?.hasAttribute("data-move-waiting") ?? false;
+
+it("while the new section is named, a copy of the dropped task waits under the field and the original is marked", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  expect(waitingCard(container)).toBeNull();
+  drop(container.querySelector(".add-section-row"), "t-groceries");
+  expect(waitingCard(container)?.textContent).toContain("Buy groceries");
+  expect(waitingCard(container)?.textContent).toContain("Moves here");
+  // Under the field, inside the form, so a tap on it doesn't close the field.
+  expect(container.querySelector(".section-name-new")?.contains(waitingCard(container))).toBe(true);
+  expect(waitingMark(container, "t-groceries")).toBe(true);
+  const input = screen.getByPlaceholderText("Name the new section, then Enter");
+  fireEvent.change(input, { target: { value: "Garden" } });
+  fireEvent.submit(input);
+  await waitFor(() => expect(titles(container)).toContain("Garden"));
+  expect(waitingCard(container)).toBeNull();
+  expect(waitingMark(container, "t-groceries")).toBe(false);
+});
+
+it("closing the field takes the waiting copy away and unmarks the original", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  drop(container.querySelector(".add-section-row"), "t-groceries");
+  fireEvent.keyDown(screen.getByPlaceholderText("Name the new section, then Enter"), { key: "Escape" });
+  expect(waitingCard(container)).toBeNull();
+  expect(waitingMark(container, "t-groceries")).toBe(false);
+  drop(container.querySelector(".add-section-row"), "t-groceries");
+  fireEvent.click(container.querySelector(".view-title") as HTMLElement);
+  expect(waitingCard(container)).toBeNull();
+  expect(waitingMark(container, "t-groceries")).toBe(false);
+  // A plain Add section has no copy.
+  fireEvent.click(screen.getByText("Add section"));
+  expect(waitingCard(container)).toBeNull();
+});
+
+it("a task is draggable at the top level only, and a project without sections has only Add section to drop on", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const draggable = [...container.querySelectorAll(".task[data-draggable]")].map((t) =>
+    t.getAttribute("data-menu-id"),
+  );
+  expect(draggable).toContain("t-groceries");
+  expect(draggable).not.toContain("t-sheets");
+  // With no sections, the only place to drop is Add section: it starts the first one.
+  const none = await show({ kind: "project", id: "p-trip", name: "Trip" });
+  const zones = [...none.container.querySelectorAll("[data-drop-zone]")];
+  expect(zones.map((z) => z.className)).toEqual(["add-section-row"]);
 });
 
 it("a filter with two comma groups titles both", async () => {

@@ -20,6 +20,7 @@ import type {
   Label,
   LabelChoice,
   LabelGroup,
+  LocationChoice,
   MenuKind,
   MonthView,
   Progress,
@@ -309,6 +310,12 @@ export function applyTitle(
 export function locationPick(value: string): EditorPick {
   ready();
   return core.locationPick(value);
+}
+
+/** Each project, then its sections (nested): the project / section menu's items. */
+export function locationChoices(projects: Project[], sections: Section[]): LocationChoice[] {
+  ready();
+  return core.locationChoices(projects, sections);
 }
 
 /** "Project" or "Project / Section"; "Inbox" for an unknown project. */

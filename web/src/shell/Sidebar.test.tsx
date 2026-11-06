@@ -437,6 +437,16 @@ it.each([
   expect(document.querySelector(".row-menu")).toBeNull();
 });
 
+it("a row stays lifted while its menu is open, so it's clear what the menu is for", async () => {
+  await start();
+  const row = within(sidebar()).getByText("Home").closest(".nav-item") as HTMLElement;
+  expect(row.hasAttribute("data-lifted")).toBe(false);
+  fireEvent(row, new Event(ROW_PRESS));
+  expect(row.hasAttribute("data-lifted")).toBe(true);
+  fireEvent.click(document.body);
+  expect(row.hasAttribute("data-lifted")).toBe(false);
+});
+
 it("another row's long press swaps the open menu", async () => {
   await start();
   const home = within(sidebar()).getByText("Home").closest(".nav-item") as HTMLElement;

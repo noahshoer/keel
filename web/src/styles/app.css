@@ -233,7 +233,7 @@ body {
   font-feature-settings: "cv11", "ss03"; font-optical-sizing: auto;
 }
 button, input, select { font-family: inherit; color: inherit; }
-button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, .label-opt, .task-row {
+button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .add-section-row, .view-toggle, .label-opt, .task-row {
   transition: background-color .16s var(--ease), color .16s var(--ease), border-color .16s var(--ease),
     box-shadow .16s var(--ease), transform .12s var(--ease), opacity .16s var(--ease);
 }
@@ -345,6 +345,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Task rows: a soft list, rounded highlight on hover */
 .task { border-radius: var(--r-md); }
 .task-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px 8px; border-radius: var(--r-md); }
+/* A long press lifts or drags a row; the system's text selection and callout would take it over. */
+.task-row { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 @media (hover: hover) { .task:not(.completed) .task-row:hover { background: var(--row-hover); } }
 .task.pressed .task-row { background: var(--row-hover); }
 .check { width: 22px; height: 22px; min-width: 22px; margin-top: 0; border-radius: 50%; padding: 0;
@@ -407,6 +409,33 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* A long-pressed task: lifted out of a dimmed page (the huge shadow dims what's around it), with its menu beside it. */
 .task.lifted { z-index: 2; box-shadow: 0 0 0 100vmax rgba(0,0,0,.55); }
 .task.lifted .task-actions { opacity: 0; pointer-events: none; }
+/* A sidebar row or a section's header whose popup is open (RowMenu): lifted the same way. */
+.nav-item[data-lifted], .section-row[data-lifted] { position: relative; z-index: 2; border-radius: var(--r-item); box-shadow: 0 0 0 100vmax rgba(0,0,0,.55); }
+.nav-item[data-lifted]:not(.active) { background: var(--bg); }
+.section-row[data-lifted] { background: var(--page-bg); }
+/* Dragging a task to another section (gestures/drag.ts): its ghost follows the finger, its place stays as an outline, and the zone it will land in is outlined. */
+.drag-ghost { background: var(--bg); border-radius: var(--r-card); box-shadow: 0 14px 30px rgba(0,0,0,.45); transform: rotate(-1.5deg); opacity: .96; }
+.drag-ghost .task-row, .drag-ghost .task-actions { border-radius: var(--r-card); }
+.task[data-drag-source] { opacity: .4; outline: 1.5px dashed var(--border-strong); outline-offset: -2px; border-radius: var(--r-card); }
+body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; }
+.drop-target { position: relative; border-radius: var(--r-card); outline: 1.5px solid var(--accent); outline-offset: 2px; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+/* The label is laid over the zone's top edge, so highlighting a zone moves nothing (a zone that grew would shift the ones below it out from under the finger). */
+.drop-target::after { content: "Drop to move to " attr(data-drop-name); position: absolute; z-index: 1; top: -11px; left: 50%; transform: translateX(-50%);
+  max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 12px; border-radius: var(--r-full);
+  background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; line-height: 18px; }
+[data-drop-new].drop-target::after { content: "Drop to start a new section"; }
+/* A task dropped on Add section, waiting for the section's name: its row stays dashed, and a dashed copy sits under the field. */
+.task[data-move-waiting] { opacity: .4; outline: 1.5px dashed var(--border-strong); outline-offset: -2px; border-radius: var(--r-card); }
+.move-preview { display: flex; gap: 12px; margin: 12px -16px 0; padding: 12px 16px; border-radius: var(--r-card); border: 1.5px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent); opacity: .85; }
+.move-preview-check { width: 22px; height: 22px; flex: none; border-radius: 50%; border: 2px solid var(--muted); }
+/* The task's own title type, so the copy reads as the task. */
+.move-preview-title { color: var(--text); font-size: 15px; line-height: 21px; font-weight: 500; }
+@media (hover: none) {
+  .move-preview-title { font-size: 17px; line-height: 23px; }
+  .move-preview-check { width: 26px; height: 26px; border-width: 1.75px; }
+}
+.move-preview-note { color: var(--accent-text); font-size: 13px; font-weight: 600; margin-top: 2px; }
 .task-menu { min-width: 232px; }
 .task-menu .menu-item { min-height: 52px; font-size: 17px; }
 .task-menu .menu-icon svg { width: 22px; height: 22px; }
@@ -429,14 +458,14 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   width: 58px; height: 58px; padding: 0; border: none; border-radius: 50%; background: var(--accent); color: #fff; cursor: pointer;
   box-shadow: 0 8px 20px rgba(0,0,0,.35); transition: transform .12s var(--ease); }
 .fab:active { transform: scale(.94); }
-.add-task-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--muted);
+.add-task-row, .add-section-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--muted);
   cursor: pointer; border-radius: var(--r-md); }
-.add-task-row .plus { width: 22px; height: 22px; border-radius: 50%; color: var(--accent);
+.add-task-row .plus, .add-section-row .plus { width: 22px; height: 22px; border-radius: 50%; color: var(--accent);
   display: flex; align-items: center; justify-content: center; transition: background-color .16s, color .16s; }
 /* Mouse only: on iPhone a hover style makes WebKit spend the first tap on hover. */
 @media (hover: hover) {
-  .add-task-row:hover { color: var(--accent-text); background: var(--row-hover); }
-  .add-task-row:hover .plus { background: var(--accent); color: #fff; }
+  .add-task-row:hover, .add-section-row:hover { color: var(--accent-text); background: var(--row-hover); }
+  .add-task-row:hover .plus, .add-section-row:hover .plus { background: var(--accent); color: #fff; }
 }
 .editor { border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 12px 0; margin: 8px 0;
   background: var(--bg); box-shadow: var(--shadow-md); animation: pop-in .18s var(--ease);
@@ -776,13 +805,16 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .search-input { height: 44px; border-radius: 14px; }
   /* The add row, Reminders-style: a blank next task with a dotted circle,
      lined up with the task circles above it. */
-  .add-task-row { padding: 14px 16px; gap: 12px; font-size: 17px; }
-  .add-task-row .plus { box-sizing: border-box; width: 26px; height: 26px; min-width: 26px;
+  .add-task-row, .add-section-row { padding: 14px 16px; gap: 12px; font-size: 17px; }
+  .add-task-row .plus, .add-section-row .plus { box-sizing: border-box; width: 26px; height: 26px; min-width: 26px;
     background: transparent; border: 2px dotted color-mix(in srgb, var(--text) 35%, transparent); }
-  .add-task-row .plus svg { display: none; }
+  .add-task-row .plus svg, .add-section-row .plus svg { display: none; }
 }
-/* Touch: a long press shows a task's actions; no text selection or callout. */
-@media (hover: none) { .task-row, .nav-item, .tv-scrim, .editor-scrim, .drawer-scrim, .modal-scrim { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
+/* Touch: no text selection or callout from a long press anywhere in the lists or the sidebar (a hold on "Add task" selected across the page); fields still select. */
+@media (hover: none) {
+  .list-scroll, .view-head, .sidebar, .tv-scrim, .editor-scrim, .drawer-scrim, .modal-scrim { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .list-scroll :is(input, textarea, [contenteditable]), .view-head :is(input, textarea, [contenteditable]), .sidebar :is(input, textarea, [contenteditable]) { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+}
 /* One line: titleFit.ts cuts between words, the ellipsis is for one huge word. */
 .view-head .view-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* Editing on the page: the title is the field, with its own type and place. */
@@ -896,6 +928,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .native-glass .tv-sheet.glass-head .tv-head .tv-round { will-change: opacity; background: transparent; }
 .native-glass .tv-sheet.glass-head .tv-head .tv-round > * { visibility: hidden; }
 .menu-item.danger, .menu-item.danger .menu-icon { color: var(--p1); }
+.menu-item.lead, .menu-item.lead .menu-icon { color: var(--accent-text); font-weight: 600; }
 .icon-btn.danger, .icon-btn.danger .icon { color: var(--p1); }
 /* Over the drawer, and sized for its confirm as well as its two items. */
 .row-menu { z-index: 60; width: 240px; min-width: 0; border: 1px solid var(--border); }
@@ -1058,14 +1091,21 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 /* Sections */
 .section-block { margin-top: 18px; }
 .section-row { position: relative; }
-.section-actions { display: none; margin-left: auto; gap: 2px; }
-.section-row:hover .section-actions { display: inline-flex; }
-.section-rename { padding: 14px 0 6px; }
-.add-section-row { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding: 6px 10px;
-  color: var(--accent); cursor: pointer; opacity: 0; transition: opacity .16s var(--ease); }
-.add-section-row:hover { opacity: 1; }
-.add-section-line { flex: 1; height: 1px; background: var(--accent); border-radius: 1px; }
-.add-section-label { font-size: 13px; font-weight: 600; }
+.section-more { margin-left: auto; align-self: center; }
+/* The ••• button sets the header's height, so the padding is what's left of the plain header's (22px above the text, 6px below). */
+.section-title.section-row { align-items: center; padding-top: 14px; padding-bottom: 0; }
+/* A new or renamed section's name: borderless, in the header's own type and place, so what's typed lands where its title will be. */
+.section-name { padding: 14px 10px 0; }
+/* A new section's field takes the "Add section" row's place: its green bar is where the row's hairline was, and the field is the row's height, so nothing moves. */
+.section-name-new { margin-top: 37px; padding: 14px 16px; border-top: 1.5px solid var(--accent); }
+.section-name-new .section-name-input { height: 26px; border-bottom: none; }
+.section-name-input { display: block; width: 100%; height: 34px; padding: 0; border: none; border-bottom: 1.5px solid var(--accent); border-radius: 0;
+  outline: none; background: none; color: var(--text); font: inherit; font-weight: 650; font-size: 14px; }
+.section-name-input::placeholder { color: var(--muted); font-weight: 400; }
+/* Like "+ Add task", in the accent, under a hairline at the end of the project. */
+.add-section-row { margin-top: 37px; border-top: 1px solid var(--border); border-radius: 0; color: var(--accent-text); font-weight: 500; }
+/* A task dragged over it: the zone is a rounded box like the others, with no hairline across it. */
+.add-section-row.drop-target { border-radius: var(--r-card); border-top-color: transparent; }
 
 /* Filters */
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace; font-size: 12px; }
@@ -1209,7 +1249,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
   .view-toggle { justify-content: center; width: 44px; height: 44px; padding: 0; margin-right: -12px; }
   .view-toggle svg { width: 24px; height: 24px; }
   .view-toggle-label { display: none; }
-  .section-title { padding-left: 8px; padding-right: 8px; }
+  .section-title, .section-name { padding-left: 8px; padding-right: 8px; }
   .streak-panel { margin-left: 0; }
   /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */
   .editor { padding: 10px 10px 0; }
