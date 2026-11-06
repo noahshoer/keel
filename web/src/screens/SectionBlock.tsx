@@ -12,6 +12,7 @@ import { addSection, deleteSection, renameSection } from "../ipc/actions";
 import { CardList } from "../lists/CardList";
 import { locationsOf } from "../lists/rowLayout";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
+import { useCloseOnClickOutside } from "../shell/clickOutside";
 import { PlusIcon } from "../shell/icons";
 import { RowMenu } from "../shell/RowMenu";
 import { ViewMenu } from "./ViewMenu";
@@ -127,6 +128,12 @@ export function AddSection({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const input = useRef<HTMLInputElement>(null);
+  const form = useRef<HTMLFormElement>(null);
+  // A click outside the field puts the row back, and drops what was typed.
+  useCloseOnClickOutside(form, () => {
+    setOpen(false);
+    setName("");
+  });
   // Inside the tap, so iOS raises the keyboard.
   const openField = () => {
     flushSync(() => setOpen(true));
@@ -156,6 +163,7 @@ export function AddSection({
   }
   return (
     <form
+      ref={form}
       className="section-name section-name-new"
       onSubmit={(e) => {
         e.preventDefault();

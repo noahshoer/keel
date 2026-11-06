@@ -217,6 +217,22 @@ it("the room for the floating add button is at the end of the page, not between 
   expect(follows(container.querySelector(".add-section-row"))).toBe(true);
 });
 
+it("tapping outside the Add section field closes it and brings the row back, dropping what was typed", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  fireEvent.click(screen.getByText("Add section"));
+  const input = screen.getByPlaceholderText("Name this section, then Enter");
+  fireEvent.change(input, { target: { value: "Garden" } });
+  // Inside it: it stays.
+  fireEvent.click(input);
+  expect(screen.queryByPlaceholderText("Name this section, then Enter")).not.toBeNull();
+  fireEvent.click(container.querySelector(".view-title") as HTMLElement);
+  expect(screen.queryByPlaceholderText("Name this section, then Enter")).toBeNull();
+  expect(container.querySelector(".add-section-row")?.textContent).toBe("Add section");
+  fireEvent.click(screen.getByText("Add section"));
+  expect((screen.getByPlaceholderText("Name this section, then Enter") as HTMLInputElement).value).toBe("");
+  expect(titles(container)).not.toContain("Garden");
+});
+
 it("a filter with two comma groups titles both", async () => {
   const { container } = await show({ kind: "filter", id: "f", name: "Two", query: "p1, today" });
   expect(container.querySelector(".view-sub")?.className).toBe("view-sub mono");
