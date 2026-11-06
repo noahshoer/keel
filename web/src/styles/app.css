@@ -1062,7 +1062,12 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .add-section-r
 .section-more { margin-left: auto; align-self: center; }
 /* The ••• button sets the header's height, so the padding is what's left of the plain header's (22px above the text, 6px below). */
 .section-title.section-row { align-items: center; padding-top: 14px; padding-bottom: 0; }
-.section-rename { padding: 14px 0 6px; }
+/* A new or renamed section's name: borderless, in the header's own type and place, so what's typed lands where its title will be. */
+.section-name { padding: 14px 10px 0; }
+.section-name-new { margin-top: 18px; }
+.section-name-input { display: block; width: 100%; height: 34px; padding: 0; border: none; border-bottom: 1.5px solid var(--accent); border-radius: 0;
+  outline: none; background: none; color: var(--text); font: inherit; font-weight: 650; font-size: 14px; }
+.section-name-input::placeholder { color: var(--muted); font-weight: 400; }
 /* Like "+ Add task", in the accent, under a hairline at the end of the project. */
 .add-section-row { margin-top: 37px; border-top: 1px solid var(--border); border-radius: 0; color: var(--accent-text); font-weight: 500; }
 
@@ -1208,7 +1213,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .add-section-r
   .view-toggle { justify-content: center; width: 44px; height: 44px; padding: 0; margin-right: -12px; }
   .view-toggle svg { width: 24px; height: 24px; }
   .view-toggle-label { display: none; }
-  .section-title { padding-left: 8px; padding-right: 8px; }
+  .section-title, .section-name { padding-left: 8px; padding-right: 8px; }
   .streak-panel { margin-left: 0; }
   /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */
   .editor { padding: 10px 10px 0; }

@@ -121,7 +121,7 @@ it("a section's ••• opens the project's popup; Edit renames it in place", 
   expect(within(popup() as HTMLElement).queryByText("Add section")).toBeNull();
   fireEvent.click(within(popup() as HTMLElement).getByText("Edit"));
   expect(popup()).toBeNull();
-  const input = container.querySelector<HTMLInputElement>(".section-rename input");
+  const input = container.querySelector<HTMLInputElement>(".section-name input");
   expect(document.activeElement).toBe(input);
   fireEvent.change(input as HTMLInputElement, { target: { value: "Weekly" } });
   fireEvent.submit(input as HTMLInputElement);
@@ -144,6 +144,21 @@ it("deleting a section asks first, in the popup", async () => {
   fireEvent.click(within(popup() as HTMLElement).getByText("Delete", { selector: "button.btn-danger" }));
   await waitFor(() => expect(container.querySelector(".section-block")).toBeNull());
   expect(await invoke("list_sections", { project_id: "p-home" })).toEqual([]);
+});
+
+it("the name fields of a new and a renamed section are the header's own style, not a boxed input", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  fireEvent.click(screen.getByText("Add section"));
+  const add = screen.getByPlaceholderText("Name this section, then Enter");
+  expect(add.className).toBe("section-name-input");
+  expect(add.closest("form")?.className).toBe("section-name section-name-new");
+  expect(container.querySelector(".project-input")).toBeNull();
+  fireEvent.keyDown(add, { key: "Escape" });
+  fireEvent.click(screen.getByLabelText("Section actions"));
+  fireEvent.click(within(popup() as HTMLElement).getByText("Edit"));
+  const rename = container.querySelector(".section-name input");
+  expect(rename?.className).toBe("section-name-input");
+  expect(rename?.closest("form")?.className).toBe("section-name");
 });
 
 it("adding a section from the divider", async () => {

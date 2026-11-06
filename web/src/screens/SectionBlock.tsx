@@ -67,10 +67,10 @@ export function SectionBlock({
   return (
     <div className="section-block">
       {mode === "renaming" ? (
-        <form className="section-rename" onSubmit={submit}>
+        <form className="section-name" onSubmit={submit}>
           <input
             ref={input}
-            className="project-input"
+            className="section-name-input"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -156,7 +156,7 @@ export function AddSection({
   }
   return (
     <form
-      className="section-rename"
+      className="section-name section-name-new"
       onSubmit={(e) => {
         e.preventDefault();
         const n = name.trim();
@@ -170,7 +170,7 @@ export function AddSection({
     >
       <input
         ref={input}
-        className="project-input"
+        className="section-name-input"
         placeholder="Name this section, then Enter"
         value={name}
         onChange={(e) => setName(e.target.value)}
