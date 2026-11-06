@@ -136,7 +136,7 @@ export function AddSection({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   // A task dropped on the row waits for its section to be named, then moves into it.
-  const [waiting, setWaiting] = useState<Id | null>(null);
+  const [waiting, setWaiting] = useState<Waiting | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
   const row = useRef<HTMLDivElement>(null);
@@ -160,12 +160,21 @@ export function AddSection({
     const el = row.current;
     if (!el) return;
     const dropped = (e: Event) => {
-      setWaiting((e as CustomEvent<{ taskId: string }>).detail.taskId);
+      const id = (e as CustomEvent<{ taskId: string }>).detail.taskId;
+      setWaiting({ id, title: taskRow(id)?.querySelector(".task-content")?.textContent ?? "" });
       latest.current();
     };
     el.addEventListener(TASK_DROP, dropped);
     return () => el.removeEventListener(TASK_DROP, dropped);
   }, [open]);
+  // The waiting task's own row is marked (an attribute: its component owns its `className`).
+  const waitingId = waiting?.id ?? null;
+  useEffect(() => {
+    if (waitingId === null) return;
+    const el = taskRow(waitingId);
+    el?.setAttribute("data-move-waiting", "");
+    return () => el?.removeAttribute("data-move-waiting");
+  }, [waitingId]);
   useEffect(() => {
     if (!opener) return;
     opener.current = () => latest.current();
@@ -200,7 +209,7 @@ export function AddSection({
         e.preventDefault();
         const n = name.trim();
         if (!n) return;
-        const task = waiting;
+        const task = waiting?.id ?? null;
         const made =
           task === null
             ? addSection(projectId, n)
@@ -226,6 +235,20 @@ export function AddSection({
           }
         }}
       />
+      {waiting !== null ? (
+        <div className="move-preview">
+          <span className="move-preview-check" />
+          <div className="move-preview-body">
+            <div className="move-preview-title">{waiting.title}</div>
+            <div className="move-preview-note">Moves here</div>
+          </div>
+        </div>
+      ) : null}
     </form>
   );
 }
+
+/** A task dropped on Add section: its id, and its title for the copy under the field. */
+type Waiting = { id: Id; title: string };
+
+const taskRow = (id: Id) => document.querySelector(`.task[data-menu-id="${CSS.escape(id)}"]`);

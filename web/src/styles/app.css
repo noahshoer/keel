@@ -424,6 +424,18 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
   max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 12px; border-radius: var(--r-full);
   background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; line-height: 18px; }
 [data-drop-new].drop-target::after { content: "Drop to start a new section"; }
+/* A task dropped on Add section, waiting for the section's name: its row stays dashed, and a dashed copy sits under the field. */
+.task[data-move-waiting] { opacity: .4; outline: 1.5px dashed var(--border-strong); outline-offset: -2px; border-radius: var(--r-card); }
+.move-preview { display: flex; gap: 12px; margin: 12px -16px 0; padding: 12px 16px; border-radius: var(--r-card); border: 1.5px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent); opacity: .85; }
+.move-preview-check { width: 22px; height: 22px; flex: none; border-radius: 50%; border: 2px solid var(--muted); }
+/* The task's own title type, so the copy reads as the task. */
+.move-preview-title { color: var(--text); font-size: 15px; line-height: 21px; font-weight: 500; }
+@media (hover: none) {
+  .move-preview-title { font-size: 17px; line-height: 23px; }
+  .move-preview-check { width: 26px; height: 26px; border-width: 1.75px; }
+}
+.move-preview-note { color: var(--accent-text); font-size: 13px; font-weight: 600; margin-top: 2px; }
 .task-menu { min-width: 232px; }
 .task-menu .menu-item { min-height: 52px; font-size: 17px; }
 .task-menu .menu-icon svg { width: 22px; height: 22px; }

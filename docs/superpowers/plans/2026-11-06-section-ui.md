@@ -51,5 +51,12 @@ Decisions:
   naming the section creates it (`addSectionGetId`) and then moves the task in. Closing
   the field (Escape, a tap outside) drops the wait, and nothing moves. A project with no
   sections has only this zone.
+- While the section is being named, the waiting task shows (option A on the canvas,
+  Noah 2026-11-06): a dashed copy with "Moves here" sits under the field (`.move-preview`,
+  inside the form so a tap on it keeps the field open), and the task's own row stays
+  dashed (`data-move-waiting`). Both go when the field closes or the move is done.
+- Known: after a drop the field has focus but iOS doesn't raise the keyboard (the focus
+  comes from a touchend whose moves were `preventDefault`ed, not a tap). Not yet tried on
+  the phone.
 - A highlighted zone's label (`::after`) is laid over its top edge: a label that took
   room moved the zones below it out from under the finger, which flickered the target.

@@ -302,6 +302,42 @@ it("a field opened by a drop that is closed again leaves the task where it was a
   expect((await allTasks()).find((t) => t.id === "t-groceries")?.section_id).toBeNull();
 });
 
+const waitingCard = (container: HTMLElement) => container.querySelector<HTMLElement>(".move-preview");
+const waitingMark = (container: HTMLElement, id: string) =>
+  container.querySelector(`.task[data-menu-id="${id}"]`)?.hasAttribute("data-move-waiting") ?? false;
+
+it("while the new section is named, a copy of the dropped task waits under the field and the original is marked", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  expect(waitingCard(container)).toBeNull();
+  drop(container.querySelector(".add-section-row"), "t-groceries");
+  expect(waitingCard(container)?.textContent).toContain("Buy groceries");
+  expect(waitingCard(container)?.textContent).toContain("Moves here");
+  // Under the field, inside the form, so a tap on it doesn't close the field.
+  expect(container.querySelector(".section-name-new")?.contains(waitingCard(container))).toBe(true);
+  expect(waitingMark(container, "t-groceries")).toBe(true);
+  const input = screen.getByPlaceholderText("Name the new section, then Enter");
+  fireEvent.change(input, { target: { value: "Garden" } });
+  fireEvent.submit(input);
+  await waitFor(() => expect(titles(container)).toContain("Garden"));
+  expect(waitingCard(container)).toBeNull();
+  expect(waitingMark(container, "t-groceries")).toBe(false);
+});
+
+it("closing the field takes the waiting copy away and unmarks the original", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  drop(container.querySelector(".add-section-row"), "t-groceries");
+  fireEvent.keyDown(screen.getByPlaceholderText("Name the new section, then Enter"), { key: "Escape" });
+  expect(waitingCard(container)).toBeNull();
+  expect(waitingMark(container, "t-groceries")).toBe(false);
+  drop(container.querySelector(".add-section-row"), "t-groceries");
+  fireEvent.click(container.querySelector(".view-title") as HTMLElement);
+  expect(waitingCard(container)).toBeNull();
+  expect(waitingMark(container, "t-groceries")).toBe(false);
+  // A plain Add section has no copy.
+  fireEvent.click(screen.getByText("Add section"));
+  expect(waitingCard(container)).toBeNull();
+});
+
 it("a task is draggable at the top level only, and a project without sections has only Add section to drop on", async () => {
   const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
   const draggable = [...container.querySelectorAll(".task[data-draggable]")].map((t) =>
