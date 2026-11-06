@@ -18,6 +18,7 @@ import { SearchPane } from "../screens/SearchPane";
 import { installKeyboardPrime } from "../shell/keyboardPrime";
 import { Sidebar } from "../shell/Sidebar";
 import { applyTheme, savedTheme, type Theme } from "../shell/theme";
+import { installUnderPage } from "../shell/underPage";
 import { TaskNavProvider } from "../taskview/nav";
 import { useTaskNav } from "../taskview/nav-context";
 import { prune as pruned, top } from "../taskview/stack";
@@ -38,7 +39,16 @@ export function App() {
   const subtasks = useMemo(() => ({ show: showSubtasks, setShow: setShowSubtasks }), [showSubtasks]);
   const [theme, setTheme] = useState<Theme>(savedTheme);
   // Applied and remembered on every change (main.tsx applies the saved one before the first paint).
-  useEffect(() => applyTheme(theme), [theme]);
+  // iOS paints past the page's end (under the keyboard's corners) in the list's color.
+  const underPage = useRef<ReturnType<typeof installUnderPage> | null>(null);
+  useEffect(() => {
+    underPage.current = installUnderPage(document, window);
+    return underPage.current.uninstall;
+  }, []);
+  useEffect(() => {
+    applyTheme(theme);
+    underPage.current?.sync();
+  }, [theme]);
   const { loaded, error } = useLoaded(view, showCompleted, reloadKey);
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   // Kept across visits to the Search view.

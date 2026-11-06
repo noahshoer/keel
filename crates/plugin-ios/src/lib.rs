@@ -1,6 +1,7 @@
 //! What Keel needs from Swift on iOS, and nothing else: the diagnostics log
 //! (`Diag.swift`), keyboard pace (`Keyboard.swift`, which tells the page
-//! through `window.keelKeyboard`), holding the page still under the task view
+//! through `window.keelKeyboard`), the color past the page's end
+//! (`UnderPage.swift`), holding the page still under the task view
 //! (`PageScroll.swift`), and the simulator-check script runner
 //! (`Script.swift`, `KEEL_SCRIPT`). It draws no views. The Liquid Glass
 //! controls are a separate, parked plugin (`tauri-plugin-glass`) that only a
