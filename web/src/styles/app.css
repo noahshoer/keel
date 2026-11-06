@@ -943,6 +943,10 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-field-btn .pri-2, .tv-field-btn .pri-2 .icon { color: var(--p2); }
 .tv-field-btn .pri-3, .tv-field-btn .pri-3 .icon { color: var(--p3); }
 .tv-field-btn.due-chip .icon, .tv-field-btn.due-chip .chip-icon { color: inherit; }
+/* The icons of a colored row follow it (the card's icon rules are more specific, so these repeat them). */
+.tv-field-btn[class*="tv-c-"] .chip-icon:not([class*="pri-"]), .tv-field-btn[class*="tv-c-"] .chip-icon:not([class*="pri-"]) .icon,
+.tv-field-btn[style*="color"] .chip-icon, .tv-field-btn[style*="color"] .chip-icon .icon,
+.tv-field-btn.deadline-chip.urgent .icon { color: inherit; }
 @media (hover: hover) { .tv-field-btn:hover { background: var(--hover); } }
 .tv-pills-wrap { position: relative; margin: -6px 0 16px; --pill-fade: var(--app-bg); }
 .tv-pills-wrap::before, .tv-pills-wrap::after { top: 0; }
