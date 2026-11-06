@@ -6,6 +6,7 @@ import { createPortal, flushSync } from "react-dom";
 import type { EditorValues, Label, Project, Section } from "../bindings";
 import { localToday } from "../clock";
 import { PlusIcon } from "../shell/icons";
+import { isTouch } from "./locale";
 import { addFromEditor } from "./save";
 import { TaskEditor } from "./TaskEditor";
 
@@ -27,6 +28,7 @@ export function AddTask({
   onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [touch] = useState(isTouch);
   const title = useRef<HTMLTextAreaElement>(null);
   // The view's own row also gets a round button floating over the page, in the
   // `.content` that holds the list (a section's row doesn't).
@@ -40,16 +42,22 @@ export function AddTask({
     flushSync(() => setOpen(true));
     title.current?.focus();
   };
+  const rowClass = main ? "add-task-row view-add" : "add-task-row";
+  const rowContent = (
+    <>
+      <span className="plus">
+        <PlusIcon size={14} />
+      </span>
+      Add task
+    </>
+  );
   if (!open) {
     return (
       <>
         {/* biome-ignore lint/a11y/useKeyWithClickEvents: the Dioxus row is a plain div (app.css styles it). */}
         {/* biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI. */}
-        <div className={main ? "add-task-row view-add" : "add-task-row"} onClick={openEditor}>
-          <span className="plus">
-            <PlusIcon size={14} />
-          </span>
-          Add task
+        <div className={rowClass} onClick={openEditor}>
+          {rowContent}
         </div>
         {main ? <span ref={anchor} hidden /> : null}
         {page !== null
@@ -63,7 +71,7 @@ export function AddTask({
       </>
     );
   }
-  return (
+  const editor = (
     <TaskEditor
       initial={defaults}
       projects={projects}
@@ -81,5 +89,17 @@ export function AddTask({
       onChanged={onChanged}
       titleRef={title}
     />
+  );
+  // On touch the card leaves for the keyboard (portaled to body), so its row
+  // stays behind, inert under the dim layer: otherwise the list below would
+  // close up while the card is open and open again when it closes.
+  if (!touch) return editor;
+  return (
+    <>
+      <div className={rowClass} aria-hidden="true">
+        {rowContent}
+      </div>
+      {editor}
+    </>
   );
 }
