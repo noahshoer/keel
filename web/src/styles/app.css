@@ -925,7 +925,12 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-field-btn .tv-streak-stat svg { width: 16px; height: 16px; }
 .tv-field-btn svg { width: 20px; height: 20px; }
 .tv-field-btn .pill-tag, .tv-field-btn .pill-tag .icon { color: inherit; }
-.tv-field-btn.deadline-chip.set, .tv-field-btn.deadline-chip.urgent { color: var(--due-overdue); }
+.tv-field-btn.deadline-chip.urgent { color: var(--due-overdue); }
+/* A row reads in its field's color, as its pill and title highlight do. */
+.tv-field-btn.tv-c-p1 { color: var(--p1); } .tv-field-btn.tv-c-p2 { color: var(--p2-text); } .tv-field-btn.tv-c-p3 { color: var(--p3-text); }
+.tv-field-btn.tv-c-reminder { color: var(--c-reminder); } .tv-field-btn.tv-c-project { color: var(--c-project); }
+.tv-field-btn.tv-c-repeat { color: var(--c-repeat); }
+.tv-field-btn[class*="tv-c-"] .icon, .tv-field-btn[class*="tv-c-"] .chip-icon { color: inherit; }
 .tv-row-icon { display: inline-flex; width: 28px; justify-content: center; color: var(--icon); flex: none; }
 .tv-row .chip-wrap { min-width: 0; }
 .tv-row .chip-wrap:first-child { flex: 0 1 auto; }
