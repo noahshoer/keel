@@ -50,6 +50,7 @@ enum KeyboardPace {
   }
 
   private static func moving(_ n: Notification, up: Bool) {
+    let at = Date().timeIntervalSince1970 * 1000
     windows().forEach(pace)
     let info = n.userInfo ?? [:]
     let dur = info[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0
@@ -62,7 +63,7 @@ enum KeyboardPace {
     // The first keyboard after launch reports a 0 s animation; the page
     // still moves at the usual pace (the last one seen, or iOS's 0.3833 s).
     let secs = dur > 0 || up ? seconds : 0
-    let js = String(format: "window.keelKeyboard?.({ kb: %.1f, secs: %.4f, ease: '%@' })", kb, secs, ease)
+    let js = String(format: "window.keelKeyboard?.({ kb: %.1f, secs: %.4f, ease: '%@', at: %.0f })", kb, secs, ease, at)
     webview?.evaluateJavaScript(js)
     if up && dur > 0 { DispatchQueue.main.async { measure() } }
   }

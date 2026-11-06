@@ -3,6 +3,7 @@
 // view's sheet.
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { log } from "../diag";
 import { KEYBOARD_EVENT, keyboardInset } from "../gestures/sheet-rules";
 import type { Rect } from "./popover";
 
@@ -53,17 +54,38 @@ export function textRoomUnderPicker(
 export type KeyboardState = { inset: number; up: boolean; room: number };
 
 /** The keyboard as Swift reports it starting to move (`window.keelKeyboard`), as `KEYBOARD_EVENT` carries it. */
-export type KeyboardMove = { kb: number; secs: number; ease: string; reduced: boolean };
+export type KeyboardMove = {
+  kb: number;
+  secs: number;
+  ease: string;
+  reduced: boolean;
+  /** When Swift saw the keyboard start (epoch ms), to count the hop to the page. */
+  at?: number;
+};
 
-type Pace = { secs: number; ease: string };
+/** `lead`: how far into its move the card starts, for the time the page lost getting going. */
+type Pace = { secs: number; ease: string; lead: number };
+
+/** A frame for the page to draw the card's first step, on top of the hop from Swift. */
+export const FRAME_LEAD_SECS = 0.02;
+/** The most the card starts ahead for the hop: a stale stamp mustn't throw it forward. */
+const MAX_HOP_SECS = 0.15;
+
+/** How far ahead of the keyboard the card starts: the hop from Swift (`at`, until `now`) and a frame. None under reduced motion. */
+export function leadOf(m: KeyboardMove, now: number): number {
+  if (m.reduced) return 0;
+  const hop = m.at === undefined ? 0 : Math.min(Math.max((now - m.at) / 1000, 0), MAX_HOP_SECS);
+  return hop + FRAME_LEAD_SECS;
+}
 
 /** The first keyboard after launch comes with no pace (iOS reports 0 s): the pace of every other one, 10% slower than iOS. */
 export const FALLBACK_SECS = 0.426;
 
 /** How long a move takes and its curve: the keyboard's own, `FALLBACK_SECS` when iOS gave none, none under reduced motion. */
-export function paceOf(m: KeyboardMove): Pace {
-  if (m.reduced) return { secs: 0, ease: m.ease };
-  return { secs: m.secs > 0 ? m.secs : FALLBACK_SECS, ease: m.ease };
+export function paceOf(m: KeyboardMove, now: number = Date.now()): Pace {
+  const lead = leadOf(m, now);
+  if (m.reduced) return { secs: 0, ease: m.ease, lead };
+  return { secs: m.secs > 0 ? m.secs : FALLBACK_SECS, ease: m.ease, lead };
 }
 
 /**
@@ -73,7 +95,8 @@ export function paceOf(m: KeyboardMove): Pace {
  */
 export function riseTransition(pace: Pace): string | null {
   if (pace.secs <= 0) return null;
-  return `transform ${pace.secs}s ${pace.ease}`;
+  // A negative delay starts it that far in.
+  return `transform ${pace.secs}s ${pace.ease} ${pace.lead > 0 ? `-${pace.lead}s` : "0s"}`;
 }
 
 /**
@@ -149,6 +172,9 @@ export function useKeyboard(enabled: boolean, paced = false): KeyboardState {
     const onMove = (e: Event) => {
       const m = (e as CustomEvent<KeyboardMove>).detail;
       const pace = paceOf(m);
+      log(
+        `card follows kb ${m.kb} hop ${m.at === undefined ? "?" : Date.now() - m.at}ms lead ${pace.lead.toFixed(3)}s`,
+      );
       held.current = m.kb > 0 ? { kb: m.kb, until: Date.now() + pace.secs * 1000 + 500 } : null;
       const card = document.querySelector<HTMLElement>(".editor.on-keyboard");
       const from = card?.getBoundingClientRect().bottom;

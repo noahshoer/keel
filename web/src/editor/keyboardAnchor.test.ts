@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KEYBOARD_EVENT, keyboardInset } from "../gestures/sheet-rules";
 import {
   FALLBACK_SECS,
+  FRAME_LEAD_SECS,
+  leadOf,
   nextHeld,
   paceOf,
   placeAboveCard,
@@ -126,17 +128,41 @@ describe("the pace of a keyboard move", () => {
     expect(paceOf({ kb: 328, secs: 0.38, ease: "ease", reduced: false })).toEqual({
       secs: 0.38,
       ease: "ease",
+      lead: FRAME_LEAD_SECS,
     });
     expect(paceOf({ kb: 328, secs: 0, ease: "ease", reduced: false })).toEqual({
       secs: FALLBACK_SECS,
       ease: "ease",
+      lead: FRAME_LEAD_SECS,
     });
-    expect(paceOf({ kb: 328, secs: 0.38, ease: "ease", reduced: true })).toEqual({ secs: 0, ease: "ease" });
+    expect(paceOf({ kb: 328, secs: 0.38, ease: "ease", reduced: true })).toEqual({
+      secs: 0,
+      ease: "ease",
+      lead: 0,
+    });
   });
 
   it("moves the card by transform (the compositor's, as the sheet's), or not at all", () => {
-    expect(riseTransition({ secs: 0.4, ease: "ease" })).toBe("transform 0.4s ease");
-    expect(riseTransition({ secs: 0, ease: "ease" })).toBeNull();
+    expect(riseTransition({ secs: 0.4, ease: "ease", lead: 0 })).toBe("transform 0.4s ease 0s");
+    expect(riseTransition({ secs: 0, ease: "ease", lead: 0 })).toBeNull();
+  });
+
+  it("starts ahead by what the page lost: the hop from Swift and a frame to draw", () => {
+    expect(riseTransition({ secs: 0.4, ease: "ease", lead: 0.05 })).toBe("transform 0.4s ease -0.05s");
+    const at = 1_000_000;
+    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: false, at }, at + 12)).toBeCloseTo(
+      0.012 + FRAME_LEAD_SECS,
+    );
+    // No stamp, a clock that is behind, or a hop that long: only the frame.
+    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: false }, at)).toBe(FRAME_LEAD_SECS);
+    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: false, at: at + 500 }, at)).toBe(
+      FRAME_LEAD_SECS,
+    );
+    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: false, at }, at + 900)).toBeCloseTo(
+      0.15 + FRAME_LEAD_SECS,
+    );
+    // Reduced motion doesn't move at all.
+    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: true, at }, at + 12)).toBe(0);
   });
 });
 
@@ -209,7 +235,7 @@ describe("useKeyboard with the pace", () => {
     expect(stages).toEqual([
       "transition=none",
       "transform=translateY(328px)",
-      "transition=transform 0.4s ease",
+      "transition=transform 0.4s ease -0.02s",
       "transform=",
     ]);
     // Back to plain once the move is over.
