@@ -896,6 +896,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .tv-grow > * { grid-area: 1 / 1; font: inherit; line-height: inherit; padding: 0; margin: 0; white-space: pre-wrap;
   overflow-wrap: anywhere; }
 .tv-grow-mirror { visibility: hidden; }
+.tv-grow-marks { color: transparent; pointer-events: none; user-select: none; }
 .tv-grow textarea { resize: none; overflow: hidden; border: none; outline: none; background: transparent; color: var(--text); }
 .tv-grow textarea::placeholder { color: var(--muted); }
 .tv-title { font-size: 24px; font-weight: 700; line-height: 29px; min-width: 0; overflow-wrap: anywhere; }
