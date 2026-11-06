@@ -192,6 +192,13 @@ export function keyboardExpands(detent: Detent, width: number, kb: number): bool
 }
 
 /**
+ * Announced on `window` (as a `CustomEvent` whose detail is the keyboard's move)
+ * each time the keyboard starts to move, for what follows it besides the sheet:
+ * the task card.
+ */
+export const KEYBOARD_EVENT = "keel-keyboard";
+
+/**
  * How far up the keyboard keeps the sheet's bottom (`--kb`), from the layout
  * height and the visual viewport. While a keyboard is still coming up (`held`,
  * its height) the viewport hasn't resized yet, so the held height stands in;

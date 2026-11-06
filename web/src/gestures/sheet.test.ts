@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { currentPlatform } from "../shell/platform";
 import { setWidth, touch } from "../test/touch";
 import { installSheet, slideClose } from "./sheet";
+import { KEYBOARD_EVENT } from "./sheet-rules";
 
 vi.mock("../shell/platform", () => ({ currentPlatform: vi.fn(() => "touch") }));
 
@@ -207,6 +208,19 @@ describe("keelKeyboard", () => {
     expect(el("card").style.transition).toBe("transform 0.25s ease");
     window.keelKeyboard?.({ kb: 0, secs: 0, ease: "ease" });
     expect(el("card").style.transition).toBe("none");
+  });
+
+  it("announces each move on the window, for the task card to follow", () => {
+    const seen: unknown[] = [];
+    const on = (e: Event) => seen.push((e as CustomEvent).detail);
+    window.addEventListener(KEYBOARD_EVENT, on);
+    window.keelKeyboard?.({ kb: 328, secs: 0.25, ease: "ease" });
+    window.keelKeyboard?.({ kb: 0, secs: 0.25, ease: "ease" });
+    window.removeEventListener(KEYBOARD_EVENT, on);
+    expect(seen).toEqual([
+      { kb: 328, secs: 0.25, ease: "ease", reduced: false },
+      { kb: 0, secs: 0.25, ease: "ease", reduced: false },
+    ]);
   });
 
   it("does nothing elsewhere", () => {

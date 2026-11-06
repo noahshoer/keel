@@ -31,6 +31,7 @@ import {
   edgeBackCommits,
   edgeOffset,
   holdsScroll,
+  KEYBOARD_EVENT,
   keyboardExpands,
   keyboardInset,
   SETTLE_S,
@@ -383,6 +384,7 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
   const keyboard = ({ kb, secs, ease }: KeyboardMove) => {
     if (!touchDevice()) return;
     log(`keelKeyboard kb ${kb} secs ${secs} ease ${ease}`);
+    win.dispatchEvent(new CustomEvent(KEYBOARD_EVENT, { detail: { kb, secs, ease, reduced: reduce() } }));
     const sheet = sheetEl();
     const s = reduce() ? 0 : secs;
     kbHold = kb > 0 ? { kb, until: win.performance.now() + s * 1000 + 500 } : null;

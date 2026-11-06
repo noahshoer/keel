@@ -1,6 +1,16 @@
-import { describe, expect, it } from "vitest";
-import { keyboardInset } from "../gestures/sheet-rules";
-import { nextHeld, placeAboveCard, textRoomUnderPicker } from "./keyboardAnchor";
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { KEYBOARD_EVENT, keyboardInset } from "../gestures/sheet-rules";
+import {
+  FALLBACK_SECS,
+  nextHeld,
+  paceOf,
+  placeAboveCard,
+  readKeyboard,
+  slideTransition,
+  textRoomUnderPicker,
+  useKeyboard,
+} from "./keyboardAnchor";
 import type { Rect } from "./popover";
 
 const rect = (left: number, top: number, width: number, height: number): Rect => ({
@@ -91,5 +101,99 @@ describe("nextHeld", () => {
 
   it("holds nothing when nothing asks it to", () => {
     expect(nextHeld(null, LETTERS, false, true)).toBeNull();
+  });
+});
+
+describe("the keyboard as the card reads it", () => {
+  it("is the viewport's, with no keyboard still coming up", () => {
+    expect(readKeyboard(844, 0, 844, null)).toEqual({ inset: 0, up: false, room: 844, slide: null });
+    expect(readKeyboard(844, 0, 544, null)).toEqual({ inset: 300, up: true, room: 544, slide: null });
+  });
+
+  it("is the held height while the viewport hasn't resized: up, with the room left above it", () => {
+    expect(readKeyboard(844, 0, 844, 328)).toEqual({ inset: 328, up: true, room: 516, slide: null });
+  });
+
+  it("goes back to the viewport once it has resized", () => {
+    expect(readKeyboard(844, 0, 516, 328)).toEqual({ inset: 328, up: true, room: 516, slide: null });
+    expect(readKeyboard(844, 20, 500, 328)).toEqual({ inset: 324, up: true, room: 500, slide: null });
+  });
+});
+
+describe("the pace of a keyboard move", () => {
+  it("is the keyboard's own, a default when iOS reports none, and none under reduced motion", () => {
+    expect(paceOf({ kb: 328, secs: 0.38, ease: "ease", reduced: false })).toEqual({
+      secs: 0.38,
+      ease: "ease",
+    });
+    expect(paceOf({ kb: 328, secs: 0, ease: "ease", reduced: false })).toEqual({
+      secs: FALLBACK_SECS,
+      ease: "ease",
+    });
+    expect(paceOf({ kb: 328, secs: 0.38, ease: "ease", reduced: true })).toEqual({ secs: 0, ease: "ease" });
+  });
+
+  it("moves the card's bottom and its margin together, or not at all", () => {
+    expect(slideTransition({ secs: 0.4, ease: "ease" })).toBe("bottom 0.4s ease, margin-bottom 0.4s ease");
+    expect(slideTransition({ secs: 0, ease: "ease" })).toBeNull();
+  });
+});
+
+describe("useKeyboard with the pace", () => {
+  const send = (detail: object) =>
+    act(() => window.dispatchEvent(new CustomEvent(KEYBOARD_EVENT, { detail })));
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    Object.defineProperty(document.documentElement, "clientHeight", { value: 844, configurable: true });
+    const vv = Object.assign(new EventTarget(), { offsetTop: 0, height: 844, scale: 1 });
+    vi.stubGlobal("visualViewport", vv);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("sits on the keyboard at once, slides at its pace, and lets the viewport take over", () => {
+    const { result } = renderHook(() => useKeyboard(true, true));
+    expect(result.current).toMatchObject({ inset: 0, up: false, slide: null });
+    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
+    expect(result.current).toMatchObject({
+      inset: 328,
+      up: true,
+      slide: "bottom 0.4s ease, margin-bottom 0.4s ease",
+    });
+    // The move over, the card moves with the viewport again, at once.
+    act(() => {
+      vi.advanceTimersByTime(451);
+    });
+    expect(result.current.slide).toBeNull();
+    expect(result.current.inset).toBe(328);
+  });
+
+  it("goes down with the keyboard", () => {
+    const { result } = renderHook(() => useKeyboard(true, true));
+    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
+    (window.visualViewport as unknown as { height: number }).height = 516;
+    act(() => window.visualViewport?.dispatchEvent(new Event("resize")));
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(result.current.inset).toBe(328);
+    send({ kb: 0, secs: 0.4, ease: "ease", reduced: false });
+    (window.visualViewport as unknown as { height: number }).height = 844;
+    act(() => window.visualViewport?.dispatchEvent(new Event("resize")));
+    expect(result.current).toMatchObject({
+      inset: 0,
+      up: false,
+      slide: "bottom 0.4s ease, margin-bottom 0.4s ease",
+    });
+  });
+
+  it("ignores the move when not paced (the drawer's)", () => {
+    const { result } = renderHook(() => useKeyboard(true));
+    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
+    expect(result.current).toMatchObject({ inset: 0, up: false, slide: null });
   });
 });

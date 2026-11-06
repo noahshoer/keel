@@ -125,7 +125,7 @@ export function TaskEditor({
   const [values, setValues] = useState(initial);
   const [open, setOpen] = useState<Pop>(null);
   const [touch] = useState(isTouch);
-  const keyboard = useHeldKeyboard(useKeyboard(touch), open === "streak-goal");
+  const keyboard = useHeldKeyboard(useKeyboard(touch, true), open === "streak-goal");
   useEffect(() => (touch ? holdPage() : undefined), [touch]);
   const ownTitle = useRef<HTMLTextAreaElement>(null);
   const title = titleRef ?? ownTitle;
@@ -343,7 +343,12 @@ export function TaskEditor({
       )}
       style={
         touch
-          ? ({ bottom: keyboard.inset + CARD_GAP, "--card-room": `${keyboard.room}px` } as CSSProperties)
+          ? ({
+              bottom: keyboard.inset + CARD_GAP,
+              "--card-room": `${keyboard.room}px`,
+              // Rises and falls with the keyboard (and only then).
+              transition: keyboard.slide ?? undefined,
+            } as CSSProperties)
           : undefined
       }
       // Pressing anything but a text field keeps the title focused, so the keyboard stays up.

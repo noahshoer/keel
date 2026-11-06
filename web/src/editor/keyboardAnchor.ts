@@ -2,7 +2,7 @@
 // the keyboard reaches is sheet-rules' `keyboardInset`, shared with the task
 // view's sheet.
 import { useEffect, useRef, useState } from "react";
-import { keyboardInset } from "../gestures/sheet-rules";
+import { KEYBOARD_EVENT, keyboardInset } from "../gestures/sheet-rules";
 import type { Rect } from "./popover";
 
 const MARGIN = 8;
@@ -48,36 +48,108 @@ export function textRoomUnderPicker(
   return Math.max(MIN_TEXT, Math.min(MAX_TEXT, left));
 }
 
-/** `room` is the height of what's visible, which the task card has to fit in. */
-export type KeyboardState = { inset: number; up: boolean; room: number };
+/**
+ * `room` is the height of what's visible, which the task card has to fit in.
+ * `slide` is the transition for the card's move while the keyboard is
+ * moving, `null` otherwise.
+ */
+export type KeyboardState = { inset: number; up: boolean; room: number; slide: string | null };
+
+/** The keyboard as Swift reports it starting to move (`window.keelKeyboard`), as `KEYBOARD_EVENT` carries it. */
+export type KeyboardMove = { kb: number; secs: number; ease: string; reduced: boolean };
+
+/** The first keyboard after launch comes with no pace (iOS reports 0 s): the pace of every other one, 10% slower than iOS. */
+export const FALLBACK_SECS = 0.426;
+
+/** How long a move takes and its curve: the keyboard's own, `FALLBACK_SECS` when iOS gave none, none under reduced motion. */
+export function paceOf(m: KeyboardMove): { secs: number; ease: string } {
+  if (m.reduced) return { secs: 0, ease: m.ease };
+  return { secs: m.secs > 0 ? m.secs : FALLBACK_SECS, ease: m.ease };
+}
+
+/** The card's bottom and its margin moving together at `pace`; `null` when it doesn't move. */
+export function slideTransition(pace: { secs: number; ease: string }): string | null {
+  if (pace.secs <= 0) return null;
+  return `bottom ${pace.secs}s ${pace.ease}, margin-bottom ${pace.secs}s ${pace.ease}`;
+}
 
 /** Whether the visible area is shorter than the page: the keyboard is up. */
 export function keyboardUp(v: VisualViewport): boolean {
   return v.height < document.documentElement.clientHeight - 0.5;
 }
 
-function read(): KeyboardState {
-  const v = window.visualViewport;
-  if (!v) return { inset: 0, up: false, room: innerHeight };
-  const clientH = document.documentElement.clientHeight;
-  return { inset: keyboardInset(clientH, v.offsetTop, v.height, null), up: keyboardUp(v), room: v.height };
+/**
+ * The keyboard from the layout height and the visual viewport. While one is
+ * still coming up (`held`, its height) the viewport hasn't resized: the card
+ * already counts as on the keyboard, with the room left above it.
+ */
+export function readKeyboard(
+  clientH: number,
+  vvTop: number,
+  vvH: number,
+  held: number | null,
+): KeyboardState {
+  const inset = keyboardInset(clientH, vvTop, vvH, held);
+  const resized = vvH < clientH - 0.5;
+  if (held !== null && !resized) return { inset, up: true, room: vvH - inset, slide: null };
+  return { inset, up: resized, room: vvH, slide: null };
 }
 
-/** The keyboard's reach while `enabled`, updated as the visual viewport moves. */
-export function useKeyboard(enabled: boolean): KeyboardState {
+/**
+ * The keyboard's reach while `enabled`, updated as the visual viewport moves.
+ * `paced` (the task card) also follows the keyboard's own start, which comes
+ * about 420 ms before the viewport resizes: the inset is its height at once,
+ * moving at its pace (`slide`), until the viewport has caught up.
+ */
+export function useKeyboard(enabled: boolean, paced = false): KeyboardState {
+  const held = useRef<{ kb: number; until: number } | null>(null);
+  const slide = useRef<string | null>(null);
+  const read = (): KeyboardState => {
+    const v = window.visualViewport;
+    if (!v) return { inset: 0, up: false, room: innerHeight, slide: null };
+    const kb = held.current !== null && Date.now() < held.current.until ? held.current.kb : null;
+    return {
+      ...readKeyboard(document.documentElement.clientHeight, v.offsetTop, v.height, kb),
+      slide: slide.current,
+    };
+  };
   const [state, setState] = useState<KeyboardState>(read);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `read` only reads refs and the window.
   useEffect(() => {
     const v = window.visualViewport;
     if (!enabled || !v) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const update = () => setState(read());
+    const onMove = (e: Event) => {
+      const m = (e as CustomEvent<KeyboardMove>).detail;
+      const pace = paceOf(m);
+      held.current = m.kb > 0 ? { kb: m.kb, until: Date.now() + pace.secs * 1000 + 500 } : null;
+      slide.current = slideTransition(pace);
+      clearTimeout(timer);
+      if (slide.current !== null) {
+        timer = setTimeout(
+          () => {
+            slide.current = null;
+            update();
+          },
+          pace.secs * 1000 + 50,
+        );
+      }
+      update();
+    };
     update();
     v.addEventListener("resize", update);
     v.addEventListener("scroll", update);
+    if (paced) window.addEventListener(KEYBOARD_EVENT, onMove);
     return () => {
+      clearTimeout(timer);
+      held.current = null;
+      slide.current = null;
       v.removeEventListener("resize", update);
       v.removeEventListener("scroll", update);
+      window.removeEventListener(KEYBOARD_EVENT, onMove);
     };
-  }, [enabled]);
+  }, [enabled, paced]);
   return state;
 }
 
