@@ -5,6 +5,7 @@
 // glass buttons; the header's menu button opens the drawer.
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { localToday } from "../clock";
+import { installDrag } from "../gestures/drag";
 import { installLongPress } from "../gestures/long-press";
 import { installSheet } from "../gestures/sheet";
 import { drawerSwipe } from "../gestures/sheet-rules";
@@ -47,6 +48,7 @@ export function App() {
 
   // Touch: a long press shows a row's actions.
   useEffect(() => installLongPress(document), []);
+  useEffect(() => installDrag(document, window), []);
   // Touch: swipe right opens the drawer, swipe left closes it. Installed
   // once, so the handler reads the drawer through a ref.
   const drawerNow = useRef(drawer);

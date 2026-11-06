@@ -10,6 +10,7 @@ import { blankValues, cards } from "../core";
 import { AddTask } from "../editor/AddTask";
 import { addSection, deleteSection, renameSection } from "../ipc/actions";
 import { CardList } from "../lists/CardList";
+import { DropZone } from "../lists/DropZone";
 import { locationsOf } from "../lists/rowLayout";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
 import { useCloseOnClickOutside } from "../shell/clickOutside";
@@ -66,7 +67,13 @@ export function SectionBlock({
   };
 
   return (
-    <div className="section-block">
+    <DropZone
+      className="section-block"
+      project={section.project_id}
+      section={section.id}
+      name={section.name}
+      onChanged={onChanged}
+    >
       {mode === "renaming" ? (
         <form className="section-name" onSubmit={submit}>
           <input
@@ -108,7 +115,7 @@ export function SectionBlock({
         labels={loaded.labels}
         onChanged={onChanged}
       />
-    </div>
+    </DropZone>
   );
 }
 

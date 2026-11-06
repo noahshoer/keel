@@ -224,6 +224,9 @@ export function TaskRow({
       ref={root}
       className={menu || moving || held ? `${PHASE_CLASS[phase]} lifted` : PHASE_CLASS[phase]}
       data-menu-id={task.id}
+      data-project={task.project_id}
+      data-section={task.section_id ?? ""}
+      data-draggable={task.parent_id === null ? "" : undefined}
     >
       <div className="task-row">
         <button

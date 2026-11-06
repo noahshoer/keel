@@ -23,6 +23,7 @@ import { blankValues, cards, dateGroups } from "../core";
 import { AddTask } from "../editor/AddTask";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
+import { DropZone } from "../lists/DropZone";
 import { LocationsContext } from "../lists/locations";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
@@ -239,10 +240,26 @@ export function MainPane({
       </>
     );
   } else {
-    body = (
+    const unsectionedBlock = (
       <>
         {list(unsectioned)}
         {addRow}
+      </>
+    );
+    body = (
+      <>
+        {projectId !== null && projectSections.length > 0 ? (
+          <DropZone
+            project={projectId}
+            section={null}
+            name={loaded.projects.find((p) => p.id === projectId)?.name ?? "Inbox"}
+            onChanged={onChanged}
+          >
+            {unsectionedBlock}
+          </DropZone>
+        ) : (
+          unsectionedBlock
+        )}
         {projectSections.map((section) => (
           <SectionBlock
             key={section.id}

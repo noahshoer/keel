@@ -4,6 +4,7 @@ import { beforeAll, expect, it, vi } from "vitest";
 import { useLoaded } from "../app/load";
 import type { View } from "../app/view";
 import { localToday } from "../clock";
+import { TASK_DROP } from "../gestures/drag";
 import { ROW_PRESS } from "../gestures/long-press";
 import { invoke } from "../ipc/invoke";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
@@ -231,6 +232,50 @@ it("tapping outside the Add section field closes it and brings the row back, dro
   fireEvent.click(screen.getByText("Add section"));
   expect((screen.getByPlaceholderText("Name this section, then Enter") as HTMLInputElement).value).toBe("");
   expect(titles(container)).not.toContain("Garden");
+});
+
+const drop = (zone: Element | null, taskId: string) =>
+  act(() => {
+    zone?.dispatchEvent(new CustomEvent(TASK_DROP, { bubbles: true, detail: { taskId } }));
+  });
+
+it("a project's sections and its unsectioned tasks are drop zones that move a task in and out", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const zones = [...container.querySelectorAll("[data-drop-zone]")];
+  expect(
+    zones.map((z) => [
+      z.getAttribute("data-drop-project"),
+      z.getAttribute("data-drop-section"),
+      z.getAttribute("data-drop-name"),
+    ]),
+  ).toEqual([
+    ["p-home", "", "Home"],
+    ["p-home", "s-chores", "Chores"],
+  ]);
+  drop(zones[1] ?? null, "t-groceries");
+  await waitFor(async () => {
+    const t = (await allTasks()).find((x) => x.id === "t-groceries");
+    expect(t?.section_id).toBe("s-chores");
+  });
+  await waitFor(() =>
+    expect(container.querySelector(".section-block")?.textContent).toContain("Buy groceries"),
+  );
+  drop(container.querySelectorAll("[data-drop-zone]")[0] ?? null, "t-groceries");
+  await waitFor(async () => {
+    const t = (await allTasks()).find((x) => x.id === "t-groceries");
+    expect(t?.section_id).toBeNull();
+  });
+});
+
+it("a task is draggable at the top level only, and a project without sections has no zones", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const draggable = [...container.querySelectorAll(".task[data-draggable]")].map((t) =>
+    t.getAttribute("data-menu-id"),
+  );
+  expect(draggable).toContain("t-groceries");
+  expect(draggable).not.toContain("t-sheets");
+  const none = await show({ kind: "project", id: "p-trip", name: "Trip" });
+  expect(none.container.querySelector("[data-drop-zone]")).toBeNull();
 });
 
 it("a filter with two comma groups titles both", async () => {
