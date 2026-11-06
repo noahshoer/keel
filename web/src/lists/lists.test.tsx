@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import type { CardRow, Label, Reminder, Task } from "../bindings";
 import { localToday } from "../clock";
+import { ROW_PRESS } from "../gestures/long-press";
 import * as fx from "../ipc/fixtures";
 import { invoke } from "../ipc/invoke";
 import { TaskNavProvider } from "../taskview/nav";
@@ -458,4 +459,60 @@ it("a completed row's body opens its task", () => {
   );
   fireEvent.click(container.querySelector(".task-body") as HTMLElement);
   expect(opened()).toBe("t-done|");
+});
+
+const press = (container: HTMLElement) =>
+  act(() => {
+    container.querySelector(".task")?.dispatchEvent(new Event(ROW_PRESS));
+  });
+const taskMenu = () => {
+  const menu = document.body.querySelector<HTMLElement>(".task-menu");
+  return menu === null ? null : within(menu);
+};
+
+it("a long press lifts the row and opens its menu: add sub-task, delete", () => {
+  const { container } = renderRow(fixture("t-laundry"));
+  expect(taskMenu()).toBeNull();
+  press(container);
+  expect(taskEl(container)?.classList.contains("lifted")).toBe(true);
+  expect(taskMenu()?.getByText("Add sub-task")).toBeTruthy();
+  expect(taskMenu()?.getByText("Delete").closest(".menu-item")?.classList.contains("danger")).toBe(true);
+  // Streak is for repeating tasks.
+  expect(taskMenu()?.queryByText("Streak")).toBeNull();
+});
+
+it("the menu's Add sub-task opens the task's sub-task editor and closes the menu", () => {
+  const { container } = renderRow(fixture("t-laundry"));
+  press(container);
+  fireEvent.click(taskMenu()?.getByText("Add sub-task") as HTMLElement);
+  expect(opened()).toBe("t-laundry|add");
+  expect(taskMenu()).toBeNull();
+  expect(taskEl(container)?.classList.contains("lifted")).toBe(false);
+});
+
+it("a repeating task's menu has Streak, which opens the streak panel", () => {
+  const task = fixture("t-laundry");
+  if (task.due) task.due.is_recurring = true;
+  const { container } = renderRow(task);
+  press(container);
+  fireEvent.click(taskMenu()?.getByText("Streak") as HTMLElement);
+  expect(container.querySelector(".streak-panel")).not.toBeNull();
+  expect(taskMenu()).toBeNull();
+});
+
+it("the menu's Delete deletes the task", async () => {
+  const { container, onChanged } = renderRow(fixture("t-groceries"));
+  press(container);
+  fireEvent.click(taskMenu()?.getByText("Delete") as HTMLElement);
+  await tick(0);
+  expect((await invoke("all_tasks", {})).map((t) => t.id)).not.toContain("t-groceries");
+  expect(onChanged).toHaveBeenCalled();
+});
+
+it("Escape closes the menu and puts the row back", () => {
+  const { container } = renderRow(fixture("t-laundry"));
+  press(container);
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(taskMenu()).toBeNull();
+  expect(taskEl(container)?.classList.contains("lifted")).toBe(false);
 });

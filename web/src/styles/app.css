@@ -404,6 +404,12 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
    a hover reveal on iPhone would cost every tap on a task an extra tap. */
 @media (hover: hover) { .task:hover .task-actions { opacity: 1; transform: none; pointer-events: auto; } }
 .task.pressed .task-actions, .task-actions:focus-within { opacity: 1; transform: none; pointer-events: auto; }
+/* A long-pressed task: lifted out of a dimmed page (the huge shadow dims what's around it), with its menu beside it. */
+.task.lifted { z-index: 2; box-shadow: 0 0 0 100vmax rgba(0,0,0,.55); }
+.task.lifted .task-actions { opacity: 0; pointer-events: none; }
+.task-menu { min-width: 232px; }
+.task-menu .menu-item { min-height: 52px; font-size: 17px; }
+.task-menu .menu-icon svg { width: 22px; height: 22px; }
 /* Three columns: each stat's number or field over its name (`column-reverse`,
    so the name still reads first), the rest of the panel below them, centered. */
 .streak-panel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; margin: 2px 0 10px 40px;
