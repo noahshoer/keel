@@ -1085,6 +1085,8 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 .section-name-input::placeholder { color: var(--muted); font-weight: 400; }
 /* Like "+ Add task", in the accent, under a hairline at the end of the project. */
 .add-section-row { margin-top: 37px; border-top: 1px solid var(--border); border-radius: 0; color: var(--accent-text); font-weight: 500; }
+/* A task dragged over it: the zone is a rounded box like the others, with no hairline across it. */
+.add-section-row.drop-target { border-radius: var(--r-card); border-top-color: transparent; }
 
 /* Filters */
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace; font-size: 12px; }

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { installDrag, TASK_DROP } from "./drag";
-import { ROW_DRAG, ROW_HOLD } from "./long-press";
+import { ROW_DRAG, ROW_HOLD, ROW_PRESS } from "./long-press";
 
 let uninstall: () => void;
 let hit: { y: number };
@@ -77,6 +77,13 @@ it("a held task that has moved past the slop is dragged: its ghost follows and t
   const g = ghost() as HTMLElement;
   expect(g.style.left).toBe("40px");
   expect(g.style.top).toBe("160px");
+});
+
+it("once the task's menu is open the held finger no longer drags it", () => {
+  hold();
+  el("task").dispatchEvent(new Event(ROW_PRESS, { bubbles: true }));
+  touch("touchmove", 80, 400);
+  expect(ghost()).toBeNull();
 });
 
 it("only a top-level task, and only on a page with somewhere to drop, can be dragged", () => {

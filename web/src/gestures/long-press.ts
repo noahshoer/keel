@@ -1,13 +1,16 @@
 // Long press on a task row, a section's header or a sidebar row (touch only). A
 // section's header or a sidebar row is sent `ROW_PRESS` when held, which opens its
 // menu. A task is sent `ROW_HOLD` when held and lifts; `ROW_PRESS` (its menu,
-// `TaskMenu`) comes when the finger lifts, unless the task was dragged meanwhile
+// `TaskMenu`) comes half a second later if the finger hasn't started to move, or
+// when it lifts, unless the task was dragged meanwhile
 // (`ROW_DRAG`, sent by `drag.ts`) or the touch was cancelled. A right click sends
 // `ROW_PRESS` at once (crates/ui/src/gestures.rs `LONG_PRESS_JS`, without the glass menu,
 // which is parked). A sidebar row is highlighted only while the finger is down.
 // A plain tap opens the row, as on desktop; hover reveals are mouse-only (app.css).
 
 const HOLD_MS = 450;
+/** A held task that hasn't started to move this long after it lifted gets its menu, finger still down. */
+export const MENU_DELAY_MS = 500;
 const SLOP = 10;
 const ROWS = ".task-row, .nav-item, .section-row";
 const ACTIONS = ".task-actions, .row-menu";
@@ -30,6 +33,11 @@ export function installLongPress(doc: Document): () => void {
   let pressedAt = 0;
   // The task that was held and whose finger is still down.
   let held: Element | null = null;
+  let menuTimer: ReturnType<typeof setTimeout> | null = null;
+  const stopMenu = () => {
+    if (menuTimer !== null) clearTimeout(menuTimer);
+    menuTimer = null;
+  };
   const clear = () => {
     for (const t of doc.querySelectorAll(".pressed")) t.classList.remove("pressed");
   };
@@ -39,6 +47,7 @@ export function installLongPress(doc: Document): () => void {
   };
   const lift = () => {
     stop();
+    stopMenu();
     for (const t of doc.querySelectorAll(".nav-item.pressed")) t.classList.remove("pressed");
     if (held) {
       const task = held;
@@ -68,6 +77,14 @@ export function installLongPress(doc: Document): () => void {
       if (task) {
         held = task;
         task.dispatchEvent(new CustomEvent(ROW_HOLD, { bubbles: true, detail: { ...origin } }));
+        // Not moving: the menu now, not when the finger lifts.
+        stopMenu();
+        menuTimer = setTimeout(() => {
+          menuTimer = null;
+          if (held !== task) return;
+          held = null;
+          task.dispatchEvent(new Event(ROW_PRESS, { bubbles: true }));
+        }, MENU_DELAY_MS);
       } else {
         if (row.matches(".nav-item")) row.classList.add("pressed");
         row.dispatchEvent(new Event(ROW_PRESS));
@@ -96,6 +113,7 @@ export function installLongPress(doc: Document): () => void {
 
   const onDrag = () => {
     held = null;
+    stopMenu();
   };
   const onCancel = () => {
     if (!held) return lift();
@@ -115,6 +133,7 @@ export function installLongPress(doc: Document): () => void {
   doc.addEventListener("contextmenu", onMenu);
   return () => {
     stop();
+    stopMenu();
     doc.removeEventListener("touchstart", onStart);
     doc.removeEventListener("touchmove", onMove);
     doc.removeEventListener("touchend", lift);

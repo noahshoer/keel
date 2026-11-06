@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { installLongPress, ROW_DRAG, ROW_HOLD, ROW_PRESS, ROW_RELEASE } from "./long-press";
+import { installLongPress, MENU_DELAY_MS, ROW_DRAG, ROW_HOLD, ROW_PRESS, ROW_RELEASE } from "./long-press";
 
 let uninstall: () => void;
 
@@ -53,6 +53,47 @@ it("a 450 ms hold lifts the task, and the menu comes when the finger lifts", () 
   const event = held.mock.calls[0]?.[0] as CustomEvent | undefined;
   expect(event?.detail).toEqual({ x: 10, y: 10 });
   expect(el("task").classList.contains("pressed")).toBe(false);
+});
+
+it("a held task that hasn't started to move in half a second gets its menu, finger still down", () => {
+  const pressed = vi.fn();
+  el("task").addEventListener(ROW_PRESS, pressed);
+  touch("touchstart", el("body"));
+  vi.advanceTimersByTime(450);
+  vi.advanceTimersByTime(MENU_DELAY_MS - 1);
+  expect(pressed).not.toHaveBeenCalled();
+  vi.advanceTimersByTime(1);
+  expect(pressed).toHaveBeenCalledTimes(1);
+  // Lifting the finger then doesn't ask again.
+  touch("touchend", el("body"));
+  expect(pressed).toHaveBeenCalledTimes(1);
+});
+
+it("starting a drag, or lifting or cancelling, within that half second stops the wait", () => {
+  const pressed = vi.fn();
+  el("task").addEventListener(ROW_PRESS, pressed);
+  touch("touchstart", el("body"));
+  vi.advanceTimersByTime(450);
+  vi.advanceTimersByTime(200);
+  el("task").dispatchEvent(new Event(ROW_DRAG, { bubbles: true }));
+  vi.advanceTimersByTime(2000);
+  touch("touchend", el("body"));
+  expect(pressed).not.toHaveBeenCalled();
+
+  touch("touchstart", el("body"));
+  vi.advanceTimersByTime(450);
+  const cancel = new Event("touchcancel", { bubbles: true });
+  Object.defineProperty(cancel, "touches", { value: [] });
+  el("body").dispatchEvent(cancel);
+  vi.advanceTimersByTime(2000);
+  expect(pressed).not.toHaveBeenCalled();
+
+  touch("touchstart", el("body"));
+  vi.advanceTimersByTime(450);
+  touch("touchend", el("body"));
+  expect(pressed).toHaveBeenCalledTimes(1);
+  vi.advanceTimersByTime(2000);
+  expect(pressed).toHaveBeenCalledTimes(1);
 });
 
 it("a drag after the hold takes the menu's place: lifting the finger doesn't open it", () => {

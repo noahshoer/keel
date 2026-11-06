@@ -16,7 +16,7 @@ import {
   type Place,
   TOUCH_SLOP,
 } from "./drag-rules";
-import { ROW_DRAG, ROW_HOLD } from "./long-press";
+import { ROW_DRAG, ROW_HOLD, ROW_PRESS } from "./long-press";
 
 /** Sent to the drop zone a task is let go over (detail: `{ taskId }`). */
 export const TASK_DROP = "keel-task-drop";
@@ -212,12 +212,22 @@ export function installDrag(doc: Document, win: Window, options: Options = {}): 
     e.preventDefault();
   };
 
+  // The task's menu is open: the finger still holding it doesn't drag it.
+  const onMenu = () => {
+    if (press && !drag && !press.mouse) {
+      press = null;
+      detach();
+    }
+  };
+
   doc.addEventListener(ROW_HOLD, onHold);
+  doc.addEventListener(ROW_PRESS, onMenu);
   doc.addEventListener("pointerdown", onPointerDown);
   doc.addEventListener("click", onClick, true);
   return () => {
     end(false);
     doc.removeEventListener(ROW_HOLD, onHold);
+    doc.removeEventListener(ROW_PRESS, onMenu);
     doc.removeEventListener("pointerdown", onPointerDown);
     doc.removeEventListener("click", onClick, true);
   };
