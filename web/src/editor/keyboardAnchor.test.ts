@@ -249,6 +249,25 @@ describe("useKeyboard with the pace", () => {
     card.remove();
   });
 
+  it("gives the caret back even when a second announcement of the move finds nothing to move", () => {
+    document.body.insertAdjacentHTML("beforeend", '<form class="editor on-keyboard" id="card2"></form>');
+    const card = document.getElementById("card2") as HTMLElement;
+    const stub = vi.spyOn(card, "getBoundingClientRect");
+    renderHook(() => useKeyboard(true, true));
+    // iOS announces a keyboard two or three times within a few ms.
+    stub.mockImplementationOnce(() => ({ bottom: 836 }) as DOMRect);
+    stub.mockImplementation(() => ({ bottom: 508 }) as DOMRect);
+    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
+    expect(card.classList.contains("riding")).toBe(true);
+    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(card.classList.contains("riding")).toBe(false);
+    expect(card.style.transition).toBe("");
+    card.remove();
+  });
+
   it("ignores the move when not paced (the drawer's)", () => {
     const { result } = renderHook(() => useKeyboard(true));
     send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });

@@ -184,8 +184,13 @@ export function useKeyboard(enabled: boolean, paced = false): KeyboardState {
       // Now, not with the next render: the card has to start with the keyboard.
       flushSync(update);
       if (card && from !== undefined) {
-        clearTimeout(timer);
-        timer = rideCard(card, from, pace);
+        // A second announcement of the same move finds nothing to move: the
+        // first ride's timer stays, and gives the caret back.
+        const next = rideCard(card, from, pace);
+        if (next !== undefined) {
+          clearTimeout(timer);
+          timer = next;
+        }
       }
     };
     update();
