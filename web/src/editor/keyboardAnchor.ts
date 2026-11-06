@@ -2,6 +2,7 @@
 // the keyboard reaches is sheet-rules' `keyboardInset`, shared with the task
 // view's sheet.
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { KEYBOARD_EVENT, keyboardInset } from "../gestures/sheet-rules";
 import type { Rect } from "./popover";
 
@@ -135,7 +136,8 @@ export function useKeyboard(enabled: boolean, paced = false): KeyboardState {
           pace.secs * 1000 + 50,
         );
       }
-      update();
+      // Now, not with the next render: the card has to start with the keyboard.
+      flushSync(update);
     };
     update();
     v.addEventListener("resize", update);
