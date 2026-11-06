@@ -97,3 +97,19 @@ test("console.error of a circular value still logs one line", async () => {
   console.error("cyclic", circular);
   expect(logged()).toContainEqual({ source: "console.error", msg: 'cyclic {"self":"[Circular]"}' });
 });
+
+test("when on, a change of focus is logged by what took it", async () => {
+  diagOn = true;
+  const diag = await load();
+  await diag.init();
+  document.body.innerHTML =
+    '<textarea class="name title-input"></textarea><textarea class="desc"></textarea>';
+  (document.querySelector(".title-input") as HTMLElement).focus();
+  (document.querySelector(".desc") as HTMLElement).focus();
+  // Hooks of the earlier tests' copies of the module are still on the document: each line may come more than once.
+  const focus = logged()
+    .filter((a) => (a as { source: string }).source === "focus")
+    .map((a) => (a as { msg: string }).msg);
+  expect([...new Set(focus)]).toEqual(["textarea.name.title-input", "textarea.desc"]);
+  document.body.innerHTML = "";
+});

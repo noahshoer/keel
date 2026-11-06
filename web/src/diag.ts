@@ -73,6 +73,11 @@ function install(): void {
     send("console.error", a.map(describe).join(" "));
     err.apply(console, a);
   };
+  // Where the keyboard's focus goes, as a field is opened or a picker closes.
+  document.addEventListener("focusin", (e) => {
+    const t = e.target;
+    if (t instanceof Element) send("focus", [t.tagName.toLowerCase(), ...t.classList].join("."));
+  });
   window.visualViewport?.addEventListener("resize", () => {
     const v = window.visualViewport;
     if (!v) return;

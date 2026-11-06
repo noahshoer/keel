@@ -446,6 +446,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .editor.on-keyboard { position: fixed; left: 8px; right: 8px; z-index: 45; margin: 0; border: none; border-radius: 24px;
   padding: 16px 16px 12px; animation: none; box-shadow: var(--shadow-lg); }
 .editor.on-keyboard.keyboard-down { margin-bottom: env(safe-area-inset-bottom); }
+/* While the card rides to the keyboard (`rideCard`): iOS draws the caret at the card's layout, which is already where it ends. */
+.editor.riding textarea, .editor.riding input { caret-color: transparent; }
 .editor-scrim { position: fixed; inset: 0; z-index: 44; background: rgba(0,0,0,.2); animation: fade-in .2s var(--ease); }
 .editor-scrim.pop-backdrop { z-index: 44; }
 .editor.on-keyboard .name { font-size: 18px; line-height: 24px; font-weight: 500; }

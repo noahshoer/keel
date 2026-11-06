@@ -50,6 +50,7 @@ enum KeyboardPace {
   }
 
   private static func moving(_ n: Notification, up: Bool) {
+    let at = Date().timeIntervalSince1970 * 1000
     windows().forEach(pace)
     let info = n.userInfo ?? [:]
     let dur = info[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0
@@ -62,7 +63,7 @@ enum KeyboardPace {
     // The first keyboard after launch reports a 0 s animation; the page
     // still moves at the usual pace (the last one seen, or iOS's 0.3833 s).
     let secs = dur > 0 || up ? seconds : 0
-    let js = String(format: "window.keelKeyboard?.({ kb: %.1f, secs: %.4f, ease: '%@' })", kb, secs, ease)
+    let js = String(format: "window.keelKeyboard?.({ kb: %.1f, secs: %.4f, ease: '%@', at: %.0f })", kb, secs, ease, at)
     webview?.evaluateJavaScript(js)
     if up && dur > 0 { DispatchQueue.main.async { measure() } }
   }
@@ -87,10 +88,11 @@ enum KeyboardPace {
       return
     }
     // The keyboard is drawn in another process, so its window has nothing to
-    // read; what hosts it here may. Only logged, until it's known to be its curve.
+    // read; what hosts it here may, and its spring is used as the keyboard's.
     for w in windows() where NSStringFromClass(type(of: w)).contains("TextEffects") {
       guard let (key, anim) = slide(in: w.layer) else { continue }
       if let s = anim as? CASpringAnimation {
+        ease = linear(s)
         Diag.log("KB host curve \(key) spring m \(s.mass) k \(s.stiffness) c \(s.damping) v \(s.initialVelocity) dur \(s.duration) settle \(s.settlingDuration)")
       } else {
         Diag.log("KB host curve \(key) \(type(of: anim)) dur \(anim.duration) timing \(String(describing: anim.timingFunction))")

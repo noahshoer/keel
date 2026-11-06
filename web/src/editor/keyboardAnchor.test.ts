@@ -1,6 +1,19 @@
-import { describe, expect, it } from "vitest";
-import { keyboardInset } from "../gestures/sheet-rules";
-import { nextHeld, placeAboveCard, textRoomUnderPicker } from "./keyboardAnchor";
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { KEYBOARD_EVENT, keyboardInset } from "../gestures/sheet-rules";
+import {
+  FALLBACK_SECS,
+  FRAME_LEAD_SECS,
+  leadOf,
+  nextHeld,
+  paceOf,
+  placeAboveCard,
+  readKeyboard,
+  rideCard,
+  riseTransition,
+  textRoomUnderPicker,
+  useKeyboard,
+} from "./keyboardAnchor";
 import type { Rect } from "./popover";
 
 const rect = (left: number, top: number, width: number, height: number): Rect => ({
@@ -91,5 +104,173 @@ describe("nextHeld", () => {
 
   it("holds nothing when nothing asks it to", () => {
     expect(nextHeld(null, LETTERS, false, true)).toBeNull();
+  });
+});
+
+describe("the keyboard as the card reads it", () => {
+  it("is the viewport's, with no keyboard still coming up", () => {
+    expect(readKeyboard(844, 0, 844, null)).toEqual({ inset: 0, up: false, room: 844 });
+    expect(readKeyboard(844, 0, 544, null)).toEqual({ inset: 300, up: true, room: 544 });
+  });
+
+  it("is the held height while the viewport hasn't resized: up, with the room left above it", () => {
+    expect(readKeyboard(844, 0, 844, 328)).toEqual({ inset: 328, up: true, room: 516 });
+  });
+
+  it("goes back to the viewport once it has resized", () => {
+    expect(readKeyboard(844, 0, 516, 328)).toEqual({ inset: 328, up: true, room: 516 });
+    expect(readKeyboard(844, 20, 500, 328)).toEqual({ inset: 324, up: true, room: 500 });
+  });
+});
+
+describe("the pace of a keyboard move", () => {
+  it("is the keyboard's own, a default when iOS reports none, and none under reduced motion", () => {
+    expect(paceOf({ kb: 328, secs: 0.38, ease: "ease", reduced: false })).toEqual({
+      secs: 0.38,
+      ease: "ease",
+      lead: FRAME_LEAD_SECS,
+    });
+    expect(paceOf({ kb: 328, secs: 0, ease: "ease", reduced: false })).toEqual({
+      secs: FALLBACK_SECS,
+      ease: "ease",
+      lead: FRAME_LEAD_SECS,
+    });
+    expect(paceOf({ kb: 328, secs: 0.38, ease: "ease", reduced: true })).toEqual({
+      secs: 0,
+      ease: "ease",
+      lead: 0,
+    });
+  });
+
+  it("moves the card by transform (the compositor's, as the sheet's), or not at all", () => {
+    expect(riseTransition({ secs: 0.4, ease: "ease", lead: 0 })).toBe("transform 0.4s ease 0s");
+    expect(riseTransition({ secs: 0, ease: "ease", lead: 0 })).toBeNull();
+  });
+
+  it("starts ahead by what the page lost: the hop from Swift and a frame to draw", () => {
+    expect(riseTransition({ secs: 0.4, ease: "ease", lead: 0.05 })).toBe("transform 0.4s ease -0.05s");
+    const at = 1_000_000;
+    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: false, at }, at + 12)).toBeCloseTo(
+      0.012 + FRAME_LEAD_SECS,
+    );
+    // No stamp, a clock that is behind, or a hop that long: only the frame.
+    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: false }, at)).toBe(FRAME_LEAD_SECS);
+    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: false, at: at + 500 }, at)).toBe(
+      FRAME_LEAD_SECS,
+    );
+    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: false, at }, at + 900)).toBeCloseTo(
+      0.15 + FRAME_LEAD_SECS,
+    );
+    // Reduced motion doesn't move at all.
+    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: true, at }, at + 12)).toBe(0);
+  });
+});
+
+describe("useKeyboard with the pace", () => {
+  const send = (detail: object) =>
+    act(() => window.dispatchEvent(new CustomEvent(KEYBOARD_EVENT, { detail })));
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    Object.defineProperty(document.documentElement, "clientHeight", { value: 844, configurable: true });
+    const vv = Object.assign(new EventTarget(), { offsetTop: 0, height: 844, scale: 1 });
+    vi.stubGlobal("visualViewport", vv);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("sits on the keyboard at once, and lets the viewport take over", () => {
+    const { result } = renderHook(() => useKeyboard(true, true));
+    expect(result.current).toMatchObject({ inset: 0, up: false });
+    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
+    expect(result.current).toMatchObject({ inset: 328, up: true });
+    act(() => {
+      vi.advanceTimersByTime(451);
+    });
+    expect(result.current.inset).toBe(328);
+  });
+
+  it("goes down with the keyboard", () => {
+    const { result } = renderHook(() => useKeyboard(true, true));
+    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
+    (window.visualViewport as unknown as { height: number }).height = 516;
+    act(() => window.visualViewport?.dispatchEvent(new Event("resize")));
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(result.current.inset).toBe(328);
+    send({ kb: 0, secs: 0.4, ease: "ease", reduced: false });
+    (window.visualViewport as unknown as { height: number }).height = 844;
+    act(() => window.visualViewport?.dispatchEvent(new Event("resize")));
+    expect(result.current).toMatchObject({ inset: 0, up: false });
+  });
+
+  it("starts the card from where it was shown, riding on its transform", () => {
+    document.body.insertAdjacentHTML("beforeend", '<form class="editor on-keyboard" id="card"></form>');
+    const card = document.getElementById("card") as HTMLElement;
+    // Low on the screen before the move, 328 up after it.
+    let bottom = 836;
+    card.getBoundingClientRect = () => ({ bottom }) as DOMRect;
+    const { result } = renderHook(() => useKeyboard(true, true));
+    bottom = 836;
+    const stages: string[] = [];
+    const real = card.style;
+    Object.defineProperty(card, "style", {
+      value: new Proxy(real, {
+        set(target, key, value) {
+          if (key === "transform" || key === "transition") stages.push(`${String(key)}=${value}`);
+          return Reflect.set(target, key, value);
+        },
+      }),
+    });
+    // The layout the keyboard's move leads to.
+    const stub = vi.spyOn(card, "getBoundingClientRect");
+    stub.mockImplementationOnce(() => ({ bottom: 836 }) as DOMRect);
+    stub.mockImplementation(() => ({ bottom: 508 }) as DOMRect);
+    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
+    expect(result.current.inset).toBe(328);
+    // The caret is drawn where the layout is, not where the card is yet: hidden meanwhile.
+    expect(card.classList.contains("riding")).toBe(true);
+    expect(stages).toEqual([
+      "transition=none",
+      "transform=translateY(328px)",
+      "transition=transform 0.4s ease -0.05s",
+      "transform=",
+    ]);
+    // Back to plain once the move is over.
+    act(() => {
+      vi.advanceTimersByTime(451);
+    });
+    expect(stages.at(-1)).toBe("transition=");
+    expect(card.classList.contains("riding")).toBe(false);
+    card.remove();
+  });
+
+  it("gives the caret back even when a second announcement of the move finds nothing to move", () => {
+    document.body.insertAdjacentHTML("beforeend", '<form class="editor on-keyboard" id="card2"></form>');
+    const card = document.getElementById("card2") as HTMLElement;
+    const stub = vi.spyOn(card, "getBoundingClientRect");
+    renderHook(() => useKeyboard(true, true));
+    // iOS announces a keyboard two or three times within a few ms.
+    stub.mockImplementationOnce(() => ({ bottom: 836 }) as DOMRect);
+    stub.mockImplementation(() => ({ bottom: 508 }) as DOMRect);
+    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
+    expect(card.classList.contains("riding")).toBe(true);
+    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(card.classList.contains("riding")).toBe(false);
+    expect(card.style.transition).toBe("");
+    card.remove();
+  });
+
+  it("ignores the move when not paced (the drawer's)", () => {
+    const { result } = renderHook(() => useKeyboard(true));
+    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
+    expect(result.current).toMatchObject({ inset: 0, up: false });
   });
 });

@@ -2,7 +2,9 @@
 // the keyboard reaches is sheet-rules' `keyboardInset`, shared with the task
 // view's sheet.
 import { useEffect, useRef, useState } from "react";
-import { keyboardInset } from "../gestures/sheet-rules";
+import { flushSync } from "react-dom";
+import { log } from "../diag";
+import { KEYBOARD_EVENT, keyboardInset } from "../gestures/sheet-rules";
 import type { Rect } from "./popover";
 
 const MARGIN = 8;
@@ -51,33 +53,158 @@ export function textRoomUnderPicker(
 /** `room` is the height of what's visible, which the task card has to fit in. */
 export type KeyboardState = { inset: number; up: boolean; room: number };
 
+/** The keyboard as Swift reports it starting to move (`window.keelKeyboard`), as `KEYBOARD_EVENT` carries it. */
+export type KeyboardMove = {
+  kb: number;
+  secs: number;
+  ease: string;
+  reduced: boolean;
+  /** When Swift saw the keyboard start (epoch ms), to count the hop to the page. */
+  at?: number;
+};
+
+/** `lead`: how far into its move the card starts, for the time the page lost getting going. */
+type Pace = { secs: number; ease: string; lead: number };
+
+/** A frame for the page to draw the card's first step, on top of the hop from Swift. */
+export const FRAME_LEAD_SECS = 0.05;
+/** The most the card starts ahead for the hop: a stale stamp mustn't throw it forward. */
+const MAX_HOP_SECS = 0.15;
+
+/** How far ahead of the keyboard the card starts: the hop from Swift (`at`, until `now`) and a frame. None under reduced motion. */
+export function leadOf(m: KeyboardMove, now: number): number {
+  if (m.reduced) return 0;
+  const hop = m.at === undefined ? 0 : Math.min(Math.max((now - m.at) / 1000, 0), MAX_HOP_SECS);
+  return hop + FRAME_LEAD_SECS;
+}
+
+/** The first keyboard after launch comes with no pace (iOS reports 0 s): the pace of every other one, 10% slower than iOS. */
+export const FALLBACK_SECS = 0.426;
+
+/** How long a move takes and its curve: the keyboard's own, `FALLBACK_SECS` when iOS gave none, none under reduced motion. */
+export function paceOf(m: KeyboardMove, now: number = Date.now()): Pace {
+  const lead = leadOf(m, now);
+  if (m.reduced) return { secs: 0, ease: m.ease, lead };
+  return { secs: m.secs > 0 ? m.secs : FALLBACK_SECS, ease: m.ease, lead };
+}
+
+/**
+ * The card's move at `pace`, on its transform: the compositor's, so it keeps up
+ * with the keyboard (`bottom` is layout, on the page's thread). `null` when it
+ * doesn't move.
+ */
+export function riseTransition(pace: Pace): string | null {
+  if (pace.secs <= 0) return null;
+  // A negative delay starts it that far in.
+  return `transform ${pace.secs}s ${pace.ease} ${pace.lead > 0 ? `-${pace.lead}s` : "0s"}`;
+}
+
+/**
+ * Starts `card` from where it was shown (`from`, its bottom edge before the
+ * layout changed) and has it ride its transform to where the layout now puts
+ * it, at `pace`. Returns the timer that puts its style back afterwards.
+ */
+export function rideCard(
+  card: HTMLElement,
+  from: number,
+  pace: Pace,
+): ReturnType<typeof setTimeout> | undefined {
+  const transition = riseTransition(pace);
+  const delta = from - card.getBoundingClientRect().bottom;
+  if (transition === null || delta === 0) return undefined;
+  card.style.transition = "none";
+  card.style.transform = `translateY(${delta}px)`;
+  // The place it starts from has to be laid out before the transition is set.
+  card.getBoundingClientRect();
+  card.style.transition = transition;
+  card.style.transform = "";
+  // iOS draws the caret where the layout is, not where the card is yet.
+  card.classList.add("riding");
+  return setTimeout(
+    () => {
+      card.style.transition = "";
+      card.classList.remove("riding");
+    },
+    pace.secs * 1000 + 50,
+  );
+}
+
 /** Whether the visible area is shorter than the page: the keyboard is up. */
 export function keyboardUp(v: VisualViewport): boolean {
   return v.height < document.documentElement.clientHeight - 0.5;
 }
 
-function read(): KeyboardState {
-  const v = window.visualViewport;
-  if (!v) return { inset: 0, up: false, room: innerHeight };
-  const clientH = document.documentElement.clientHeight;
-  return { inset: keyboardInset(clientH, v.offsetTop, v.height, null), up: keyboardUp(v), room: v.height };
+/**
+ * The keyboard from the layout height and the visual viewport. While one is
+ * still coming up (`held`, its height) the viewport hasn't resized: the card
+ * already counts as on the keyboard, with the room left above it.
+ */
+export function readKeyboard(
+  clientH: number,
+  vvTop: number,
+  vvH: number,
+  held: number | null,
+): KeyboardState {
+  const inset = keyboardInset(clientH, vvTop, vvH, held);
+  const resized = vvH < clientH - 0.5;
+  if (held !== null && !resized) return { inset, up: true, room: vvH - inset };
+  return { inset, up: resized, room: vvH };
 }
 
-/** The keyboard's reach while `enabled`, updated as the visual viewport moves. */
-export function useKeyboard(enabled: boolean): KeyboardState {
+/**
+ * The keyboard's reach while `enabled`, updated as the visual viewport moves.
+ * `paced` (the task card) also follows the keyboard's own start, which comes
+ * about 420 ms before the viewport resizes: the inset is its height at once,
+ * and the card rides to it at the keyboard's pace (`rideCard`).
+ */
+export function useKeyboard(enabled: boolean, paced = false): KeyboardState {
+  const held = useRef<{ kb: number; until: number } | null>(null);
+  const read = (): KeyboardState => {
+    const v = window.visualViewport;
+    if (!v) return { inset: 0, up: false, room: innerHeight };
+    const kb = held.current !== null && Date.now() < held.current.until ? held.current.kb : null;
+    return readKeyboard(document.documentElement.clientHeight, v.offsetTop, v.height, kb);
+  };
   const [state, setState] = useState<KeyboardState>(read);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `read` only reads a ref and the window.
   useEffect(() => {
     const v = window.visualViewport;
     if (!enabled || !v) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const update = () => setState(read());
+    const onMove = (e: Event) => {
+      const m = (e as CustomEvent<KeyboardMove>).detail;
+      const pace = paceOf(m);
+      log(
+        `card follows kb ${m.kb} hop ${m.at === undefined ? "?" : Date.now() - m.at}ms lead ${pace.lead.toFixed(3)}s`,
+      );
+      held.current = m.kb > 0 ? { kb: m.kb, until: Date.now() + pace.secs * 1000 + 500 } : null;
+      const card = document.querySelector<HTMLElement>(".editor.on-keyboard");
+      const from = card?.getBoundingClientRect().bottom;
+      // Now, not with the next render: the card has to start with the keyboard.
+      flushSync(update);
+      if (card && from !== undefined) {
+        // A second announcement of the same move finds nothing to move: the
+        // first ride's timer stays, and gives the caret back.
+        const next = rideCard(card, from, pace);
+        if (next !== undefined) {
+          clearTimeout(timer);
+          timer = next;
+        }
+      }
+    };
     update();
     v.addEventListener("resize", update);
     v.addEventListener("scroll", update);
+    if (paced) window.addEventListener(KEYBOARD_EVENT, onMove);
     return () => {
+      clearTimeout(timer);
+      held.current = null;
       v.removeEventListener("resize", update);
       v.removeEventListener("scroll", update);
+      window.removeEventListener(KEYBOARD_EVENT, onMove);
     };
-  }, [enabled]);
+  }, [enabled, paced]);
   return state;
 }
 

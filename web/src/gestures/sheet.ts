@@ -31,6 +31,7 @@ import {
   edgeBackCommits,
   edgeOffset,
   holdsScroll,
+  KEYBOARD_EVENT,
   keyboardExpands,
   keyboardInset,
   SETTLE_S,
@@ -43,7 +44,13 @@ import {
 } from "./sheet-rules";
 
 /** A keyboard move as Swift reports it: `kb` px of the web view it will cover (0 as it goes), its pace and curve. */
-export type KeyboardMove = { kb: number; secs: number; ease: string };
+export type KeyboardMove = {
+  kb: number;
+  secs: number;
+  ease: string;
+  /** When Swift saw the keyboard start (epoch ms), to count the hop to the page. */
+  at?: number;
+};
 
 declare global {
   interface Window {
@@ -380,9 +387,10 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
   // The sheet's bottom follows the keyboard both ways; coming up, a medium
   // sheet also slides up to large from wherever it is, and stays large once
   // the keyboard has gone.
-  const keyboard = ({ kb, secs, ease }: KeyboardMove) => {
+  const keyboard = ({ kb, secs, ease, at }: KeyboardMove) => {
     if (!touchDevice()) return;
     log(`keelKeyboard kb ${kb} secs ${secs} ease ${ease}`);
+    win.dispatchEvent(new CustomEvent(KEYBOARD_EVENT, { detail: { kb, secs, ease, reduced: reduce(), at } }));
     const sheet = sheetEl();
     const s = reduce() ? 0 : secs;
     kbHold = kb > 0 ? { kb, until: win.performance.now() + s * 1000 + 500 } : null;
