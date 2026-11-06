@@ -353,6 +353,8 @@ export function MainPane({
               </div>
             ) : null}
             {body}
+            {/* Room under the last row of the page, so the floating add button doesn't cover it. */}
+            {search ? null : <div className="fab-spacer" />}
             {showCompleted && toggle && !search ? (
               <>
                 <div className="section-title">

@@ -190,6 +190,18 @@ it("a label or filter page's ••• has no Add section", async () => {
   expect(entries).toEqual(["Edit", "Delete"]);
 });
 
+it("the room for the floating add button is at the end of the page, not between the view's add row and its sections", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const spacers = container.querySelectorAll(".fab-spacer");
+  expect(spacers).toHaveLength(1);
+  const spacer = spacers[0] as Element;
+  const follows = (el: Element | null) =>
+    el !== null && Boolean(el.compareDocumentPosition(spacer) & Node.DOCUMENT_POSITION_FOLLOWING);
+  expect(follows(container.querySelector(".view-add"))).toBe(true);
+  expect(follows(container.querySelector(".section-block"))).toBe(true);
+  expect(follows(container.querySelector(".add-section-row"))).toBe(true);
+});
+
 it("a filter with two comma groups titles both", async () => {
   const { container } = await show({ kind: "filter", id: "f", name: "Two", query: "p1, today" });
   expect(container.querySelector(".view-sub")?.className).toBe("view-sub mono");

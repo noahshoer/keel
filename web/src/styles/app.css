@@ -1060,7 +1060,8 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .add-section-r
 .section-block { margin-top: 18px; }
 .section-row { position: relative; }
 .section-more { margin-left: auto; align-self: center; }
-.section-row { min-height: 36px; align-items: center; }
+/* The ••• button sets the header's height, so the padding is what's left of the plain header's (22px above the text, 6px below). */
+.section-title.section-row { align-items: center; padding-top: 14px; padding-bottom: 0; }
 .section-rename { padding: 14px 0 6px; }
 /* Like "+ Add task", in the accent, under a hairline at the end of the project. */
 .add-section-row { margin-top: 18px; border-top: 1px solid var(--border); border-radius: 0; color: var(--accent-text); font-weight: 500; }

@@ -30,10 +30,10 @@ export function AddTask({
   const title = useRef<HTMLTextAreaElement>(null);
   // The view's own row also gets a round button floating over the page, in the
   // `.content` that holds the list (a section's row doesn't).
-  const spacer = useRef<HTMLDivElement>(null);
+  const anchor = useRef<HTMLSpanElement>(null);
   const [page, setPage] = useState<Element | null>(null);
   useLayoutEffect(() => {
-    setPage(main ? (spacer.current?.closest(".content") ?? null) : null);
+    setPage(main ? (anchor.current?.closest(".content") ?? null) : null);
   }, [main]);
   // Inside the tap, so iOS raises the keyboard.
   const openEditor = () => {
@@ -51,8 +51,7 @@ export function AddTask({
           </span>
           Add task
         </div>
-        {/* Room under the last row, so the button doesn't cover it. */}
-        {main ? <div ref={spacer} className="fab-spacer" /> : null}
+        {main ? <span ref={anchor} hidden /> : null}
         {page !== null
           ? createPortal(
               <button type="button" className="fab" aria-label="New task" onClick={openEditor}>
