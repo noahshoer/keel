@@ -1064,7 +1064,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .add-section-r
 .section-title.section-row { align-items: center; padding-top: 14px; padding-bottom: 0; }
 .section-rename { padding: 14px 0 6px; }
 /* Like "+ Add task", in the accent, under a hairline at the end of the project. */
-.add-section-row { margin-top: 18px; border-top: 1px solid var(--border); border-radius: 0; color: var(--accent-text); font-weight: 500; }
+.add-section-row { margin-top: 37px; border-top: 1px solid var(--border); border-radius: 0; color: var(--accent-text); font-weight: 500; }
 
 /* Filters */
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace; font-size: 12px; }
