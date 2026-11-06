@@ -42,3 +42,10 @@ Decisions:
 - Rows are `user-select: none`, or iOS's text selection takes the hold over.
 - The dragged row's place is marked with `data-drag-source`, not a class: the
   row's component resets its `className` when the hold ends.
+- The Add section row is also a drop zone (`data-drop-new`, never "where the task
+  already is"): letting a task go on it opens the name field with the task waiting;
+  naming the section creates it (`addSectionGetId`) and then moves the task in. Closing
+  the field (Escape, a tap outside) drops the wait, and nothing moves. A project with no
+  sections has only this zone.
+- A highlighted zone's label (`::after`) is laid over its top edge: a label that took
+  room moved the zones below it out from under the finger, which flickered the target.
