@@ -418,6 +418,11 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .view-toggle, 
 .streak-panel input:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
 
 /* Add task */
+.fab-spacer { height: 88px; }
+.fab { position: absolute; z-index: 5; right: 18px; bottom: calc(26px + env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: center;
+  width: 58px; height: 58px; padding: 0; border: none; border-radius: 50%; background: var(--accent); color: #fff; cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0,0,0,.35); transition: transform .12s var(--ease); }
+.fab:active { transform: scale(.94); }
 .add-task-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--muted);
   cursor: pointer; border-radius: var(--r-md); }
 .add-task-row .plus { width: 22px; height: 22px; border-radius: 50%; color: var(--accent);
