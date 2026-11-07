@@ -1278,6 +1278,13 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
      fade-in's animation). */
   .content { transition: translate .26s var(--ease); }
   .app.drawer-open .content { translate: 28px 0; }
+  /* Dragged (drawerDrag.ts): --p is 0 shut to 1 open, set as the finger moves; "settle" runs the rest at the tap's pace. */
+  .app[data-drawer-drag] .sidebar { transform: translateX(calc((var(--p) - 1) * 100%)); visibility: visible; transition: none; }
+  .app[data-drawer-drag] .drawer-scrim { animation: none; opacity: var(--p); }
+  .app[data-drawer-drag] .content { translate: calc(28px * var(--p)) 0; transition: none; }
+  .app[data-drawer-drag="settle"] .sidebar { transition: transform .26s var(--ease); }
+  .app[data-drawer-drag="settle"] .drawer-scrim { transition: opacity .26s var(--ease); }
+  .app[data-drawer-drag="settle"] .content { transition: translate .26s var(--ease); }
   .menu-btn, .back-btn { display: inline-flex; }
   .view-head:has(.back-btn) .view-title { display: none; }
   .main { margin: 0; border-radius: 0; box-shadow: none; }

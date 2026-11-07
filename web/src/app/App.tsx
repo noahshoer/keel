@@ -8,13 +8,14 @@ import { localToday } from "../clock";
 import { installDrag } from "../gestures/drag";
 import { installLongPress } from "../gestures/long-press";
 import { installSheet } from "../gestures/sheet";
-import { drawerSwipe, searchBackSwipe, searchSwipe } from "../gestures/sheet-rules";
+import { searchBackSwipe, searchSwipe } from "../gestures/sheet-rules";
 import { installSwipe } from "../gestures/swipe";
 import { CompletionIconContext, savedIcon } from "../lists/completion";
 import { ShowSubtasksContext, savedShowSubtasks } from "../lists/showSubtasks";
 import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
 import { SearchPane } from "../screens/SearchPane";
+import { installDrawerDrag } from "../shell/drawerDrag";
 import { Sidebar } from "../shell/Sidebar";
 import { applyTheme, savedTheme, type Theme } from "../shell/theme";
 import { installUnderPage } from "../shell/underPage";
@@ -59,9 +60,10 @@ export function App() {
   // Touch: a long press shows a row's actions.
   useEffect(() => installLongPress(document), []);
   useEffect(() => installDrag(document, window), []);
-  // Touch: swipe right opens the drawer, swipe left closes it (or, with the
-  // drawer shut, opens Search on a page that has the button). Installed
-  // once, so the handler reads the drawer and the view through refs.
+  // Touch: the drawer follows a drag (shell/drawerDrag.ts), and a quick swipe
+  // left, with the drawer shut, opens Search on a page that has the button; a
+  // swipe right on Search goes back. Installed once, so the handlers read the
+  // drawer and the view through refs.
   const drawerNow = useRef(drawer);
   drawerNow.current = drawer;
   const viewNow = useRef(view);
@@ -69,6 +71,15 @@ export function App() {
   const openSearchNow = useRef<() => void>(() => {});
   const leaveSearchNow = useRef<() => void>(() => {});
   leaveSearchNow.current = () => setView(beforeSearch.current);
+  useEffect(
+    () =>
+      installDrawerDrag(document, {
+        isOpen: () => drawerNow.current,
+        canOpen: () => viewNow.current.kind !== "search",
+        setOpen: setDrawer,
+      }),
+    [],
+  );
   useEffect(
     () =>
       installSwipe(document, (s) => {
@@ -81,8 +92,6 @@ export function App() {
           leaveSearchNow.current();
           return;
         }
-        const open = drawerSwipe(s, drawerNow.current);
-        if (open !== null) setDrawer(open);
       }),
     [],
   );

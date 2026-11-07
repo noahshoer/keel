@@ -9,8 +9,8 @@ import { importLine, pickSetting, reminderMenus, upcomingWhen } from "../core";
 import * as diag from "../diag";
 import { Menu } from "../editor/Menu";
 import type { Pop } from "../editor/pop";
-import { settingsSwipe } from "../gestures/sheet-rules";
-import { installSwipe } from "../gestures/swipe";
+import { installPan } from "../gestures/pan";
+import { NARROW_MAX } from "../gestures/sheet-rules";
 import { invoke } from "../ipc/invoke";
 import { COMPLETION_ICONS, type CompletionIcon, iconLabel, saveIcon } from "../lists/completion";
 import { ShowSubtasksContext, saveShowSubtasks } from "../lists/showSubtasks";
@@ -130,8 +130,35 @@ export function Settings({
   closeNow.current = close;
   useEffect(
     () =>
-      installSwipe(document, (s) => {
-        if (settingsSwipe(s)) closeNow.current();
+      installPan(document, (ctx) => {
+        const screen = modal.current;
+        const scrim = screen?.parentElement;
+        if (!screen || !scrim || !ctx.inSettings || ctx.blocked || ctx.width > NARROW_MAX) return null;
+        const range = screen.offsetWidth;
+        return {
+          dir: 1,
+          range,
+          onStart: () => {
+            screen.style.transition = "none";
+            scrim.style.transition = "none";
+          },
+          onMove: (p) => {
+            screen.style.transform = `translateX(${p * range}px)`;
+            scrim.style.opacity = String(1 - p);
+          },
+          // Carried on, the leaving animation takes over from where it is; otherwise it springs back.
+          onEnd: (commit) => {
+            if (commit) return closeNow.current();
+            screen.style.transition = "transform .26s var(--ease)";
+            scrim.style.transition = "opacity .26s var(--ease)";
+            screen.style.transform = "";
+            scrim.style.opacity = "";
+            setTimeout(() => {
+              screen.style.transition = "";
+              scrim.style.transition = "";
+            }, 260);
+          },
+        };
       }),
     [],
   );
