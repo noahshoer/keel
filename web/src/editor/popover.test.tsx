@@ -118,6 +118,28 @@ describe("usePlacedPopover on the keyboard", () => {
     vi.unstubAllGlobals();
   });
 
+  it("is placed by its own size, not the smaller one its entrance's scale draws", async () => {
+    const { container } = render(
+      <form className="on-keyboard">
+        <Picker />
+      </form>,
+    );
+    const card = container.querySelector("form") as HTMLElement;
+    const pop = container.querySelector(".popover") as HTMLElement;
+    card.getBoundingClientRect = () => rect(0, 500, 402, 136) as DOMRect;
+    // Drawn at 98% while it comes in; laid out 386 x 200.
+    pop.getBoundingClientRect = () => rect(0, 0, 378.3, 196) as DOMRect;
+    Object.defineProperty(pop, "offsetWidth", { value: 386 });
+    Object.defineProperty(pop, "offsetHeight", { value: 200 });
+    pop.appendChild(document.createElement("div"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // Centered in jsdom's 1024 px window by its laid-out width.
+    expect(pop.style.left).toBe("319px");
+    expect(pop.style.top).toBe("-208px");
+  });
+
   // The card is the picker's containing block (its transform), so the
   // picker's `top` is from the card's top: it rides along when the card moves.
   it("sits above the card, in the card's own coordinates, whatever WebKit scrolled", async () => {
@@ -131,6 +153,8 @@ describe("usePlacedPopover on the keyboard", () => {
     const pop = container.querySelector(".popover") as HTMLElement;
     card.getBoundingClientRect = () => rect(0, 339, 402, 139) as DOMRect;
     pop.getBoundingClientRect = () => rect(0, 0, 386, 100) as DOMRect;
+    Object.defineProperty(pop, "offsetWidth", { value: 386 });
+    Object.defineProperty(pop, "offsetHeight", { value: 100 });
     card.style.bottom = "0px";
     await act(async () => {
       await Promise.resolve();
@@ -152,6 +176,8 @@ describe("usePlacedPopover on the keyboard", () => {
     const pop = container.querySelector(".popover") as HTMLElement;
     card.getBoundingClientRect = () => rect(0, 500, 402, 136) as DOMRect;
     pop.getBoundingClientRect = () => rect(0, 0, 386, 200) as DOMRect;
+    Object.defineProperty(pop, "offsetWidth", { value: 386 });
+    Object.defineProperty(pop, "offsetHeight", { value: 200 });
     pop.appendChild(document.createElement("div"));
     await act(async () => {
       await Promise.resolve();
@@ -170,6 +196,8 @@ describe("usePlacedPopover on the keyboard", () => {
     // Laid out with its top at 600, drawn 294 higher as it starts down with the keyboard.
     card.getBoundingClientRect = () => rect(0, 306, 402, 136) as DOMRect;
     pop.getBoundingClientRect = () => rect(0, 0, 386, 400) as DOMRect;
+    Object.defineProperty(pop, "offsetWidth", { value: 386 });
+    Object.defineProperty(pop, "offsetHeight", { value: 400 });
     card.style.transform = "matrix(1, 0, 0, 1, 0, -294)";
     await act(async () => {
       await Promise.resolve();

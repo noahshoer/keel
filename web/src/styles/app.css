@@ -479,6 +479,13 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
    in place (keyboardAnchor.ts `rideCard`). */
 @keyframes picker-rise { from { opacity: 0; translate: 0 16px; scale: .97; } to { opacity: 1; translate: none; scale: none; } }
 .on-keyboard .popover { animation: picker-rise .3s var(--ease); transform-origin: bottom center; }
+/* The date's full calendar (the quick choices' popover, switched to `sched-card`) lowers the
+   keyboard, and the card drops under it for ~0.43 s. It's built once the drop has started, and
+   fades in at its place while the card drops, without rising against it. */
+@keyframes calendar-in { from { opacity: 0; scale: .98; } to { opacity: 1; scale: none; } }
+.on-keyboard .popover.scheduler.sched-card:not(.scheduler-compact) { animation: calendar-in .25s var(--ease) .05s both; }
+/* The quick choices fade out at once as the calendar is chosen (it comes once the card has set off). */
+.on-keyboard .popover.scheduler.sched-leaving { opacity: 0; transition: opacity .1s var(--ease); }
 /* A transform even at rest: the card is always its pickers' containing block, so a
    picker rides with the card's moves rather than jumping when one starts or ends
    (popover.ts `followCard`). */

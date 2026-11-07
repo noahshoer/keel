@@ -138,6 +138,47 @@ export function rideCard(
   return setTimeout(() => card.classList.remove("riding"), pace.secs * 1000 + 50);
 }
 
+/** The last move Swift reported with a pace: what a move the page sets off itself rides at. */
+let lastPaced: KeyboardMove | null = null;
+
+/**
+ * Starts the card down with the keyboard the page is about to lower (by
+ * blurring its field), at the keyboard's last pace, instead of waiting for
+ * Swift's report, which comes ~30 ms after the keyboard has set off. That
+ * report is then the same move, and the ride under way carries on. Whether
+ * it started one (there's no pace before the first report).
+ */
+export function lowerKeyboardNow(): boolean {
+  if (lastPaced === null) return false;
+  const { secs, ease, reduced } = lastPaced;
+  window.dispatchEvent(new CustomEvent(KEYBOARD_EVENT, { detail: { kb: 0, secs, ease, reduced } }));
+  return true;
+}
+
+/** The most `afterKeyboardMove` waits for a move (none comes when the keyboard wasn't up). */
+export const KEYBOARD_MOVE_LIMIT_MS = 200;
+
+/**
+ * Runs `then` once the keyboard's next move has started (`KEYBOARD_EVENT`, after
+ * the card's ride is set off) and a frame has gone by, so the ride is on the
+ * compositor first; or after `KEYBOARD_MOVE_LIMIT_MS` when no move comes. For
+ * heavy work set off with the move (the date's calendar, which lowers the
+ * keyboard): on the page's thread before the ride, it held the card back
+ * ~60 ms while the keyboard went.
+ */
+export function afterKeyboardMove(then: () => void): void {
+  let done = false;
+  const run = () => {
+    if (done) return;
+    done = true;
+    window.removeEventListener(KEYBOARD_EVENT, run);
+    clearTimeout(limit);
+    requestAnimationFrame(() => setTimeout(then, 0));
+  };
+  window.addEventListener(KEYBOARD_EVENT, run);
+  const limit = setTimeout(run, KEYBOARD_MOVE_LIMIT_MS);
+}
+
 /** Whether the visible area is shorter than the page: the keyboard is up. */
 export function keyboardUp(v: VisualViewport): boolean {
   return v.height < document.documentElement.clientHeight - 0.5;
@@ -187,6 +228,7 @@ export function useKeyboard(enabled: boolean, paced = false): KeyboardState {
     let moving: { kb: number; until: number } | null = null;
     const onMove = (e: Event) => {
       const m = (e as CustomEvent<KeyboardMove>).detail;
+      if (m.secs > 0) lastPaced = m;
       const pace = paceOf(m);
       const now = Date.now();
       log(`card follows kb ${m.kb} secs ${pace.secs} hop ${m.at === undefined ? "?" : now - m.at}ms`);

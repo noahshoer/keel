@@ -39,7 +39,7 @@ import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
 import { HighlightedTitle } from "./HighlightedTitle";
 import { flagClass, locationChosen, locationFace, locationItems, PRIORITY_ITEMS } from "./items";
-import { CARD_GAP, useHeldKeyboard, useKeyboard } from "./keyboardAnchor";
+import { CARD_GAP, lowerKeyboardNow, useHeldKeyboard, useKeyboard } from "./keyboardAnchor";
 import { LabelPicker } from "./LabelPicker";
 import { isTouch } from "./locale";
 import { Menu, type MenuItem } from "./Menu";
@@ -144,7 +144,12 @@ export function TaskEditor({
     const focused = document.activeElement as HTMLElement | null;
     roomFrom.current =
       focused?.closest(".on-keyboard") && !focused.closest(".popover") ? focused : title.current;
-    focused?.blur();
+    // The card sets off with the keyboard, not when Swift reports it, and the
+    // keyboard a frame after: iOS moves it at once, the card's ride reaches the
+    // screen a frame or two after the page starts it.
+    if (focused?.closest("input, textarea") && lowerKeyboardNow())
+      requestAnimationFrame(() => focused.blur());
+    else focused?.blur();
   };
   const setPop = (p: Pop) => {
     setOpen(p);

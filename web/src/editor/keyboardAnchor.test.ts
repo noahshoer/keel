@@ -2,6 +2,10 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KEYBOARD_EVENT, keyboardInset } from "../gestures/sheet-rules";
 import {
+  afterKeyboardMove,
+  KEYBOARD_MOVE_LIMIT_MS,
+  type KeyboardMove,
+  lowerKeyboardNow,
   nextHeld,
   paceOf,
   placeAboveCard,
@@ -263,9 +267,46 @@ describe("useKeyboard with the pace", () => {
     card.remove();
   });
 
+  it("starts a move the page sets off itself at once, at the keyboard's last pace", () => {
+    const seen: KeyboardMove[] = [];
+    const listen = (e: Event) => seen.push((e as CustomEvent<KeyboardMove>).detail);
+    window.addEventListener(KEYBOARD_EVENT, listen);
+    renderHook(() => useKeyboard(true, true));
+    send({ kb: 328, secs: 0.4, ease: "linear(0,1)", reduced: false });
+    lowerKeyboardNow();
+    expect(seen.at(-1)).toMatchObject({ kb: 0, secs: 0.4, ease: "linear(0,1)", reduced: false });
+    window.removeEventListener(KEYBOARD_EVENT, listen);
+  });
+
   it("ignores the move when not paced (the drawer's)", () => {
     const { result } = renderHook(() => useKeyboard(true));
     send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
     expect(result.current).toMatchObject({ inset: 0, up: false });
+  });
+});
+
+describe("work that waits for the keyboard's move", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("runs once the move has started and a frame has gone by", () => {
+    const then = vi.fn();
+    afterKeyboardMove(then);
+    vi.advanceTimersByTime(10);
+    expect(then).not.toHaveBeenCalled();
+    window.dispatchEvent(new CustomEvent(KEYBOARD_EVENT, { detail: { kb: 0 } }));
+    expect(then).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(40);
+    expect(then).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs anyway when no move comes, and only once", () => {
+    const then = vi.fn();
+    afterKeyboardMove(then);
+    vi.advanceTimersByTime(KEYBOARD_MOVE_LIMIT_MS + 40);
+    expect(then).toHaveBeenCalledTimes(1);
+    window.dispatchEvent(new CustomEvent(KEYBOARD_EVENT, { detail: { kb: 0 } }));
+    vi.advanceTimersByTime(100);
+    expect(then).toHaveBeenCalledTimes(1);
   });
 });

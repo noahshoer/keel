@@ -50,9 +50,17 @@ function followCard(pop: HTMLElement, card: HTMLElement): () => void {
     const scrolled = pop.scrollTop;
     Object.assign(pop.style, { position: "fixed", right: "auto", margin: "0", maxHeight: "" });
     const minTop = visibleTop();
-    fitText(card, pop.getBoundingClientRect().height, minTop);
+    // Its laid-out size: its rect is drawn smaller while its entrance scales it up.
+    const size = {
+      top: 0,
+      left: 0,
+      width: pop.offsetWidth,
+      height: pop.offsetHeight,
+      bottom: pop.offsetHeight,
+    };
+    fitText(card, size.height, minTop);
     const box = layoutRect(card);
-    const at = placeAboveCard(box, pop.getBoundingClientRect(), innerWidth, minTop);
+    const at = placeAboveCard(box, size, innerWidth, minTop);
     Object.assign(pop.style, {
       top: `${at.top - box.top - card.clientTop}px`,
       left: `${at.left - box.left - card.clientLeft}px`,

@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditorValues } from "../bindings";
 import { blankValues, valuesFromTask } from "../core";
+import { KEYBOARD_EVENT } from "../gestures/sheet-rules";
 import * as fx from "../ipc/fixtures";
 import { mockPageScrollHeld } from "../ipc/mock";
 import { CheckSmallIcon } from "../shell/icons";
@@ -507,9 +508,19 @@ describe("on touch", () => {
     });
 
     const openDeadline = () => fireEvent.click(screen.getByTitle("Deadline: the date it must be done by"));
-    const openCalendar = () => {
+    /** On touch the calendar is built once the keyboard has started down and a frame has gone by. */
+    const calendarIn = async () => {
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(KEYBOARD_EVENT, { detail: { kb: 0, secs: 0, ease: "", reduced: true } }),
+        );
+        await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+      });
+    };
+    const openCalendar = async () => {
       fireEvent.click(screen.getByTitle("Date"));
       fireEvent.click(screen.getByText("Pick a date and time"));
+      await calendarIn();
     };
     const day = (n: string) => screen.getByText(n, { selector: ".cal-day:not(.other)" });
 
@@ -558,12 +569,12 @@ describe("on touch", () => {
       expect(screen.getByTitle("Deadline: the date it must be done by").textContent).not.toContain("12");
     });
 
-    it("only the deadline's calendar is compact, to fit above the keyboard", () => {
+    it("only the deadline's calendar is compact, to fit above the keyboard", async () => {
       adding();
       openDeadline();
       expect(document.querySelector(".scheduler")?.className).toContain("scheduler-compact");
       fireEvent.click(screen.getByRole("button", { name: "Done" }));
-      openCalendar();
+      await openCalendar();
       expect(document.querySelector(".scheduler")?.className).not.toContain("scheduler-compact");
     });
 
@@ -578,11 +589,12 @@ describe("on touch", () => {
       expect(screen.getByTitle("Deadline: the date it must be done by").textContent).not.toContain("12");
     });
 
-    it("the X undoes the date, time and repeat chosen in the date card", () => {
+    it("the X undoes the date, time and repeat chosen in the date card", async () => {
       adding();
       title().focus();
       fireEvent.click(screen.getByTitle("Date"));
       fireEvent.click(screen.getByText("Pick a date and time"));
+      await calendarIn();
       fireEvent.click(day("12"));
       fireEvent.click(
         within(document.querySelector(".scheduler") as HTMLElement).getByRole("button", { name: /^Repeat/ }),
@@ -602,10 +614,10 @@ describe("on touch", () => {
 
     const desc = () => screen.getByPlaceholderText("Description") as HTMLTextAreaElement;
 
-    it("lowers the keyboard from the description too, and goes back to it", () => {
+    it("lowers the keyboard from the description too, and goes back to it", async () => {
       adding();
       desc().focus();
-      openCalendar();
+      await openCalendar();
       expect(document.activeElement).not.toBe(desc());
       fireEvent.click(screen.getByRole("button", { name: "Done" }));
       expect(document.activeElement).toBe(desc());
@@ -620,24 +632,24 @@ describe("on touch", () => {
       expect(focused()).toBe(true);
     });
 
-    it("another pill or a tap outside brings it back", () => {
+    it("another pill or a tap outside brings it back", async () => {
       adding();
       title().focus();
-      openCalendar();
+      await openCalendar();
       expect(focused()).toBe(false);
       fireEvent.click(screen.getByTitle("Priority"));
       expect(focused()).toBe(true);
       fireEvent.click(screen.getByTitle("Priority"));
-      openCalendar();
+      await openCalendar();
       expect(focused()).toBe(false);
       fireEvent.click(document.querySelector(".pop-backdrop") as Element);
       expect(focused()).toBe(true);
     });
 
-    it("going from the date's calendar to the deadline brings it back", () => {
+    it("going from the date's calendar to the deadline brings it back", async () => {
       adding();
       title().focus();
-      openCalendar();
+      await openCalendar();
       openDeadline();
       expect(document.querySelector(".cal-grid")).not.toBeNull();
       expect(focused()).toBe(true);
@@ -682,10 +694,10 @@ describe("on touch", () => {
       expect(document.querySelector(".popover")).not.toBeNull();
     });
 
-    it("tapping the description from the date's calendar stays there and keeps the day", () => {
+    it("tapping the description from the date's calendar stays there and keeps the day", async () => {
       adding();
       title().focus();
-      openCalendar();
+      await openCalendar();
       fireEvent.click(day("12"));
       desc().focus();
       fireEvent.pointerUp(desc());

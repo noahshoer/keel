@@ -46,3 +46,14 @@ What it showed and what changed:
   request. In that case only, the card rises in 0.15 s (`SNAPPED_RISE_SECS`).
 - Also tried and rolled back: starting the card a frame late and the keyboard
   at 0.8×. The card then trailed the keyboard, which looked like it pushed it.
+- Opening the date's calendar: the page lowers the keyboard itself (`makeRoom`
+  blurs the field), so it starts the card's ride at once with the keyboard's
+  last pace (`lowerKeyboardNow`) and blurs on the next frame. Waiting for
+  Swift's report, the card set off ~35 ms after the keyboard (a gap opened to
+  88 pt); blurring in the same task, the same; holding the card back a frame,
+  it trailed again. As is, the card leads by a few points at most. The
+  calendar is built only after the keyboard's move has started
+  (`afterKeyboardMove`): building it first (~60 ms) held the card back. It
+  fades in once built (`sched-card`, 0.25 s), the quick choices fade out first, and
+  pickers on the card are placed by their laid-out size (their entrance
+  scales them, which shifted them left once it ended).
