@@ -3,6 +3,7 @@
 // edge. Fixed positioning, so scrolling containers never clip it (the
 // Dioxus `PLACE_JS` in crates/ui/src/pickers.rs).
 import { type RefObject, useLayoutEffect } from "react";
+import { layoutRect } from "./glide";
 import { keyboardUp, placeAboveCard, textRoomUnderPicker } from "./keyboardAnchor";
 import { isTouch } from "./locale";
 
@@ -30,15 +31,18 @@ function visibleTop(): number {
 function fitText(card: HTMLElement, picker: number, minTop: number): void {
   const text = card.querySelector(".editor-text");
   if (!text) return;
-  const box = card.getBoundingClientRect();
+  const box = layoutRect(card);
   const room = `${textRoomUnderPicker(box.bottom, minTop, picker, box.height - text.clientHeight)}px`;
   if (card.style.getPropertyValue("--picker-text") !== room) card.style.setProperty("--picker-text", room);
 }
 
 /**
  * Keeps a picker above the task card as the keyboard moves or its content
- * changes. Rects are relative to what's visible; a fixed `top` is relative to
- * the layout viewport, which starts `offsetTop` higher once WebKit scrolls.
+ * changes. The card's transform makes it the picker's containing block, so
+ * the picker's fixed `top` and `left` are from the card's own box: it rides
+ * with the card's moves (`rideCard`) instead of being left behind or drawn
+ * over the card while one is under way. It's placed against where the layout
+ * puts the card, which is where the ride ends.
  */
 function followCard(pop: HTMLElement, card: HTMLElement): () => void {
   const place = () => {
@@ -47,11 +51,11 @@ function followCard(pop: HTMLElement, card: HTMLElement): () => void {
     Object.assign(pop.style, { position: "fixed", right: "auto", margin: "0", maxHeight: "" });
     const minTop = visibleTop();
     fitText(card, pop.getBoundingClientRect().height, minTop);
-    const at = placeAboveCard(card.getBoundingClientRect(), pop.getBoundingClientRect(), innerWidth, minTop);
-    const offset = window.visualViewport?.offsetTop ?? 0;
+    const box = layoutRect(card);
+    const at = placeAboveCard(box, pop.getBoundingClientRect(), innerWidth, minTop);
     Object.assign(pop.style, {
-      top: `${at.top + offset}px`,
-      left: `${at.left}px`,
+      top: `${at.top - box.top - card.clientTop}px`,
+      left: `${at.left - box.left - card.clientLeft}px`,
       maxHeight: `${at.maxHeight}px`,
       overflowY: "auto",
     });
