@@ -12,7 +12,8 @@ beforeEach(() => {
     <main id="list">List</main>
     <input id="field" />
     <div class="tv-scrim" id="scrim"></div>
-    <div class="tv-sheet" id="sheet">Sheet</div>`;
+    <div class="tv-sheet" id="sheet">Sheet</div>
+    <div class="modal-scrim"><div class="modal"><p id="settings">Settings</p></div></div>`;
   swipes = [];
   uninstall = installSwipe(document, (s) => swipes.push(s));
 });
@@ -31,7 +32,13 @@ function swipe(id: string, dx: number, dy = 0) {
 
 it("a rightward touch reports its travel and the width", () => {
   swipe("list", 120);
-  expect(swipes).toEqual([{ dx: 120, dy: 0, width: 390, blocked: false, inSheet: false }]);
+  expect(swipes).toEqual([{ dx: 120, dy: 0, width: 390, blocked: false, inSheet: false, inSettings: false }]);
+});
+
+it("a touch on the Settings screen is in Settings, and not blocked", () => {
+  swipe("settings", 120);
+  expect(swipes[0]?.inSettings).toBe(true);
+  expect(swipes[0]?.blocked).toBe(false);
 });
 
 it("a touch on the scrim counts as in the sheet", () => {

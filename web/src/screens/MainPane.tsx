@@ -43,7 +43,7 @@ const SEARCH = viewPlace({ kind: "search" });
 
 function contentClass(motion: Motion, swap: number): string {
   if (motion === "pop") return "content view-pop";
-  if (motion === "push") return "content";
+  if (motion === "push" || motion === "still") return "content";
   return swap % 2 === 0 ? "content view-in-a" : "content view-in-b";
 }
 

@@ -46,14 +46,24 @@ export type Swipe = {
   blocked: boolean;
   /** It started in the task view's sheet or its scrim (no drawer swipes there). */
   inSheet: boolean;
+  /** It started on the Settings screen (which handles its own swipe; no drawer or search swipes there). */
+  inSettings: boolean;
 };
 
-/** The drawer state a swipe asks for, if any: right opens, left closes. */
-export function drawerSwipe(s: Swipe, open: boolean): boolean | null {
-  if (s.blocked || s.inSheet || s.width > NARROW_MAX) return null;
-  if (Math.abs(s.dx) < MIN_DISTANCE || Math.abs(s.dy) > Math.abs(s.dx) * MAX_SLOPE) return null;
-  const want = s.dx > 0;
-  return want !== open ? want : null;
+/** On a phone, a long enough, mostly horizontal move that didn't start in a field, popover or the task view. */
+function isSideways(s: Swipe): boolean {
+  if (s.blocked || s.inSheet || s.width > NARROW_MAX) return false;
+  return Math.abs(s.dx) >= MIN_DISTANCE && Math.abs(s.dy) <= Math.abs(s.dx) * MAX_SLOPE;
+}
+
+/** A swipe left on a page with a search button, with the drawer shut, opens Search. */
+export function searchSwipe(s: Swipe, drawerOpen: boolean, hasSearchButton: boolean): boolean {
+  return hasSearchButton && !drawerOpen && !s.inSettings && isSideways(s) && s.dx < 0;
+}
+
+/** A swipe right on the Search page goes back to the page it came from (not to the drawer). */
+export function searchBackSwipe(s: Swipe, onSearch: boolean): boolean {
+  return onSearch && !s.inSettings && isSideways(s) && s.dx > 0;
 }
 
 /** The sheet's two resting heights on the phone: medium (where it opens) and large. */
@@ -254,4 +264,33 @@ export function velocity(samples: Array<[number, number]>): number {
   if (a === undefined || b === undefined || samples.length < 2) return 0;
   const dt = b[0] - a[0];
   return dt > 0 ? (b[1] - a[1]) / dt : 0;
+}
+
+/** Where a touch that started a horizontal pan stands: still a tap, a sideways pan, or a scroll to leave alone. */
+export type PanIntent = "pending" | "horizontal" | "vertical";
+
+/** Decided once the touch has moved DRAG_SLOP; sideways (within MAX_SLOPE of level) is a pan. */
+export function panIntent(dx: number, dy: number): PanIntent {
+  if (Math.abs(dx) < DRAG_SLOP && Math.abs(dy) < DRAG_SLOP) return "pending";
+  return Math.abs(dy) <= Math.abs(dx) * MAX_SLOPE ? "horizontal" : "vertical";
+}
+
+/** How far along a pan is, 0 to 1: `dx` along `dir` (1 right, -1 left) over `range` px. */
+export function panProgress(dx: number, dir: 1 | -1, range: number): number {
+  if (range <= 0) return 0;
+  return Math.min(1, Math.max(0, (dx * dir) / range));
+}
+
+/** Past this far, a released pan carries on. */
+export const PAN_COMMIT = 0.5;
+
+/**
+ * Whether a released pan carries on (true) or springs back: past halfway, or
+ * flicked along its direction at FLICK_SPEED or more (`speed` is px per ms
+ * along it, negative when flicked back).
+ */
+export function panCommits(progress: number, speed: number): boolean {
+  if (speed >= FLICK_SPEED) return true;
+  if (speed <= -FLICK_SPEED) return false;
+  return progress >= PAN_COMMIT;
 }

@@ -9,6 +9,8 @@ import { importLine, pickSetting, reminderMenus, upcomingWhen } from "../core";
 import * as diag from "../diag";
 import { Menu } from "../editor/Menu";
 import type { Pop } from "../editor/pop";
+import { installPan } from "../gestures/pan";
+import { NARROW_MAX } from "../gestures/sheet-rules";
 import { invoke } from "../ipc/invoke";
 import { COMPLETION_ICONS, type CompletionIcon, iconLabel, saveIcon } from "../lists/completion";
 import { ShowSubtasksContext, saveShowSubtasks } from "../lists/showSubtasks";
@@ -114,6 +116,53 @@ export function Settings({
 
   const reloadUpcoming = () => upcomingInto(setUpcoming);
 
+  // Touch: a swipe right slides Settings away, back to the sidebar under it.
+  // On the phone the screen slides off to the right, as the drawer slid in
+  // (the sidebar under it is already open).
+  const [leaving, setLeaving] = useState(false);
+  const close = () => {
+    if (leaving) return;
+    if (!window.matchMedia?.("(max-width: 899px)").matches) return onClose();
+    setLeaving(true);
+    setTimeout(onClose, 260);
+  };
+  const closeNow = useRef(close);
+  closeNow.current = close;
+  useEffect(
+    () =>
+      installPan(document, (ctx) => {
+        const screen = modal.current;
+        const scrim = screen?.parentElement;
+        if (!screen || !scrim || !ctx.inSettings || ctx.blocked || ctx.width > NARROW_MAX) return null;
+        const range = screen.offsetWidth;
+        return {
+          dir: 1,
+          range,
+          onStart: () => {
+            screen.style.transition = "none";
+            scrim.style.transition = "none";
+          },
+          onMove: (p) => {
+            screen.style.transform = `translateX(${p * range}px)`;
+            scrim.style.opacity = String(1 - p);
+          },
+          // Carried on, the leaving animation takes over from where it is; otherwise it springs back.
+          onEnd: (commit) => {
+            if (commit) return closeNow.current();
+            screen.style.transition = "transform .26s var(--ease)";
+            scrim.style.transition = "opacity .26s var(--ease)";
+            screen.style.transform = "";
+            scrim.style.opacity = "";
+            setTimeout(() => {
+              screen.style.transition = "";
+              scrim.style.transition = "";
+            }, 260);
+          },
+        };
+      }),
+    [],
+  );
+
   useEffect(() => {
     void (async () => {
       const ok = <T,>(p: Promise<T>) =>
@@ -160,7 +209,7 @@ export function Settings({
     return (
       // biome-ignore lint/a11y/useKeyWithClickEvents: same markup as the Dioxus dialog; Escape works once it has loaded.
       // biome-ignore lint/a11y/noStaticElementInteractions: see above.
-      <div className="modal-scrim" onClick={onClose}>
+      <div className={`modal-scrim${leaving ? " leaving" : ""}`} onClick={close}>
         {/* biome-ignore lint/a11y/useKeyWithClickEvents: only stops the click reaching the scrim. */}
         {/* biome-ignore lint/a11y/noStaticElementInteractions: see above. */}
         <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -255,12 +304,12 @@ export function Settings({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus dialog; the scrim closes it.
     <div
-      className="modal-scrim"
-      onClick={onClose}
+      className={`modal-scrim${leaving ? " leaving" : ""}`}
+      onClick={close}
       onKeyDown={(e) => {
         if (e.key !== "Escape") return;
         if (open !== null) setOpen(null);
-        else onClose();
+        else close();
       }}
     >
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: only stops the click reaching the scrim; keys go to the scrim. */}
@@ -272,10 +321,10 @@ export function Settings({
           <div className="pop-backdrop" onClick={() => setOpen(null)} />
         ) : null}
         <div className="modal-head">
-          <button type="button" className="icon-btn back-btn" aria-label="Back" onClick={onClose}>
+          <button type="button" className="icon-btn back-btn" aria-label="Back" onClick={close}>
             <ChevronLeftIcon />
           </button>
-          <button type="button" className="icon-btn modal-close" title="Close" onClick={onClose}>
+          <button type="button" className="icon-btn modal-close" title="Close" onClick={close}>
             <XIcon />
           </button>
         </div>

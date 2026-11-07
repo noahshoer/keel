@@ -26,11 +26,13 @@ export function ghost(dir: "push" | "pop", doc: Document = document): void {
   const list = copy.querySelector(".list-scroll");
   if (list) list.scrollTop = content.querySelector(".list-scroll")?.scrollTop ?? 0;
   // In case the new view never lands.
-  setTimeout(() => el.remove(), 2000);
+  setTimeout(() => {
+    if (!el.classList.contains("dragging")) el.remove();
+  }, 2000);
 }
 
 export function ghostGo(doc: Document = document): void {
-  for (const g of doc.querySelectorAll(".view-ghost:not(.go)")) {
+  for (const g of doc.querySelectorAll(".view-ghost:not(.go):not(.dragging)")) {
     g.classList.add("go");
     g.addEventListener("animationend", () => g.remove());
     setTimeout(() => g.remove(), 1500);

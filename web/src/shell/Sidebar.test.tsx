@@ -42,16 +42,24 @@ it("the brand row has the logo first and the theme and settings buttons last", a
   expect(kids[1]).toContain("brand-name");
 });
 
-it("a search field sits under the brand row, and opens Search on a phone", async () => {
+it("the drawer has no search field on a phone; the header's button is the way in", async () => {
+  await start();
+  expect(sidebar().querySelector(".sidebar-search-input")).toBeNull();
+  expect(sidebar().querySelector(".sidebar-search")).toBeNull();
+});
+
+it("on desktop a search field sits under the brand row", async () => {
+  vi.stubGlobal("matchMedia", (q: string) => ({
+    matches: q.includes("min-width"),
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
   await start();
   const field = sidebar().querySelector(".sidebar-search-input") as HTMLInputElement;
   const brand = sidebar().querySelector(".brand") as HTMLElement;
   expect(brand.nextElementSibling?.contains(field)).toBe(true);
-  expect(field.readOnly).toBe(true);
-  fireEvent.click(field);
-  await waitFor(() => expect(title()).toBe("Search"));
-  expect(await screen.findByPlaceholderText("Search tasks, descriptions and labels")).toBeTruthy();
   expect(within(sidebar()).queryByText("Search", { selector: ".nav-item" })).toBeNull();
+  vi.unstubAllGlobals();
 });
 
 it("on desktop the field types the search, and results fill the main area", async () => {

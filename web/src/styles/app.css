@@ -1258,6 +1258,13 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 /* Narrow windows and phones: the sidebar becomes a slide-over drawer (opened
    by the header's hamburger) and the main pane goes full-bleed. */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+/* Settings leaving on the phone: it slides right, the pace of the drawer sliding in (Settings.tsx waits .26s). */
+@keyframes settings-out { to { transform: translateX(100%); } }
+@keyframes scrim-out { to { opacity: 0; } }
+@media (max-width: 899px) {
+  .modal-scrim.leaving { animation: scrim-out .26s var(--ease) forwards; }
+  .modal-scrim.leaving .modal { animation: settings-out .26s var(--ease) forwards; }
+}
 @media (max-width: 700px) {
   .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; width: min(360px, 88vw);
     background: var(--app-bg); box-shadow: var(--shadow-lg);
@@ -1271,6 +1278,13 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
      fade-in's animation). */
   .content { transition: translate .26s var(--ease); }
   .app.drawer-open .content { translate: 28px 0; }
+  /* Dragged (drawerDrag.ts) sets the styles itself, with a dimming layer of its own; React's scrim waits. */
+  .app[data-drawer-drag] .drawer-scrim:not(.drag-dim) { display: none; }
+  /* Opened by a drag, it stays open: the scrim must not play its fade-in again (it would flicker). */
+  .app[data-drawer-rest] .drawer-scrim { animation: none; }
+  /* Search dragged in (searchDrag.ts): once it has landed its screen sits at --push px from the left edge, over the copy of the page it leaves; "settle" runs the rest at the slide's pace. */
+  .app[data-push-drag] .main:has(.search-input) { transform: translateX(var(--push, 100%)); box-shadow: -10px 0 30px rgba(0,0,0,.25); }
+  .app[data-push-drag="settle"] .main:has(.search-input) { transition: transform .36s cubic-bezier(.32,.72,0,1); }
   .menu-btn, .back-btn { display: inline-flex; }
   .view-head:has(.back-btn) .view-title { display: none; }
   .main { margin: 0; border-radius: 0; box-shadow: none; }

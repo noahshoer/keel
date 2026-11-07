@@ -112,7 +112,30 @@ it("deleting a sub-task from its ••• makes the parent active in the same s
   expect(classes.every((c) => c.includes("view-open"))).toBe(true);
 });
 
-it("on a phone, a swipe right opens the drawer and a swipe left closes it", async () => {
+it("on a phone, dragging right opens the drawer and dragging left closes it", async () => {
+  setWidth(390);
+  try {
+    const { container } = render(<App />);
+    await screen.findByText("Do laundry");
+    const main = container.querySelector(".main") as HTMLElement;
+    const drag = (from: number, to: number, at: number) =>
+      act(() => {
+        touch("touchstart", main, from, 300, at);
+        touch("touchmove", main, from + Math.sign(to - from) * 20, 302, at + 10);
+        touch("touchmove", main, to, 304, at + 40);
+        touch("touchend", main, to, 304, at + 50);
+      });
+    drag(40, 200, 0); // a quick flick
+    await waitFor(() => expect(appClass(container)).toBe("app drawer-open"));
+    await waitFor(() => expect(container.querySelector(".app[data-drawer-drag]")).toBeNull()); // settled
+    drag(300, 140, 1000);
+    await waitFor(() => expect(appClass(container)).toBe("app"));
+  } finally {
+    setWidth(1024);
+  }
+});
+
+it("a short slow drag springs back, leaving the drawer as it was", async () => {
   setWidth(390);
   try {
     const { container } = render(<App />);
@@ -120,13 +143,11 @@ it("on a phone, a swipe right opens the drawer and a swipe left closes it", asyn
     const main = container.querySelector(".main") as HTMLElement;
     act(() => {
       touch("touchstart", main, 40, 300, 0);
-      touch("touchend", main, 160, 310, 200);
+      touch("touchmove", main, 60, 302, 100);
+      touch("touchmove", main, 80, 304, 1500);
+      touch("touchend", main, 80, 304, 1600);
     });
-    expect(appClass(container)).toBe("app drawer-open");
-    act(() => {
-      touch("touchstart", main, 300, 300, 1000);
-      touch("touchend", main, 180, 305, 1200);
-    });
+    await waitFor(() => expect(container.querySelector(".app[data-drawer-drag]")).toBeNull());
     expect(appClass(container)).toBe("app");
   } finally {
     setWidth(1024);

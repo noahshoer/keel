@@ -8,13 +8,15 @@ import { localToday } from "../clock";
 import { installDrag } from "../gestures/drag";
 import { installLongPress } from "../gestures/long-press";
 import { installSheet } from "../gestures/sheet";
-import { drawerSwipe } from "../gestures/sheet-rules";
+import { searchBackSwipe, searchSwipe } from "../gestures/sheet-rules";
 import { installSwipe } from "../gestures/swipe";
 import { CompletionIconContext, savedIcon } from "../lists/completion";
 import { ShowSubtasksContext, savedShowSubtasks } from "../lists/showSubtasks";
 import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
 import { SearchPane } from "../screens/SearchPane";
+import { clearPush, installSearchDrag } from "../screens/searchDrag";
+import { clearDrag, installDrawerDrag } from "../shell/drawerDrag";
 import { Sidebar } from "../shell/Sidebar";
 import { applyTheme, savedTheme, type Theme } from "../shell/theme";
 import { installUnderPage } from "../shell/underPage";
@@ -40,6 +42,8 @@ export function App() {
   // Applied and remembered on every change (main.tsx applies the saved one before the first paint).
   // iOS paints past the page's end (under the keyboard's corners) in the list's color.
   const underPage = useRef<ReturnType<typeof installUnderPage> | null>(null);
+  // The same for Search dragged in: "drag" while Search is being brought in, "cancel" while the page it came from is wanted back.
+  const pushDrag = useRef<"drag" | "cancel" | null>(null);
   useEffect(() => {
     underPage.current = installUnderPage(document, window);
     return underPage.current.uninstall;
@@ -59,15 +63,74 @@ export function App() {
   // Touch: a long press shows a row's actions.
   useEffect(() => installLongPress(document), []);
   useEffect(() => installDrag(document, window), []);
-  // Touch: swipe right opens the drawer, swipe left closes it. Installed
-  // once, so the handler reads the drawer through a ref.
+  // Touch: the drawer follows a drag (shell/drawerDrag.ts), and a quick swipe
+  // left, with the drawer shut, opens Search on a page that has the button; a
+  // swipe right on Search goes back. Installed once, so the handlers read the
+  // drawer and the view through refs.
   const drawerNow = useRef(drawer);
   drawerNow.current = drawer;
+  const viewNow = useRef(view);
+  viewNow.current = view;
+  const openSearchNow = useRef<() => void>(() => {});
+  const leaveSearchNow = useRef<() => void>(() => {});
+  leaveSearchNow.current = () => setView(beforeSearch.current);
+  // While the Search screen is dragged back: "drag" until the page behind has landed, "cancel" while it is wanted back.
+  const panGhost = useRef<"drag" | "cancel" | null>(null);
+  useEffect(
+    () =>
+      installSearchDrag(document, {
+        isSearch: () => viewNow.current.kind === "search",
+        drawerOpen: () => drawerNow.current,
+        leave: () => {
+          panGhost.current = "drag";
+          setView(beforeSearch.current);
+        },
+        cancel: () => {
+          panGhost.current = "cancel";
+          // Search was never left on screen: when it lands again it doesn't slide in.
+          if (landedView.current?.kind !== "search") renamedTo.current = { kind: "search" };
+          setView({ kind: "search" });
+        },
+        push: () => {
+          pushDrag.current = "drag";
+          setView({ kind: "search" });
+        },
+        pushed: () => {
+          pushDrag.current = null;
+          document.querySelector<HTMLInputElement>(".search-input")?.focus();
+        },
+        pushCancel: () => {
+          pushDrag.current = "cancel";
+          // The page it came from was never left on screen: when it lands again it doesn't slide in.
+          if (landedView.current?.kind === "search") renamedTo.current = beforeSearch.current;
+          setView(beforeSearch.current);
+        },
+      }),
+    [],
+  );
+  useEffect(
+    () =>
+      installDrawerDrag(document, {
+        isOpen: () => drawerNow.current,
+        canOpen: () => viewNow.current.kind !== "search",
+        setOpen: setDrawer,
+      }),
+    [],
+  );
   useEffect(
     () =>
       installSwipe(document, (s) => {
-        const open = drawerSwipe(s, drawerNow.current);
-        if (open !== null) setDrawer(open);
+        const onSearch = viewNow.current.kind === "search";
+        const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        if (reduced && searchSwipe(s, drawerNow.current, !onSearch)) {
+          openSearchNow.current();
+          return;
+        }
+        // With motion the Search screen follows the finger in and out (screens/searchDrag.ts); these are the reduced-motion forms.
+        if (reduced && !drawerNow.current && searchBackSwipe(s, onSearch)) {
+          leaveSearchNow.current();
+          return;
+        }
       }),
     [],
   );
@@ -84,6 +147,7 @@ export function App() {
       60,
     );
   }, []);
+  openSearchNow.current = openSearch;
   // "/" (when not typing) or Ctrl/Cmd+K does too.
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -108,7 +172,7 @@ export function App() {
     requested.current = view;
     closingFor.current = view;
     const motion = viewMotion(before, view);
-    if (motion !== "fade") ghost(motion);
+    if (motion !== "fade" && panGhost.current === null) ghost(motion);
   }, [view]);
 
   // Each time a different view's data lands, the page fades in again
@@ -129,6 +193,19 @@ export function App() {
   };
   useEffect(() => {
     const landed = loaded?.view ?? null;
+    if (landed !== null) {
+      // A dragged Search screen: its copy goes once the page it is wanted back as has landed.
+      if (panGhost.current === "cancel" && landed.kind === "search") {
+        panGhost.current = null;
+        requestAnimationFrame(() => {
+          for (const g of document.querySelectorAll(".view-ghost")) g.remove();
+        });
+      } else if (panGhost.current === "drag" && landed.kind !== "search") panGhost.current = null;
+      if (pushDrag.current === "cancel" && landed.kind !== "search") {
+        pushDrag.current = null;
+        requestAnimationFrame(() => clearPush());
+      }
+    }
     if (error !== null || landed !== null) {
       const target = closingFor.current;
       if (target !== null && (error !== null || (landed !== null && sameView(target, landed)))) {
@@ -143,10 +220,12 @@ export function App() {
       renamedTo.current = null;
       return;
     }
-    const motion = before === null ? "fade" : viewMotion(before, landed);
+    // Search dragged in is placed by the drag as it lands: no slide of its own.
+    const pushing = pushDrag.current === "drag" && landed.kind === "search";
+    const motion = before === null ? "fade" : pushing ? "still" : viewMotion(before, landed);
     setSwap((s) => ({ key: viewKey(landed), n: s.n + 1, motion }));
     // After the new page renders, the left-behind copy moves off.
-    if (motion !== "fade") requestAnimationFrame(() => ghostGo());
+    if (motion !== "fade" && motion !== "still") requestAnimationFrame(() => ghostGo());
   }, [loaded, error]);
 
   let body: React.ReactNode;
@@ -255,8 +334,16 @@ function Frame({
   const viewOpen = loaded !== null && top(pruned(nav.stack, loaded.all)) !== null;
   useEffect(() => (viewOpen ? holdPage() : undefined), [viewOpen]);
   useEffect(() => (drawer ? holdPage() : undefined), [drawer]);
+  // Once it is shut, the next scrim fades in as usual (see drawerDrag.ts).
+  const appEl = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const app = appEl.current;
+    if (drawer || !app) return;
+    delete app.dataset["drawerRest"];
+    clearDrag(app); // a drag that shut it waited for this
+  }, [drawer]);
   return (
-    <div className={`app${drawer ? " drawer-open" : ""}${viewOpen ? " view-open" : ""}`}>
+    <div ref={appEl} className={`app${drawer ? " drawer-open" : ""}${viewOpen ? " view-open" : ""}`}>
       {drawer ? (
         // biome-ignore lint/a11y/useKeyWithClickEvents: the scrim is a pointer target; Escape isn't part of the Dioxus drawer.
         // biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI.

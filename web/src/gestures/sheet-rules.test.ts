@@ -4,7 +4,6 @@ import {
   type DragStart,
   dragFrom,
   dragOffset,
-  drawerSwipe,
   EDGE_WIDTH,
   edgeBackAction,
   edgeBackCommits,
@@ -12,7 +11,12 @@ import {
   holdsScroll,
   keyboardExpands,
   keyboardInset,
+  panCommits,
+  panIntent,
+  panProgress,
   type Swipe,
+  searchBackSwipe,
+  searchSwipe,
   settleOffset,
   sheetDragAction,
   sheetSettle,
@@ -25,6 +29,7 @@ const swipe = (dx: number, dy: number, over: Partial<Swipe> = {}): Swipe => ({
   width: 390,
   blocked: false,
   inSheet: false,
+  inSettings: false,
   ...over,
 });
 
@@ -41,32 +46,41 @@ const start = (scrollTop: number, over: Partial<DragStart> = {}): DragStart => (
 
 const large = (scrollTop: number): DragStart => start(scrollTop, { detent: "large" });
 
-describe("drawer swipes", () => {
-  it("swipe_right_opens_a_closed_drawer", () => {
-    expect(drawerSwipe(swipe(120, 10), false)).toBe(true);
+describe("page swipes", () => {
+  it("swipe_right_on_the_search_page_goes_back", () => {
+    expect(searchBackSwipe(swipe(120, 10), true)).toBe(true);
   });
 
-  it("swipe_left_closes_an_open_drawer", () => {
-    expect(drawerSwipe(swipe(-120, 10), true)).toBe(false);
+  it("search_back_swipe_needs_the_search_page_and_a_clean_rightward_swipe", () => {
+    expect(searchBackSwipe(swipe(120, 0), false)).toBe(false);
+    expect(searchBackSwipe(swipe(-120, 0), true)).toBe(false);
+    expect(searchBackSwipe(swipe(40, 0), true)).toBe(false);
+    expect(searchBackSwipe(swipe(100, 90), true)).toBe(false);
+    expect(searchBackSwipe(swipe(120, 0, { blocked: true }), true)).toBe(false);
+    expect(searchBackSwipe(swipe(120, 0, { width: 1200 }), true)).toBe(false);
+    expect(searchBackSwipe(swipe(120, 0, { inSettings: true }), true)).toBe(false);
   });
 
-  it("same_direction_as_the_state_does_nothing", () => {
-    expect(drawerSwipe(swipe(120, 0), true)).toBeNull();
-    expect(drawerSwipe(swipe(-120, 0), false)).toBeNull();
+  it("swipe_left_on_a_page_with_a_search_button_opens_search", () => {
+    expect(searchSwipe(swipe(-120, 10), false, true)).toBe(true);
   });
 
-  it("short_or_mostly_vertical_moves_are_ignored", () => {
-    expect(drawerSwipe(swipe(40, 0), false)).toBeNull(); // too short
-    expect(drawerSwipe(swipe(100, 90), false)).toBeNull(); // a scroll, not a swipe
+  it("no_search_swipe_with_the_drawer_open_without_the_button_or_to_the_right", () => {
+    expect(searchSwipe(swipe(-120, 0), true, true)).toBe(false); // left closes the drawer
+    expect(searchSwipe(swipe(-120, 0), false, false)).toBe(false); // the Search screen itself
+    expect(searchSwipe(swipe(120, 0), false, true)).toBe(false);
   });
 
-  it("no_drawer_swipe_from_the_sheet", () => {
-    expect(drawerSwipe(swipe(120, 0, { inSheet: true }), false)).toBeNull();
+  it("search_swipe_ignores_short_vertical_blocked_sheet_and_wide", () => {
+    expect(searchSwipe(swipe(-40, 0), false, true)).toBe(false);
+    expect(searchSwipe(swipe(-100, 90), false, true)).toBe(false);
+    expect(searchSwipe(swipe(-120, 0, { blocked: true }), false, true)).toBe(false);
+    expect(searchSwipe(swipe(-120, 0, { inSheet: true }), false, true)).toBe(false);
+    expect(searchSwipe(swipe(-120, 0, { width: 1200 }), false, true)).toBe(false);
   });
 
-  it("wide_layouts_and_blocked_targets_are_ignored", () => {
-    expect(drawerSwipe(swipe(120, 0, { width: 1200 }), false)).toBeNull();
-    expect(drawerSwipe(swipe(120, 0, { blocked: true }), false)).toBeNull();
+  it("search_ignores_swipes_that_start_on_settings", () => {
+    expect(searchSwipe(swipe(-120, 0, { inSettings: true }), false, true)).toBe(false);
   });
 });
 
@@ -285,5 +299,30 @@ describe("velocity", () => {
         [5, 40],
       ]),
     ).toBe(0);
+  });
+});
+
+describe("horizontal pan", () => {
+  it("intent_waits_for_the_slop_then_sideways_wins", () => {
+    expect(panIntent(5, 3)).toBe("pending");
+    expect(panIntent(30, 4)).toBe("horizontal");
+    expect(panIntent(-30, 10)).toBe("horizontal");
+    expect(panIntent(20, 40)).toBe("vertical"); // a scroll
+    expect(panIntent(0, 20)).toBe("vertical");
+  });
+
+  it("progress_follows_the_finger_in_the_pans_direction_and_clamps", () => {
+    expect(panProgress(90, 1, 360)).toBe(0.25);
+    expect(panProgress(-90, -1, 360)).toBe(0.25);
+    expect(panProgress(-90, 1, 360)).toBe(0); // against the direction
+    expect(panProgress(900, 1, 360)).toBe(1);
+  });
+
+  it("commits_past_half_or_on_a_flick_in_its_direction", () => {
+    expect(panCommits(0.6, 0)).toBe(true);
+    expect(panCommits(0.4, 0)).toBe(false);
+    expect(panCommits(0.1, 0.8)).toBe(true); // flicked along
+    expect(panCommits(0.9, -0.8)).toBe(false); // flicked back
+    expect(panCommits(0.4, 0.3)).toBe(false); // too slow to count as a flick
   });
 });
