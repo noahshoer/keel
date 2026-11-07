@@ -173,7 +173,7 @@ pub fn chain(id: &Id, all: &[Task]) -> Vec<Id> {
 }
 
 /// Whether a task repeats.
-fn repeats(t: &Task) -> bool {
+pub fn repeats(t: &Task) -> bool {
     t.due.as_ref().is_some_and(|d| d.is_recurring)
 }
 
@@ -189,6 +189,20 @@ fn repeating_done(t: &Task, today: NaiveDate) -> bool {
 /// Whether a task shows as completed (see [`repeating_done`]).
 pub fn is_done(t: &Task, today: NaiveDate) -> bool {
     t.checked || repeating_done(t, today)
+}
+
+/// Whether a task is done for now: checked, or a repeating task completed
+/// for the occurrence before its next date (top-level too, unlike [`is_done`]).
+pub fn done_for_now(t: &Task, today: NaiveDate) -> bool {
+    t.checked
+        || (repeats(t)
+            && due_date_of(t).is_some_and(|d| d > today)
+            && streak::undoable_completion(t, today).is_some())
+}
+
+/// Whether every sub-task its "x of y" counts is done (false with none).
+pub fn all_done(parent: &Id, all: &[Task], today: NaiveDate) -> bool {
+    progress(parent, all, today).is_some_and(|p| p.done == p.total)
 }
 
 /// Counts a task's direct, non-deleted sub-tasks. Repeating sub-tasks count
