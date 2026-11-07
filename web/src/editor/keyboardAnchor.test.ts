@@ -2,15 +2,12 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KEYBOARD_EVENT, keyboardInset } from "../gestures/sheet-rules";
 import {
-  FALLBACK_SECS,
-  FRAME_LEAD_SECS,
-  leadOf,
   nextHeld,
   paceOf,
   placeAboveCard,
   readKeyboard,
   rideCard,
-  riseTransition,
+  SNAPPED_RISE_SECS,
   textRoomUnderPicker,
   useKeyboard,
 } from "./keyboardAnchor";
@@ -121,48 +118,64 @@ describe("the keyboard as the card reads it", () => {
     expect(readKeyboard(844, 0, 516, 328)).toEqual({ inset: 328, up: true, room: 516 });
     expect(readKeyboard(844, 20, 500, 328)).toEqual({ inset: 324, up: true, room: 500 });
   });
+
+  it("counts a keyboard on its way down as down, before the viewport resizes", () => {
+    expect(readKeyboard(844, 0, 516, 0)).toEqual({ inset: 0, up: false, room: 844 });
+  });
+});
+
+describe("a picker open on the card as it rides", () => {
+  it("holds its place on the screen while the card moves under it", () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<form class="editor on-keyboard" id="ride-card"><div class="popover" id="ride-pop"></div></form>',
+    );
+    const card = document.getElementById("ride-card") as HTMLElement;
+    const pop = document.getElementById("ride-pop") as HTMLElement;
+    const moves = new Map<HTMLElement, string[]>();
+    for (const el of [card, pop]) {
+      Object.assign(el, {
+        animate: (k: Keyframe[]) => {
+          moves.set(
+            el,
+            k.map((f) => String(f["transform"])),
+          );
+          return {} as Animation;
+        },
+        getAnimations: () => [],
+      });
+    }
+    // The calendar lowers the keyboard: the card rides down from 538 to rest at 832.
+    card.getBoundingClientRect = () => ({ bottom: 832 }) as DOMRect;
+    rideCard(
+      card,
+      538,
+      { secs: 0.4, ease: "linear(0,0.5,1)" },
+      { kbFrom: 546, kbTo: 874, gap: 8, rest: 832 },
+    );
+    expect(moves.get(card)).toEqual(["translateY(-294px)", "translateY(-130px)", "translateY(0px)"]);
+    // The picker moves the other way, so it stays where it was placed.
+    expect(moves.get(pop)).toEqual(["translateY(294px)", "translateY(130px)", "translateY(0px)"]);
+    card.remove();
+  });
 });
 
 describe("the pace of a keyboard move", () => {
-  it("is the keyboard's own, a default when iOS reports none, and none under reduced motion", () => {
+  it("is the keyboard's own, and none when it doesn't animate or under reduced motion", () => {
     expect(paceOf({ kb: 328, secs: 0.38, ease: "ease", reduced: false })).toEqual({
       secs: 0.38,
       ease: "ease",
-      lead: FRAME_LEAD_SECS,
     });
+    // A very quick first tap after launch snaps the keyboard in (iOS reports 0 s):
+    // the card still rises into place, in 0.15 s, so it arrives with it. Only then.
+    expect(SNAPPED_RISE_SECS).toBe(0.15);
     expect(paceOf({ kb: 328, secs: 0, ease: "ease", reduced: false })).toEqual({
-      secs: FALLBACK_SECS,
+      secs: SNAPPED_RISE_SECS,
       ease: "ease",
-      lead: FRAME_LEAD_SECS,
     });
-    expect(paceOf({ kb: 328, secs: 0.38, ease: "ease", reduced: true })).toEqual({
-      secs: 0,
-      ease: "ease",
-      lead: 0,
-    });
-  });
-
-  it("moves the card by transform (the compositor's, as the sheet's), or not at all", () => {
-    expect(riseTransition({ secs: 0.4, ease: "ease", lead: 0 })).toBe("transform 0.4s ease 0s");
-    expect(riseTransition({ secs: 0, ease: "ease", lead: 0 })).toBeNull();
-  });
-
-  it("starts ahead by what the page lost: the hop from Swift and a frame to draw", () => {
-    expect(riseTransition({ secs: 0.4, ease: "ease", lead: 0.05 })).toBe("transform 0.4s ease -0.05s");
-    const at = 1_000_000;
-    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: false, at }, at + 12)).toBeCloseTo(
-      0.012 + FRAME_LEAD_SECS,
-    );
-    // No stamp, a clock that is behind, or a hop that long: only the frame.
-    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: false }, at)).toBe(FRAME_LEAD_SECS);
-    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: false, at: at + 500 }, at)).toBe(
-      FRAME_LEAD_SECS,
-    );
-    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: false, at }, at + 900)).toBeCloseTo(
-      0.15 + FRAME_LEAD_SECS,
-    );
-    // Reduced motion doesn't move at all.
-    expect(leadOf({ kb: 328, secs: 0.4, ease: "ease", reduced: true, at }, at + 12)).toBe(0);
+    // One that snaps away: the card goes with it.
+    expect(paceOf({ kb: 0, secs: 0, ease: "ease", reduced: false })).toEqual({ secs: 0, ease: "ease" });
+    expect(paceOf({ kb: 328, secs: 0.38, ease: "ease", reduced: true })).toEqual({ secs: 0, ease: "ease" });
   });
 });
 
@@ -208,63 +221,45 @@ describe("useKeyboard with the pace", () => {
     expect(result.current).toMatchObject({ inset: 0, up: false });
   });
 
-  it("starts the card from where it was shown, riding on its transform", () => {
-    document.body.insertAdjacentHTML("beforeend", '<form class="editor on-keyboard" id="card"></form>');
-    const card = document.getElementById("card") as HTMLElement;
-    // Low on the screen before the move, 328 up after it.
-    let bottom = 836;
-    card.getBoundingClientRect = () => ({ bottom }) as DOMRect;
-    const { result } = renderHook(() => useKeyboard(true, true));
-    bottom = 836;
-    const stages: string[] = [];
-    const real = card.style;
-    Object.defineProperty(card, "style", {
-      value: new Proxy(real, {
-        set(target, key, value) {
-          if (key === "transform" || key === "transition") stages.push(`${String(key)}=${value}`);
-          return Reflect.set(target, key, value);
-        },
-      }),
+  it("rides the keyboard's own path on the keyboard's spring, from where it rests", () => {
+    document.body.insertAdjacentHTML("beforeend", '<form class="editor on-keyboard" id="card3"></form>');
+    const card = document.getElementById("card3") as HTMLElement;
+    const frames: Keyframe[][] = [];
+    const options: KeyframeAnimationOptions[] = [];
+    Object.assign(card, {
+      animate: (k: Keyframe[], o: KeyframeAnimationOptions) => {
+        frames.push(k);
+        options.push(o);
+        return {} as Animation;
+      },
+      getAnimations: () => [],
     });
-    // The layout the keyboard's move leads to.
+    // At rest above a 34 pt home indicator (844 - 34 - 8), then 8 pt above the keyboard.
     const stub = vi.spyOn(card, "getBoundingClientRect");
-    stub.mockImplementationOnce(() => ({ bottom: 836 }) as DOMRect);
+    stub.mockImplementationOnce(() => ({ bottom: 802 }) as DOMRect);
     stub.mockImplementation(() => ({ bottom: 508 }) as DOMRect);
-    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
-    expect(result.current.inset).toBe(328);
-    // The caret is drawn where the layout is, not where the card is yet: hidden meanwhile.
-    expect(card.classList.contains("riding")).toBe(true);
-    expect(stages).toEqual([
-      "transition=none",
-      "transform=translateY(328px)",
-      "transition=transform 0.4s ease -0.05s",
-      "transform=",
+    const margin = vi.spyOn(window, "getComputedStyle");
+    margin.mockImplementationOnce(() => ({ marginBottom: "34px" }) as CSSStyleDeclaration);
+    margin.mockImplementation(() => ({ marginBottom: "0px" }) as CSSStyleDeclaration);
+    renderHook(() => useKeyboard(true, true));
+    send({ kb: 328, secs: 0.4, ease: "linear(0,0.1,0.5,1)", reduced: false });
+    margin.mockRestore();
+    // Keyboard tops 844, 811.2, 680, 516: picked up after the first tenth.
+    expect(frames[0]?.map((f) => f["transform"])).toEqual([
+      "translateY(294px)",
+      "translateY(294px)",
+      "translateY(164px)",
+      "translateY(0px)",
     ]);
-    // Back to plain once the move is over.
+    expect(options[0]).toEqual({ id: "keel-ride", duration: 400, easing: "linear" });
+    expect(card.classList.contains("riding")).toBe(true);
+    // iOS announces a keyboard more than once: the ride under way goes on.
+    send({ kb: 328, secs: 0.4, ease: "linear(0,0.1,0.5,1)", reduced: false });
+    expect(frames).toHaveLength(1);
     act(() => {
       vi.advanceTimersByTime(451);
     });
-    expect(stages.at(-1)).toBe("transition=");
     expect(card.classList.contains("riding")).toBe(false);
-    card.remove();
-  });
-
-  it("gives the caret back even when a second announcement of the move finds nothing to move", () => {
-    document.body.insertAdjacentHTML("beforeend", '<form class="editor on-keyboard" id="card2"></form>');
-    const card = document.getElementById("card2") as HTMLElement;
-    const stub = vi.spyOn(card, "getBoundingClientRect");
-    renderHook(() => useKeyboard(true, true));
-    // iOS announces a keyboard two or three times within a few ms.
-    stub.mockImplementationOnce(() => ({ bottom: 836 }) as DOMRect);
-    stub.mockImplementation(() => ({ bottom: 508 }) as DOMRect);
-    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
-    expect(card.classList.contains("riding")).toBe(true);
-    send({ kb: 328, secs: 0.4, ease: "ease", reduced: false });
-    act(() => {
-      vi.advanceTimersByTime(500);
-    });
-    expect(card.classList.contains("riding")).toBe(false);
-    expect(card.style.transition).toBe("");
     card.remove();
   });
 

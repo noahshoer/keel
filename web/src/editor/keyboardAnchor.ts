@@ -5,9 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { log } from "../diag";
 import { KEYBOARD_EVENT, keyboardInset } from "../gestures/sheet-rules";
+import { type Glide, gluedPath, springPoints } from "./glide";
 import type { Rect } from "./popover";
 
 const MARGIN = 8;
+/** How far above the keyboard the task card sits. */
+export const CARD_GAP = 8;
 /** A picker keeps this much room, even above a very tall card. */
 const MIN_ROOM = 120;
 
@@ -63,70 +66,76 @@ export type KeyboardMove = {
   at?: number;
 };
 
-/** `lead`: how far into its move the card starts, for the time the page lost getting going. */
-type Pace = { secs: number; ease: string; lead: number };
-
-/** A frame for the page to draw the card's first step, on top of the hop from Swift. */
-export const FRAME_LEAD_SECS = 0.05;
-/** The most the card starts ahead for the hop: a stale stamp mustn't throw it forward. */
-const MAX_HOP_SECS = 0.15;
-
-/** How far ahead of the keyboard the card starts: the hop from Swift (`at`, until `now`) and a frame. None under reduced motion. */
-export function leadOf(m: KeyboardMove, now: number): number {
-  if (m.reduced) return 0;
-  const hop = m.at === undefined ? 0 : Math.min(Math.max((now - m.at) / 1000, 0), MAX_HOP_SECS);
-  return hop + FRAME_LEAD_SECS;
-}
-
-/** The first keyboard after launch comes with no pace (iOS reports 0 s): the pace of every other one, 10% slower than iOS. */
-export const FALLBACK_SECS = 0.426;
-
-/** How long a move takes and its curve: the keyboard's own, `FALLBACK_SECS` when iOS gave none, none under reduced motion. */
-export function paceOf(m: KeyboardMove, now: number = Date.now()): Pace {
-  const lead = leadOf(m, now);
-  if (m.reduced) return { secs: 0, ease: m.ease, lead };
-  return { secs: m.secs > 0 ? m.secs : FALLBACK_SECS, ease: m.ease, lead };
-}
+type Pace = { secs: number; ease: string };
 
 /**
- * The card's move at `pace`, on its transform: the compositor's, so it keeps up
- * with the keyboard (`bottom` is layout, on the page's thread). `null` when it
- * doesn't move.
+ * How long the card takes to rise onto a keyboard that snapped in (a very
+ * quick tap on + right after launch). Short, so it reads as arriving with the
+ * keyboard: at the keyboard's usual 0.43 s it lagged behind one already there.
  */
-export function riseTransition(pace: Pace): string | null {
-  if (pace.secs <= 0) return null;
-  // A negative delay starts it that far in.
-  return `transform ${pace.secs}s ${pace.ease} ${pace.lead > 0 ? `-${pace.lead}s` : "0s"}`;
-}
+export const SNAPPED_RISE_SECS = 0.15;
 
 /**
- * Starts `card` from where it was shown (`from`, its bottom edge before the
- * layout changed) and has it ride its transform to where the layout now puts
- * it, at `pace`. Returns the timer that puts its style back afterwards.
+ * How long a move takes and its curve: the keyboard's own. When the keyboard
+ * snaps up (iOS reports 0 s, as for the first keyboard after launch after a
+ * very quick tap), the card still rises into place, briefly
+ * (`SNAPPED_RISE_SECS`), rather than popping in; when one snaps away, the
+ * card goes with it. None under reduced motion. It starts with the keyboard,
+ * never ahead of it: a head start on the keyboard's stiff spring was a 96 pt
+ * jump on the first frame.
+ */
+export function paceOf(m: KeyboardMove): Pace {
+  if (m.reduced) return { secs: 0, ease: m.ease };
+  if (m.secs <= 0) return { secs: m.kb > 0 ? SNAPPED_RISE_SECS : 0, ease: m.ease };
+  return { secs: m.secs, ease: m.ease };
+}
+
+/** The id of a ride's animations, so a new ride cancels only those. */
+const RIDE = "keel-ride";
+
+/** The keyboard's move as the card rides it (see `gluedPath`). */
+export type Track = Pick<Glide, "kbFrom" | "kbTo" | "gap" | "rest">;
+
+/**
+ * Has `card` ride the keyboard from where it was shown (`from`, its bottom
+ * edge before the layout changed) to where the layout now puts it. Its
+ * transform follows the keyboard's own path (`gluedPath`), sampled from the
+ * keyboard's spring (`linear()` from Swift), as keyframes: the compositor's,
+ * so it keeps up with the keyboard (`bottom` is layout, on the page's thread).
+ * Returns the timer that gives the caret back afterwards.
  */
 export function rideCard(
   card: HTMLElement,
   from: number,
   pace: Pace,
+  track: Track,
 ): ReturnType<typeof setTimeout> | undefined {
-  const transition = riseTransition(pace);
-  const delta = from - card.getBoundingClientRect().bottom;
-  if (transition === null || delta === 0) return undefined;
-  card.style.transition = "none";
-  card.style.transform = `translateY(${delta}px)`;
-  // The place it starts from has to be laid out before the transition is set.
-  card.getBoundingClientRect();
-  card.style.transition = transition;
-  card.style.transform = "";
+  const points = springPoints(pace.ease);
+  if (pace.secs <= 0 || points === null || typeof card.animate !== "function") return undefined;
+  const pickers = [...card.querySelectorAll<HTMLElement>(".popover")];
+  // Where the layout puts it, without what's left of an earlier move.
+  for (const el of [card, ...pickers]) {
+    for (const a of el.getAnimations()) if (a.id === RIDE) a.cancel();
+  }
+  const path = gluedPath({ ...track, points, from, final: card.getBoundingClientRect().bottom });
+  if (path.every((y) => Math.abs(y) < 0.5)) return undefined;
+  const timing = { id: RIDE, duration: pace.secs * 1000, easing: "linear" };
+  card.animate(
+    path.map((y) => ({ transform: `translateY(${y}px)` })),
+    timing,
+  );
+  // A picker open on the card (the calendar, which lowered the keyboard) stays
+  // where it was placed while the card moves under it: it's inside the card,
+  // so it moves the other way.
+  for (const pop of pickers) {
+    pop.animate(
+      path.map((y) => ({ transform: `translateY(${-y}px)` })),
+      timing,
+    );
+  }
   // iOS draws the caret where the layout is, not where the card is yet.
   card.classList.add("riding");
-  return setTimeout(
-    () => {
-      card.style.transition = "";
-      card.classList.remove("riding");
-    },
-    pace.secs * 1000 + 50,
-  );
+  return setTimeout(() => card.classList.remove("riding"), pace.secs * 1000 + 50);
 }
 
 /** Whether the visible area is shorter than the page: the keyboard is up. */
@@ -145,6 +154,8 @@ export function readKeyboard(
   vvH: number,
   held: number | null,
 ): KeyboardState {
+  // One on its way down (`held` 0): down already, though the viewport is still short.
+  if (held === 0) return { inset: 0, up: false, room: clientH };
   const inset = keyboardInset(clientH, vvTop, vvH, held);
   const resized = vvH < clientH - 0.5;
   if (held !== null && !resized) return { inset, up: true, room: vvH - inset };
@@ -172,21 +183,36 @@ export function useKeyboard(enabled: boolean, paced = false): KeyboardState {
     if (!enabled || !v) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const update = () => setState(read());
+    /** The move under way: iOS announces a keyboard more than once. */
+    let moving: { kb: number; until: number } | null = null;
     const onMove = (e: Event) => {
       const m = (e as CustomEvent<KeyboardMove>).detail;
       const pace = paceOf(m);
-      log(
-        `card follows kb ${m.kb} hop ${m.at === undefined ? "?" : Date.now() - m.at}ms lead ${pace.lead.toFixed(3)}s`,
-      );
-      held.current = m.kb > 0 ? { kb: m.kb, until: Date.now() + pace.secs * 1000 + 500 } : null;
+      const now = Date.now();
+      log(`card follows kb ${m.kb} secs ${pace.secs} hop ${m.at === undefined ? "?" : now - m.at}ms`);
+      if (moving !== null && moving.kb === m.kb && now < moving.until) return;
+      moving = { kb: m.kb, until: now + pace.secs * 1000 };
+      const clientH = document.documentElement.clientHeight;
+      const before = read();
+      // Until the viewport has caught up, in either direction.
+      held.current = { kb: m.kb, until: now + pace.secs * 1000 + 500 };
       const card = document.querySelector<HTMLElement>(".editor.on-keyboard");
       const from = card?.getBoundingClientRect().bottom;
+      // Above the home indicator while the keyboard is down (`.keyboard-down`).
+      const margin = () => (card ? Number.parseFloat(getComputedStyle(card).marginBottom) || 0 : 0);
+      const restBefore = margin();
       // Now, not with the next render: the card has to start with the keyboard.
       flushSync(update);
       if (card && from !== undefined) {
+        const track: Track = {
+          kbFrom: clientH - before.inset,
+          kbTo: clientH - read().inset,
+          gap: CARD_GAP,
+          rest: clientH - CARD_GAP - Math.max(restBefore, margin()),
+        };
         // A second announcement of the same move finds nothing to move: the
         // first ride's timer stays, and gives the caret back.
-        const next = rideCard(card, from, pace);
+        const next = rideCard(card, from, pace, track);
         if (next !== undefined) {
           clearTimeout(timer);
           timer = next;
