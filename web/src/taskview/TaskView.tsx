@@ -153,12 +153,32 @@ export function TaskView({
   const [open, setOpen] = useState<Pop>(null);
 
   type Pair = { before: EditorValues; after: EditorValues; rule: Recurrence | null };
+  // A move of one occurrence resets a streak going, so it waits for an answer.
+  type PendingMove = { move: () => void; cancel: () => void };
+  const [pendingMove, setPendingMoveState] = useState<PendingMove | null>(null);
+  const pendingRef = useRef<PendingMove | null>(null);
+  const setPendingMove = (p: PendingMove | null) => {
+    pendingRef.current = p;
+    setPendingMoveState(p);
+  };
+  const asksFirst = (before: EditorValues, after: EditorValues) =>
+    task.streak_enabled && task.streak_current > 0 && movesOccurrence(before, after, rule);
+  // Reads the ref, so it keeps its identity (the prompt's outside-click close).
+  const cancelMove = useCallback(() => {
+    const p = pendingRef.current;
+    pendingRef.current = null;
+    setPendingMoveState(null);
+    p?.cancel();
+  }, []);
   const save = (pair: Pair) => saveEdit(id, pair.before, pair.after, pair.rule, localToday());
   // The title / description edit to save, if any (`base` moves ahead). An
   // emptied title goes back to the saved one. A retyped title applies what it
   // says (a date, a priority, ...) and loses those words; one with nothing
   // else in it goes back too.
-  const commit = (): Pair | null => {
+  // What the drafts would save (`pair`) and the title they leave, without
+  // applying either; `take` applies it.
+  type Draft = { pair: Pair | null; title: string };
+  const readDrafts = (): Draft => {
     const before = baseRef.current;
     const typed = titleRef.current.trim();
     const retyped = typed !== "" && typed !== before.content;
@@ -171,32 +191,56 @@ export function TaskView({
           today,
         )
       : null;
-    let pair: Pair | null;
     if (applied !== null) {
       const after = { ...applied.values, description: descRef.current };
-      pair = sameValues(before, after) ? null : { before, after, rule: applied.rule };
-      setTitle(after.content);
-    } else {
-      const drafts = commitDrafts(before, retyped ? before.content : titleRef.current, descRef.current);
-      if (drafts.title !== titleRef.current) setTitle(drafts.title);
-      pair = drafts.save === null ? null : { ...drafts.save, rule };
+      return {
+        pair: sameValues(before, after) ? null : { before, after, rule: applied.rule },
+        title: after.content,
+      };
     }
-    if (pair !== null) setBase(pair.after);
-    return pair;
+    const drafts = commitDrafts(before, retyped ? before.content : titleRef.current, descRef.current);
+    return { pair: drafts.save === null ? null : { ...drafts.save, rule }, title: drafts.title };
   };
-  const saveDrafts = () => {
-    const pair = commit();
-    // Not tied to the view: it may close before the save lands.
-    if (pair !== null) void settle(save(pair)).then(onChanged);
+  const take = (d: Draft) => {
+    if (d.title !== titleRef.current) setTitle(d.title);
+    if (d.pair !== null) {
+      setBase(d.pair.after);
+      // Not tied to the view: it may close before the save lands.
+      void settle(save(d.pair)).then(onChanged);
+    }
+  };
+  // Saves the drafts, then `then`. A typed date that would reset a streak
+  // asks first; Cancel keeps the description but not the retyped title.
+  const saveDrafts = (then?: () => void) => {
+    const d = readDrafts();
+    if (d.pair !== null && asksFirst(d.pair.before, d.pair.after)) {
+      setOpen(null);
+      setPendingMove({
+        move: () => {
+          take(d);
+          then?.();
+        },
+        cancel: () => {
+          const before = baseRef.current;
+          const drafts = commitDrafts(before, before.content, descRef.current);
+          take({ pair: drafts.save === null ? null : { ...drafts.save, rule }, title: before.content });
+          then?.();
+        },
+      });
+      return;
+    }
+    take(d);
+    then?.();
   };
   // Moves at once (a second fast tap on Back acts on the view below, not
-  // again on this one); the pending edit still saves.
-  const navigate = (to: NavTo) => {
-    saveDrafts();
-    if (to === "back") nav.back();
-    else if (to === "close") nav.close();
-    else nav.push(to.push);
-  };
+  // again on this one); the pending edit still saves. Only a move that would
+  // reset a streak holds it, until it's answered.
+  const navigate = (to: NavTo) =>
+    saveDrafts(() => {
+      if (to === "back") nav.back();
+      else if (to === "close") nav.close();
+      else nav.push(to.push);
+    });
   // A list row's "Add sub-task" opens the view with the editor showing.
   useEffect(() => {
     if (active && nav.addSub) {
@@ -215,7 +259,6 @@ export function TaskView({
   }, [active, nav]);
 
   // A picker's change, saved now; a move that would reset a streak asks first.
-  const [pendingMove, setPendingMove] = useState<EditorValues | null>(null);
   const fieldsCard = useRef<HTMLDivElement>(null);
   const commitValues = (after: EditorValues) => {
     const before = baseRef.current;
@@ -224,14 +267,13 @@ export function TaskView({
     void settle(save({ before, after, rule })).then(onChanged);
   };
   const saveValues = (after: EditorValues) => {
-    if (task.streak_enabled && task.streak_current > 0 && movesOccurrence(baseRef.current, after, rule)) {
+    if (asksFirst(baseRef.current, after)) {
       setOpen(null);
-      setPendingMove(after);
+      setPendingMove({ move: () => commitValues(after), cancel: () => {} });
     } else {
       commitValues(after);
     }
   };
-  const cancelMove = useCallback(() => setPendingMove(null), []);
   // Today at pick time, as Dioxus reads it: a view left open past midnight.
   const pick = (p: EditorPick) =>
     saveValues(applyPick(baseRef.current, p, false, projects, sections, localToday()));
@@ -251,7 +293,10 @@ export function TaskView({
 
   const completeHere = () => {
     if (!nav.holdCircles()) return;
-    const pair = commit();
+    // Completing saves the drafts first, without asking: the occurrence is done either way.
+    const { pair, title } = readDrafts();
+    if (title !== titleRef.current) setTitle(title);
+    if (pair !== null) setBase(pair.after);
     const done = detail.done;
     if (!done) haptic("complete");
     void (async () => {
@@ -380,7 +425,7 @@ export function TaskView({
                 if (next !== null) setPlain(next.plain);
               }}
               onInput={typeTitle}
-              onCommit={saveDrafts}
+              onCommit={() => saveDrafts()}
             />
           </div>
           {fields.includes("Description") ? (
@@ -463,7 +508,7 @@ export function TaskView({
               onCancel={cancelMove}
               onMove={() => {
                 setPendingMove(null);
-                commitValues(pendingMove);
+                pendingMove.move();
               }}
             />
           ) : null}

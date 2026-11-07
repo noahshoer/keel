@@ -20,4 +20,5 @@ With a streak going, moving first asks: a popup says the streak will reset, with
 - A repeating task now loads into the editor with its own rule ("keep"), not a preset: presets follow the date, so after a move "Every week" would have read as the new day. Presets that are the same rule as the task's are left out of the menu, so it has no duplicate row.
 - UI: the task view's pickers save through `saveValues`; when `moves_occurrence` and `streak_current > 0`, `MovePrompt` asks (Cancel / Move) before saving.
 
-Not done: list rows don't say a task was moved (only its date shows). A date typed into the task view's title moves the occurrence and resets the streak without asking (it saves on leaving the title, often while the view closes).
+- A date typed into the task view's title asks the same way. The title's save is split into reading the drafts and applying them, so it can wait: Cancel keeps a description edit but drops the retyped title, and leaving the view (Back, Close, the scrim) waits for the answer before it goes. Completing from the view saves the drafts without asking.
+- List rows say "moved" beside the repeat icon, titled "Moved from Wed 21 Oct" (`views::moved_note`; the editor chip uses the same `views::moved_text`).

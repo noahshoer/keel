@@ -544,6 +544,15 @@ pub fn edit_plan(
     output(&editor::edit_plan(&id, &before, &after, existing, date(today)?))
 }
 
+/// `views::moved_note`: "Moved from Wed 21 Oct" for a moved occurrence, or null.
+#[wasm_bindgen(js_name = movedNote)]
+pub fn moved_note(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task")] task: JsValue,
+) -> Result<Option<String>, JsError> {
+    let task: Task = input("task", task)?;
+    Ok(views::moved_note(&task))
+}
+
 /// `editor::moves_occurrence`: whether saving `after` moves one occurrence of a repeating task.
 #[wasm_bindgen(js_name = movesOccurrence)]
 pub fn moves_occurrence(

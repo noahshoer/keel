@@ -330,6 +330,12 @@ export function locationText(
   return core.locationText(projectId, sectionId, projects, sections);
 }
 
+/** "Moved from Wed 21 Oct" while a repeating task's date stands in for another occurrence, else null. */
+export function movedNote(task: Task): string | null {
+  ready();
+  return core.movedNote(task) ?? null;
+}
+
 /** Whether saving `after` moves one occurrence of a repeating task (a streak can't carry over it). */
 export function movesOccurrence(
   before: EditorValues,

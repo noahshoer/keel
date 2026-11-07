@@ -388,6 +388,7 @@ button, .chip, .nav-item, .icon-btn, .btn, .check, .add-task-row, .add-section-r
 .subtask-ring-track { stroke: var(--border-strong); }
 .subtask-ring-fill { stroke: var(--accent); }
 .task-repeat { display: inline-flex; color: var(--icon); }
+.task-repeat.moved { align-items: center; gap: 3px; color: var(--muted); font-size: 12px; }
 .task-labels { display: flex; align-items: center; gap: 4px; overflow: hidden; }
 .task-label-items { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-label-group { color: var(--tint, var(--secondary)); }

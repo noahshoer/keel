@@ -961,8 +961,8 @@ pub fn editor_view(
     // A moved occurrence says which day it stands in for, while it's off the repeat.
     let moved = NaiveDate::parse_from_str(&shown.moved_from, "%Y-%m-%d").ok();
     if let (Some(from), Some(day), Some(rule)) = (moved, date, &repeat_rule) {
-        if day != from && !rule.contains(day) {
-            date_chip.0 = format!("{} · moved from {}", date_chip.0, from.format("%a %-d %b"));
+        if let Some(note) = views::moved_text(from, day, rule) {
+            date_chip.0 = format!("{} · {}", date_chip.0, note.replacen("Moved", "moved", 1));
         }
     }
     let deadline_urgent = deadline.map(|d| views::deadline_urgent(d, today));
