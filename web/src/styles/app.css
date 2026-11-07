@@ -1258,6 +1258,13 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 /* Narrow windows and phones: the sidebar becomes a slide-over drawer (opened
    by the header's hamburger) and the main pane goes full-bleed. */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+/* Settings leaving on the phone: it slides right, the pace of the drawer sliding in (Settings.tsx waits .26s). */
+@keyframes settings-out { to { transform: translateX(100%); } }
+@keyframes scrim-out { to { opacity: 0; } }
+@media (max-width: 899px) {
+  .modal-scrim.leaving { animation: scrim-out .26s var(--ease) forwards; }
+  .modal-scrim.leaving .modal { animation: settings-out .26s var(--ease) forwards; }
+}
 @media (max-width: 700px) {
   .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; width: min(360px, 88vw);
     background: var(--app-bg); box-shadow: var(--shadow-lg);

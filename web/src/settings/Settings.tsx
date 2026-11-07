@@ -117,8 +117,17 @@ export function Settings({
   const reloadUpcoming = () => upcomingInto(setUpcoming);
 
   // Touch: a swipe right slides Settings away, back to the sidebar under it.
-  const closeNow = useRef(onClose);
-  closeNow.current = onClose;
+  // On the phone the screen slides off to the right, as the drawer slid in
+  // (the sidebar under it is already open).
+  const [leaving, setLeaving] = useState(false);
+  const close = () => {
+    if (leaving) return;
+    if (!window.matchMedia?.("(max-width: 899px)").matches) return onClose();
+    setLeaving(true);
+    setTimeout(onClose, 260);
+  };
+  const closeNow = useRef(close);
+  closeNow.current = close;
   useEffect(
     () =>
       installSwipe(document, (s) => {
@@ -173,7 +182,7 @@ export function Settings({
     return (
       // biome-ignore lint/a11y/useKeyWithClickEvents: same markup as the Dioxus dialog; Escape works once it has loaded.
       // biome-ignore lint/a11y/noStaticElementInteractions: see above.
-      <div className="modal-scrim" onClick={onClose}>
+      <div className={`modal-scrim${leaving ? " leaving" : ""}`} onClick={close}>
         {/* biome-ignore lint/a11y/useKeyWithClickEvents: only stops the click reaching the scrim. */}
         {/* biome-ignore lint/a11y/noStaticElementInteractions: see above. */}
         <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -268,12 +277,12 @@ export function Settings({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus dialog; the scrim closes it.
     <div
-      className="modal-scrim"
-      onClick={onClose}
+      className={`modal-scrim${leaving ? " leaving" : ""}`}
+      onClick={close}
       onKeyDown={(e) => {
         if (e.key !== "Escape") return;
         if (open !== null) setOpen(null);
-        else onClose();
+        else close();
       }}
     >
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: only stops the click reaching the scrim; keys go to the scrim. */}
@@ -285,10 +294,10 @@ export function Settings({
           <div className="pop-backdrop" onClick={() => setOpen(null)} />
         ) : null}
         <div className="modal-head">
-          <button type="button" className="icon-btn back-btn" aria-label="Back" onClick={onClose}>
+          <button type="button" className="icon-btn back-btn" aria-label="Back" onClick={close}>
             <ChevronLeftIcon />
           </button>
-          <button type="button" className="icon-btn modal-close" title="Close" onClick={onClose}>
+          <button type="button" className="icon-btn modal-close" title="Close" onClick={close}>
             <XIcon />
           </button>
         </div>
