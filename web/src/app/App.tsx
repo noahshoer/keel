@@ -8,7 +8,7 @@ import { localToday } from "../clock";
 import { installDrag } from "../gestures/drag";
 import { installLongPress } from "../gestures/long-press";
 import { installSheet } from "../gestures/sheet";
-import { drawerSwipe, searchSwipe } from "../gestures/sheet-rules";
+import { drawerSwipe, searchBackSwipe, searchSwipe } from "../gestures/sheet-rules";
 import { installSwipe } from "../gestures/swipe";
 import { CompletionIconContext, savedIcon } from "../lists/completion";
 import { ShowSubtasksContext, savedShowSubtasks } from "../lists/showSubtasks";
@@ -67,11 +67,18 @@ export function App() {
   const viewNow = useRef(view);
   viewNow.current = view;
   const openSearchNow = useRef<() => void>(() => {});
+  const leaveSearchNow = useRef<() => void>(() => {});
+  leaveSearchNow.current = () => setView(beforeSearch.current);
   useEffect(
     () =>
       installSwipe(document, (s) => {
-        if (searchSwipe(s, drawerNow.current, viewNow.current.kind !== "search")) {
+        const onSearch = viewNow.current.kind === "search";
+        if (searchSwipe(s, drawerNow.current, !onSearch)) {
           openSearchNow.current();
+          return;
+        }
+        if (!drawerNow.current && searchBackSwipe(s, onSearch)) {
+          leaveSearchNow.current();
           return;
         }
         const open = drawerSwipe(s, drawerNow.current);

@@ -11,7 +11,7 @@ async function openSearch() {
   const r = render(<App />);
   await screen.findByText("Do laundry");
   const nav = r.container.querySelector(".sidebar") as HTMLElement;
-  fireEvent.click(nav.querySelector(".sidebar-search-input") as HTMLElement);
+  fireEvent.click(document.querySelector(".search-btn") as HTMLElement);
   const input = await screen.findByPlaceholderText("Search tasks, descriptions and labels");
   return { ...r, nav, input: input as HTMLInputElement };
 }
@@ -125,7 +125,7 @@ it("the query survives leaving Search and coming back", async () => {
   fireEvent.change(input, { target: { value: "laundry" } });
   fireEvent.click(within(nav).getByText("Today"));
   await waitFor(() => expect(document.querySelector(".view-title")?.textContent).toBe("Today"));
-  fireEvent.click(nav.querySelector(".sidebar-search-input") as HTMLElement);
+  fireEvent.click(document.querySelector(".search-btn") as HTMLElement);
   const again = (await screen.findByPlaceholderText(
     "Search tasks, descriptions and labels",
   )) as HTMLInputElement;

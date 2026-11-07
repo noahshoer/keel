@@ -13,6 +13,7 @@ import {
   keyboardExpands,
   keyboardInset,
   type Swipe,
+  searchBackSwipe,
   searchSwipe,
   settingsSwipe,
   settleOffset,
@@ -45,6 +46,20 @@ const start = (scrollTop: number, over: Partial<DragStart> = {}): DragStart => (
 const large = (scrollTop: number): DragStart => start(scrollTop, { detent: "large" });
 
 describe("page swipes", () => {
+  it("swipe_right_on_the_search_page_goes_back", () => {
+    expect(searchBackSwipe(swipe(120, 10), true)).toBe(true);
+  });
+
+  it("search_back_swipe_needs_the_search_page_and_a_clean_rightward_swipe", () => {
+    expect(searchBackSwipe(swipe(120, 0), false)).toBe(false);
+    expect(searchBackSwipe(swipe(-120, 0), true)).toBe(false);
+    expect(searchBackSwipe(swipe(40, 0), true)).toBe(false);
+    expect(searchBackSwipe(swipe(100, 90), true)).toBe(false);
+    expect(searchBackSwipe(swipe(120, 0, { blocked: true }), true)).toBe(false);
+    expect(searchBackSwipe(swipe(120, 0, { width: 1200 }), true)).toBe(false);
+    expect(searchBackSwipe(swipe(120, 0, { inSettings: true }), true)).toBe(false);
+  });
+
   it("swipe_left_on_a_page_with_a_search_button_opens_search", () => {
     expect(searchSwipe(swipe(-120, 10), false, true)).toBe(true);
   });

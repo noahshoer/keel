@@ -68,6 +68,11 @@ export function searchSwipe(s: Swipe, drawerOpen: boolean, hasSearchButton: bool
   return hasSearchButton && !drawerOpen && !s.inSettings && isSideways(s) && s.dx < 0;
 }
 
+/** A swipe right on the Search page goes back to the page it came from (not to the drawer). */
+export function searchBackSwipe(s: Swipe, onSearch: boolean): boolean {
+  return onSearch && !s.inSettings && isSideways(s) && s.dx > 0;
+}
+
 /** A swipe right on Settings slides it away, back to the sidebar under it. */
 export function settingsSwipe(s: Swipe): boolean {
   return s.inSettings && isSideways(s) && s.dx > 0;

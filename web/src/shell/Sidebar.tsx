@@ -189,27 +189,27 @@ export function Sidebar({
           setIcon={setIcon}
         />
       ) : null}
-      <div className="sidebar-search">
-        <span className="sidebar-search-icon">
-          <SearchIcon />
-        </span>
-        {/* On a phone it's a door to the Search screen; on desktop results fill the main area. */}
-        <input
-          className="sidebar-search-input"
-          type="search"
-          placeholder="Search"
-          title={searchTooltip(currentPlatform())}
-          spellCheck={false}
-          readOnly={!wide}
-          value={wide ? searchQuery : ""}
-          onClick={wide ? undefined : () => setView({ kind: "search" })}
-          onFocus={wide && view.kind !== "search" ? () => setView({ kind: "search" }) : undefined}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setSearchQuery("");
-          }}
-        />
-      </div>
+      {wide ? (
+        <div className="sidebar-search">
+          <span className="sidebar-search-icon">
+            <SearchIcon />
+          </span>
+          {/* On desktop results fill the main area; the phone reaches Search from the header or a swipe left. */}
+          <input
+            className="sidebar-search-input"
+            type="search"
+            placeholder="Search"
+            title={searchTooltip(currentPlatform())}
+            spellCheck={false}
+            value={searchQuery}
+            onFocus={view.kind !== "search" ? () => setView({ kind: "search" }) : undefined}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setSearchQuery("");
+            }}
+          />
+        </div>
+      ) : null}
       <div className="nav-card">
         {fixed("inbox", <InboxIcon />, "Inbox")}
         {fixed("today", <TodayIcon day={day} />, "Today")}
