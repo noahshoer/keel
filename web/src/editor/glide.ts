@@ -60,3 +60,43 @@ export function gluedPath({ points, kbFrom, kbTo, gap, rest, from, final }: Glid
   const off = from - bottom(0);
   return points.map((p) => bottom(p) - final + off * (1 - p));
 }
+
+/** The ride's move at `t` ms: its path is evenly spaced over `rideMs`, straight between points. */
+function rideAt(path: number[], rideMs: number, t: number): number {
+  const last = path.length - 1;
+  const x = Math.min(Math.max(t / rideMs, 0), 1) * last;
+  const i = Math.min(Math.floor(x), last - 1);
+  const a = path[i] ?? 0;
+  const b = path[i + 1] ?? a;
+  return a + (b - a) * (x - i);
+}
+
+/** How long a picker's unroll takes: what's left of the card's ride, or the unroll's own time if longer. */
+export function unrollMs(rideMs: number, elapsedMs: number, unroll: number): number {
+  return Math.max(rideMs - elapsedMs, unroll);
+}
+
+/**
+ * A picker built on the card part-way through its ride (`elapsedMs` of
+ * `rideMs`, along `path`, px from where the card ends) unrolls both ways from
+ * the card's top: its clip's top edge rises to its full `height` over `unroll`
+ * ms (easing out), and its bottom edge stays on the card as it comes down
+ * (the card above its place by `-path`). `steps + 1` frames, evenly spaced.
+ */
+export function unrollFrames(
+  path: number[],
+  rideMs: number,
+  elapsedMs: number,
+  height: number,
+  unroll: number,
+  steps: number,
+): Array<{ offset: number; top: number; bottom: number }> {
+  const total = unrollMs(rideMs, elapsedMs, unroll);
+  const above = (t: number) => Math.max(0, -rideAt(path, rideMs, elapsedMs + t));
+  const top0 = Math.max(0, height - above(0));
+  return Array.from({ length: steps + 1 }, (_, k) => {
+    const t = (total * k) / steps;
+    const u = Math.min(t / unroll, 1);
+    return { offset: k / steps, top: top0 * (1 - u) ** 3, bottom: above(t) };
+  });
+}

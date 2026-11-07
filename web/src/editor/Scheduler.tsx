@@ -1,7 +1,7 @@
 // The date popover, in steps: quick choices, then a month grid (or month / year
 // wheels) with Time and Repeat rows, then the repeat options. A deadline is the
 // grid alone. keel-core builds the grid and reads typed times; this draws them.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Recurrence } from "../bindings";
 import { dueBucket, monthNames, monthView, quickDates, timeLabel, typedTime, yearChoices } from "../core";
 import { BUCKET_CLASS } from "../lists/chips";
@@ -14,7 +14,7 @@ import {
   XSmallIcon,
 } from "../shell/icons";
 import { CalendarMonths } from "./CalendarMonths";
-import { afterKeyboardMove } from "./keyboardAnchor";
+import { afterKeyboardMove, unrollWithCard } from "./keyboardAnchor";
 import { isTouch, weekStart } from "./locale";
 import type { MenuItem } from "./Menu";
 import { cx } from "./pop";
@@ -115,6 +115,12 @@ export function Scheduler({
       for (const stop of stops) stop();
     };
   }, [choosing, years]);
+
+  // Built while the card drops (it lowered the keyboard): it unrolls with the
+  // card, or else unfolds on its own (app.css `sched-card`).
+  useLayoutEffect(() => {
+    if (step === "card" && touch && ref.current) unrollWithCard(ref.current);
+  }, [step, touch]);
 
   const [y, mo] = month;
   const view = monthView(y, mo, start, today, selected, rule);
