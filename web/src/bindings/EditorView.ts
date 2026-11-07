@@ -33,7 +33,12 @@ has_due: boolean,
 /**
  * The location menu's selected value.
  */
-location: string, location_text: string, locations: Array<LocationChoice>, priority_text: string, labels_text: string, repeat_options: Array<[string, string]>, repeat_chip_text: string, date_chip: [string, DueBucket | null], deadline_text: string, 
+location: string, location_text: string, locations: Array<LocationChoice>, priority_text: string, labels_text: string, repeat_options: Array<[string, string]>, 
+/**
+ * The menu's checked row: "typed" for a repeat typed in the title, or
+ * the chosen option.
+ */
+repeat_selected: string, repeat_chip_text: string, date_chip: [string, DueBucket | null], deadline_text: string, 
 /**
  * `None` without a deadline.
  */

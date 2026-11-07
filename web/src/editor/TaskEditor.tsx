@@ -231,12 +231,8 @@ export function TaskEditor({
         rule={view.repeat_rule}
         repeat={{
           items: repeatItems,
-          selected: values.repeat,
-          // A repeat typed in the title isn't one of the menu's choices.
-          text:
-            values.repeat === "none" && view.repeat_rule !== null
-              ? repeatText(view.repeat_rule)
-              : (repeatItems.find((i) => i.value === values.repeat)?.label ?? view.repeat_chip_text),
+          selected: view.repeat_selected,
+          text: repeatItems.find((i) => i.value === view.repeat_selected)?.label ?? view.repeat_chip_text,
           onSelect: (value) => pick({ type: "repeat", value }),
           typed: typedRepeat,
         }}
@@ -312,7 +308,7 @@ export function TaskEditor({
         icon={<RepeatSmallIcon />}
         text={view.repeat_chip_text}
         items={repeatItems}
-        selected={values.repeat}
+        selected={view.repeat_selected}
         open={open}
         setOpen={setPop}
         chipClass={view.repeat_rule !== null ? "pill-set pill-repeat" : ""}

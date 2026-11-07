@@ -554,6 +554,10 @@ pub fn apply_pick(
     sections: &[Section],
     today: NaiveDate,
 ) {
+    // The title's own repeat, picked again, stays as it is.
+    if matches!(pick, Pick::Repeat { value } if value == "typed") {
+        return;
+    }
     // Typed text that isn't a repeat changes nothing.
     let reading = match pick {
         Pick::RepeatText { text } => match read_repeat(text, &v.date, today) {
@@ -874,6 +878,9 @@ pub struct EditorView {
     pub priority_text: String,
     pub labels_text: String,
     pub repeat_options: Vec<(String, String)>,
+    /// The menu's checked row: "typed" for a repeat typed in the title, or
+    /// the chosen option.
+    pub repeat_selected: String,
     pub repeat_chip_text: String,
     pub date_chip: (String, Option<DueBucket>),
     pub deadline_text: String,
@@ -913,6 +920,10 @@ pub fn editor_view(
     if let (Some(rule), "custom") = (&v.rule, v.repeat.as_str()) {
         opts.push(("custom".to_string(), repeat_text(rule)));
     }
+    if let Some(rule) = &typed_repeat {
+        opts.push(("typed".to_string(), repeat_text(rule)));
+    }
+    let repeat_selected = if typed_repeat.is_some() { "typed".to_string() } else { v.repeat.clone() };
     let date = NaiveDate::parse_from_str(&shown.date, "%Y-%m-%d").ok();
     let time = NaiveTime::parse_from_str(&shown.time, "%H:%M").ok();
     let deadline = NaiveDate::parse_from_str(&shown.deadline, "%Y-%m-%d").ok();
@@ -943,6 +954,7 @@ pub fn editor_view(
         labels_text: labels_text(&shown.labels),
         repeat_chip_text,
         repeat_options: opts,
+        repeat_selected,
         date_chip,
         deadline_text: deadline_text(deadline, today),
         deadline_urgent,
@@ -1641,6 +1653,22 @@ mod tests {
         // A preset afterwards replaces it, end included.
         apply_pick(&mut v, &Pick::Repeat { value: "daily".into() }, false, &[], &[], day19());
         assert_eq!((v.repeat.as_str(), v.rule.clone(), v.until.as_str()), ("daily", None, ""));
+    }
+
+    #[test]
+    fn a_repeat_typed_in_the_title_is_the_menus_checked_row() {
+        let v = typed("Gym every third fri");
+        let view = editor_view(&v, true, None, None, &[], &[], day19());
+        assert_eq!(view.repeat_selected, "typed");
+        assert!(view.repeat_options.iter().any(|(value, label)| value == "typed" && label == "Every third Fri"));
+        // Picking it again keeps the title as it is.
+        let mut after = v.clone();
+        apply_pick(&mut after, &Pick::Repeat { value: "typed".into() }, true, &[], &[], day19());
+        assert_eq!(after, v);
+        // Without one, the checked row is the chosen option.
+        let view = editor_view(&typed("Gym"), true, None, None, &[], &[], day19());
+        assert_eq!(view.repeat_selected, "none");
+        assert!(!view.repeat_options.iter().any(|(value, _)| value == "typed"));
     }
 
     #[test]

@@ -67,7 +67,7 @@ export function FieldControl({
       icon={<RepeatSmallIcon />}
       text={view.repeat_chip_text}
       items={repeatItems}
-      selected={v.repeat}
+      selected={view.repeat_selected}
       {...pop}
       face={f}
       onSelect={(value) => onPick({ type: "repeat", value })}
@@ -96,8 +96,8 @@ export function FieldControl({
           rule={view.repeat_rule}
           repeat={{
             items: repeatItems,
-            selected: v.repeat,
-            text: repeatItems.find((i) => i.value === v.repeat)?.label ?? view.repeat_chip_text,
+            selected: view.repeat_selected,
+            text: repeatItems.find((i) => i.value === view.repeat_selected)?.label ?? view.repeat_chip_text,
             onSelect: (value) => onPick({ type: "repeat", value }),
             typed,
           }}
