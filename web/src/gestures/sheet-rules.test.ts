@@ -13,6 +13,8 @@ import {
   keyboardExpands,
   keyboardInset,
   type Swipe,
+  searchSwipe,
+  settingsSwipe,
   settleOffset,
   sheetDragAction,
   sheetSettle,
@@ -25,6 +27,7 @@ const swipe = (dx: number, dy: number, over: Partial<Swipe> = {}): Swipe => ({
   width: 390,
   blocked: false,
   inSheet: false,
+  inSettings: false,
   ...over,
 });
 
@@ -40,6 +43,46 @@ const start = (scrollTop: number, over: Partial<DragStart> = {}): DragStart => (
 });
 
 const large = (scrollTop: number): DragStart => start(scrollTop, { detent: "large" });
+
+describe("page swipes", () => {
+  it("swipe_left_on_a_page_with_a_search_button_opens_search", () => {
+    expect(searchSwipe(swipe(-120, 10), false, true)).toBe(true);
+  });
+
+  it("no_search_swipe_with_the_drawer_open_without_the_button_or_to_the_right", () => {
+    expect(searchSwipe(swipe(-120, 0), true, true)).toBe(false); // left closes the drawer
+    expect(searchSwipe(swipe(-120, 0), false, false)).toBe(false); // the Search screen itself
+    expect(searchSwipe(swipe(120, 0), false, true)).toBe(false);
+  });
+
+  it("search_swipe_ignores_short_vertical_blocked_sheet_and_wide", () => {
+    expect(searchSwipe(swipe(-40, 0), false, true)).toBe(false);
+    expect(searchSwipe(swipe(-100, 90), false, true)).toBe(false);
+    expect(searchSwipe(swipe(-120, 0, { blocked: true }), false, true)).toBe(false);
+    expect(searchSwipe(swipe(-120, 0, { inSheet: true }), false, true)).toBe(false);
+    expect(searchSwipe(swipe(-120, 0, { width: 1200 }), false, true)).toBe(false);
+  });
+
+  it("swipe_right_on_settings_slides_it_away", () => {
+    expect(settingsSwipe(swipe(120, 10, { inSettings: true }))).toBe(true);
+  });
+
+  it("settings_ignores_left_short_vertical_blocked_and_wide_swipes", () => {
+    const o = { inSettings: true };
+    expect(settingsSwipe(swipe(-120, 0, o))).toBe(false);
+    expect(settingsSwipe(swipe(40, 0, o))).toBe(false);
+    expect(settingsSwipe(swipe(100, 90, o))).toBe(false);
+    expect(settingsSwipe(swipe(120, 0, { ...o, blocked: true }))).toBe(false);
+    expect(settingsSwipe(swipe(120, 0, { ...o, width: 1200 }))).toBe(false);
+    expect(settingsSwipe(swipe(120, 0))).toBe(false); // not on Settings
+  });
+
+  it("the_drawer_and_search_ignore_swipes_that_start_on_settings", () => {
+    expect(drawerSwipe(swipe(-120, 0, { inSettings: true }), true)).toBeNull();
+    expect(drawerSwipe(swipe(120, 0, { inSettings: true }), false)).toBeNull();
+    expect(searchSwipe(swipe(-120, 0, { inSettings: true }), false, true)).toBe(false);
+  });
+});
 
 describe("drawer swipes", () => {
   it("swipe_right_opens_a_closed_drawer", () => {

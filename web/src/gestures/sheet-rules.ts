@@ -46,14 +46,31 @@ export type Swipe = {
   blocked: boolean;
   /** It started in the task view's sheet or its scrim (no drawer swipes there). */
   inSheet: boolean;
+  /** It started on the Settings screen (which handles its own swipe; no drawer or search swipes there). */
+  inSettings: boolean;
 };
+
+/** On a phone, a long enough, mostly horizontal move that didn't start in a field, popover or the task view. */
+function isSideways(s: Swipe): boolean {
+  if (s.blocked || s.inSheet || s.width > NARROW_MAX) return false;
+  return Math.abs(s.dx) >= MIN_DISTANCE && Math.abs(s.dy) <= Math.abs(s.dx) * MAX_SLOPE;
+}
 
 /** The drawer state a swipe asks for, if any: right opens, left closes. */
 export function drawerSwipe(s: Swipe, open: boolean): boolean | null {
-  if (s.blocked || s.inSheet || s.width > NARROW_MAX) return null;
-  if (Math.abs(s.dx) < MIN_DISTANCE || Math.abs(s.dy) > Math.abs(s.dx) * MAX_SLOPE) return null;
+  if (s.inSettings || !isSideways(s)) return null;
   const want = s.dx > 0;
   return want !== open ? want : null;
+}
+
+/** A swipe left on a page with a search button, with the drawer shut, opens Search. */
+export function searchSwipe(s: Swipe, drawerOpen: boolean, hasSearchButton: boolean): boolean {
+  return hasSearchButton && !drawerOpen && !s.inSettings && isSideways(s) && s.dx < 0;
+}
+
+/** A swipe right on Settings slides it away, back to the sidebar under it. */
+export function settingsSwipe(s: Swipe): boolean {
+  return s.inSettings && isSideways(s) && s.dx > 0;
 }
 
 /** The sheet's two resting heights on the phone: medium (where it opens) and large. */

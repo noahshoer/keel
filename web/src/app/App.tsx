@@ -8,7 +8,7 @@ import { localToday } from "../clock";
 import { installDrag } from "../gestures/drag";
 import { installLongPress } from "../gestures/long-press";
 import { installSheet } from "../gestures/sheet";
-import { drawerSwipe } from "../gestures/sheet-rules";
+import { drawerSwipe, searchSwipe } from "../gestures/sheet-rules";
 import { installSwipe } from "../gestures/swipe";
 import { CompletionIconContext, savedIcon } from "../lists/completion";
 import { ShowSubtasksContext, savedShowSubtasks } from "../lists/showSubtasks";
@@ -59,13 +59,21 @@ export function App() {
   // Touch: a long press shows a row's actions.
   useEffect(() => installLongPress(document), []);
   useEffect(() => installDrag(document, window), []);
-  // Touch: swipe right opens the drawer, swipe left closes it. Installed
-  // once, so the handler reads the drawer through a ref.
+  // Touch: swipe right opens the drawer, swipe left closes it (or, with the
+  // drawer shut, opens Search on a page that has the button). Installed
+  // once, so the handler reads the drawer and the view through refs.
   const drawerNow = useRef(drawer);
   drawerNow.current = drawer;
+  const viewNow = useRef(view);
+  viewNow.current = view;
+  const openSearchNow = useRef<() => void>(() => {});
   useEffect(
     () =>
       installSwipe(document, (s) => {
+        if (searchSwipe(s, drawerNow.current, viewNow.current.kind !== "search")) {
+          openSearchNow.current();
+          return;
+        }
         const open = drawerSwipe(s, drawerNow.current);
         if (open !== null) setDrawer(open);
       }),
@@ -84,6 +92,7 @@ export function App() {
       60,
     );
   }, []);
+  openSearchNow.current = openSearch;
   // "/" (when not typing) or Ctrl/Cmd+K does too.
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {

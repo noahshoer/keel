@@ -9,6 +9,8 @@ import { importLine, pickSetting, reminderMenus, upcomingWhen } from "../core";
 import * as diag from "../diag";
 import { Menu } from "../editor/Menu";
 import type { Pop } from "../editor/pop";
+import { settingsSwipe } from "../gestures/sheet-rules";
+import { installSwipe } from "../gestures/swipe";
 import { invoke } from "../ipc/invoke";
 import { COMPLETION_ICONS, type CompletionIcon, iconLabel, saveIcon } from "../lists/completion";
 import { ShowSubtasksContext, saveShowSubtasks } from "../lists/showSubtasks";
@@ -113,6 +115,17 @@ export function Settings({
   const modal = useRef<HTMLDivElement>(null);
 
   const reloadUpcoming = () => upcomingInto(setUpcoming);
+
+  // Touch: a swipe right slides Settings away, back to the sidebar under it.
+  const closeNow = useRef(onClose);
+  closeNow.current = onClose;
+  useEffect(
+    () =>
+      installSwipe(document, (s) => {
+        if (settingsSwipe(s)) closeNow.current();
+      }),
+    [],
+  );
 
   useEffect(() => {
     void (async () => {
