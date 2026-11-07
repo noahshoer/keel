@@ -120,12 +120,16 @@ pub struct TaskDetail {
     pub done: bool,
     /// Direct sub-tasks in child order; done ones only when `show_completed`.
     pub visible: Vec<SubtaskLine>,
+    /// It has a sub-task, done or not.
+    pub has_subtasks: bool,
 }
 
 pub fn detail(id: &Id, all: &[Task], show_completed: bool, today: NaiveDate) -> Option<TaskDetail> {
     let task = all.iter().find(|t| &t.id == id)?.clone();
     let parent = task.parent_id.as_ref().and_then(|p| all.iter().find(|t| &t.id == p)).cloned();
-    let visible = views::children(id, all)
+    let children = views::children(id, all);
+    let has_subtasks = !children.is_empty();
+    let visible = children
         .into_iter()
         .map(|c| SubtaskLine {
             task: c.clone(),
@@ -134,7 +138,7 @@ pub fn detail(id: &Id, all: &[Task], show_completed: bool, today: NaiveDate) -> 
         })
         .filter(|line| show_completed || !line.done)
         .collect();
-    Some(TaskDetail { progress: views::progress(id, all, today), done: views::is_done(&task, today), task, parent, visible })
+    Some(TaskDetail { progress: views::progress(id, all, today), done: views::is_done(&task, today), task, parent, visible, has_subtasks })
 }
 
 #[cfg(test)]
@@ -285,6 +289,15 @@ mod tests {
         let shown = detail(&id("P"), &all, true, some_day()).unwrap();
         let ids: Vec<_> = shown.visible.iter().map(|r| r.task.id.clone()).collect();
         assert_eq!(ids, vec![id("C"), id("S")]);
+    }
+
+    #[test]
+    fn detail_has_subtasks_counts_done_ones_too() {
+        let mut c = task("C", Some("P"), 0);
+        c.checked = true;
+        let all = vec![task("P", None, 0), c, task("L", None, 1)];
+        assert!(detail(&id("P"), &all, false, some_day()).unwrap().has_subtasks);
+        assert!(!detail(&id("L"), &all, false, some_day()).unwrap().has_subtasks);
     }
 
     fn some_day() -> NaiveDate {

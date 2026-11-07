@@ -139,6 +139,10 @@ function apply(a: Action): string | null {
       for (const t of subtree(find(state.tasks, a.id).id)) t.is_deleted = true;
       return null;
     }
+    case "task_set_done_with_subtasks": {
+      find(state.tasks, a.id).done_with_subtasks = a.enabled;
+      return null;
+    }
     case "task_set_streak": {
       const t = find(state.tasks, a.id);
       t.streak_enabled = a.enabled;
@@ -276,7 +280,7 @@ const handlers: Handlers = {
     const id = apply(cmd.action);
     const id_mapping: Record<string, string> = {};
     if (id !== null && cmd.temp_id != null) id_mapping[cmd.temp_id] = id;
-    return { id_mapping };
+    return { id_mapping, auto_completed: [] };
   },
   search: async ({ query }) => {
     const ids = fx.searchResults[query.trim()] ?? {

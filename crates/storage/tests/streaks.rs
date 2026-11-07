@@ -144,3 +144,16 @@ fn early_completion_credits_the_upcoming_occurrence() {
     apply_at(&repo, cmd("c3", None, Action::TaskComplete { id: id.clone() }), d(2026, 1, 12)).unwrap(); // next Mon
     assert_eq!(repo.get_task(&id).unwrap().unwrap().streak_current, 3, "early completion must not break the streak");
 }
+
+#[test]
+fn set_done_with_subtasks_round_trips() {
+    let repo = SqliteRepo::open_in_memory().unwrap();
+    let project = Id::new();
+    let res = apply(&repo, cmd("a", Some("t"), add("saw", &project, None))).unwrap();
+    let id = res.id_mapping["t"].clone();
+    assert!(!repo.get_task(&id).unwrap().unwrap().done_with_subtasks);
+    apply(&repo, cmd("on", None, Action::TaskSetDoneWithSubtasks { id: id.clone(), enabled: true })).unwrap();
+    assert!(repo.get_task(&id).unwrap().unwrap().done_with_subtasks);
+    apply(&repo, cmd("off", None, Action::TaskSetDoneWithSubtasks { id: id.clone(), enabled: false })).unwrap();
+    assert!(!repo.get_task(&id).unwrap().unwrap().done_with_subtasks);
+}

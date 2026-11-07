@@ -14,6 +14,9 @@ use crate::streak;
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct ApplyResult {
     pub id_mapping: HashMap<String, Id>,
+    /// Parents a sub-task's completion completed with it, nearest first.
+    #[serde(default)]
+    pub auto_completed: Vec<Id>,
 }
 
 /// A single mutation. Carries a client `uuid` (idempotency) and, for creates,
@@ -192,6 +195,11 @@ pub enum Action {
     ReminderDelete {
         id: Id,
     },
+    /// Turn on/off completing a task once all its sub-tasks are done.
+    TaskSetDoneWithSubtasks {
+        id: Id,
+        enabled: bool,
+    },
 }
 
 impl Action {
@@ -207,6 +215,7 @@ impl Action {
             Action::SectionUpdate { .. } => "section_update",
             Action::SectionDelete { .. } => "section_delete",
             Action::TaskSetStreak { .. } => "task_set_streak",
+            Action::TaskSetDoneWithSubtasks { .. } => "task_set_done_with_subtasks",
             Action::LabelAdd { .. } => "label_add",
             Action::LabelUpdate { .. } => "label_update",
             Action::LabelSetColor { .. } => "label_set_color",
@@ -561,6 +570,13 @@ pub fn apply_at<R: Repository>(
             if let Some(mut r) = repo.list_reminders()?.into_iter().find(|r| r.id == id) {
                 r.is_deleted = true;
                 repo.upsert_reminder(&r)?;
+            }
+        }
+        Action::TaskSetDoneWithSubtasks { id, enabled } => {
+            if let Some(mut task) = repo.get_task(&id)? {
+                task.done_with_subtasks = enabled;
+                task.updated_at = Utc::now();
+                repo.upsert_task(&task)?;
             }
         }
         Action::TaskSetStreak { id, enabled, goal } => {

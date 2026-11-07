@@ -14,4 +14,8 @@ done: boolean,
 /**
  * Direct sub-tasks in child order; done ones only when `show_completed`.
  */
-visible: Array<SubtaskLine>, };
+visible: Array<SubtaskLine>, 
+/**
+ * It has a sub-task, done or not.
+ */
+has_subtasks: boolean, };

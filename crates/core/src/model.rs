@@ -135,6 +135,9 @@ pub struct Task {
     /// parent's next date (`YYYY-MM-DD`).
     #[serde(default)]
     pub reopens_on: Option<String>,
+    /// Completes itself once its sub-tasks are all done (issue #11).
+    #[serde(default)]
+    pub done_with_subtasks: bool,
 }
 
 /// What a repeating task's completion changed. It stays active, so this is all
@@ -201,6 +204,7 @@ impl Task {
             streak_last_period: None,
             last_completion: None,
             reopens_on: None,
+            done_with_subtasks: false,
         }
     }
 }

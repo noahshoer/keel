@@ -4,4 +4,8 @@ import type { Id } from "./Id";
 /**
  * The result of applying a command: any temp-id → real-id mappings created.
  */
-export type ApplyResult = { id_mapping: { [key in string]?: Id }, };
+export type ApplyResult = { id_mapping: { [key in string]?: Id }, 
+/**
+ * Parents a sub-task's completion completed with it, nearest first.
+ */
+auto_completed: Array<Id>, };
