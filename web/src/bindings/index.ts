@@ -62,6 +62,7 @@ export type * from "./ReminderDraft";
 export type * from "./ReminderMenus";
 export type * from "./ReminderSettings";
 export type * from "./ReminderType";
+export type * from "./RepeatReading";
 export type * from "./SearchArgs";
 export type * from "./SearchResults";
 export type * from "./Section";

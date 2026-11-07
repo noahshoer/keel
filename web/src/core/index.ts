@@ -30,6 +30,7 @@ import type {
   ReminderDraft,
   ReminderMenus,
   ReminderSettings,
+  RepeatReading,
   Section,
   SidebarCounts,
   Task,
@@ -327,6 +328,12 @@ export function locationText(
 ): string {
   ready();
   return core.locationText(projectId, sectionId, projects, sections);
+}
+
+/** What a typed repeat reads as ("every 3 tuesdays"), anchored on `date`; null when it isn't one. */
+export function readRepeat(text: string, date: string, today: string): RepeatReading | null {
+  ready();
+  return core.readRepeat(text, date, today);
 }
 
 /** A repeat rule as text: "Every Mon, Wed". */

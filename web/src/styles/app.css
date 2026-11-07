@@ -620,6 +620,14 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 .menu-item.checked.row-p3 { background: var(--p3-bg); }
 .label-row.on[style*="color"] { background: color-mix(in srgb, currentColor 16%, transparent); }
 .menu-icon { display: inline-flex; color: var(--icon); }
+.menu-typed { display: flex; flex-direction: column; gap: 2px; padding-bottom: 4px; margin-bottom: 2px; border-bottom: 1px solid var(--border); }
+.menu-typed-field { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 12px; border-radius: var(--r-item); background: var(--hover); }
+.menu-typed-field:focus-within { box-shadow: 0 0 0 3px var(--focus-ring); }
+.menu-typed-icon { color: var(--c-repeat); }
+.menu-typed-input { flex: 1; min-width: 0; height: 36px; padding: 0; border: none; outline: none; background: none; font-size: 14px; }
+.menu-typed-input::placeholder { color: var(--muted); }
+.menu-item.menu-reading { color: var(--c-repeat); font-weight: 600; }
+.menu-item.menu-reading:disabled { color: var(--muted); font-weight: 400; cursor: default; }
 .menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-hint { color: var(--muted); font-size: 13px; }
 .menu-check { display: inline-flex; color: var(--accent); }

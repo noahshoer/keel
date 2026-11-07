@@ -131,7 +131,7 @@ pub fn parse_keeping(
             if kept && !c.is_whitespace() { "\u{1}".repeat(c.len_utf8()) } else { c.to_string() }
         })
         .collect();
-    let (mut q, used) = parse_tokens(&masked, today, projects, sections);
+    let (mut q, used) = parse_tokens(&masked, today, today, projects, sections);
     // The title is the words the parser didn't use, as in `parse`, taken from
     // the real text. Masking keeps every word boundary, so the words line up.
     q.content = unused_words(&tokens(input), &used);
@@ -694,11 +694,37 @@ fn match_name(t: &[Token], i: usize, sigil: &str, names: &[&str]) -> Option<(usi
 /// phrase on its own is still recognized (`content` is then empty); the
 /// editors won't save until there's a name besides it, as in Todoist.
 pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Section]) -> QuickAdd {
-    parse_tokens(input, today, projects, sections).0
+    parse_tokens(input, today, today, projects, sections).0
+}
+
+/// A repeat typed on its own (the Repeat menu's field): the phrase, with an
+/// optional start, end and time, and nothing else. "every" may be left off.
+/// `start` anchors the repeat when no start date is typed.
+pub fn parse_repeat(text: &str, today: NaiveDate, start: NaiveDate) -> Option<QuickAdd> {
+    let read = |input: &str| {
+        let q = parse_tokens(input, today, start, &[], &[]).0;
+        let only = q.content.trim().is_empty()
+            && q.recurrence.is_some()
+            && q.priority.is_none()
+            && q.labels.is_empty()
+            && q.deadline.is_none()
+            && q.project_id.is_none()
+            && !q.streak;
+        only.then_some(q)
+    };
+    let text = text.trim();
+    read(text).or_else(|| read(&format!("every {text}")))
 }
 
 /// `parse`, also returning which of `input`'s words it used.
-fn parse_tokens(input: &str, today: NaiveDate, projects: &[Project], sections: &[Section]) -> (QuickAdd, Vec<bool>) {
+/// `start` anchors a repeat when no date is typed (quick add: today).
+fn parse_tokens(
+    input: &str,
+    today: NaiveDate,
+    start: NaiveDate,
+    projects: &[Project],
+    sections: &[Section],
+) -> (QuickAdd, Vec<bool>) {
     let t = tokens(input);
     let mut used = vec![false; t.len()];
     let mut q = QuickAdd::default();
@@ -881,7 +907,7 @@ fn parse_tokens(input: &str, today: NaiveDate, projects: &[Project], sections: &
 
     // Repeats anchor on the parsed date (or today); the due becomes the first occurrence.
     if let Some(spec) = repeat {
-        let start = q.date.unwrap_or(today);
+        let start = q.date.unwrap_or(start);
         let rule = match spec {
             RepeatSpec::Rule(r) => r,
             RepeatSpec::Weekly => Recurrence::Weekly(vec![idx(start) as u8]),
@@ -1410,6 +1436,30 @@ mod tests {
         // A time after it is still a time.
         let q = p("x every may at 9am");
         assert_eq!((q.recurrence, q.time.is_some()), (Some(Recurrence::Yearly { month: 5, day: 1 }), true));
+    }
+
+    #[test]
+    fn a_repeat_read_on_its_own() {
+        use super::parse_repeat;
+        let sat = d(2026, 10, 24);
+        // Anchored on the given start, not today.
+        let q = parse_repeat("every week", today(), sat).unwrap();
+        assert_eq!((q.recurrence, q.date), (Some(Recurrence::Weekly(vec![5])), Some(sat)));
+        let q = parse_repeat("every 3 tuesdays", today(), sat).unwrap();
+        assert_eq!(q.date, Some(d(2026, 10, 27)));
+        // "every" may be left off.
+        let q = parse_repeat("3 tuesdays", today(), sat).unwrap();
+        assert_eq!(q.recurrence, Some(Recurrence::EveryNWeeks { n: 3, days: vec![1], anchor: d(2026, 10, 27) }));
+        assert_eq!(parse_repeat("other week", today(), sat).unwrap().recurrence.map(|r| r.describe()), Some("every other week on Sat".into()));
+        assert!(parse_repeat("daily", today(), sat).is_some());
+        // A start, an end and a time come along; relative dates count from today.
+        let q = parse_repeat("every day starting tomorrow until nov 30 at 9am", today(), sat).unwrap();
+        assert_eq!((q.date, q.until), (Some(d(2026, 10, 20)), Some(d(2026, 11, 30))));
+        assert!(q.time.is_some());
+        // Anything else, or no repeat, isn't one.
+        for text in ["", "tomorrow", "every day p1", "every day call mom", "every 5th monday", "buy milk"] {
+            assert!(parse_repeat(text, today(), sat).is_none(), "{text}");
+        }
     }
 
     #[test]

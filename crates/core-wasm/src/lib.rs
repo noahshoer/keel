@@ -497,6 +497,12 @@ pub fn repeat_text(
     Ok(editor::repeat_text(&rule))
 }
 
+/// `editor::read_repeat`: what the Repeat menu's field reads, or null.
+#[wasm_bindgen(js_name = readRepeat, unchecked_return_type = "import('../../bindings').RepeatReading | null")]
+pub fn read_repeat(text: &str, date_value: &str, today: &str) -> Result<JsValue, JsError> {
+    output(&editor::read_repeat(text, date_value, date(today)?))
+}
+
 /// `ReminderDraft::from_reminder`: a stored reminder as the editor edits it.
 #[wasm_bindgen(js_name = reminderDraftOf, unchecked_return_type = "import('../../bindings').ReminderDraft")]
 pub fn reminder_draft_of(
