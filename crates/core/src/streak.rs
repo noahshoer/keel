@@ -113,6 +113,7 @@ mod tests {
             lang: "en".to_string(),
             is_recurring: true,
             recurrence: Some(rule),
+            until: None,
         });
         t.streak_enabled = true;
         t
@@ -203,6 +204,7 @@ mod streak_text_tests {
             lang: "en".into(),
             timezone: None,
             recurrence: Some(r),
+            until: None,
         });
         t
     }

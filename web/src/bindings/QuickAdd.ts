@@ -17,6 +17,10 @@ content: string, date: string | null, time: string | null, recurrence: Recurrenc
  */
 deadline: string | null, 
 /**
+ * From "for 10 days" / "until nov 30" after the repeat: its last day.
+ */
+until: string | null, 
+/**
  * From "streak" beside the repeat phrase: track a streak.
  */
 streak: boolean, 

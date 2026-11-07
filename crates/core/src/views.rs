@@ -584,6 +584,7 @@ mod tests {
             lang: "en".to_string(),
             is_recurring: false,
             recurrence: None,
+            until: None,
         });
         assert_eq!(due_date_of(&t), Some(d(2026, 10, 19)));
     }
@@ -684,6 +685,7 @@ mod time_tests {
             lang: "en".into(),
             is_recurring: false,
             recurrence: None,
+            until: None,
         };
         task.due = Some(due("2026-10-19"));
         assert_eq!(due_time(&task), None, "date-only due has no time");
@@ -709,6 +711,7 @@ mod sidebar_count_mode_tests {
             lang: "en".into(),
             is_recurring: false,
             recurrence: None,
+            until: None,
         });
         t
     }
@@ -761,6 +764,7 @@ mod progress_tests {
                 lang: "en".into(),
                 is_recurring: true,
                 recurrence: None,
+                until: None,
             });
         }
         task
@@ -814,6 +818,7 @@ mod progress_tests {
             lang: "en".into(),
             is_recurring: true,
             recurrence: None,
+            until: None,
         });
         task
     }
@@ -965,6 +970,7 @@ mod card_tests {
             lang: "en".into(),
             is_recurring: true,
             recurrence: None,
+            until: None,
         });
         done.last_completion = Some(crate::model::LastCompletion {
             moved_to: "2026-11-04".into(),
@@ -1054,6 +1060,7 @@ mod card_tests {
             lang: "en".into(),
             is_recurring: true,
             recurrence: None,
+            until: None,
         });
         let mut a = all(&f);
         a.push(h.clone());
@@ -1160,6 +1167,7 @@ mod date_group_tests {
             lang: "en".to_string(),
             is_recurring: false,
             recurrence: None,
+            until: None,
         });
         t
     }
@@ -1399,6 +1407,7 @@ mod sidebar_count_tests {
             lang: "en".to_string(),
             timezone: None,
             recurrence: None,
+            until: None,
         });
         t
     }

@@ -240,7 +240,7 @@ fn undo_leaves_a_task_whose_date_was_changed_since() {
     let mut f = Fx::new();
     let task = f.add(None, Some(Recurrence::Daily));
     f.complete(&task);
-    let due = keel_core::commands::DueEdit { date: Some("2026-02-01".into()), recurrence: Some(Recurrence::Daily) };
+    let due = keel_core::commands::DueEdit { date: Some("2026-02-01".into()), recurrence: Some(Recurrence::Daily), until: None };
     f.run_on(
         Action::TaskUpdate {
             id: task.clone(),

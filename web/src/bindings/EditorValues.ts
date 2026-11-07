@@ -44,4 +44,9 @@ streak: boolean,
  * Its goal, carried over from a typed "streak 30" when a pick takes the
  * phrase out of the title.
  */
-streak_goal: number | null, };
+streak_goal: number | null, 
+/**
+ * The repeat's last day, `YYYY-MM-DD` or empty (from "for 10 days" /
+ * "until nov 30").
+ */
+until: string, };

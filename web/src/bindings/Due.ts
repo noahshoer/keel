@@ -10,4 +10,9 @@ export type Due = { date: string, timezone: string | null, string: string, lang:
  * Structured recurrence rule (NL parsing lands in a later plan).
  * Invariant: `is_recurring == recurrence.is_some()`.
  */
-recurrence?: Recurrence | null, };
+recurrence?: Recurrence | null, 
+/**
+ * The last day a repeat may fall on (`YYYY-MM-DD`), from "for 10 days"
+ * or "until nov 30"; completing the last occurrence finishes the task.
+ */
+until?: string | null, };

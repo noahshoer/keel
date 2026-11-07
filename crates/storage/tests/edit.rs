@@ -121,7 +121,7 @@ fn update_sets_date_priority_project_labels() {
             priority: Some(Priority::P2),
             project_id: Some(other.clone()),
             labels: Some(vec!["work".into(), "deep".into()]),
-            due: Some(DueEdit { date: Some("2026-02-01".into()), recurrence: None }),
+            due: Some(DueEdit { date: Some("2026-02-01".into()), recurrence: None, until: None }),
             is_collapsed: None,
             deadline: None,
         },
@@ -144,7 +144,7 @@ fn clear_due_removes_recurrence() {
     assert!(h.get(&id).due.is_some());
     let mut action = noop(&id);
     if let Action::TaskUpdate { due, .. } = &mut action {
-        *due = Some(DueEdit { date: None, recurrence: None });
+        *due = Some(DueEdit { date: None, recurrence: None, until: None });
     }
     h.run(action, mon());
     assert_eq!(h.get(&id).due, None);
@@ -156,7 +156,7 @@ fn set_recurrence_without_date_uses_first_occurrence() {
     let id = h.add(None, None, None);
     let mut action = noop(&id);
     if let Action::TaskUpdate { due, .. } = &mut action {
-        *due = Some(DueEdit { date: None, recurrence: Some(Recurrence::Weekly(vec![2])) });
+        *due = Some(DueEdit { date: None, recurrence: Some(Recurrence::Weekly(vec![2])), until: None });
     }
     h.run(action, mon());
     let due = h.get(&id).due.unwrap();
@@ -176,7 +176,7 @@ fn changing_recurrence_resets_streak_keeps_best() {
 
     let mut action = noop(&id);
     if let Action::TaskUpdate { due, .. } = &mut action {
-        *due = Some(DueEdit { date: Some("2026-01-12".into()), recurrence: Some(Recurrence::Weekly(vec![0])) });
+        *due = Some(DueEdit { date: Some("2026-01-12".into()), recurrence: Some(Recurrence::Weekly(vec![0])), until: None });
     }
     h.run(action, d(2026, 1, 6));
     let t = h.get(&id);

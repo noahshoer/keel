@@ -299,6 +299,7 @@ mod tests {
             lang: "en".into(),
             is_recurring: true,
             recurrence: None,
+            until: None,
         });
         t
     }

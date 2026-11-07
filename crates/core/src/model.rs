@@ -66,6 +66,11 @@ pub struct Due {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub recurrence: Option<Recurrence>,
+    /// The last day a repeat may fall on (`YYYY-MM-DD`), from "for 10 days"
+    /// or "until nov 30"; completing the last occurrence finishes the task.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
+    pub until: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -382,6 +387,7 @@ impl Reminder {
                 lang: "en".to_string(),
                 is_recurring: false,
                 recurrence: None,
+                until: None,
             }),
             minute_offset: None,
             is_deleted: false,
@@ -444,6 +450,7 @@ mod tests {
             lang: "en".to_string(),
             is_recurring: false,
             recurrence: None,
+            until: None,
         };
         let json = serde_json::to_string(&due).expect("serialize");
         let back: Due = serde_json::from_str(&json).expect("deserialize");

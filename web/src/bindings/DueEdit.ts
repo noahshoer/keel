@@ -6,4 +6,9 @@ import type { Recurrence } from "./Recurrence";
  * `recurrence`, the first occurrence on/after today is used; both `None`
  * clears the due.
  */
-export type DueEdit = { date?: string | null, recurrence?: Recurrence | null, };
+export type DueEdit = { date?: string | null, recurrence?: Recurrence | null, 
+/**
+ * The repeat's last day: `None` keeps the task's end while the rule stays
+ * the same, `Some("")` clears it.
+ */
+until?: string | null, };

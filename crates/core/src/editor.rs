@@ -48,6 +48,10 @@ pub struct EditorValues {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub streak_goal: Option<i64>,
+    /// The repeat's last day, `YYYY-MM-DD` or empty (from "for 10 days" /
+    /// "until nov 30").
+    #[serde(default)]
+    pub until: String,
 }
 
 impl EditorValues {
@@ -68,6 +72,7 @@ impl EditorValues {
             plain: Vec::new(),
             streak: false,
             streak_goal: None,
+            until: String::new(),
         }
     }
 
@@ -89,6 +94,7 @@ impl EditorValues {
             plain: Vec::new(),
             streak: false,
             streak_goal: None,
+            until: t.due.as_ref().and_then(|d| d.until.clone()).unwrap_or_default(),
         }
     }
 
@@ -254,6 +260,8 @@ pub struct NewTask {
     pub parent_id: Option<Id>,
     /// `YYYY-MM-DD`, or empty for no deadline.
     pub deadline: String,
+    /// The repeat's last day, `YYYY-MM-DD`, or empty.
+    pub until: String,
 }
 
 impl NewTask {
@@ -266,6 +274,7 @@ impl NewTask {
             lang: "en".to_string(),
             is_recurring: false,
             recurrence: None,
+            until: (!self.until.is_empty()).then(|| self.until.clone()),
         });
         let description = (!self.description.trim().is_empty()).then(|| self.description.trim().to_string());
         Action::TaskAdd {
@@ -353,6 +362,14 @@ pub fn repeat_chip_text(repeat: &str, opts: &[(String, String)]) -> String {
         .unwrap_or_else(|| "Repeat".to_string())
 }
 
+/// A repeat's text with its end: "Every day until Oct 21".
+fn with_end(text: String, until: Option<&str>) -> String {
+    match until.and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok()) {
+        Some(end) => format!("{text} until {}", end.format("%b %-d")),
+        None => text,
+    }
+}
+
 /// "Project" or "Project / Section" for the location chip.
 pub fn location_text(project_id: &Id, section_id: Option<&Id>, projects: &[Project], sections: &[Section]) -> String {
     let Some(p) = projects.iter().find(|p| &p.id == project_id) else { return "Inbox".to_string() };
@@ -415,7 +432,10 @@ pub fn changes(
     existing: Option<Recurrence>,
     today: NaiveDate,
 ) -> (TaskPatch, Option<(Id, Option<Id>)>) {
-    let due_changed = before.date != after.date || before.time != after.time || before.repeat != after.repeat;
+    let due_changed = before.date != after.date
+        || before.time != after.time
+        || before.repeat != after.repeat
+        || before.until != after.until;
     let due = after.due_string(today);
     let patch = TaskPatch {
         content: (after.content.trim() != before.content).then(|| after.content.trim().to_string()),
@@ -427,6 +447,7 @@ pub fn changes(
         due: due_changed.then(|| DueEdit {
             date: (!due.is_empty()).then(|| due.clone()),
             recurrence: recurrence_for(&after.repeat, &due, existing, today),
+            until: (after.until != before.until).then(|| after.until.clone()),
         }),
     };
     let moved = (after.project_id != before.project_id || after.section_id != before.section_id)
@@ -617,6 +638,16 @@ pub fn new_task_from(v: &EditorValues, qa: &QuickAdd, today: NaiveDate) -> NewTa
         section_id,
         parent_id: v.parent_id.clone(),
         deadline: qa.deadline.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| v.deadline.clone()),
+        until: shown_until(v, qa),
+    }
+}
+
+/// The repeat's end: a typed repeat brings its own (or none).
+fn shown_until(v: &EditorValues, qa: &QuickAdd) -> String {
+    match (&qa.recurrence, qa.until) {
+        (Some(_), Some(end)) => end.format("%Y-%m-%d").to_string(),
+        (Some(_), None) => String::new(),
+        (None, _) => v.until.clone(),
     }
 }
 
@@ -737,6 +768,7 @@ fn shown_values(v: &EditorValues, qa: &QuickAdd) -> EditorValues {
         time: qa.time.map(|t| t.format("%H:%M").to_string()).unwrap_or_else(|| v.time.clone()),
         priority: qa.priority.map(|p| (5 - p.to_api()).to_string()).unwrap_or_else(|| v.priority.clone()),
         deadline: qa.deadline.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| v.deadline.clone()),
+        until: shown_until(v, qa),
         labels,
         project_id,
         section_id,
@@ -816,6 +848,10 @@ pub fn editor_view(
             _ => {}
         }
     }
+    let repeat_chip_text = with_end(
+        typed_repeat.as_ref().map(repeat_text).unwrap_or_else(|| repeat_chip_text(&v.repeat, &opts)),
+        repeat_rule.is_some().then_some(shown.until.as_str()),
+    );
     EditorView {
         can_submit,
         segments,
@@ -827,7 +863,7 @@ pub fn editor_view(
         locations: location_choices(projects, sections),
         priority_text: priority_text(&shown.priority),
         labels_text: labels_text(&shown.labels),
-        repeat_chip_text: typed_repeat.as_ref().map(repeat_text).unwrap_or_else(|| repeat_chip_text(&v.repeat, &opts)),
+        repeat_chip_text,
         repeat_options: opts,
         date_chip,
         deadline_text: deadline_text(deadline, today),
@@ -1491,5 +1527,48 @@ mod tests {
         assert_eq!(after.content, "Water plants");
         assert!(matches!(rule, Some(Recurrence::EveryNMonths { n: 3, .. })));
         assert_eq!(after.repeat, "keep");
+    }
+
+    #[test]
+    fn a_typed_end_goes_with_the_new_task() {
+        let plan = add_plan(&typed("Stretch every day for 3 days"), &[], &[], &[], day19());
+        let Action::TaskAdd { due, recurrence, .. } = plan.task else { panic!("a task add") };
+        assert_eq!(recurrence, Some(Recurrence::Daily));
+        assert_eq!(due.and_then(|d| d.until).as_deref(), Some("2026-10-21"));
+        let view = editor_view(&typed("Stretch every day for 3 days"), true, None, None, &[], &[], day19());
+        assert_eq!(view.repeat_chip_text, "Every day until Oct 21");
+    }
+
+    #[test]
+    fn a_tasks_end_shows_and_edits() {
+        let mut task = Task::new("Stretch", Id::from("P-IN"));
+        task.id = Id::from("T-1");
+        task.due = Some(Due {
+            date: "2026-10-19".into(),
+            timezone: None,
+            string: String::new(),
+            lang: "en".into(),
+            is_recurring: true,
+            recurrence: Some(Recurrence::Daily),
+            until: Some("2026-10-21".into()),
+        });
+        let before = EditorValues::from_task(&task);
+        assert_eq!(before.until, "2026-10-21");
+        let view = editor_view(&before, false, None, Some(Recurrence::Daily), &[], &[], day19());
+        assert_eq!(view.repeat_chip_text, "Every day until Oct 21");
+
+        // Untouched, the end isn't sent (the task keeps it).
+        let mut after = before.clone();
+        after.date = "2026-10-20".into();
+        let (patch, _) = changes(&before, &after, Some(Recurrence::Daily), day19());
+        assert_eq!(patch.due.unwrap().until, None);
+
+        // A typed end replaces it; a typed repeat without one clears it.
+        let (after, rule) = apply_title(&with_title(&before, "Stretch every day until nov 30".into()), Some(Recurrence::Daily), &[], &[], day19()).unwrap();
+        let (patch, _) = changes(&before, &after, rule, day19());
+        assert_eq!(patch.due.unwrap().until.as_deref(), Some("2026-11-30"));
+        let (after, rule) = apply_title(&with_title(&before, "Stretch every day".into()), Some(Recurrence::Daily), &[], &[], day19()).unwrap();
+        let (patch, _) = changes(&before, &after, rule, day19());
+        assert_eq!(patch.due.unwrap().until.as_deref(), Some(""));
     }
 }

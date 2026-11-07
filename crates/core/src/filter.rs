@@ -393,6 +393,7 @@ mod tests {
             lang: "en".into(),
             is_recurring: false,
             recurrence: None,
+            until: None,
         });
         t
     }

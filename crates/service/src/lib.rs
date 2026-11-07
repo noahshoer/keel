@@ -260,6 +260,7 @@ impl AppService {
                             lang: "en".to_string(),
                             is_recurring: false,
                             recurrence: None,
+                            until: None,
                         }),
                         labels: (!labels.is_empty()).then(|| labels.clone()),
                         parent_id: lookup(parent),
