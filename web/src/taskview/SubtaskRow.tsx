@@ -1,12 +1,12 @@
 // One direct sub-task in the task view (crates/ui/src/task_view/view.rs
 // `SubtaskRow`): its circle (complete, or reopen when checked), its name, its
-// own "x/y", and a ›. The rest of the row opens its view.
+// streak, its own "x/y", and a ›. The rest of the row opens its view.
 import type { Id, SubtaskLine } from "../bindings";
 import { completeTask, uncompleteTask } from "../ipc/actions";
 import { CHECK_CLASS } from "../lists/chips";
 import { SubtaskProgress } from "../lists/SubtaskProgress";
 import { haptic } from "../shell/haptics";
-import { CheckIcon, ChevronRightIcon } from "../shell/icons";
+import { CheckIcon, ChevronRightIcon, FireIcon } from "../shell/icons";
 import { useTaskNav } from "./nav-context";
 
 export function SubtaskRow({
@@ -32,7 +32,13 @@ export function SubtaskRow({
           if (!done) haptic("complete");
           // Not tied to the row: it goes once the task is done.
           const sent = done ? uncompleteTask(t.id) : completeTask(t.id);
-          void sent.then(onChanged, onChanged).then(() => nav.releaseCircles());
+          void sent
+            .then((res) => {
+              // Its parent, the task on screen, completed with it: as if ticked here.
+              if (t.parent_id !== null && res.auto_completed.includes(t.parent_id)) nav.completedHere();
+              onChanged();
+            }, onChanged)
+            .then(() => nav.releaseCircles());
         }}
       >
         <CheckIcon />
@@ -41,6 +47,12 @@ export function SubtaskRow({
       {/* biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI. */}
       <div className="tv-sub-body" title="Open task" onClick={() => onOpen(t.id)}>
         <span className="task-content">{t.content}</span>
+        {t.streak_enabled ? (
+          <span className="streak" title="Current streak">
+            <FireIcon />
+            {t.streak_current}
+          </span>
+        ) : null}
         {row.progress !== null ? <SubtaskProgress progress={row.progress} /> : null}
         <span className="card-chev">
           <ChevronRightIcon />
