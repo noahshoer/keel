@@ -133,3 +133,15 @@ it("a finger that rests before lifting is not a flick", () => {
   touch("touchend", list(), 100, 100, 900);
   expect(log.at(-1)).toBe("end false 0.20");
 });
+
+it("keeps following a touch whose element left the page mid-pan", () => {
+  // The Search screen is replaced when the pan starts; WebKit then sends the
+  // touch's moves and its end to the removed element only, not up to the document.
+  const target = list();
+  touch("touchstart", target, 20, 100, 0);
+  touch("touchmove", target, 40, 102, 50);
+  target.remove();
+  touch("touchmove", target, 190, 104, 400);
+  touch("touchend", target, 190, 104, 410);
+  expect(log).toEqual(["start", "move 0.00", "move 0.50", "end true 0.50"]);
+});

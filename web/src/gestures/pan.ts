@@ -24,6 +24,8 @@ export type Pan = {
 
 type Active = {
   pan: Pan;
+  /** Removes the listeners on the touch's own element. */
+  unbind: () => void;
   x: number;
   y: number;
   mode: PanIntent | "pan" | "ignore";
@@ -38,6 +40,7 @@ export function installPan(doc: Document, begin: (ctx: TouchContext) => Pan | nu
   const finish = (commit: boolean, at?: number) => {
     const a = cur;
     cur = null;
+    a?.unbind();
     if (a?.mode !== "pan") return;
     // A finger that rested before lifting is not a flick: the speed runs to the lift.
     const last = a.samples.at(-1);
@@ -51,7 +54,19 @@ export function installPan(doc: Document, begin: (ctx: TouchContext) => Pan | nu
     if (ev.touches.length !== 1 || !t) return;
     const pan = begin(touchContext(doc, ev));
     if (!pan) return;
-    cur = { pan, x: t.clientX, y: t.clientY, mode: "pending", anchor: 0, progress: 0, samples: [] };
+    // The rest of the touch is heard on its own element: if the page replaces it mid-pan
+    // (the Search screen does), WebKit sends the touch's moves and end there and no
+    // longer up to the document.
+    const el = ev.target;
+    const unbind = () => {
+      el?.removeEventListener("touchmove", onMove as EventListener);
+      el?.removeEventListener("touchend", onEnd as EventListener);
+      el?.removeEventListener("touchcancel", onCancel);
+    };
+    cur = { pan, unbind, x: t.clientX, y: t.clientY, mode: "pending", anchor: 0, progress: 0, samples: [] };
+    el?.addEventListener("touchmove", onMove as EventListener, { passive: false });
+    el?.addEventListener("touchend", onEnd as EventListener, { passive: true });
+    el?.addEventListener("touchcancel", onCancel, { passive: true });
   };
   const onMove = (ev: TouchEvent) => {
     const a = cur;
@@ -80,15 +95,10 @@ export function installPan(doc: Document, begin: (ctx: TouchContext) => Pan | nu
   const onEnd = (ev: TouchEvent) => finish(true, ev.timeStamp);
   const onCancel = () => finish(false);
 
-  const passive = { passive: true } as const;
-  doc.addEventListener("touchstart", onStart, passive);
-  doc.addEventListener("touchmove", onMove, { passive: false });
-  doc.addEventListener("touchend", onEnd, passive);
-  doc.addEventListener("touchcancel", onCancel, passive);
+  doc.addEventListener("touchstart", onStart, { passive: true });
   return () => {
     doc.removeEventListener("touchstart", onStart);
-    doc.removeEventListener("touchmove", onMove);
-    doc.removeEventListener("touchend", onEnd);
-    doc.removeEventListener("touchcancel", onCancel);
+    cur?.unbind();
+    cur = null;
   };
 }
