@@ -27,7 +27,7 @@ export function MovePrompt({
       role="alertdialog"
       aria-label="Move this one?"
     >
-      <div className="confirm-text">Moving just this one resets its streak of {streak}. Your best stays.</div>
+      <div className="confirm-text">Moving this task resets its streak of {streak}. Your best stays.</div>
       <div className="confirm-actions">
         <button type="button" className="btn btn-cancel" onClick={onCancel}>
           Cancel
