@@ -280,8 +280,13 @@ function Frame({
   const viewOpen = loaded !== null && top(pruned(nav.stack, loaded.all)) !== null;
   useEffect(() => (viewOpen ? holdPage() : undefined), [viewOpen]);
   useEffect(() => (drawer ? holdPage() : undefined), [drawer]);
+  // Once it is shut, the next scrim fades in as usual (see drawerDrag.ts).
+  const appEl = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!drawer) delete appEl.current?.dataset["drawerRest"];
+  }, [drawer]);
   return (
-    <div className={`app${drawer ? " drawer-open" : ""}${viewOpen ? " view-open" : ""}`}>
+    <div ref={appEl} className={`app${drawer ? " drawer-open" : ""}${viewOpen ? " view-open" : ""}`}>
       {drawer ? (
         // biome-ignore lint/a11y/useKeyWithClickEvents: the scrim is a pointer target; Escape isn't part of the Dioxus drawer.
         // biome-ignore lint/a11y/noStaticElementInteractions: same markup as the Dioxus UI.

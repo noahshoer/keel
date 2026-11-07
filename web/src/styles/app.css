@@ -1281,6 +1281,8 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
   /* Dragged (drawerDrag.ts): --p is 0 shut to 1 open, set as the finger moves; "settle" runs the rest at the tap's pace. */
   .app[data-drawer-drag] .sidebar { transform: translateX(calc((var(--p) - 1) * 100%)); visibility: visible; transition: none; }
   .app[data-drawer-drag] .drawer-scrim { animation: none; opacity: var(--p); }
+  /* Opened by a drag, it stays open: the scrim must not play its fade-in again (it would flicker). */
+  .app[data-drawer-rest] .drawer-scrim { animation: none; }
   .app[data-drawer-drag] .content { translate: calc(28px * var(--p)) 0; transition: none; }
   .app[data-drawer-drag="settle"] .sidebar { transition: transform .26s var(--ease); }
   .app[data-drawer-drag="settle"] .drawer-scrim { transition: opacity .26s var(--ease); }

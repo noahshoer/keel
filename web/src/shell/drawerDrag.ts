@@ -48,6 +48,8 @@ export function installDrawerDrag(doc: Document, ctl: DrawerControl): () => void
           timers.delete(t);
           settling = false;
           delete app.dataset["drawerDrag"];
+          // The scrim a drag made is already showing; keep it from fading in again.
+          if (final) app.dataset["drawerRest"] = "";
           app.style.removeProperty("--p");
           ctl.setOpen(final);
         }, SETTLE_MS);
