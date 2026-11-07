@@ -54,6 +54,7 @@ What it showed and what changed:
   it trailed again. As is, the card leads by a few points at most. The
   calendar is built only after the keyboard's move has started
   (`afterKeyboardMove`): building it first (~60 ms) held the card back. It
-  fades in once built (`sched-card`, 0.25 s), the quick choices fade out first, and
+  unfolds upward once built (`sched-card`, 0.25 s, solid: a fade showed the list
+  through it), the quick choices fade out first, and
   pickers on the card are placed by their laid-out size (their entrance
   scales them, which shifted them left once it ended).

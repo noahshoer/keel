@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { log } from "../diag";
 import { KEYBOARD_EVENT, keyboardInset } from "../gestures/sheet-rules";
-import { type Glide, gluedPath, springPoints } from "./glide";
+import { type Glide, gluedPath, springPoints, unrollFrames, unrollMs } from "./glide";
 import type { Rect } from "./popover";
 
 const MARGIN = 8;
@@ -90,6 +90,42 @@ export function paceOf(m: KeyboardMove): Pace {
   return { secs: m.secs, ease: m.ease };
 }
 
+/** Each picker's counter-move in the card's ride under way, for `unrollWithCard`. */
+const pickerRides = new WeakMap<HTMLElement, { anim: Animation; path: number[]; ms: number }>();
+
+/** How long a picker built during a ride takes to unroll up to its full height. */
+export const UNROLL_MS = 250;
+/**
+ * How far ahead of the ride the unroll's clip runs. The card's transform is
+ * drawn by the compositor; a clip-path is worked out on the page's thread and
+ * reached the screen about two frames later (its edge trailed the card by up
+ * to 38 pt).
+ */
+const UNROLL_LEAD_MS = 33;
+
+/**
+ * Unrolls `pop`, built on the card while it rides (the date's calendar, built
+ * once the keyboard has set off), both ways from the card's top: up to its
+ * full height, and down with the card (`unrollFrames`). False when the card
+ * isn't riding, for the picker's own entrance to run instead.
+ */
+export function unrollWithCard(pop: HTMLElement): boolean {
+  const ride = pickerRides.get(pop);
+  const start = ride?.anim.startTime;
+  if (ride?.anim.playState !== "running" || typeof start !== "number") return false;
+  // From the clock, not the ride's `currentTime`: that holds still through
+  // the page's work, and building the calendar took ~60 ms, so it trailed
+  // the card by that much. The unroll then starts at that point of the ride.
+  const elapsed = Math.max(0, performance.now() - start + UNROLL_LEAD_MS);
+  const frames = unrollFrames(ride.path, ride.ms, elapsed, pop.offsetHeight, UNROLL_MS, 24);
+  const clip = pop.animate(
+    frames.map((f) => ({ offset: f.offset, clipPath: `inset(${f.top}px 0 ${f.bottom}px 0 round 20px)` })),
+    { duration: unrollMs(ride.ms, elapsed, UNROLL_MS), easing: "linear" },
+  );
+  clip.startTime = start + elapsed - UNROLL_LEAD_MS;
+  return true;
+}
+
 /** The id of a ride's animations, so a new ride cancels only those. */
 const RIDE = "keel-ride";
 
@@ -128,10 +164,11 @@ export function rideCard(
   // where it was placed while the card moves under it: it's inside the card,
   // so it moves the other way.
   for (const pop of pickers) {
-    pop.animate(
+    const anim = pop.animate(
       path.map((y) => ({ transform: `translateY(${-y}px)` })),
       timing,
     );
+    pickerRides.set(pop, { anim, path, ms: pace.secs * 1000 });
   }
   // iOS draws the caret where the layout is, not where the card is yet.
   card.classList.add("riding");

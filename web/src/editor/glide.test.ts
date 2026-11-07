@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gluedPath, springPoints, translateY } from "./glide";
+import { gluedPath, springPoints, translateY, unrollFrames, unrollMs } from "./glide";
 
 describe("the keyboard's curve as points", () => {
   it("reads a sampled spring", () => {
@@ -49,5 +49,33 @@ describe("a transform's vertical move", () => {
   it("is zero without a transform", () => {
     expect(translateY("none")).toBe(0);
     expect(translateY("")).toBe(0);
+  });
+});
+
+describe("a picker unrolling with the card", () => {
+  // The card rides down 300 px over 300 ms (its path, px from where it ends);
+  // the picker, 400 tall, is built 150 ms in, and unrolls up over 100 ms.
+  const path = [-300, -100, 0];
+
+  it("starts as a line at the card's top, then opens up and down to its full height", () => {
+    const frames = unrollFrames(path, 300, 150, 400, 100, 4);
+    expect(frames[0]).toEqual({ offset: 0, top: 300, bottom: 100 });
+    expect(frames.at(-1)).toEqual({ offset: 1, top: 0, bottom: 0 });
+  });
+
+  it("keeps its bottom edge on the card, and its top edge only rises", () => {
+    const frames = unrollFrames(path, 300, 150, 400, 100, 4);
+    // Half way through what's left of the ride (225 ms): the card is 50 px above its place.
+    expect(frames[2]?.bottom).toBeCloseTo(50);
+    for (let i = 1; i < frames.length; i++) {
+      expect(frames[i]?.top ?? 0).toBeLessThanOrEqual(frames[i - 1]?.top ?? 0);
+    }
+  });
+
+  it("takes the unroll's own time when the ride has less left", () => {
+    const frames = unrollFrames(path, 300, 280, 400, 100, 4);
+    expect(frames.at(-1)?.offset).toBe(1);
+    expect(unrollMs(300, 280, 100)).toBe(100);
+    expect(unrollMs(300, 150, 100)).toBe(150);
   });
 });
