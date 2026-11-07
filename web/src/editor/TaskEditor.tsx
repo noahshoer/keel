@@ -29,7 +29,7 @@ import {
   applyPick,
   editorView,
   locationPick,
-  repeatText,
+  readRepeat,
   toggleLabel,
   unhighlightAt,
   withTitle,
@@ -183,6 +183,10 @@ export function TaskEditor({
   const today = localToday();
   const view = editorView(values, quickAdd, keepLabel, existing, projects, sections, today);
   const pick = (p: EditorPick) => setValues((v) => applyPick(v, p, quickAdd, projects, sections, today));
+  const typedRepeat = {
+    read: (text: string) => readRepeat(text, view.shown.date, today)?.text ?? null,
+    onSubmit: (text: string) => pick({ type: "repeatText", text }),
+  };
 
   const submit = () => {
     const v = latest.current;
@@ -226,13 +230,10 @@ export function TaskEditor({
         rule={view.repeat_rule}
         repeat={{
           items: repeatItems,
-          selected: values.repeat,
-          // A repeat typed in the title isn't one of the menu's choices.
-          text:
-            values.repeat === "none" && view.repeat_rule !== null
-              ? repeatText(view.repeat_rule)
-              : (repeatItems.find((i) => i.value === values.repeat)?.label ?? view.repeat_chip_text),
+          selected: view.repeat_selected,
+          text: repeatItems.find((i) => i.value === view.repeat_selected)?.label ?? view.repeat_chip_text,
           onSelect: (value) => pick({ type: "repeat", value }),
+          typed: typedRepeat,
         }}
         today={today}
         open={open}
@@ -306,11 +307,12 @@ export function TaskEditor({
         icon={<RepeatSmallIcon />}
         text={view.repeat_chip_text}
         items={repeatItems}
-        selected={values.repeat}
+        selected={view.repeat_selected}
         open={open}
         setOpen={setPop}
         chipClass={view.repeat_rule !== null ? "pill-set pill-repeat" : ""}
         onSelect={(value) => pick({ type: "repeat", value })}
+        typed={typedRepeat}
       />
       {view.streak_offered ? (
         <StreakPicker

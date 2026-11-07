@@ -55,6 +55,8 @@ impl Fixture {
             lang: "en".into(),
             is_recurring: false,
             recurrence: None,
+            until: None,
+            moved_from: None,
         });
         let res = self
             .svc
@@ -90,6 +92,8 @@ impl Fixture {
             lang: "en".into(),
             is_recurring: false,
             recurrence: None,
+            until: None,
+            moved_from: None,
         });
         let inbox = self.inbox.clone();
         let res = self

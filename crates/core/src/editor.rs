@@ -48,6 +48,17 @@ pub struct EditorValues {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub streak_goal: Option<i64>,
+    /// The repeat's last day, `YYYY-MM-DD` or empty (from "for 10 days" /
+    /// "until nov 30").
+    #[serde(default)]
+    pub until: String,
+    /// The occurrence (`YYYY-MM-DD`) a moved date stands in for, or empty.
+    #[serde(default)]
+    pub moved_from: String,
+    /// The rule typed into the Repeat menu, while `repeat` is "custom".
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
+    pub rule: Option<Recurrence>,
 }
 
 impl EditorValues {
@@ -68,6 +79,9 @@ impl EditorValues {
             plain: Vec::new(),
             streak: false,
             streak_goal: None,
+            until: String::new(),
+            moved_from: String::new(),
+            rule: None,
         }
     }
 
@@ -79,7 +93,9 @@ impl EditorValues {
             date: t.due.as_ref().and_then(|d| d.date.get(..10)).unwrap_or("").to_string(),
             time: t.due.as_ref().and_then(|d| d.date.get(11..16)).unwrap_or("").to_string(),
             priority: (5 - t.priority.to_api()).to_string(),
-            repeat: repeat_choice(&rule).to_string(),
+            // The task's own rule, not a preset: presets follow the date, and
+            // a new date only moves one occurrence.
+            repeat: if rule.is_some() { "keep" } else { "none" }.to_string(),
             project_id: t.project_id.clone(),
             section_id: t.section_id.clone(),
             labels: t.labels.clone(),
@@ -89,6 +105,9 @@ impl EditorValues {
             plain: Vec::new(),
             streak: false,
             streak_goal: None,
+            until: t.due.as_ref().and_then(|d| d.until.clone()).unwrap_or_default(),
+            moved_from: t.due.as_ref().and_then(|d| d.moved_from.clone()).unwrap_or_default(),
+            rule: None,
         }
     }
 
@@ -188,6 +207,8 @@ pub enum Pick {
     Reminders { drafts: Vec<ReminderDraft> },
     Deadline { date: String },
     Repeat { value: String },
+    /// A repeat typed into the Repeat menu ("every 3 tuesdays").
+    RepeatText { text: String },
     Location { project_id: Id, section_id: Option<Id> },
     Streak {
         on: bool,
@@ -254,6 +275,8 @@ pub struct NewTask {
     pub parent_id: Option<Id>,
     /// `YYYY-MM-DD`, or empty for no deadline.
     pub deadline: String,
+    /// The repeat's last day, `YYYY-MM-DD`, or empty.
+    pub until: String,
 }
 
 impl NewTask {
@@ -266,6 +289,8 @@ impl NewTask {
             lang: "en".to_string(),
             is_recurring: false,
             recurrence: None,
+            until: (!self.until.is_empty()).then(|| self.until.clone()),
+            moved_from: None,
         });
         let description = (!self.description.trim().is_empty()).then(|| self.description.trim().to_string());
         Action::TaskAdd {
@@ -306,6 +331,56 @@ pub fn recurrence_for(choice: &str, date: &str, existing: Option<Recurrence>, to
         "keep" => existing,
         _ => None,
     }
+}
+
+/// The rule the values repeat by: the typed one, or the chosen option's.
+fn rule_of(v: &EditorValues, date: &str, existing: Option<Recurrence>, today: NaiveDate) -> Option<Recurrence> {
+    if v.repeat == "custom" {
+        v.rule.clone()
+    } else {
+        recurrence_for(&v.repeat, date, existing, today)
+    }
+}
+
+fn same_repeat(before: &EditorValues, after: &EditorValues) -> bool {
+    before.repeat == after.repeat && before.rule == after.rule && before.until == after.until
+}
+
+/// Whether saving `after` moves one occurrence of the repeating task: a new
+/// day under the same repeat. A streak can't carry over a move.
+pub fn moves_occurrence(before: &EditorValues, after: &EditorValues, existing: Option<&Recurrence>) -> bool {
+    existing.is_some() && before.repeat != "none" && same_repeat(before, after) && before.date != after.date
+}
+
+/// What the Repeat menu's field reads, live.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct RepeatReading {
+    pub rule: Recurrence,
+    /// "Every 3 weeks on Tue until Dec 31".
+    pub text: String,
+    /// The first occurrence, `YYYY-MM-DD`.
+    pub date: String,
+    /// `HH:MM` when a time was typed, or empty.
+    pub time: String,
+    /// The last day, `YYYY-MM-DD`, or empty.
+    pub until: String,
+}
+
+/// Reads a typed repeat, anchored on `date` (today when it's empty or past).
+/// `None` when the text isn't a repeat alone.
+pub fn read_repeat(text: &str, date: &str, today: NaiveDate) -> Option<RepeatReading> {
+    let start = NaiveDate::parse_from_str(date.get(..10).unwrap_or(date), "%Y-%m-%d").map_or(today, |d| d.max(today));
+    let q = quickadd::parse_repeat(text, today, start)?;
+    let rule = q.recurrence?;
+    let until = q.until.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default();
+    Some(RepeatReading {
+        text: with_end(repeat_text(&rule), Some(&until)),
+        date: q.date.unwrap_or(start).format("%Y-%m-%d").to_string(),
+        time: q.time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default(),
+        until,
+        rule,
+    })
 }
 
 /// Human text for a repeat rule ("Every other week on Wed").
@@ -351,6 +426,14 @@ pub fn repeat_chip_text(repeat: &str, opts: &[(String, String)]) -> String {
         .find(|(value, _)| value == repeat && value != "none")
         .map(|(_, label)| label.clone())
         .unwrap_or_else(|| "Repeat".to_string())
+}
+
+/// A repeat's text with its end: "Every day until Oct 21".
+fn with_end(text: String, until: Option<&str>) -> String {
+    match until.and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok()) {
+        Some(end) => format!("{text} until {}", end.format("%b %-d")),
+        None => text,
+    }
 }
 
 /// "Project" or "Project / Section" for the location chip.
@@ -415,7 +498,11 @@ pub fn changes(
     existing: Option<Recurrence>,
     today: NaiveDate,
 ) -> (TaskPatch, Option<(Id, Option<Id>)>) {
-    let due_changed = before.date != after.date || before.time != after.time || before.repeat != after.repeat;
+    let due_changed = before.date != after.date
+        || before.time != after.time
+        || before.repeat != after.repeat
+        || before.until != after.until
+        || before.rule != after.rule;
     let due = after.due_string(today);
     let patch = TaskPatch {
         content: (after.content.trim() != before.content).then(|| after.content.trim().to_string()),
@@ -426,7 +513,14 @@ pub fn changes(
         deadline: (after.deadline != before.deadline).then(|| after.deadline.clone()),
         due: due_changed.then(|| DueEdit {
             date: (!due.is_empty()).then(|| due.clone()),
-            recurrence: recurrence_for(&after.repeat, &due, existing, today),
+            // Same repeat, new date: the task's own rule, never one
+            // re-anchored on the new day (that's a move of one occurrence).
+            recurrence: if same_repeat(before, after) && existing.is_some() {
+                existing
+            } else {
+                rule_of(after, &due, existing, today)
+            },
+            until: (after.until != before.until).then(|| after.until.clone()),
         }),
     };
     let moved = (after.project_id != before.project_id || after.section_id != before.section_id)
@@ -466,7 +560,7 @@ fn kinds_for(pick: &Pick) -> &'static [SpanKind] {
         Pick::Reminders { .. } => &[],
         Pick::Deadline { .. } => &[SpanKind::Deadline],
         // A typed "streak" goes with the typed repeat it needs (and carries over).
-        Pick::Repeat { .. } => &[SpanKind::Repeat, SpanKind::Streak],
+        Pick::Repeat { .. } | Pick::RepeatText { .. } => &[SpanKind::Repeat, SpanKind::Streak],
         Pick::Streak { .. } => &[SpanKind::Streak],
         Pick::Location { .. } => &[SpanKind::Project, SpanKind::Section],
     }
@@ -484,6 +578,18 @@ pub fn apply_pick(
     sections: &[Section],
     today: NaiveDate,
 ) {
+    // The title's own repeat, picked again, stays as it is.
+    if matches!(pick, Pick::Repeat { value } if value == "typed") {
+        return;
+    }
+    // Typed text that isn't a repeat changes nothing.
+    let reading = match pick {
+        Pick::RepeatText { text } => match read_repeat(text, &v.date, today) {
+            Some(r) => Some(r),
+            None => return,
+        },
+        _ => None,
+    };
     let mut typed_streak = false;
     let mut typed_goal = None;
     if quick_add {
@@ -507,10 +613,28 @@ pub fn apply_pick(
         Pick::Reminders { drafts } => v.reminders = drafts.clone(),
         Pick::Deadline { date } => v.deadline = date.clone(),
         Pick::Repeat { value } => {
+            // Another choice drops the end and any typed rule; the task's own keeps its end.
+            if *value != v.repeat && value != "keep" {
+                v.until = String::new();
+            }
             v.repeat = value.clone();
+            v.rule = None;
             // No repeat, no streak.
             v.streak = value != "none" && (v.streak || typed_streak);
             v.streak_goal = if v.streak { typed_goal.or(v.streak_goal) } else { None };
+        }
+        Pick::RepeatText { .. } => {
+            if let Some(r) = reading {
+                v.repeat = "custom".to_string();
+                v.rule = Some(r.rule);
+                v.date = r.date;
+                if !r.time.is_empty() {
+                    v.time = r.time;
+                }
+                v.until = r.until;
+                v.streak = v.streak || typed_streak;
+                v.streak_goal = if v.streak { typed_goal.or(v.streak_goal) } else { None };
+            }
         }
         Pick::Streak { on, goal } => {
             v.streak = *on;
@@ -595,7 +719,7 @@ pub fn new_task_from(v: &EditorValues, qa: &QuickAdd, today: NaiveDate) -> NewTa
         },
         _ => qa.due_string().unwrap_or_else(|| v.due_string(today)),
     };
-    let recurrence = qa.recurrence.clone().or_else(|| recurrence_for(&v.repeat, &date, None, today));
+    let recurrence = qa.recurrence.clone().or_else(|| rule_of(v, &date, None, today));
     let mut labels = v.labels.clone();
     for l in &qa.labels {
         if !labels.iter().any(|x| x.eq_ignore_ascii_case(l)) {
@@ -617,6 +741,16 @@ pub fn new_task_from(v: &EditorValues, qa: &QuickAdd, today: NaiveDate) -> NewTa
         section_id,
         parent_id: v.parent_id.clone(),
         deadline: qa.deadline.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| v.deadline.clone()),
+        until: shown_until(v, qa),
+    }
+}
+
+/// The repeat's end: a typed repeat brings its own (or none).
+fn shown_until(v: &EditorValues, qa: &QuickAdd) -> String {
+    match (&qa.recurrence, qa.until) {
+        (Some(_), Some(end)) => end.format("%Y-%m-%d").to_string(),
+        (Some(_), None) => String::new(),
+        (None, _) => v.until.clone(),
     }
 }
 
@@ -737,6 +871,7 @@ fn shown_values(v: &EditorValues, qa: &QuickAdd) -> EditorValues {
         time: qa.time.map(|t| t.format("%H:%M").to_string()).unwrap_or_else(|| v.time.clone()),
         priority: qa.priority.map(|p| (5 - p.to_api()).to_string()).unwrap_or_else(|| v.priority.clone()),
         deadline: qa.deadline.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| v.deadline.clone()),
+        until: shown_until(v, qa),
         labels,
         project_id,
         section_id,
@@ -767,6 +902,9 @@ pub struct EditorView {
     pub priority_text: String,
     pub labels_text: String,
     pub repeat_options: Vec<(String, String)>,
+    /// The menu's checked row: "typed" for a repeat typed in the title, or
+    /// the chosen option.
+    pub repeat_selected: String,
     pub repeat_chip_text: String,
     pub date_chip: (String, Option<DueBucket>),
     pub deadline_text: String,
@@ -797,16 +935,36 @@ pub fn editor_view(
     let spans = qa.as_ref().map(|q| q.spans.as_slice()).unwrap_or(&[]);
     let mut shown = qa.as_ref().map(|q| shown_values(v, q)).unwrap_or_else(|| v.clone());
     let typed_repeat = qa.as_ref().and_then(|q| q.recurrence.clone());
-    let repeat_rule = typed_repeat.clone().or_else(|| recurrence_for(&v.repeat, &shown.date, existing, today));
+    let repeat_rule = typed_repeat.clone().or_else(|| rule_of(v, &shown.date, existing.clone(), today));
     let streak_offered = quick_add && repeat_rule.is_some();
     shown.streak = streak_offered && (v.streak || qa.as_ref().is_some_and(|q| q.streak));
     shown.streak_goal = if shown.streak { qa.as_ref().and_then(|q| q.streak_goal).or(v.streak_goal) } else { None };
     let has_due = !shown.date.is_empty() || !shown.time.is_empty();
-    let opts = repeat_options(&shown.date, keep_label, today);
+    // The task's own rule names itself when the caller doesn't.
+    let own_label = keep_label.map(str::to_string).or_else(|| existing.as_ref().filter(|_| v.repeat == "keep").map(repeat_text));
+    let mut opts = repeat_options(&shown.date, own_label.as_deref(), today);
+    // A preset that is the task's own rule would be the same row twice.
+    if let Some(rule) = existing.as_ref().filter(|_| own_label.is_some()) {
+        opts.retain(|(value, _)| value == "keep" || recurrence_for(value, &shown.date, None, today).as_ref() != Some(rule));
+    }
+    if let (Some(rule), "custom") = (&v.rule, v.repeat.as_str()) {
+        opts.push(("custom".to_string(), repeat_text(rule)));
+    }
+    if let Some(rule) = &typed_repeat {
+        opts.push(("typed".to_string(), repeat_text(rule)));
+    }
+    let repeat_selected = if typed_repeat.is_some() { "typed".to_string() } else { v.repeat.clone() };
     let date = NaiveDate::parse_from_str(&shown.date, "%Y-%m-%d").ok();
     let time = NaiveTime::parse_from_str(&shown.time, "%H:%M").ok();
     let deadline = NaiveDate::parse_from_str(&shown.deadline, "%Y-%m-%d").ok();
-    let date_chip = date_chip(date, time, today);
+    let mut date_chip = date_chip(date, time, today);
+    // A moved occurrence says which day it stands in for, while it's off the repeat.
+    let moved = NaiveDate::parse_from_str(&shown.moved_from, "%Y-%m-%d").ok();
+    if let (Some(from), Some(day), Some(rule)) = (moved, date, &repeat_rule) {
+        if let Some(note) = views::moved_text(from, day, rule) {
+            date_chip.0 = format!("{} · {}", date_chip.0, note.replacen("Moved", "moved", 1));
+        }
+    }
     let deadline_urgent = deadline.map(|d| views::deadline_urgent(d, today));
     let mut segments = title_segments(&v.content, spans);
     for s in &mut segments {
@@ -816,6 +974,10 @@ pub fn editor_view(
             _ => {}
         }
     }
+    let repeat_chip_text = with_end(
+        typed_repeat.as_ref().map(repeat_text).unwrap_or_else(|| repeat_chip_text(&v.repeat, &opts)),
+        repeat_rule.is_some().then_some(shown.until.as_str()),
+    );
     EditorView {
         can_submit,
         segments,
@@ -827,8 +989,9 @@ pub fn editor_view(
         locations: location_choices(projects, sections),
         priority_text: priority_text(&shown.priority),
         labels_text: labels_text(&shown.labels),
-        repeat_chip_text: typed_repeat.as_ref().map(repeat_text).unwrap_or_else(|| repeat_chip_text(&v.repeat, &opts)),
+        repeat_chip_text,
         repeat_options: opts,
+        repeat_selected,
         date_chip,
         deadline_text: deadline_text(deadline, today),
         deadline_urgent,
@@ -1491,5 +1654,185 @@ mod tests {
         assert_eq!(after.content, "Water plants");
         assert!(matches!(rule, Some(Recurrence::EveryNMonths { n: 3, .. })));
         assert_eq!(after.repeat, "keep");
+    }
+
+    #[test]
+    fn a_typed_repeat_reads_live() {
+        let r = read_repeat("every 3 tuesdays", "2026-10-24", day19()).unwrap();
+        assert_eq!(r.text, "Every 3 weeks on Tue");
+        assert_eq!(r.date, "2026-10-27");
+        let r = read_repeat("every day for 3 days", "", day19()).unwrap();
+        assert_eq!((r.text.as_str(), r.date.as_str()), ("Every day until Oct 21", "2026-10-19"));
+        // A past date starts from today.
+        assert_eq!(read_repeat("every week", "2026-10-01", day19()).unwrap().date, "2026-10-19");
+        assert_eq!(read_repeat("every week buy milk", "", day19()), None);
+    }
+
+    #[test]
+    fn a_typed_repeat_pick_sets_the_rule() {
+        let mut v = typed("Gym");
+        v.date = "2026-10-24".into();
+        v.time = "07:00".into();
+        apply_pick(&mut v, &Pick::RepeatText { text: "every 3 tuesdays until dec 31".into() }, false, &[], &[], day19());
+        assert_eq!(v.repeat, "custom");
+        assert_eq!(v.rule, Some(Recurrence::EveryNWeeks { n: 3, days: vec![1], anchor: NaiveDate::from_ymd_opt(2026, 10, 27).unwrap() }));
+        assert_eq!((v.date.as_str(), v.time.as_str(), v.until.as_str()), ("2026-10-27", "07:00", "2026-12-31"));
+        let view = editor_view(&v, false, None, None, &[], &[], day19());
+        assert_eq!(view.repeat_chip_text, "Every 3 weeks on Tue until Dec 31");
+        assert_eq!(view.repeat_rule, v.rule);
+        assert!(view.repeat_options.iter().any(|(value, label)| value == "custom" && label == "Every 3 weeks on Tue"));
+
+        // Unreadable text changes nothing.
+        let before = v.clone();
+        apply_pick(&mut v, &Pick::RepeatText { text: "whenever".into() }, false, &[], &[], day19());
+        assert_eq!(v, before);
+
+        // A preset afterwards replaces it, end included.
+        apply_pick(&mut v, &Pick::Repeat { value: "daily".into() }, false, &[], &[], day19());
+        assert_eq!((v.repeat.as_str(), v.rule.clone(), v.until.as_str()), ("daily", None, ""));
+    }
+
+    #[test]
+    fn a_repeat_typed_in_the_title_is_the_menus_checked_row() {
+        let v = typed("Gym every third fri");
+        let view = editor_view(&v, true, None, None, &[], &[], day19());
+        assert_eq!(view.repeat_selected, "typed");
+        assert!(view.repeat_options.iter().any(|(value, label)| value == "typed" && label == "Every third Fri"));
+        // Picking it again keeps the title as it is.
+        let mut after = v.clone();
+        apply_pick(&mut after, &Pick::Repeat { value: "typed".into() }, true, &[], &[], day19());
+        assert_eq!(after, v);
+        // Without one, the checked row is the chosen option.
+        let view = editor_view(&typed("Gym"), true, None, None, &[], &[], day19());
+        assert_eq!(view.repeat_selected, "none");
+        assert!(!view.repeat_options.iter().any(|(value, _)| value == "typed"));
+    }
+
+    /// A task due Wed Oct 21 that repeats every Wednesday.
+    fn weekly_wed(moved_from: Option<&str>, date: &str) -> Task {
+        let mut task = Task::new("Swim", Id::from("P-IN"));
+        task.id = Id::from("T-1");
+        task.due = Some(Due {
+            date: date.into(),
+            timezone: None,
+            string: String::new(),
+            lang: "en".into(),
+            is_recurring: true,
+            recurrence: Some(Recurrence::Weekly(vec![2])),
+            until: None,
+            moved_from: moved_from.map(str::to_string),
+        });
+        task
+    }
+
+    #[test]
+    fn a_date_pick_keeps_the_tasks_rule() {
+        let wed = Some(Recurrence::Weekly(vec![2]));
+        let before = EditorValues::from_task(&weekly_wed(None, "2026-10-21"));
+        let mut after = before.clone();
+        apply_pick(&mut after, &Pick::Date { date: "2026-10-22".into(), time: String::new() }, false, &[], &[], day19());
+        let (patch, _) = changes(&before, &after, wed.clone(), day19());
+        let due = patch.due.unwrap();
+        assert_eq!(due.recurrence, wed, "not re-anchored on Thursday");
+        assert_eq!(due.date.as_deref(), Some("2026-10-22"));
+        assert!(moves_occurrence(&before, &after, wed.as_ref()));
+
+        // Choosing a repeat isn't a move.
+        let mut repeat = before.clone();
+        apply_pick(&mut repeat, &Pick::Repeat { value: "daily".into() }, false, &[], &[], day19());
+        assert!(!moves_occurrence(&before, &repeat, wed.as_ref()));
+        // Nor is a date on a task that doesn't repeat.
+        let plain = typed("Swim");
+        let mut moved = plain.clone();
+        moved.date = "2026-10-22".into();
+        assert!(!moves_occurrence(&plain, &moved, None));
+        // A time alone isn't one either.
+        let mut timed = before.clone();
+        timed.time = "09:00".into();
+        assert!(!moves_occurrence(&before, &timed, wed.as_ref()));
+    }
+
+    #[test]
+    fn the_date_chip_says_what_it_was_moved_from() {
+        let wed = Some(Recurrence::Weekly(vec![2]));
+        let v = EditorValues::from_task(&weekly_wed(Some("2026-10-21"), "2026-10-22"));
+        assert_eq!(v.moved_from, "2026-10-21");
+        let view = editor_view(&v, false, None, wed.clone(), &[], &[], day19());
+        assert_eq!(view.date_chip.0, "Thursday · moved from Wed 21 Oct");
+        // Back on the repeat's own day, there's no move to show.
+        let mut back = v.clone();
+        back.date = "2026-10-21".into();
+        let view = editor_view(&back, false, None, wed, &[], &[], day19());
+        assert_eq!(view.date_chip.0, "Wednesday");
+    }
+
+    #[test]
+    fn a_typed_repeat_saves() {
+        // Adding: the typed rule and its end go with the task.
+        let mut v = typed("Gym");
+        apply_pick(&mut v, &Pick::RepeatText { text: "every other friday for 2 months".into() }, true, &[], &[], day19());
+        let plan = add_plan(&v, &[], &[], &[], day19());
+        let Action::TaskAdd { due, recurrence, .. } = plan.task else { panic!("a task add") };
+        assert!(matches!(recurrence, Some(Recurrence::EveryNWeeks { n: 2, .. })));
+        assert_eq!(due.and_then(|d| d.until).as_deref(), Some("2026-12-22"));
+
+        // Editing: a new typed rule replaces the task's.
+        let mut task = Task::new("Gym", Id::from("P-IN"));
+        task.id = Id::from("T-1");
+        let before = EditorValues::from_task(&task);
+        let mut after = before.clone();
+        apply_pick(&mut after, &Pick::RepeatText { text: "every 2 weeks".into() }, false, &[], &[], day19());
+        let (patch, _) = changes(&before, &after, None, day19());
+        let due = patch.due.unwrap();
+        assert!(matches!(due.recurrence, Some(Recurrence::EveryNWeeks { n: 2, .. })));
+        // A different typed rule over a typed rule counts as a change.
+        let mut again = after.clone();
+        apply_pick(&mut again, &Pick::RepeatText { text: "every 3 weeks".into() }, false, &[], &[], day19());
+        let (patch, _) = changes(&after, &again, None, day19());
+        assert!(matches!(patch.due.unwrap().recurrence, Some(Recurrence::EveryNWeeks { n: 3, .. })));
+    }
+
+    #[test]
+    fn a_typed_end_goes_with_the_new_task() {
+        let plan = add_plan(&typed("Stretch every day for 3 days"), &[], &[], &[], day19());
+        let Action::TaskAdd { due, recurrence, .. } = plan.task else { panic!("a task add") };
+        assert_eq!(recurrence, Some(Recurrence::Daily));
+        assert_eq!(due.and_then(|d| d.until).as_deref(), Some("2026-10-21"));
+        let view = editor_view(&typed("Stretch every day for 3 days"), true, None, None, &[], &[], day19());
+        assert_eq!(view.repeat_chip_text, "Every day until Oct 21");
+    }
+
+    #[test]
+    fn a_tasks_end_shows_and_edits() {
+        let mut task = Task::new("Stretch", Id::from("P-IN"));
+        task.id = Id::from("T-1");
+        task.due = Some(Due {
+            date: "2026-10-19".into(),
+            timezone: None,
+            string: String::new(),
+            lang: "en".into(),
+            is_recurring: true,
+            recurrence: Some(Recurrence::Daily),
+            until: Some("2026-10-21".into()),
+            moved_from: None,
+        });
+        let before = EditorValues::from_task(&task);
+        assert_eq!(before.until, "2026-10-21");
+        let view = editor_view(&before, false, None, Some(Recurrence::Daily), &[], &[], day19());
+        assert_eq!(view.repeat_chip_text, "Every day until Oct 21");
+
+        // Untouched, the end isn't sent (the task keeps it).
+        let mut after = before.clone();
+        after.date = "2026-10-20".into();
+        let (patch, _) = changes(&before, &after, Some(Recurrence::Daily), day19());
+        assert_eq!(patch.due.unwrap().until, None);
+
+        // A typed end replaces it; a typed repeat without one clears it.
+        let (after, rule) = apply_title(&with_title(&before, "Stretch every day until nov 30".into()), Some(Recurrence::Daily), &[], &[], day19()).unwrap();
+        let (patch, _) = changes(&before, &after, rule, day19());
+        assert_eq!(patch.due.unwrap().until.as_deref(), Some("2026-11-30"));
+        let (after, rule) = apply_title(&with_title(&before, "Stretch every day".into()), Some(Recurrence::Daily), &[], &[], day19()).unwrap();
+        let (patch, _) = changes(&before, &after, rule, day19());
+        assert_eq!(patch.due.unwrap().until.as_deref(), Some(""));
     }
 }

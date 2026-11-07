@@ -42,6 +42,19 @@ const WEEKDAYS_LONG: [&str; 7] = [
 
 /// Todoist-style chip text: Today / Tomorrow / Yesterday / weekday / "3 Nov"
 /// (with the year when it differs from today's).
+/// "Moved from Wed 21 Oct" while `day` stands in for the occurrence `from`
+/// (off the repeat's own days).
+pub fn moved_text(from: NaiveDate, day: NaiveDate, rule: &crate::recurrence::Recurrence) -> Option<String> {
+    (day != from && !rule.contains(day)).then(|| format!("Moved from {}", from.format("%a %-d %b")))
+}
+
+/// [`moved_text`] for a task's due: what a list row says about a moved occurrence.
+pub fn moved_note(task: &Task) -> Option<String> {
+    let due = task.due.as_ref()?;
+    let parse = |s: &str| NaiveDate::parse_from_str(s.get(..10)?, "%Y-%m-%d").ok();
+    moved_text(parse(due.moved_from.as_deref()?)?, parse(&due.date)?, due.recurrence.as_ref()?)
+}
+
 pub fn due_label(due: NaiveDate, today: NaiveDate) -> String {
     match (due - today).num_days() {
         0 => "Today".to_string(),
@@ -584,6 +597,8 @@ mod tests {
             lang: "en".to_string(),
             is_recurring: false,
             recurrence: None,
+            until: None,
+            moved_from: None,
         });
         assert_eq!(due_date_of(&t), Some(d(2026, 10, 19)));
     }
@@ -684,6 +699,8 @@ mod time_tests {
             lang: "en".into(),
             is_recurring: false,
             recurrence: None,
+            until: None,
+            moved_from: None,
         };
         task.due = Some(due("2026-10-19"));
         assert_eq!(due_time(&task), None, "date-only due has no time");
@@ -709,6 +726,8 @@ mod sidebar_count_mode_tests {
             lang: "en".into(),
             is_recurring: false,
             recurrence: None,
+            until: None,
+            moved_from: None,
         });
         t
     }
@@ -761,6 +780,8 @@ mod progress_tests {
                 lang: "en".into(),
                 is_recurring: true,
                 recurrence: None,
+                until: None,
+                moved_from: None,
             });
         }
         task
@@ -814,6 +835,8 @@ mod progress_tests {
             lang: "en".into(),
             is_recurring: true,
             recurrence: None,
+            until: None,
+            moved_from: None,
         });
         task
     }
@@ -825,6 +848,7 @@ mod progress_tests {
             streak_current: 0,
             streak_best: 0,
             streak_last_period: None,
+            moved_from: None,
         });
         task
     }
@@ -965,6 +989,8 @@ mod card_tests {
             lang: "en".into(),
             is_recurring: true,
             recurrence: None,
+            until: None,
+            moved_from: None,
         });
         done.last_completion = Some(crate::model::LastCompletion {
             moved_to: "2026-11-04".into(),
@@ -972,6 +998,7 @@ mod card_tests {
             streak_current: 0,
             streak_best: 0,
             streak_last_period: None,
+            moved_from: None,
         });
         let cs = cards(vec![f.pack.clone(), done.clone()], &all(&f), CardMode::Grouped, some_day());
         assert_eq!(heads(&cs), ["Pack"]);
@@ -1054,6 +1081,8 @@ mod card_tests {
             lang: "en".into(),
             is_recurring: true,
             recurrence: None,
+            until: None,
+            moved_from: None,
         });
         let mut a = all(&f);
         a.push(h.clone());
@@ -1160,6 +1189,8 @@ mod date_group_tests {
             lang: "en".to_string(),
             is_recurring: false,
             recurrence: None,
+            until: None,
+            moved_from: None,
         });
         t
     }
@@ -1399,6 +1430,8 @@ mod sidebar_count_tests {
             lang: "en".to_string(),
             timezone: None,
             recurrence: None,
+            until: None,
+            moved_from: None,
         });
         t
     }
@@ -1503,5 +1536,37 @@ mod label_choice_tests {
     fn says_whether_a_name_is_chosen() {
         assert!(label_chosen(&names(&["Home"]), " home "));
         assert!(!label_chosen(&names(&["Home"]), "Work"));
+    }
+}
+
+#[cfg(test)]
+mod moved_tests {
+    use super::moved_note;
+    use crate::ids::Id;
+    use crate::model::{Due, Task};
+    use crate::recurrence::Recurrence;
+
+    fn every_wed(date: &str, moved_from: Option<&str>) -> Task {
+        let mut t = Task::new("Swim", Id::from("P"));
+        t.due = Some(Due {
+            date: date.into(),
+            timezone: None,
+            string: String::new(),
+            lang: "en".into(),
+            is_recurring: true,
+            recurrence: Some(Recurrence::Weekly(vec![2])),
+            until: None,
+            moved_from: moved_from.map(str::to_string),
+        });
+        t
+    }
+
+    #[test]
+    fn a_moved_occurrence_says_where_it_came_from() {
+        assert_eq!(moved_note(&every_wed("2026-10-22T09:00:00", Some("2026-10-21"))).as_deref(), Some("Moved from Wed 21 Oct"));
+        assert_eq!(moved_note(&every_wed("2026-10-21", None)), None);
+        // On one of the repeat's own days it isn't a move, whatever is stored.
+        assert_eq!(moved_note(&every_wed("2026-10-28", Some("2026-10-21"))), None);
+        assert_eq!(moved_note(&Task::new("Plain", Id::from("P"))), None);
     }
 }

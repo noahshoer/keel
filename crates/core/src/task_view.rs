@@ -299,6 +299,8 @@ mod tests {
             lang: "en".into(),
             is_recurring: true,
             recurrence: None,
+            until: None,
+            moved_from: None,
         });
         t
     }
@@ -312,6 +314,7 @@ mod tests {
             streak_current: 0,
             streak_best: 0,
             streak_last_period: None,
+            moved_from: None,
         });
         let all = vec![
             repeats(task("P", None, 0), "2026-11-03"),

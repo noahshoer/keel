@@ -4,6 +4,7 @@ import { type ReactNode, useRef } from "react";
 import { CheckCircleIcon, ChevronDownSmallIcon } from "../shell/icons";
 import { cx, type Face, type Pop, type PopProps } from "./pop";
 import { usePlacedPopover } from "./popover";
+import { RepeatField, type TypedRepeat } from "./RepeatField";
 
 export type MenuItem = {
   value: string;
@@ -19,15 +20,20 @@ function MenuList({
   items,
   selected,
   onPick,
+  typed,
+  onTyped,
 }: {
   items: MenuItem[];
   selected: string;
   onPick: (value: string) => void;
+  typed?: TypedRepeat | undefined;
+  onTyped: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   usePlacedPopover(ref);
   return (
     <div ref={ref} className="popover menu">
+      {typed !== undefined ? <RepeatField typed={typed} onDone={onTyped} /> : null}
       {items.map((item) => {
         const checked = item.value === selected;
         return (
@@ -71,6 +77,7 @@ export function Menu({
   setOpen,
   onSelect,
   face,
+  typed,
 }: PopProps & {
   id: Exclude<Pop, null>;
   title: string;
@@ -84,6 +91,8 @@ export function Menu({
   onSelect: (value: string) => void;
   /** The task view's look for the button. */
   face?: Face;
+  /** A field above the choices for a typed repeat. */
+  typed?: TypedRepeat | undefined;
 }) {
   const isOpen = open === id;
   return (
@@ -114,6 +123,8 @@ export function Menu({
             onSelect(value);
             setOpen(null);
           }}
+          typed={typed}
+          onTyped={() => setOpen(null)}
         />
       ) : null}
     </div>

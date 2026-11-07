@@ -44,6 +44,8 @@ impl F {
                 lang: "en".into(),
                 is_recurring: false,
                 recurrence: None,
+                until: None,
+                moved_from: None,
             }),
             labels: Some(labels.iter().map(|s| s.to_string()).collect()),
             parent_id: None,

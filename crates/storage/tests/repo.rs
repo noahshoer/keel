@@ -57,6 +57,8 @@ fn floating_due_stored_as_null_tz() {
         lang: "en".to_string(),
         is_recurring: false,
         recurrence: None,
+        until: None,
+        moved_from: None,
     });
     repo.upsert_task(&task).unwrap();
     let got = repo.get_task(&task.id).unwrap().unwrap();

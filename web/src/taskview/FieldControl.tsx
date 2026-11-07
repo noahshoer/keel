@@ -3,7 +3,7 @@
 // the non-native branch of the `field` closure). Every text and class comes
 // from the one `editorView` the view draws from.
 import type { EditorPick, EditorValues, EditorView, Field, Label, MissingPill } from "../bindings";
-import { locationPick } from "../core";
+import { locationPick, readRepeat } from "../core";
 import { DatePicker } from "../editor/DatePicker";
 import { DeadlinePicker } from "../editor/DeadlinePicker";
 import { flagClass, locationItems, PRIORITY_ITEMS } from "../editor/items";
@@ -56,6 +56,10 @@ export function FieldControl({
   const face = (cls: string, text: string) => (missing !== null ? pillFace(missing) : rowFace(cls, text));
   const pop = { open, setOpen };
   const repeatItems: MenuItem[] = view.repeat_options.map(([value, label]) => ({ value, label }));
+  const typed = {
+    read: (text: string) => readRepeat(text, v.date, today)?.text ?? null,
+    onSubmit: (text: string) => onPick({ type: "repeatText", text }),
+  };
   const repeat = (f: Face) => (
     <Menu
       id="repeat"
@@ -63,10 +67,11 @@ export function FieldControl({
       icon={<RepeatSmallIcon />}
       text={view.repeat_chip_text}
       items={repeatItems}
-      selected={v.repeat}
+      selected={view.repeat_selected}
       {...pop}
       face={f}
       onSelect={(value) => onPick({ type: "repeat", value })}
+      typed={typed}
     />
   );
 
@@ -91,9 +96,10 @@ export function FieldControl({
           rule={view.repeat_rule}
           repeat={{
             items: repeatItems,
-            selected: v.repeat,
-            text: repeatItems.find((i) => i.value === v.repeat)?.label ?? view.repeat_chip_text,
+            selected: view.repeat_selected,
+            text: repeatItems.find((i) => i.value === view.repeat_selected)?.label ?? view.repeat_chip_text,
             onSelect: (value) => onPick({ type: "repeat", value }),
+            typed,
           }}
           today={today}
           {...pop}

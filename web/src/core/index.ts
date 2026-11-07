@@ -30,6 +30,7 @@ import type {
   ReminderDraft,
   ReminderMenus,
   ReminderSettings,
+  RepeatReading,
   Section,
   SidebarCounts,
   Task,
@@ -327,6 +328,28 @@ export function locationText(
 ): string {
   ready();
   return core.locationText(projectId, sectionId, projects, sections);
+}
+
+/** "Moved from Wed 21 Oct" while a repeating task's date stands in for another occurrence, else null. */
+export function movedNote(task: Task): string | null {
+  ready();
+  return core.movedNote(task) ?? null;
+}
+
+/** Whether saving `after` moves one occurrence of a repeating task (a streak can't carry over it). */
+export function movesOccurrence(
+  before: EditorValues,
+  after: EditorValues,
+  existing: Recurrence | null,
+): boolean {
+  ready();
+  return core.movesOccurrence(before, after, existing);
+}
+
+/** What a typed repeat reads as ("every 3 tuesdays"), anchored on `date`; null when it isn't one. */
+export function readRepeat(text: string, date: string, today: string): RepeatReading | null {
+  ready();
+  return core.readRepeat(text, date, today);
 }
 
 /** A repeat rule as text: "Every Mon, Wed". */

@@ -26,6 +26,8 @@ fn add(svc: &AppService, uuid: &str, name: &str, due: &str) {
                     lang: "en".into(),
                     is_recurring: false,
                     recurrence: None,
+                    until: None,
+                    moved_from: None,
                 }),
                 labels: None,
                 parent_id: None,

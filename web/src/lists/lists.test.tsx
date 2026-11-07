@@ -228,6 +228,25 @@ it("the when group runs sub-tasks, date, repeat icon, bell", () => {
   expect(when?.querySelector(".reminder-tag")?.getAttribute("title")).toBe("30 min before");
 });
 
+it("a moved occurrence says so beside the repeat icon", () => {
+  const base = fixture("t-laundry");
+  const due = {
+    date: "2026-10-22",
+    timezone: null,
+    string: "every Wed",
+    lang: "en",
+    is_recurring: true,
+    recurrence: { Weekly: [2] },
+    moved_from: "2026-10-21",
+  };
+  const { container } = renderRow({ ...base, due });
+  const repeat = container.querySelector(".task-repeat");
+  expect(repeat?.classList.contains("moved")).toBe(true);
+  expect(repeat?.textContent).toBe("moved");
+  expect(repeat?.getAttribute("title")).toBe("Moved from Wed 21 Oct");
+  expect(repeat?.querySelector("svg")).not.toBeNull();
+});
+
 it("the project shares a row with the when group when there are no labels", () => {
   const task = { ...fixture("t-laundry"), labels: [] };
   const { container } = renderRow(task);

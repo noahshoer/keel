@@ -526,3 +526,92 @@ it("Close closes at once outside the phone sheet", async () => {
   fireEvent.click(top().querySelector(".tv-close") as HTMLElement);
   expect(stack()).toBe("");
 });
+
+/** "Pack for the trip" repeating every day from today, with a streak of 3. */
+function streakTrip() {
+  const real = mockHandlers.all_tasks;
+  vi.spyOn(mockHandlers, "all_tasks").mockImplementation(async (args) =>
+    (await real(args)).map((t) =>
+      t.id === "t-trip"
+        ? {
+            ...t,
+            due: {
+              date: localToday(),
+              timezone: null,
+              string: "every day",
+              lang: "en",
+              is_recurring: true,
+              recurrence: "Daily",
+            },
+            streak_enabled: true,
+            streak_current: 3,
+            streak_best: 5,
+          }
+        : t,
+    ),
+  );
+}
+
+const moveToTomorrow = () => {
+  fireEvent.click(within(top()).getByText("Today"));
+  fireEvent.click(within(document.querySelector(".scheduler") as HTMLElement).getByText("Tomorrow"));
+};
+
+it("moving a task with a streak asks first, and Cancel leaves it", async () => {
+  streakTrip();
+  await show(["t-trip"]);
+  const sent = spyActions();
+  moveToTomorrow();
+  const prompt = document.querySelector(".move-prompt") as HTMLElement;
+  expect(prompt.textContent).toContain("streak of 3");
+  fireEvent.click(within(prompt).getByText("Cancel"));
+  expect(document.querySelector(".move-prompt")).toBeNull();
+  await new Promise((r) => setTimeout(r, 50));
+  expect(sent.filter((a) => a.type === "task_update")).toHaveLength(0);
+  expect(within(top()).getByText("Today")).not.toBeNull();
+});
+
+it("Move saves the new date", async () => {
+  streakTrip();
+  await show(["t-trip"]);
+  const sent = spyActions();
+  moveToTomorrow();
+  fireEvent.click(within(document.querySelector(".move-prompt") as HTMLElement).getByText("Move"));
+  await waitFor(() => expect(sent.filter((a) => a.type === "task_update")).toHaveLength(1));
+  expect(document.querySelector(".move-prompt")).toBeNull();
+});
+
+it("a move with no streak going saves without asking", async () => {
+  await show(["t-trip"]);
+  const sent = spyActions();
+  moveToTomorrow();
+  expect(document.querySelector(".move-prompt")).toBeNull();
+  await waitFor(() => expect(sent.filter((a) => a.type === "task_update")).toHaveLength(1));
+});
+
+it("a date typed into the title of a task with a streak asks first; Cancel puts the title back", async () => {
+  streakTrip();
+  await show(["t-trip"]);
+  const sent = spyActions();
+  fireEvent.change(titleField(), { target: { value: "Pack for the trip tomorrow" } });
+  fireEvent.blur(titleField());
+  const prompt = document.querySelector(".move-prompt") as HTMLElement;
+  expect(prompt.textContent).toContain("streak of 3");
+  fireEvent.click(within(prompt).getByText("Cancel"));
+  expect(document.querySelector(".move-prompt")).toBeNull();
+  expect(titleField().value).toBe("Pack for the trip");
+  await new Promise((r) => setTimeout(r, 50));
+  expect(sent.filter((a) => a.type === "task_update")).toHaveLength(0);
+});
+
+it("a typed move asks before the view closes, then closes once answered", async () => {
+  streakTrip();
+  await show(["t-trip"]);
+  const sent = spyActions();
+  fireEvent.change(titleField(), { target: { value: "Pack for the trip tomorrow" } });
+  fireEvent.click(top().querySelector(".tv-close") as HTMLElement);
+  expect(stack()).toBe("t-trip");
+  fireEvent.click(within(document.querySelector(".move-prompt") as HTMLElement).getByText("Move"));
+  expect(stack()).toBe("");
+  await waitFor(() => expect(sent.filter((a) => a.type === "task_update")).toHaveLength(1));
+});

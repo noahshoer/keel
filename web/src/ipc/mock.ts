@@ -62,6 +62,8 @@ function dueFrom(edit: DueEdit): Due | null {
     lang: "en",
     is_recurring: edit.recurrence != null,
     recurrence: edit.recurrence ?? null,
+    // A sketch of keel-core's rule: an end only goes with a repeat.
+    until: edit.recurrence != null && edit.until ? edit.until : null,
   };
 }
 

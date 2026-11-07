@@ -13,7 +13,7 @@ import {
   useState,
 } from "react";
 import type { CardRow, Label, LabelGroup, Reminder } from "../bindings";
-import { deadlineUrgent, dueLabel, labelGroups, reminderLabel } from "../core";
+import { deadlineUrgent, dueLabel, labelGroups, movedNote, reminderLabel } from "../core";
 import { labelColorVar } from "../editor/labelColors";
 import { ROW_DRAG, ROW_PRESS } from "../gestures/long-press";
 import { completeTask, deleteTask, moveTask } from "../ipc/actions";
@@ -176,6 +176,7 @@ export function TaskRow({
     : null;
   const due = dueChip(task, today);
   const recurring = task.due?.is_recurring ?? false;
+  const moved = recurring ? movedNote(task) : null;
   // A wasm call serializes both lists, so only when there's something to group.
   const groups = useMemo(
     () => (task.labels.length > 0 ? labelGroups(task.labels, labels) : []),
@@ -192,8 +193,9 @@ export function TaskRow({
         </span>
       ) : null}
       {recurring ? (
-        <span className="task-repeat" title="Repeats">
+        <span className={moved === null ? "task-repeat" : "task-repeat moved"} title={moved ?? "Repeats"}>
           <RepeatSmallIcon />
+          {moved === null ? null : "moved"}
         </span>
       ) : null}
       {mine.length > 0 ? (

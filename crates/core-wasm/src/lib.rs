@@ -497,6 +497,12 @@ pub fn repeat_text(
     Ok(editor::repeat_text(&rule))
 }
 
+/// `editor::read_repeat`: what the Repeat menu's field reads, or null.
+#[wasm_bindgen(js_name = readRepeat, unchecked_return_type = "import('../../bindings').RepeatReading | null")]
+pub fn read_repeat(text: &str, date_value: &str, today: &str) -> Result<JsValue, JsError> {
+    output(&editor::read_repeat(text, date_value, date(today)?))
+}
+
 /// `ReminderDraft::from_reminder`: a stored reminder as the editor edits it.
 #[wasm_bindgen(js_name = reminderDraftOf, unchecked_return_type = "import('../../bindings').ReminderDraft")]
 pub fn reminder_draft_of(
@@ -536,6 +542,28 @@ pub fn edit_plan(
     let after: EditorValues = input("after", after)?;
     let existing: Option<Recurrence> = input("existing", existing)?;
     output(&editor::edit_plan(&id, &before, &after, existing, date(today)?))
+}
+
+/// `views::moved_note`: "Moved from Wed 21 Oct" for a moved occurrence, or null.
+#[wasm_bindgen(js_name = movedNote)]
+pub fn moved_note(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task")] task: JsValue,
+) -> Result<Option<String>, JsError> {
+    let task: Task = input("task", task)?;
+    Ok(views::moved_note(&task))
+}
+
+/// `editor::moves_occurrence`: whether saving `after` moves one occurrence of a repeating task.
+#[wasm_bindgen(js_name = movesOccurrence)]
+pub fn moves_occurrence(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] before: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] after: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")] existing: JsValue,
+) -> Result<bool, JsError> {
+    let before: EditorValues = input("before", before)?;
+    let after: EditorValues = input("after", after)?;
+    let existing: Option<Recurrence> = input("existing", existing)?;
+    Ok(editor::moves_occurrence(&before, &after, existing.as_ref()))
 }
 
 /// `editor::reminder_actions`.

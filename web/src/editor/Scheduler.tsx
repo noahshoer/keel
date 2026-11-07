@@ -19,6 +19,7 @@ import { isTouch, weekStart } from "./locale";
 import type { MenuItem } from "./Menu";
 import { cx } from "./pop";
 import { usePlacedPopover } from "./popover";
+import { RepeatField, type TypedRepeat } from "./RepeatField";
 import { TimeWheel } from "./TimeWheel";
 import { installMonthWheel, installYearWheel } from "./wheel";
 
@@ -31,6 +32,8 @@ export type RepeatChoice = {
   /** The Repeat row's text. */
   text: string;
   onSelect: (value: string) => void;
+  /** A field above the choices for a typed repeat. */
+  typed?: TypedRepeat | undefined;
 };
 
 /** `[year, month]` (1-based) of a `YYYY-MM-DD` date. */
@@ -226,6 +229,9 @@ export function Scheduler({
             <ChevronLeftIcon />
             <span className="menu-label">Back to date</span>
           </button>
+          {repeat.typed !== undefined ? (
+            <RepeatField typed={repeat.typed} onDone={() => setStep("card")} />
+          ) : null}
           {repeat.items.map((item) => (
             <button
               key={item.value}
