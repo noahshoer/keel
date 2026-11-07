@@ -1282,6 +1282,9 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
   .app[data-drawer-drag] .drawer-scrim:not(.drag-dim) { display: none; }
   /* Opened by a drag, it stays open: the scrim must not play its fade-in again (it would flicker). */
   .app[data-drawer-rest] .drawer-scrim { animation: none; }
+  /* Search dragged in (searchDrag.ts): once it has landed its screen sits at --push px from the left edge, over the copy of the page it leaves; "settle" runs the rest at the slide's pace. */
+  .app[data-push-drag] .main:has(.search-input) { transform: translateX(var(--push, 100%)); box-shadow: -10px 0 30px rgba(0,0,0,.25); }
+  .app[data-push-drag="settle"] .main:has(.search-input) { transition: transform .36s cubic-bezier(.32,.72,0,1); }
   .menu-btn, .back-btn { display: inline-flex; }
   .view-head:has(.back-btn) .view-title { display: none; }
   .main { margin: 0; border-radius: 0; box-shadow: none; }

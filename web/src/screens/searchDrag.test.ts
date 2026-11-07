@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setWidth, touch } from "../test/touch";
 import { installSearchDrag } from "./searchDrag";
 
@@ -23,6 +23,9 @@ beforeEach(() => {
     drawerOpen: () => drawerOpen,
     leave: () => calls.push("leave"),
     cancel: () => calls.push("cancel"),
+    push: () => calls.push("push"),
+    pushed: () => calls.push("pushed"),
+    pushCancel: () => calls.push("pushCancel"),
   });
 });
 
@@ -80,4 +83,54 @@ it("leaves the swipe to the instant fallback when motion is reduced", () => {
   drag(300, true);
   vi.unstubAllGlobals();
   expect(calls).toEqual([]);
+});
+
+describe("dragging Search in", () => {
+  const app = () => document.querySelector(".app") as HTMLElement;
+  const left = (to: number, end: boolean, at = 0) => {
+    touch("touchstart", content(), 300, 300, at);
+    touch("touchmove", content(), 280, 302, at + 10);
+    touch("touchmove", content(), to, 304, at + 500);
+    if (end) touch("touchend", content(), to, 304, at + 510);
+  };
+
+  beforeEach(() => {
+    isSearch = false;
+    document.querySelector(".app")?.insertAdjacentHTML("beforeend", `<div class="view-ghost push"></div>`);
+  });
+
+  it("switches to Search and places its screen by the finger, moving the old page aside", () => {
+    left(60, false);
+    expect(calls).toEqual(["push"]);
+    expect(app().dataset["pushDrag"]).toBe("");
+    expect(app().style.getPropertyValue("--push")).toBe("170px"); // (1 - 220 / 390) of 390
+    expect(ghostEl()?.classList.contains("dragging")).toBe(true);
+    expect(ghostEl()?.style.transform).toMatch(/^translateX\(-13\.5/);
+  });
+
+  it("released past halfway it settles open, then Search stays", () => {
+    left(60, true);
+    expect(app().dataset["pushDrag"]).toBe("settle");
+    expect(app().style.getPropertyValue("--push")).toBe("0px");
+    vi.advanceTimersByTime(400);
+    expect(calls).toEqual(["push", "pushed"]);
+    expect(app().dataset["pushDrag"]).toBeUndefined();
+    expect(ghostEl()).toBeNull();
+  });
+
+  it("released short and slow it settles shut and the old page is asked for again", () => {
+    left(240, true);
+    expect(app().style.getPropertyValue("--push")).toBe("390px");
+    vi.advanceTimersByTime(400);
+    expect(calls).toEqual(["push", "pushCancel"]);
+    // No Search screen ever showed, so nothing waits: the copy and the placing go at once.
+    expect(ghostEl()).toBeNull();
+    expect(app().dataset["pushDrag"]).toBeUndefined();
+  });
+
+  it("only on a page with the search button, with the drawer shut", () => {
+    isSearch = true;
+    left(100, true);
+    expect(calls).not.toContain("push");
+  });
 });

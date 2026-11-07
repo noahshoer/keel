@@ -15,7 +15,7 @@ import { ShowSubtasksContext, savedShowSubtasks } from "../lists/showSubtasks";
 import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
 import { SearchPane } from "../screens/SearchPane";
-import { installSearchDrag } from "../screens/searchDrag";
+import { clearPush, installSearchDrag } from "../screens/searchDrag";
 import { clearDrag, installDrawerDrag } from "../shell/drawerDrag";
 import { Sidebar } from "../shell/Sidebar";
 import { applyTheme, savedTheme, type Theme } from "../shell/theme";
@@ -42,6 +42,8 @@ export function App() {
   // Applied and remembered on every change (main.tsx applies the saved one before the first paint).
   // iOS paints past the page's end (under the keyboard's corners) in the list's color.
   const underPage = useRef<ReturnType<typeof installUnderPage> | null>(null);
+  // The same for Search dragged in: "drag" while Search is being brought in, "cancel" while the page it came from is wanted back.
+  const pushDrag = useRef<"drag" | "cancel" | null>(null);
   useEffect(() => {
     underPage.current = installUnderPage(document, window);
     return underPage.current.uninstall;
@@ -89,6 +91,20 @@ export function App() {
           if (landedView.current?.kind !== "search") renamedTo.current = { kind: "search" };
           setView({ kind: "search" });
         },
+        push: () => {
+          pushDrag.current = "drag";
+          setView({ kind: "search" });
+        },
+        pushed: () => {
+          pushDrag.current = null;
+          document.querySelector<HTMLInputElement>(".search-input")?.focus();
+        },
+        pushCancel: () => {
+          pushDrag.current = "cancel";
+          // The page it came from was never left on screen: when it lands again it doesn't slide in.
+          if (landedView.current?.kind === "search") renamedTo.current = beforeSearch.current;
+          setView(beforeSearch.current);
+        },
       }),
     [],
   );
@@ -105,12 +121,12 @@ export function App() {
     () =>
       installSwipe(document, (s) => {
         const onSearch = viewNow.current.kind === "search";
-        if (searchSwipe(s, drawerNow.current, !onSearch)) {
+        const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        if (reduced && searchSwipe(s, drawerNow.current, !onSearch)) {
           openSearchNow.current();
           return;
         }
-        // With motion, the Search screen follows the finger back (screens/searchDrag.ts); this is its reduced-motion form.
-        const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        // With motion the Search screen follows the finger in and out (screens/searchDrag.ts); these are the reduced-motion forms.
         if (reduced && !drawerNow.current && searchBackSwipe(s, onSearch)) {
           leaveSearchNow.current();
           return;
@@ -185,6 +201,10 @@ export function App() {
           for (const g of document.querySelectorAll(".view-ghost")) g.remove();
         });
       } else if (panGhost.current === "drag" && landed.kind !== "search") panGhost.current = null;
+      if (pushDrag.current === "cancel" && landed.kind !== "search") {
+        pushDrag.current = null;
+        requestAnimationFrame(() => clearPush());
+      }
     }
     if (error !== null || landed !== null) {
       const target = closingFor.current;
@@ -200,10 +220,12 @@ export function App() {
       renamedTo.current = null;
       return;
     }
-    const motion = before === null ? "fade" : viewMotion(before, landed);
+    // Search dragged in is placed by the drag as it lands: no slide of its own.
+    const pushing = pushDrag.current === "drag" && landed.kind === "search";
+    const motion = before === null ? "fade" : pushing ? "still" : viewMotion(before, landed);
     setSwap((s) => ({ key: viewKey(landed), n: s.n + 1, motion }));
     // After the new page renders, the left-behind copy moves off.
-    if (motion !== "fade") requestAnimationFrame(() => ghostGo());
+    if (motion !== "fade" && motion !== "still") requestAnimationFrame(() => ghostGo());
   }, [loaded, error]);
 
   let body: React.ReactNode;

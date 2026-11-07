@@ -14,7 +14,7 @@ export type View =
   | { kind: "filter"; id: Id; name: string; query: string }
   | { kind: "search" };
 
-export type Motion = "fade" | "push" | "pop";
+export type Motion = "fade" | "push" | "pop" | "still";
 
 /** How many days Upcoming shows. */
 export const UPCOMING_DAYS = 14;
@@ -52,7 +52,7 @@ export function viewMode(v: View, showSubtasks: boolean): CardMode {
 }
 
 /** Search slides in over the page and back out, like an iOS push / pop; everything else fades. */
-export function viewMotion(from: View, to: View): Motion {
+export function viewMotion(from: View, to: View): "fade" | "push" | "pop" {
   const a = from.kind === "search";
   const b = to.kind === "search";
   if (!a && b) return "push";

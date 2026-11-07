@@ -26,7 +26,9 @@ export function ghost(dir: "push" | "pop", doc: Document = document): void {
   const list = copy.querySelector(".list-scroll");
   if (list) list.scrollTop = content.querySelector(".list-scroll")?.scrollTop ?? 0;
   // In case the new view never lands.
-  setTimeout(() => el.remove(), 2000);
+  setTimeout(() => {
+    if (!el.classList.contains("dragging")) el.remove();
+  }, 2000);
 }
 
 export function ghostGo(doc: Document = document): void {
