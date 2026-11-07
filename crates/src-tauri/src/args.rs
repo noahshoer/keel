@@ -107,6 +107,23 @@ pub struct HoldPageScrollArgs {
     pub on: bool,
 }
 
+/// Which vibration to play (`haptic`).
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "snake_case")]
+pub enum HapticKind {
+    /// A task was completed: one quick tap.
+    Complete,
+    /// A long press registered: one deep pop.
+    Press,
+}
+
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct HapticArgs {
+    pub kind: HapticKind,
+}
+
 #[derive(Debug, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct DiagLogArgs {

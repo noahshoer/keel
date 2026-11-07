@@ -30,6 +30,7 @@ import { slideClose } from "../gestures/sheet";
 import { completeTask, deleteTask, uncompleteTask } from "../ipc/actions";
 import { CHECK_CLASS } from "../lists/chips";
 import { openAndFocus } from "../shell/focus";
+import { haptic } from "../shell/haptics";
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -239,6 +240,7 @@ export function TaskView({
     if (!nav.holdCircles()) return;
     const pair = commit();
     const done = detail.done;
+    if (!done) haptic("complete");
     void (async () => {
       if (pair !== null) await settle(save(pair));
       if (done) await settle(uncompleteTask(id));

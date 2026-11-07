@@ -9,6 +9,7 @@ import type { DispatchArgs } from "./DispatchArgs";
 import type { Filter } from "./Filter";
 import type { FilterGroup } from "./FilterGroup";
 import type { FilterViewArgs } from "./FilterViewArgs";
+import type { HapticArgs } from "./HapticArgs";
 import type { HoldPageScrollArgs } from "./HoldPageScrollArgs";
 import type { ImportSummary } from "./ImportSummary";
 import type { ImportTodoistCsvArgs } from "./ImportTodoistCsvArgs";
@@ -61,4 +62,5 @@ export interface Commands {
   request_notification_permission: { args: NoArgs; ret: string };
   test_notification: { args: NoArgs; ret: null };
   hold_page_scroll: { args: HoldPageScrollArgs; ret: null };
+  haptic: { args: HapticArgs; ret: null };
 }

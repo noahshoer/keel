@@ -1,0 +1,71 @@
+import CoreHaptics
+import UIKit
+
+/// Keel's vibrations, played with Core Haptics, where an event's sharpness
+/// is its pitch: `complete` is one quick tap; `press` is one deep pop. The engine is made on first use and started again after
+/// iOS stops or resets it. Without Core Haptics, UIKit's impact taps stand in.
+enum Haptics {
+  private static var engine: CHHapticEngine?
+  private static var running = false
+
+  static func play(_ kind: String) {
+    guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
+      fallback(kind)
+      return
+    }
+    do {
+      let player = try ready().makePlayer(with: pattern(kind))
+      try player.start(atTime: CHHapticTimeImmediate)
+    } catch {
+      Diag.log("haptic \(kind) failed: \(error)")
+      running = false
+    }
+  }
+
+  private static func ready() throws -> CHHapticEngine {
+    let e: CHHapticEngine
+    if let have = engine {
+      e = have
+    } else {
+      e = try CHHapticEngine()
+      e.playsHapticsOnly = true
+      e.stoppedHandler = { _ in running = false }
+      e.resetHandler = { running = false }
+      engine = e
+    }
+    if !running {
+      try e.start()
+      running = true
+    }
+    return e
+  }
+
+  private static func tap(at time: TimeInterval, intensity: Float, sharpness: Float) -> CHHapticEvent {
+    CHHapticEvent(
+      eventType: .hapticTransient,
+      parameters: [
+        CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity),
+        CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness),
+      ],
+      relativeTime: time)
+  }
+
+  private static func pattern(_ kind: String) throws -> CHHapticPattern {
+    let events: [CHHapticEvent]
+    switch kind {
+    case "press":
+      events = [tap(at: 0, intensity: 1, sharpness: 0.2)]
+    default:
+      events = [tap(at: 0, intensity: 0.8, sharpness: 0.5)]
+    }
+    return try CHHapticPattern(events: events, parameters: [])
+  }
+
+  private static func fallback(_ kind: String) {
+    if kind == "press" {
+      UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+      return
+    }
+    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+  }
+}

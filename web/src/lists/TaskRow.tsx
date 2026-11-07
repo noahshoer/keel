@@ -17,6 +17,7 @@ import { deadlineUrgent, dueLabel, labelGroups, reminderLabel } from "../core";
 import { labelColorVar } from "../editor/labelColors";
 import { ROW_DRAG, ROW_PRESS } from "../gestures/long-press";
 import { completeTask, deleteTask, moveTask } from "../ipc/actions";
+import { haptic } from "../shell/haptics";
 import {
   BellRingingIcon,
   CalendarSmallIcon,
@@ -148,6 +149,7 @@ export function TaskRow({
       return;
     }
     const mine = gen.current;
+    haptic("complete");
     setPhase(1);
     await sleep(FILL_MS);
     if (gen.current !== mine) return;

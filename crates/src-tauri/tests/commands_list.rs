@@ -35,7 +35,7 @@ fn exports_command_names() {
     json.push('\n');
     std::fs::write(bindings_dir().join("commands.json"), json).expect("write commands.json");
 
-    assert_eq!(names.len(), 30, "{names:?}");
+    assert_eq!(names.len(), 31, "{names:?}");
     for n in ["today_view", "dispatch", "diag_log", "set_reminder_settings"] {
         assert!(names.iter().any(|x| x == n), "{n} missing: {names:?}");
     }
@@ -180,6 +180,7 @@ mod ts {
             request_notification_permission => NoArgs => String,
             test_notification => NoArgs => (),
             hold_page_scroll => HoldPageScrollArgs => (),
+            haptic => HapticArgs => (),
         );
         let mut covered: Vec<String> = commands.iter().map(|(c, _, _)| c.clone()).collect();
         covered.sort();

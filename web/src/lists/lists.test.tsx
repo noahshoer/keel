@@ -6,6 +6,7 @@ import { localToday } from "../clock";
 import { ROW_DRAG, ROW_HOLD, ROW_PRESS } from "../gestures/long-press";
 import * as fx from "../ipc/fixtures";
 import { invoke } from "../ipc/invoke";
+import { mockHaptics } from "../ipc/mock";
 import { TaskNavProvider } from "../taskview/nav";
 import { useTaskNav } from "../taskview/nav-context";
 import { loadCoreForTests } from "../test/wasm";
@@ -89,6 +90,8 @@ it("completing fills the circle, switches the row off, then completes the task",
   await tick(350);
   expect(taskEl(container)?.className).toBe("task completing switch-off");
   expect(await completed()).not.toContain("t-laundry");
+  // The vibration plays on the tap, not when the save lands.
+  expect(mockHaptics()).toEqual(["complete"]);
   await tick(380);
   expect(await completed()).toContain("t-laundry");
   expect(onChanged).toHaveBeenCalledTimes(1);
@@ -102,6 +105,7 @@ it("a second tap during the fill cancels", async () => {
   await tick(100);
   fireEvent.click(circle(container));
   expect(taskEl(container)?.className).toBe("task");
+  expect(mockHaptics()).toEqual(["complete"]);
   await tick(1000);
   expect(await completed()).not.toContain("t-laundry");
   expect(onChanged).not.toHaveBeenCalled();

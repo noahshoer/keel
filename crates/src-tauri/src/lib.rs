@@ -190,6 +190,17 @@ async fn hold_page_scroll(args: HoldPageScrollArgs, app: tauri::AppHandle) -> Re
     tauri_plugin_keel_ios::hold_page_scroll(&app, args.on)
 }
 
+/// Plays a vibration (iOS; see `tauri_plugin_keel_ios::haptic`). Async: it
+/// calls into Swift.
+#[tauri::command(rename_all = "snake_case")]
+async fn haptic(args: HapticArgs, app: tauri::AppHandle) -> Result<(), String> {
+    let kind = match args.kind {
+        HapticKind::Complete => "complete",
+        HapticKind::Press => "press",
+    };
+    tauri_plugin_keel_ios::haptic(&app, kind)
+}
+
 /// The app was renamed from "todo-planner" (identifier `com.nshoe.todoplanner`,
 /// store `todo.db`). On first launch as Keel, copy that store into the new
 /// data dir so existing tasks carry over. The old copy is left in place.
@@ -266,7 +277,8 @@ pub fn run() {
             diag::diag_log,
             request_notification_permission,
             test_notification,
-            hold_page_scroll
+            hold_page_scroll,
+            haptic
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

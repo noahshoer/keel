@@ -2,7 +2,7 @@
 //! (`Diag.swift`), keyboard pace (`Keyboard.swift`, which tells the page
 //! through `window.keelKeyboard`), the color past the page's end
 //! (`UnderPage.swift`), holding the page still under the task view
-//! (`PageScroll.swift`), and the simulator-check script runner
+//! (`PageScroll.swift`), vibrations (`Haptics.swift`), and the simulator-check script runner
 //! (`Script.swift`, `KEEL_SCRIPT`). It draws no views. The Liquid Glass
 //! controls are a separate, parked plugin (`tauri-plugin-glass`) that only a
 //! build with the `glass` feature loads. On other platforms this plugin does nothing.
@@ -75,6 +75,26 @@ pub fn hold_page_scroll<R: Runtime>(_app: &tauri::AppHandle<R>, _on: bool) -> Re
         use tauri::Manager;
         if let Some(h) = _app.try_state::<IosHandle<R>>() {
             h.0.run_mobile_plugin::<()>("pageScroll", PageScrollArgs { on: _on }).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "ios")]
+#[derive(serde::Serialize)]
+struct HapticArgs<'a> {
+    kind: &'a str,
+}
+
+/// Plays a vibration: `complete` (one quick tap) or `press` (one deep
+/// pop). iOS only; a no-op elsewhere. Call it from an
+/// async command: it waits for Swift.
+pub fn haptic<R: Runtime>(_app: &tauri::AppHandle<R>, _kind: &str) -> Result<(), String> {
+    #[cfg(target_os = "ios")]
+    {
+        use tauri::Manager;
+        if let Some(h) = _app.try_state::<IosHandle<R>>() {
+            h.0.run_mobile_plugin::<()>("haptic", HapticArgs { kind: _kind }).map_err(|e| e.to_string())?;
         }
     }
     Ok(())
