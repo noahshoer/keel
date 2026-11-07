@@ -14,6 +14,7 @@ import {
   XSmallIcon,
 } from "../shell/icons";
 import { CalendarMonths } from "./CalendarMonths";
+import { afterKeyboardMove } from "./keyboardAnchor";
 import { isTouch, weekStart } from "./locale";
 import type { MenuItem } from "./Menu";
 import { cx } from "./pop";
@@ -74,6 +75,8 @@ export function Scheduler({
   const ref = useRef<HTMLDivElement>(null);
   usePlacedPopover(ref);
   const [step, setStep] = useState<"quick" | "card" | "repeat">(withTime ? "quick" : "card");
+  // The quick choices fading out while the calendar waits for the keyboard to set off.
+  const [leaving, setLeaving] = useState(false);
   const [month, setMonth] = useState<[number, number]>(() => yearMonth(selected ?? today));
   const monthRef = useRef(month);
   monthRef.current = month;
@@ -138,7 +141,13 @@ export function Scheduler({
     // biome-ignore lint/a11y/noStaticElementInteractions: Escape anywhere in the popover closes it, not the editor (the Dioxus markup).
     <div
       ref={ref}
-      className={cx("popover scheduler", compact && "scheduler-compact")}
+      // `sched-card` once the quick choices give way to the calendar, so its own entrance runs (app.css).
+      className={cx(
+        "popover scheduler",
+        step === "card" && "sched-card",
+        leaving && "sched-leaving",
+        compact && "scheduler-compact",
+      )}
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           e.stopPropagation();
@@ -175,8 +184,16 @@ export function Scheduler({
             type="button"
             className="menu-item"
             onClick={() => {
-              setStep("card");
               onCalendar?.();
+              // On touch the calendar lowers the keyboard (`onCalendar`): it's built once
+              // the card has set off with the keyboard, not before, which held the card back.
+              if (touch && onCalendar) {
+                setLeaving(true);
+                afterKeyboardMove(() => {
+                  setLeaving(false);
+                  setStep("card");
+                });
+              } else setStep("card");
             }}
           >
             <span className="menu-label">Pick a date and time</span>

@@ -15,7 +15,6 @@ import { ShowSubtasksContext, savedShowSubtasks } from "../lists/showSubtasks";
 import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
 import { SearchPane } from "../screens/SearchPane";
-import { installKeyboardPrime } from "../shell/keyboardPrime";
 import { Sidebar } from "../shell/Sidebar";
 import { applyTheme, savedTheme, type Theme } from "../shell/theme";
 import { installUnderPage } from "../shell/underPage";
@@ -60,11 +59,6 @@ export function App() {
   // Touch: a long press shows a row's actions.
   useEffect(() => installLongPress(document), []);
   useEffect(() => installDrag(document, window), []);
-  // Touch: the first real tap lets later out-of-tap focuses (a drop's) raise the keyboard.
-  useEffect(
-    () => (window.matchMedia?.("(hover: none)").matches ? installKeyboardPrime(document) : undefined),
-    [],
-  );
   // Touch: swipe right opens the drawer, swipe left closes it. Installed
   // once, so the handler reads the drawer through a ref.
   const drawerNow = useRef(drawer);

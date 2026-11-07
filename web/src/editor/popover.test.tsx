@@ -118,7 +118,31 @@ describe("usePlacedPopover on the keyboard", () => {
     vi.unstubAllGlobals();
   });
 
-  it("works in what's visible, then offsets into the fixed coordinates WebKit scrolled", async () => {
+  it("is placed by its own size, not the smaller one its entrance's scale draws", async () => {
+    const { container } = render(
+      <form className="on-keyboard">
+        <Picker />
+      </form>,
+    );
+    const card = container.querySelector("form") as HTMLElement;
+    const pop = container.querySelector(".popover") as HTMLElement;
+    card.getBoundingClientRect = () => rect(0, 500, 402, 136) as DOMRect;
+    // Drawn at 98% while it comes in; laid out 386 x 200.
+    pop.getBoundingClientRect = () => rect(0, 0, 378.3, 196) as DOMRect;
+    Object.defineProperty(pop, "offsetWidth", { value: 386 });
+    Object.defineProperty(pop, "offsetHeight", { value: 200 });
+    pop.appendChild(document.createElement("div"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // Centered in jsdom's 1024 px window by its laid-out width.
+    expect(pop.style.left).toBe("319px");
+    expect(pop.style.top).toBe("-208px");
+  });
+
+  // The card is the picker's containing block (its transform), so the
+  // picker's `top` is from the card's top: it rides along when the card moves.
+  it("sits above the card, in the card's own coordinates, whatever WebKit scrolled", async () => {
     vi.stubGlobal("visualViewport", Object.assign(new EventTarget(), { offsetTop: 396, height: 478 }));
     const { container } = render(
       <form className="on-keyboard">
@@ -129,11 +153,16 @@ describe("usePlacedPopover on the keyboard", () => {
     const pop = container.querySelector(".popover") as HTMLElement;
     card.getBoundingClientRect = () => rect(0, 339, 402, 139) as DOMRect;
     pop.getBoundingClientRect = () => rect(0, 0, 386, 100) as DOMRect;
+    Object.defineProperty(pop, "offsetWidth", { value: 386 });
+    Object.defineProperty(pop, "offsetHeight", { value: 100 });
     card.style.bottom = "0px";
     await act(async () => {
       await Promise.resolve();
     });
-    expect(pop.style.top).toBe("627px");
+    // 231 on the screen, 108 above the card's top.
+    expect(pop.style.top).toBe("-108px");
+    // Centered in jsdom's 1024 px window: 319 from the card's left edge (at 0 here).
+    expect(pop.style.left).toBe("319px");
     expect(pop.style.maxHeight).toBe("323px");
   });
 
@@ -147,14 +176,16 @@ describe("usePlacedPopover on the keyboard", () => {
     const pop = container.querySelector(".popover") as HTMLElement;
     card.getBoundingClientRect = () => rect(0, 500, 402, 136) as DOMRect;
     pop.getBoundingClientRect = () => rect(0, 0, 386, 200) as DOMRect;
+    Object.defineProperty(pop, "offsetWidth", { value: 386 });
+    Object.defineProperty(pop, "offsetHeight", { value: 200 });
     pop.appendChild(document.createElement("div"));
     await act(async () => {
       await Promise.resolve();
     });
-    expect(pop.style.top).toBe("292px");
+    expect(pop.style.top).toBe("-208px");
   });
 
-  it("follows the task card when the card moves", async () => {
+  it("places against where the layout puts the card, not where its ride has it now", async () => {
     const { container } = render(
       <form className="on-keyboard">
         <Picker />
@@ -162,19 +193,17 @@ describe("usePlacedPopover on the keyboard", () => {
     );
     const card = container.querySelector("form") as HTMLElement;
     const pop = container.querySelector(".popover") as HTMLElement;
-    let cardTop = 300;
-    card.getBoundingClientRect = () => rect(0, cardTop, 402, 136) as DOMRect;
-    pop.getBoundingClientRect = () => rect(0, 0, 386, 100) as DOMRect;
-    card.style.bottom = "1px";
+    // Laid out with its top at 600, drawn 294 higher as it starts down with the keyboard.
+    card.getBoundingClientRect = () => rect(0, 306, 402, 136) as DOMRect;
+    pop.getBoundingClientRect = () => rect(0, 0, 386, 400) as DOMRect;
+    Object.defineProperty(pop, "offsetWidth", { value: 386 });
+    Object.defineProperty(pop, "offsetHeight", { value: 400 });
+    card.style.transform = "matrix(1, 0, 0, 1, 0, -294)";
     await act(async () => {
       await Promise.resolve();
     });
-    expect(pop.style.top).toBe("192px");
-    cardTop = 700;
-    card.style.bottom = "0px";
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(pop.style.top).toBe("592px");
+    // 192 on the screen once the card is down: 408 above its top.
+    expect(pop.style.top).toBe("-408px");
+    expect(pop.style.maxHeight).toBe("584px");
   });
 });

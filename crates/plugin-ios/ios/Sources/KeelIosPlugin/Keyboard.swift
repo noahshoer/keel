@@ -13,8 +13,17 @@ enum KeyboardPace {
   /// 0.3833 s both ways; updated from each notification).
   private(set) static var seconds = 0.3833 / Double(speed)
   /// The keyboard's curve in CSS, measured from its own animation after
-  /// each show (until the first, an approximation).
-  private(set) static var ease = "cubic-bezier(.25,.9,.3,1)"
+  /// each show. Until the first, the spring it has had on iOS 26 every time
+  /// (critically damped, 0.3833 s), so the first keyboard's card rides it too.
+  private(set) static var ease: String = {
+    let s = CASpringAnimation()
+    s.mass = 1
+    s.stiffness = 555.0265
+    s.damping = 47.118
+    s.initialVelocity = 0
+    s.duration = 0.3833
+    return linear(s)
+  }()
 
   private static weak var webview: WKWebView?
   private static var observers: [NSObjectProtocol] = []
@@ -60,9 +69,9 @@ enum KeyboardPace {
       let f = webview.convert(end, from: nil)
       kb = max(0, webview.bounds.maxY - f.minY)
     }
-    // The first keyboard after launch reports a 0 s animation; the page
-    // still moves at the usual pace (the last one seen, or iOS's 0.3833 s).
-    let secs = dur > 0 || up ? seconds : 0
+    // A keyboard iOS shows with no animation (0 s, after a very quick first
+    // tap) snaps in: the page hears so, and the card rises briefly.
+    let secs = dur > 0 ? seconds : 0
     let js = String(format: "window.keelKeyboard?.({ kb: %.1f, secs: %.4f, ease: '%@', at: %.0f })", kb, secs, ease, at)
     webview?.evaluateJavaScript(js)
     if up && dur > 0 { DispatchQueue.main.async { measure() } }

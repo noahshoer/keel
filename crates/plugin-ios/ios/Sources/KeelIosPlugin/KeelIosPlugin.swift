@@ -22,7 +22,8 @@ class HapticArgs: Decodable {
 }
 
 /// What Keel needs from Swift on iOS: the diagnostics log (`Diag`),
-/// keyboard pace (`KeyboardPace`), the color past the page's end
+/// keyboard pace (`KeyboardPace`), the page's focus and the keyboard
+/// (`PageFocus`), the color past the page's end
 /// (`UnderPage`), holding the page still under the task
 /// view (`PageScroll`), vibrations (`Haptics`) and the simulator-check script runner
 /// (`Script`). It draws nothing over the web view.
@@ -32,6 +33,7 @@ class KeelIosPlugin: Plugin {
       Diag.attach(webview)
       KeyboardPace.attach(webview)
       KeyboardBar.hide(in: webview)
+      PageFocus.attach(webview)
       UnderPage.attach(webview)
       PageScroll.attach(webview)
       Script.run(webview)

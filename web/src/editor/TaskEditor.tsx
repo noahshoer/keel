@@ -39,7 +39,7 @@ import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
 import { HighlightedTitle } from "./HighlightedTitle";
 import { flagClass, locationChosen, locationFace, locationItems, PRIORITY_ITEMS } from "./items";
-import { useHeldKeyboard, useKeyboard } from "./keyboardAnchor";
+import { CARD_GAP, lowerKeyboardNow, useHeldKeyboard, useKeyboard } from "./keyboardAnchor";
 import { LabelPicker } from "./LabelPicker";
 import { isTouch } from "./locale";
 import { Menu, type MenuItem } from "./Menu";
@@ -47,9 +47,6 @@ import { type TypedPills, usePillFade, useRevealFilled } from "./pillFade";
 import { cx, DEADLINE_TITLE, type Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
 import { StreakPicker } from "./StreakPicker";
-
-/** The space between the task card and the keyboard. */
-const CARD_GAP = 8;
 
 /** Stops a press taking focus from the title, except in a field of its own. */
 function keepFocus(e: MouseEvent<HTMLElement>): void {
@@ -147,7 +144,12 @@ export function TaskEditor({
     const focused = document.activeElement as HTMLElement | null;
     roomFrom.current =
       focused?.closest(".on-keyboard") && !focused.closest(".popover") ? focused : title.current;
-    focused?.blur();
+    // The card sets off with the keyboard, not when Swift reports it, and the
+    // keyboard a frame after: iOS moves it at once, the card's ride reaches the
+    // screen a frame or two after the page starts it.
+    if (focused?.closest("input, textarea") && lowerKeyboardNow())
+      requestAnimationFrame(() => focused.blur());
+    else focused?.blur();
   };
   const setPop = (p: Pop) => {
     setOpen(p);

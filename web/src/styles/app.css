@@ -474,6 +474,22 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 /* Touch: the task card sits on the keyboard and its pickers on the card. */
 .editor.on-keyboard { position: fixed; left: 8px; right: 8px; z-index: 45; margin: 0; border: none; border-radius: 24px;
   padding: 16px 16px 12px; animation: none; box-shadow: var(--shadow-lg); }
+/* A picker on the card rises out of it and fades in. On `translate` and `scale`, not
+   `transform`: a ride moves an open picker the other way on `transform` to hold it
+   in place (keyboardAnchor.ts `rideCard`). */
+@keyframes picker-rise { from { opacity: 0; translate: 0 16px; scale: .97; } to { opacity: 1; translate: none; scale: none; } }
+.on-keyboard .popover { animation: picker-rise .3s var(--ease); transform-origin: bottom center; }
+/* The date's full calendar (the quick choices' popover, switched to `sched-card`) lowers the
+   keyboard, and the card drops under it for ~0.43 s. It's built once the drop has started, and
+   fades in at its place while the card drops, without rising against it. */
+@keyframes calendar-in { from { opacity: 0; scale: .98; } to { opacity: 1; scale: none; } }
+.on-keyboard .popover.scheduler.sched-card:not(.scheduler-compact) { animation: calendar-in .25s var(--ease) .05s both; }
+/* The quick choices fade out at once as the calendar is chosen (it comes once the card has set off). */
+.on-keyboard .popover.scheduler.sched-leaving { opacity: 0; transition: opacity .1s var(--ease); }
+/* A transform even at rest: the card is always its pickers' containing block, so a
+   picker rides with the card's moves rather than jumping when one starts or ends
+   (popover.ts `followCard`). */
+.editor.on-keyboard { transform: translateY(0); }
 .editor.on-keyboard.keyboard-down { margin-bottom: env(safe-area-inset-bottom); }
 /* While the card rides to the keyboard (`rideCard`): iOS draws the caret at the card's layout, which is already where it ends. */
 .editor.riding textarea, .editor.riding input { caret-color: transparent; }
