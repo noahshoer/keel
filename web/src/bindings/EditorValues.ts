@@ -52,6 +52,10 @@ streak_goal: number | null,
  */
 until: string, 
 /**
+ * The occurrence (`YYYY-MM-DD`) a moved date stands in for, or empty.
+ */
+moved_from: string, 
+/**
  * The rule typed into the Repeat menu, while `repeat` is "custom".
  */
 rule?: Recurrence | null, };

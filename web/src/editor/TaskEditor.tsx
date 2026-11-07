@@ -30,7 +30,6 @@ import {
   editorView,
   locationPick,
   readRepeat,
-  repeatText,
   toggleLabel,
   unhighlightAt,
   withTitle,

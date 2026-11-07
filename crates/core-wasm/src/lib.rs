@@ -544,6 +544,19 @@ pub fn edit_plan(
     output(&editor::edit_plan(&id, &before, &after, existing, date(today)?))
 }
 
+/// `editor::moves_occurrence`: whether saving `after` moves one occurrence of a repeating task.
+#[wasm_bindgen(js_name = movesOccurrence)]
+pub fn moves_occurrence(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] before: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] after: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")] existing: JsValue,
+) -> Result<bool, JsError> {
+    let before: EditorValues = input("before", before)?;
+    let after: EditorValues = input("after", after)?;
+    let existing: Option<Recurrence> = input("existing", existing)?;
+    Ok(editor::moves_occurrence(&before, &after, existing.as_ref()))
+}
+
 /// `editor::reminder_actions`.
 #[wasm_bindgen(js_name = reminderActions, unchecked_return_type = "import('../../bindings').Action[]")]
 pub fn reminder_actions(

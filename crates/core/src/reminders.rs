@@ -299,6 +299,7 @@ mod tests {
             is_recurring: false,
             recurrence: None,
             until: None,
+            moved_from: None,
         });
         task
     }

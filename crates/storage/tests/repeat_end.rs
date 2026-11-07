@@ -36,6 +36,7 @@ impl World {
             is_recurring: true,
             recurrence: Some(Recurrence::Daily),
             until: until.map(str::to_string),
+            moved_from: None,
         };
         let action = Action::TaskAdd {
             content: "x".to_string(),

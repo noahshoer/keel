@@ -38,6 +38,7 @@ it("values compare by value", () => {
     streak: false,
     streak_goal: null,
     until: "",
+    moved_from: "",
   };
   expect(sameValues(v, { ...v })).toBe(true);
   expect(sameValues(v, { ...v, priority: "1" })).toBe(false);

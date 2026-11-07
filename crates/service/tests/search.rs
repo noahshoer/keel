@@ -36,6 +36,7 @@ impl F {
                 is_recurring: false,
                 recurrence: None,
                 until: None,
+                moved_from: None,
             }),
             labels: None,
             parent_id: None,

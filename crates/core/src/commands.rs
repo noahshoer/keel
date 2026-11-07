@@ -266,6 +266,7 @@ fn build_due(date: Option<String>, rule: Option<Recurrence>, until: Option<Strin
         is_recurring: rule.is_some(),
         recurrence: rule,
         until,
+        moved_from: None,
     })
 }
 
@@ -275,7 +276,24 @@ fn repeat_ends(due: &Due, rule: &Recurrence, current: NaiveDate, today: NaiveDat
     let Some(end) = due.until.as_deref().and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok()) else {
         return false;
     };
-    rule.next_after(completed_occurrence(rule, current, today).max(current)) > end
+    let occurrence = moved_from(due).unwrap_or_else(|| completed_occurrence(rule, current, today));
+    rule.next_after(occurrence.max(current)) > end
+}
+
+/// The occurrence a moved due date stands in for.
+fn moved_from(due: &Due) -> Option<NaiveDate> {
+    due.moved_from.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
+}
+
+/// After an edit that kept the rule: the occurrence the new date stands in
+/// for, or `None` when it falls on one of the repeat's own days.
+fn moved_occurrence(old: &Due, new: &Due, rule: &Recurrence) -> Option<String> {
+    let new_day = due_date(new)?;
+    if rule.contains(new_day) {
+        return None;
+    }
+    let old_day = due_date(old).filter(|d| rule.contains(*d));
+    moved_from(old).or(old_day).map(iso)
 }
 
 fn iso(date: NaiveDate) -> String {
@@ -480,13 +498,26 @@ pub fn apply_at<R: Repository>(
                     task.deadline = valid_date(&d);
                 }
                 if let Some(edit) = due {
-                    let old_rule = task.due.as_ref().and_then(|d| d.recurrence.clone());
+                    let old_due = task.due.clone();
+                    let old_rule = old_due.as_ref().and_then(|d| d.recurrence.clone());
                     let until = match edit.until {
                         Some(u) => Some(u),
                         None if edit.recurrence == old_rule => task.due.as_ref().and_then(|d| d.until.clone()),
                         None => None,
                     };
                     task.due = build_due(edit.date, edit.recurrence, until, today);
+                    // A new date under the same rule moves just this occurrence;
+                    // a streak can't carry over a move.
+                    if let (Some(old), Some(new), Some(rule)) = (old_due.as_ref(), task.due.as_mut(), old_rule.as_ref()) {
+                        if new.recurrence.as_ref() == Some(rule) && due_date(old) != due_date(new) {
+                            new.moved_from = moved_occurrence(old, new, rule);
+                            task.streak_current = 0;
+                            task.streak_last_period = None;
+                            task.last_completion = None;
+                        } else if new.recurrence.as_ref() == Some(rule) {
+                            new.moved_from = old.moved_from.clone();
+                        }
+                    }
                     let new_rule = task.due.as_ref().and_then(|d| d.recurrence.clone());
                     // A different schedule invalidates the occurrence history.
                     if new_rule != old_rule {
@@ -634,6 +665,7 @@ pub fn apply_at<R: Repository>(
                 if let Some(undo) = streak::undoable_completion(&task, today) {
                     if let Some(d) = task.due.as_mut() {
                         d.date = undo.date;
+                        d.moved_from = undo.moved_from;
                     }
                     task.streak_current = undo.streak_current;
                     task.streak_best = undo.streak_best;
@@ -746,7 +778,11 @@ fn complete_occurrence(
     current: NaiveDate,
     today: NaiveDate,
 ) -> Option<NaiveDate> {
-    let occurrence = completed_occurrence(rule, current, today);
+    let occurrence = task
+        .due
+        .as_ref()
+        .and_then(moved_from)
+        .unwrap_or_else(|| completed_occurrence(rule, current, today));
     if already_credited(task, occurrence) {
         return None;
     }
@@ -755,12 +791,14 @@ fn complete_occurrence(
     if let Some(d) = task.due.as_mut() {
         let suffix = d.date.get(10..).unwrap_or("").to_string();
         let before = std::mem::replace(&mut d.date, format!("{}{}", iso(rule.next_after(passed)), suffix));
+        let was_moved = d.moved_from.take();
         undo = Some(LastCompletion {
             moved_to: d.date.clone(),
             date: before,
             streak_current: task.streak_current,
             streak_best: task.streak_best,
             streak_last_period: task.streak_last_period.clone(),
+            moved_from: was_moved,
         });
     }
     task.last_completion = undo;

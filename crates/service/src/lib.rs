@@ -261,6 +261,7 @@ impl AppService {
                             is_recurring: false,
                             recurrence: None,
                             until: None,
+                            moved_from: None,
                         }),
                         labels: (!labels.is_empty()).then(|| labels.clone()),
                         parent_id: lookup(parent),

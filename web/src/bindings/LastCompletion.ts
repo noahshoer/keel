@@ -8,4 +8,8 @@ export type LastCompletion = {
 /**
  * The date it moved to. Once the due date is anything else, it can't be undone.
  */
-moved_to: string, date: string, streak_current: number, streak_best: number, streak_last_period: string | null, };
+moved_to: string, date: string, streak_current: number, streak_best: number, streak_last_period: string | null, 
+/**
+ * The occurrence the due stood in for, when it had been moved.
+ */
+moved_from?: string | null, };

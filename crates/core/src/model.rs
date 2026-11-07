@@ -71,6 +71,11 @@ pub struct Due {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub until: Option<String>,
+    /// The occurrence (`YYYY-MM-DD`) this due date stands in for, when just
+    /// this one was moved off the repeat's days.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
+    pub moved_from: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -145,6 +150,10 @@ pub struct LastCompletion {
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub streak_best: i64,
     pub streak_last_period: Option<String>,
+    /// The occurrence the due stood in for, when it had been moved.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
+    pub moved_from: Option<String>,
 }
 
 impl Task {
@@ -388,6 +397,7 @@ impl Reminder {
                 is_recurring: false,
                 recurrence: None,
                 until: None,
+                moved_from: None,
             }),
             minute_offset: None,
             is_deleted: false,
@@ -451,6 +461,7 @@ mod tests {
             is_recurring: false,
             recurrence: None,
             until: None,
+            moved_from: None,
         };
         let json = serde_json::to_string(&due).expect("serialize");
         let back: Due = serde_json::from_str(&json).expect("deserialize");

@@ -585,6 +585,7 @@ mod tests {
             is_recurring: false,
             recurrence: None,
             until: None,
+            moved_from: None,
         });
         assert_eq!(due_date_of(&t), Some(d(2026, 10, 19)));
     }
@@ -686,6 +687,7 @@ mod time_tests {
             is_recurring: false,
             recurrence: None,
             until: None,
+            moved_from: None,
         };
         task.due = Some(due("2026-10-19"));
         assert_eq!(due_time(&task), None, "date-only due has no time");
@@ -712,6 +714,7 @@ mod sidebar_count_mode_tests {
             is_recurring: false,
             recurrence: None,
             until: None,
+            moved_from: None,
         });
         t
     }
@@ -765,6 +768,7 @@ mod progress_tests {
                 is_recurring: true,
                 recurrence: None,
                 until: None,
+                moved_from: None,
             });
         }
         task
@@ -819,6 +823,7 @@ mod progress_tests {
             is_recurring: true,
             recurrence: None,
             until: None,
+            moved_from: None,
         });
         task
     }
@@ -830,6 +835,7 @@ mod progress_tests {
             streak_current: 0,
             streak_best: 0,
             streak_last_period: None,
+            moved_from: None,
         });
         task
     }
@@ -971,6 +977,7 @@ mod card_tests {
             is_recurring: true,
             recurrence: None,
             until: None,
+            moved_from: None,
         });
         done.last_completion = Some(crate::model::LastCompletion {
             moved_to: "2026-11-04".into(),
@@ -978,6 +985,7 @@ mod card_tests {
             streak_current: 0,
             streak_best: 0,
             streak_last_period: None,
+            moved_from: None,
         });
         let cs = cards(vec![f.pack.clone(), done.clone()], &all(&f), CardMode::Grouped, some_day());
         assert_eq!(heads(&cs), ["Pack"]);
@@ -1061,6 +1069,7 @@ mod card_tests {
             is_recurring: true,
             recurrence: None,
             until: None,
+            moved_from: None,
         });
         let mut a = all(&f);
         a.push(h.clone());
@@ -1168,6 +1177,7 @@ mod date_group_tests {
             is_recurring: false,
             recurrence: None,
             until: None,
+            moved_from: None,
         });
         t
     }
@@ -1408,6 +1418,7 @@ mod sidebar_count_tests {
             timezone: None,
             recurrence: None,
             until: None,
+            moved_from: None,
         });
         t
     }

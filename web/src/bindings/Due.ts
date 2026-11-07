@@ -15,4 +15,9 @@ recurrence?: Recurrence | null,
  * The last day a repeat may fall on (`YYYY-MM-DD`), from "for 10 days"
  * or "until nov 30"; completing the last occurrence finishes the task.
  */
-until?: string | null, };
+until?: string | null, 
+/**
+ * The occurrence (`YYYY-MM-DD`) this due date stands in for, when just
+ * this one was moved off the repeat's days.
+ */
+moved_from?: string | null, };

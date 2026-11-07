@@ -3,7 +3,7 @@
 // the native glass branches). Every change saves right away through
 // `saveEdit`, the same path as the editor; saves are fire-and-forget, so the
 // view moves at once and the reload that follows catches up.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { Loaded } from "../app/load";
 import type { EditorPick, EditorValues, Id, Recurrence, TaskDetail } from "../bindings";
@@ -13,6 +13,7 @@ import {
   applyTitle,
   editorView,
   fieldLayout,
+  movesOccurrence,
   reminderDraftOf,
   repeatText,
   streakText,
@@ -44,6 +45,7 @@ import { commitDrafts, takesStoredText } from "./drafts";
 import { FieldControl } from "./FieldControl";
 import { GrowingText } from "./GrowingText";
 import { MoreMenu } from "./MoreMenu";
+import { MovePrompt } from "./MovePrompt";
 import { useTaskNav } from "./nav-context";
 import { StreakOnKeyboard, StreakPopover } from "./StreakPopover";
 import { SubtaskCard } from "./SubtaskCard";
@@ -212,13 +214,24 @@ export function TaskView({
     }
   }, [active, nav]);
 
-  // A picker's change, saved now.
-  const saveValues = (after: EditorValues) => {
+  // A picker's change, saved now; a move that would reset a streak asks first.
+  const [pendingMove, setPendingMove] = useState<EditorValues | null>(null);
+  const fieldsCard = useRef<HTMLDivElement>(null);
+  const commitValues = (after: EditorValues) => {
     const before = baseRef.current;
     if (sameValues(before, after)) return;
     setBase(after);
     void settle(save({ before, after, rule })).then(onChanged);
   };
+  const saveValues = (after: EditorValues) => {
+    if (task.streak_enabled && task.streak_current > 0 && movesOccurrence(baseRef.current, after, rule)) {
+      setOpen(null);
+      setPendingMove(after);
+    } else {
+      commitValues(after);
+    }
+  };
+  const cancelMove = useCallback(() => setPendingMove(null), []);
   // Today at pick time, as Dioxus reads it: a view left open past midnight.
   const pick = (p: EditorPick) =>
     saveValues(applyPick(baseRef.current, p, false, projects, sections, localToday()));
@@ -387,7 +400,7 @@ export function TaskView({
             </div>
           ) : null}
           {rows.length > 0 || task.streak_enabled ? (
-            <div className="tv-card tv-fields">
+            <div ref={fieldsCard} className="tv-card tv-fields">
               {task.streak_enabled ? (
                 <div className="tv-row">
                   <div className="chip-wrap">
@@ -442,6 +455,17 @@ export function TaskView({
                 ))}
               </div>
             </div>
+          ) : null}
+          {pendingMove !== null ? (
+            <MovePrompt
+              anchor={fieldsCard}
+              streak={task.streak_current}
+              onCancel={cancelMove}
+              onMove={() => {
+                setPendingMove(null);
+                commitValues(pendingMove);
+              }}
+            />
           ) : null}
           <SubtaskCard
             detail={detail}

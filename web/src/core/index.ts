@@ -330,6 +330,16 @@ export function locationText(
   return core.locationText(projectId, sectionId, projects, sections);
 }
 
+/** Whether saving `after` moves one occurrence of a repeating task (a streak can't carry over it). */
+export function movesOccurrence(
+  before: EditorValues,
+  after: EditorValues,
+  existing: Recurrence | null,
+): boolean {
+  ready();
+  return core.movesOccurrence(before, after, existing);
+}
+
 /** What a typed repeat reads as ("every 3 tuesdays"), anchored on `date`; null when it isn't one. */
 export function readRepeat(text: string, date: string, today: string): RepeatReading | null {
   ready();
