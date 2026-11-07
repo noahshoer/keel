@@ -15,7 +15,7 @@ import { ShowSubtasksContext, savedShowSubtasks } from "../lists/showSubtasks";
 import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
 import { SearchPane } from "../screens/SearchPane";
-import { installDrawerDrag } from "../shell/drawerDrag";
+import { clearDrag, installDrawerDrag } from "../shell/drawerDrag";
 import { Sidebar } from "../shell/Sidebar";
 import { applyTheme, savedTheme, type Theme } from "../shell/theme";
 import { installUnderPage } from "../shell/underPage";
@@ -283,7 +283,10 @@ function Frame({
   // Once it is shut, the next scrim fades in as usual (see drawerDrag.ts).
   const appEl = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!drawer) delete appEl.current?.dataset["drawerRest"];
+    const app = appEl.current;
+    if (drawer || !app) return;
+    delete app.dataset["drawerRest"];
+    clearDrag(app); // a drag that shut it waited for this
   }, [drawer]);
   return (
     <div ref={appEl} className={`app${drawer ? " drawer-open" : ""}${viewOpen ? " view-open" : ""}`}>

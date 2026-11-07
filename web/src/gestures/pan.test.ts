@@ -125,3 +125,11 @@ it("reports nothing after uninstall", () => {
   expect(spy).not.toHaveBeenCalled();
   uninstall = () => {};
 });
+
+it("a finger that rests before lifting is not a flick", () => {
+  touch("touchstart", list(), 20, 100, 0);
+  touch("touchmove", list(), 40, 100, 10);
+  touch("touchmove", list(), 100, 100, 20); // fast, then it stops
+  touch("touchend", list(), 100, 100, 900);
+  expect(log.at(-1)).toBe("end false 0.20");
+});

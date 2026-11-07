@@ -35,10 +35,13 @@ type Active = {
 /** Installs the listeners on `doc`; returns a function that removes them. */
 export function installPan(doc: Document, begin: (ctx: TouchContext) => Pan | null): () => void {
   let cur: Active | null = null;
-  const finish = (commit: boolean) => {
+  const finish = (commit: boolean, at?: number) => {
     const a = cur;
     cur = null;
     if (a?.mode !== "pan") return;
+    // A finger that rested before lifting is not a flick: the speed runs to the lift.
+    const last = a.samples.at(-1);
+    if (at !== undefined && last) a.samples.push([at, last[1]]);
     a.pan.onEnd(commit ? panCommits(a.progress, velocity(a.samples)) : false, a.progress);
   };
 
@@ -74,7 +77,7 @@ export function installPan(doc: Document, begin: (ctx: TouchContext) => Pan | nu
     a.pan.onMove(a.progress);
     if (ev.cancelable) ev.preventDefault();
   };
-  const onEnd = () => finish(true);
+  const onEnd = (ev: TouchEvent) => finish(true, ev.timeStamp);
   const onCancel = () => finish(false);
 
   const passive = { passive: true } as const;
