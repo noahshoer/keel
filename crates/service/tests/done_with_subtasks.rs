@@ -77,7 +77,6 @@ impl Fx {
         self.complete_on(id, today())
     }
 
-    #[allow(dead_code)]
     fn reopen_on(&mut self, id: &Id, on: NaiveDate) {
         self.run_on(Action::TaskUncomplete { id: id.clone() }, on);
     }
@@ -251,3 +250,66 @@ fn replayed_complete_does_not_cascade_again() {
     assert_eq!(f.get(&parent).streak_current, 1);
 }
 
+#[test]
+fn reopening_a_sub_task_reopens_the_parent() {
+    let mut f = Fx::new();
+    let (parent, [a, b, c]) = f.sharpen();
+    for s in [&a, &b, &c] {
+        f.complete(s);
+    }
+    assert_eq!(f.date(&parent), "2026-01-06");
+
+    f.reopen_on(&a, today());
+
+    assert_eq!(f.date(&parent), "2026-01-05");
+    assert_eq!(f.get(&parent).streak_current, 0);
+    let all = f.svc.all_tasks_at(today()).unwrap();
+    for s in [&b, &c] {
+        assert!(keel_core::views::is_done(all.iter().find(|t| &t.id == s).unwrap(), today()), "{s:?} stays done");
+    }
+}
+
+#[test]
+fn reopening_reopens_a_parent_without_the_flag() {
+    let mut f = Fx::new();
+    let parent = f.add(None, None);
+    let a = f.add(Some(&parent), None);
+    let b = f.add(Some(&parent), None);
+    f.complete(&parent);
+
+    f.reopen_on(&a, today());
+
+    assert!(!f.get(&parent).checked);
+    assert!(f.get(&b).checked);
+}
+
+#[test]
+fn reopening_today_leaves_yesterdays_parent_alone() {
+    let mut f = Fx::new();
+    let (parent, [a, b, c]) = f.sharpen();
+    for s in [&a, &b, &c] {
+        f.complete(s);
+    }
+
+    f.complete_on(&a, day(6));
+    f.reopen_on(&a, day(6));
+
+    assert_eq!(f.get_on(&parent, day(6)).due.unwrap().date, "2026-01-06");
+    assert_eq!(f.get_on(&parent, day(6)).streak_current, 1);
+}
+
+#[test]
+fn reopening_climbs_two_levels() {
+    let mut f = Fx::new();
+    let grandparent = f.add(None, None);
+    f.done_with(&grandparent);
+    let parent = f.add(Some(&grandparent), None);
+    f.done_with(&parent);
+    let sub = f.add(Some(&parent), None);
+    f.complete(&sub);
+
+    f.reopen_on(&sub, today());
+
+    assert!(!f.get(&parent).checked);
+    assert!(!f.get(&grandparent).checked);
+}

@@ -619,23 +619,15 @@ pub fn apply_at<R: Repository>(
             }
         }
         Action::TaskUncomplete { id } => {
-            if let Some(mut task) = repo.get_task(&id)? {
-                // A repeating task was never checked: put back what completing it changed.
-                if let Some(undo) = streak::undoable_completion(&task, today) {
-                    if let Some(d) = task.due.as_mut() {
-                        d.date = undo.date;
-                        d.moved_from = undo.moved_from;
-                    }
-                    task.streak_current = undo.streak_current;
-                    task.streak_best = undo.streak_best;
-                    task.streak_last_period = undo.streak_last_period;
+            uncomplete_task(repo, &id, today)?;
+            // A parent that was done isn't any more.
+            let mut child = id;
+            while let Some(parent) = repo.get_task(&child)?.and_then(|t| t.parent_id) {
+                match repo.get_task(&parent)? {
+                    Some(p) if views::done_for_now(&p, today) => uncomplete_task(repo, &parent, today)?,
+                    _ => break,
                 }
-                task.last_completion = None;
-                task.reopens_on = None;
-                task.checked = false;
-                task.completed_at = None;
-                task.updated_at = Utc::now();
-                repo.upsert_task(&task)?;
+                child = parent;
             }
         }
         Action::LabelSetColor { id, color } => {
@@ -780,6 +772,28 @@ fn complete_parents<R: Repository>(repo: &R, id: &Id, today: NaiveDate) -> Resul
         child = parent;
     }
     Ok(completed)
+}
+
+/// Reopens a task (see `Action::TaskUncomplete`).
+fn uncomplete_task<R: Repository>(repo: &R, id: &Id, today: NaiveDate) -> Result<(), RepoError> {
+    let Some(mut task) = repo.get_task(id)? else { return Ok(()) };
+    // A repeating task was never checked: put back what completing it changed.
+    if let Some(undo) = streak::undoable_completion(&task, today) {
+        if let Some(d) = task.due.as_mut() {
+            d.date = undo.date;
+            d.moved_from = undo.moved_from;
+        }
+        task.streak_current = undo.streak_current;
+        task.streak_best = undo.streak_best;
+        task.streak_last_period = undo.streak_last_period;
+    }
+    task.last_completion = None;
+    task.reopens_on = None;
+    task.checked = false;
+    task.completed_at = None;
+    task.updated_at = Utc::now();
+    repo.upsert_task(&task)?;
+    Ok(())
 }
 
 /// Every task below `id` (children, grandchildren, …), non-deleted.
