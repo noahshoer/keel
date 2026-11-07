@@ -30,7 +30,7 @@ export function ghost(dir: "push" | "pop", doc: Document = document): void {
 }
 
 export function ghostGo(doc: Document = document): void {
-  for (const g of doc.querySelectorAll(".view-ghost:not(.go)")) {
+  for (const g of doc.querySelectorAll(".view-ghost:not(.go):not(.dragging)")) {
     g.classList.add("go");
     g.addEventListener("animationend", () => g.remove());
     setTimeout(() => g.remove(), 1500);

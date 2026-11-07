@@ -15,6 +15,7 @@ import { ShowSubtasksContext, savedShowSubtasks } from "../lists/showSubtasks";
 import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
 import { SearchPane } from "../screens/SearchPane";
+import { installSearchDrag } from "../screens/searchDrag";
 import { clearDrag, installDrawerDrag } from "../shell/drawerDrag";
 import { Sidebar } from "../shell/Sidebar";
 import { applyTheme, savedTheme, type Theme } from "../shell/theme";
@@ -71,6 +72,26 @@ export function App() {
   const openSearchNow = useRef<() => void>(() => {});
   const leaveSearchNow = useRef<() => void>(() => {});
   leaveSearchNow.current = () => setView(beforeSearch.current);
+  // While the Search screen is dragged back: "drag" until the page behind has landed, "cancel" while it is wanted back.
+  const panGhost = useRef<"drag" | "cancel" | null>(null);
+  useEffect(
+    () =>
+      installSearchDrag(document, {
+        isSearch: () => viewNow.current.kind === "search",
+        drawerOpen: () => drawerNow.current,
+        leave: () => {
+          panGhost.current = "drag";
+          setView(beforeSearch.current);
+        },
+        cancel: () => {
+          panGhost.current = "cancel";
+          // Search was never left on screen: when it lands again it doesn't slide in.
+          if (landedView.current?.kind !== "search") renamedTo.current = { kind: "search" };
+          setView({ kind: "search" });
+        },
+      }),
+    [],
+  );
   useEffect(
     () =>
       installDrawerDrag(document, {
@@ -88,7 +109,9 @@ export function App() {
           openSearchNow.current();
           return;
         }
-        if (!drawerNow.current && searchBackSwipe(s, onSearch)) {
+        // With motion, the Search screen follows the finger back (screens/searchDrag.ts); this is its reduced-motion form.
+        const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        if (reduced && !drawerNow.current && searchBackSwipe(s, onSearch)) {
           leaveSearchNow.current();
           return;
         }
@@ -133,7 +156,7 @@ export function App() {
     requested.current = view;
     closingFor.current = view;
     const motion = viewMotion(before, view);
-    if (motion !== "fade") ghost(motion);
+    if (motion !== "fade" && panGhost.current === null) ghost(motion);
   }, [view]);
 
   // Each time a different view's data lands, the page fades in again
@@ -154,6 +177,15 @@ export function App() {
   };
   useEffect(() => {
     const landed = loaded?.view ?? null;
+    if (landed !== null) {
+      // A dragged Search screen: its copy goes once the page it is wanted back as has landed.
+      if (panGhost.current === "cancel" && landed.kind === "search") {
+        panGhost.current = null;
+        requestAnimationFrame(() => {
+          for (const g of document.querySelectorAll(".view-ghost")) g.remove();
+        });
+      } else if (panGhost.current === "drag" && landed.kind !== "search") panGhost.current = null;
+    }
     if (error !== null || landed !== null) {
       const target = closingFor.current;
       if (target !== null && (error !== null || (landed !== null && sameView(target, landed)))) {
