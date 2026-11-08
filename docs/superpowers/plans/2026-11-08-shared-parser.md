@@ -118,6 +118,7 @@ Pure move; no behavior change. The quick-add and editor tests are the proof.
   - `pub fn keep_as_text(v: &EditorValues, names: &[String], projects, sections, today) -> EditorValues` — adds the spans of those typed names (`#name` or `@name`, case-insensitive) to `v.plain`. wasm `keepAsText`.
   - `AddPlan.project: Option<String>` — the new project to create first.
   - `pub fn task_with_project(task: Action, project_id: Id) -> Action` — a `TaskAdd` with its project set and section cleared; other actions unchanged. wasm `taskWithProject`.
+  - `pub fn with_project(v: &EditorValues, project_id: Id) -> EditorValues` — the values moved to a just-created project (section cleared); the task view uses it on `applyTitle`'s result before `saveEdit`. wasm `withProject`.
 
 - [ ] **Step 1: Write the failing tests:**
   - `new_names_lists_typed_projects_and_labels`: known project Work, known label `home`; title `"Buy ink #wrok @errands @Home @office"` → `NewNames { projects: ["wrok"], labels: ["errands", "office"] }`.
@@ -127,6 +128,7 @@ Pure move; no behavior change. The quick-add and editor tests are the proof.
   - `kept_name_after_multibyte_text`: title `"café @office"`, `keep_as_text(["office"])` → `plain == [(6, 13)]` (byte offsets after the 5-byte "café ").
   - `add_plan_names_the_new_project`: title `"Buy ink #wrok"` → `AddPlan.project == Some("wrok")`, task's project is the card's.
   - `task_with_project_moves_the_add`: `task_with_project(TaskAdd{project_id:"P-IN", section_id:Some("S")..}, "P-NEW")` → project `P-NEW`, section `None`.
+  - `retyped_title_with_new_project`: editing a task in P-HOME, retyped title `"Buy ink #wrok"` → `new_names` lists `wrok`; `apply_title` keeps project P-HOME; `with_project(after, "P-NEW")` then `edit_plan` → `moved == Some(TaskMove{project_id:"P-NEW", section_id: None})`, content `"Buy ink"`.
 - [ ] **Step 2: Run** `cargo test -p keel-core editor` → FAIL.
 - [ ] **Step 3: Implement** the interfaces above; add the wasm exports in `core-wasm/src/lib.rs` following `addPlan`'s pattern; add the wrappers in `web/src/core/index.ts`; pass `labels` at every `editorView` call (the add card, sub-task card, task view already hold `labels`).
 - [ ] **Step 4: Run** `cargo test`, `scripts/check-bindings.sh`, `cd web && pnpm check` → PASS.
@@ -275,8 +277,8 @@ Pure move; no behavior change. The quick-add and editor tests are the proof.
 
 **Files:**
 - Create: `web/src/editor/NewNamesPrompt.tsx`, `web/src/editor/newNames.ts` (+ `newNames.test.ts`)
-- Modify: `web/src/editor/AddTask.tsx`, `web/src/taskview/SubtaskCard.tsx`, `web/src/editor/save.ts` (+ `save.test.ts`), `web/src/ipc/actions.ts`, `web/src/ipc/mock.ts`, `web/src/styles/app.css`
-- Test: `newNames.test.ts`, `save.test.ts`, `AddTask.test.tsx`
+- Modify: `web/src/editor/AddTask.tsx`, `web/src/taskview/SubtaskCard.tsx`, `web/src/taskview/TaskView.tsx`, `web/src/editor/save.ts` (+ `save.test.ts`), `web/src/ipc/actions.ts`, `web/src/ipc/mock.ts`, `web/src/styles/app.css`
+- Test: `newNames.test.ts`, `save.test.ts`, `AddTask.test.tsx`, the task view's tests
 
 **Interfaces:**
 - Consumes: `newNames`, `keepAsText`, `addPlan`, `taskWithProject` (Task 4).
@@ -289,8 +291,9 @@ Pure move; no behavior change. The quick-add and editor tests are the proof.
   - `newNames.test.ts`: `groupState({a:true,b:false}) === "some"`; `toggleGroup({a:true,b:false})` → both true; `toggleGroup({a:true,b:true})` → both false; `unticked` lists `office` for `{labels:{errands:true, office:false}}`; `countText({errands:true, office:false}) === "1 of 2"`.
   - `save.test.ts`: a title with `#wrok` sends `project_add` "wrok" before `task_add`, and the task's `project_id` is the new id.
   - `AddTask.test.tsx`: submitting "Buy ink #wrok @errands" shows "Create these with the task?" with both groups ticked; "Back to editing" returns to the card with the title intact; unticking `@errands` and "Save" adds a task titled "Buy ink @errands" with no label and creates project "wrok"; a title with no new names saves straight away with no prompt.
-- [ ] **Step 2: Run** `cd web && pnpm vitest run newNames save AddTask` → FAIL.
-- [ ] **Step 3: Implement**. On save: `newNames(v, …)`; empty → save as today; else show the prompt; "Save" runs `keepAsText(v, unticked)` then `addFromEditor`. Same flow in `SubtaskCard`'s add.
+  - Task view: retyping a task's title to "Buy ink #wrok @errands" and leaving the field shows the prompt; "Save" creates project "wrok" and label "errands", moves the task to "wrok" and saves the title "Buy ink"; "Back to editing" keeps the typed title and saves nothing.
+- [ ] **Step 2: Run** `cd web && pnpm vitest run newNames save AddTask TaskView` → FAIL.
+- [ ] **Step 3: Implement**. On save: `newNames(v, …)`; empty → save as today; else show the prompt; "Save" runs `keepAsText(v, unticked)` then `addFromEditor`. Same flow in `SubtaskCard`'s add. In `TaskView`, `saveDrafts` checks `newNames` on the retyped title before `applyTitle`, and shows the prompt through the same pending path the streak-reset question uses (`setPendingMove`); "Save" applies `keepAsText`, creates the ticked project (`addProjectGetId`) and labels, applies `withProject` when a project was created, then saves as today.
 - [ ] **Step 4: Run** `cd web && pnpm check` → PASS.
 - [ ] **Step 5: Commit** `feat(web): confirm new projects and labels when saving a task`
 
