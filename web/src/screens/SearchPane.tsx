@@ -2,10 +2,10 @@
 // completed ones when "Show completed" is on). Results load here rather than
 // in the app-wide loader, so typing doesn't reload everything
 // (crates/ui/src/search.rs).
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Loaded } from "../app/load";
-import type { SearchResults, Task } from "../bindings";
-import { progress } from "../core";
+import type { SearchResults, SearchScope, Task } from "../bindings";
+import { filterReading, progress } from "../core";
 import { invoke } from "../ipc/invoke";
 import { CompletedRow } from "../lists/CompletedRow";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
@@ -18,6 +18,8 @@ type Found = { query: string; results: SearchResults | null; error: string | nul
 export function SearchPane({
   query,
   setQuery,
+  scope,
+  setScope,
   today,
   showCompleted,
   loaded,
@@ -26,6 +28,9 @@ export function SearchPane({
 }: {
   query: string;
   setQuery: (q: string) => void;
+  /** The project or label the search stays inside, if any. */
+  scope: SearchScope | null;
+  setScope: (s: SearchScope | null) => void;
   today: string;
   showCompleted: boolean;
   loaded: Loaded;
@@ -35,11 +40,14 @@ export function SearchPane({
   const wide = useWideLayout();
   const [found, setFound] = useState<Found>({ query: "", results: null, error: null });
   const latest = useRef(0);
+  // A project or label that's gone leaves nothing to stay inside.
+  const scopeName = scopeLabel(scope, loaded);
+  const live = scopeName === null ? null : scope;
   useEffect(() => {
     void reloadKey;
     const mine = ++latest.current;
     if (!query.trim()) return;
-    invoke("search", { query }).then(
+    invoke("search", { query, scope: live }).then(
       (results) => {
         if (latest.current === mine) setFound({ query, results, error: null });
       },
@@ -47,8 +55,14 @@ export function SearchPane({
         if (latest.current === mine) setFound({ query, results: null, error: String(e) });
       },
     );
-  }, [query, reloadKey]);
+  }, [query, live, reloadKey]);
 
+  // keel-core's reading of the query: when it isn't a filter, the backend searches its words instead.
+  const { projects, sections, labels } = loaded;
+  const problem = useMemo(
+    () => (query.trim() === "" ? null : filterReading(query, today, projects, sections, labels).problem),
+    [query, today, projects, sections, labels],
+  );
   const locations = locationsOf(
     [...(found.results?.open ?? []), ...(found.results?.completed ?? [])],
     loaded.projects,
@@ -173,7 +187,38 @@ export function SearchPane({
           ) : null}
         </div>
       )}
+      {scopeName !== null ? (
+        <div className="search-scope">
+          <span className="muted">Searching in</span>
+          <button
+            type="button"
+            className="scope-chip"
+            title="Search everything"
+            aria-label={`Searching in ${scopeName}. Remove to search everything`}
+            onClick={() => setScope(null)}
+          >
+            {scopeName}
+            <XSmallIcon />
+          </button>
+        </div>
+      ) : null}
+      {problem !== null ? (
+        <p
+          className="view-sub search-problem"
+          role="status"
+        >{`Searching for the words, not as a filter: ${problem}`}</p>
+      ) : null}
       {results}
     </>
   );
+}
+
+/** The chip's text (“#Home”, “@errand”), or null when there's no scope or what it names is gone. */
+function scopeLabel(scope: SearchScope | null, loaded: Loaded): string | null {
+  if (scope === null) return null;
+  if (scope.kind === "project") {
+    const p = loaded.projects.find((x) => x.id === scope.id);
+    return p === undefined ? null : `#${p.name}`;
+  }
+  return `@${scope.name}`;
 }

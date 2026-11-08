@@ -109,7 +109,7 @@ async fn dispatch(args: DispatchArgs, app: tauri::AppHandle, state: tauri::State
 
 #[tauri::command(rename_all = "snake_case")]
 fn search(args: SearchArgs, state: tauri::State<'_, AppService>) -> Result<SearchResults, String> {
-    state.search(&args.query).map_err(|e| e.to_string())
+    state.search(&args.query, args.scope.as_ref()).map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]

@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use keel_core::commands::{Action, Command};
 use keel_core::model::{Due, Priority};
+use keel_core::search::SearchScope;
 use keel_service::AppService;
 
 fn today() -> NaiveDate {
@@ -48,6 +49,34 @@ impl F {
         self.svc.dispatch_at(cmd, today()).unwrap().id_mapping["t"].to_string()
     }
 
+    fn run(&mut self, action: Action) -> String {
+        self.n += 1;
+        let cmd = Command { uuid: format!("u{}", self.n), temp_id: Some("x".into()), action };
+        self.svc.dispatch_at(cmd, today()).unwrap().id_mapping.get("x").map(|i| i.to_string()).unwrap_or_default()
+    }
+
+    /// A task in `project` (or the Inbox) carrying `labels`.
+    fn add_in(&mut self, name: &str, project: Option<&str>, labels: &[&str], due: Option<&str>, priority: Priority) -> String {
+        let id = self.add(name, "", due, priority);
+        if let Some(p) = project {
+            self.run(Action::TaskMove { id: id.clone().into(), project_id: p.into(), section_id: None });
+        }
+        if !labels.is_empty() {
+            self.run(Action::TaskUpdate {
+                id: id.clone().into(),
+                content: None,
+                description: None,
+                priority: None,
+                project_id: None,
+                labels: Some(labels.iter().map(|l| l.to_string()).collect()),
+                due: None,
+                is_collapsed: None,
+                deadline: None,
+            });
+        }
+        id
+    }
+
     fn complete(&mut self, id: &str) {
         self.n += 1;
         let cmd = Command {
@@ -71,7 +100,7 @@ fn title_matches_first_then_due_then_priority() {
     f.add("Buy milk", "", Some("2026-10-20"), Priority::None);
     f.add("Milk the goat", "", None, Priority::P1);
     f.add("Bread", "", Some("2026-10-19"), Priority::None);
-    let r = f.svc.search_at("milk", today()).unwrap();
+    let r = f.svc.search_at("milk", None, today()).unwrap();
     assert_eq!(names(&r.open), vec!["Buy milk", "Milk run later", "Milk the goat", "Groceries"]);
     assert!(r.completed.is_empty());
 }
@@ -82,8 +111,78 @@ fn completed_matches_are_separate_and_empty_query_finds_nothing() {
     let done = f.add("Call the bank", "", None, Priority::None);
     f.add("Bank statement", "", None, Priority::None);
     f.complete(&done);
-    let r = f.svc.search_at("bank", today()).unwrap();
+    let r = f.svc.search_at("bank", None, today()).unwrap();
     assert_eq!(names(&r.open), vec!["Bank statement"]);
     assert_eq!(names(&r.completed), vec!["Call the bank"]);
-    assert_eq!(f.svc.search_at("   ", today()).unwrap(), Default::default());
+    assert_eq!(f.svc.search_at("   ", None, today()).unwrap(), Default::default());
+}
+
+#[test]
+fn filter_terms_narrow_the_search() {
+    let mut f = F::new();
+    f.run(Action::LabelAdd { name: "errands".into() });
+    f.add_in("Buy milk", None, &["errands"], Some("2026-10-19"), Priority::P1);
+    f.add_in("Buy bread", None, &["errands"], Some("2026-10-25"), Priority::None);
+    f.add_in("Buy stamps", None, &[], Some("2026-10-19"), Priority::None);
+    let open = |f: &F, q: &str| names(&f.svc.search_at(q, None, today()).unwrap().open).iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    assert_eq!(open(&f, "buy & @errands & today"), vec!["Buy milk"]);
+    assert_eq!(open(&f, "buy p1"), vec!["Buy milk"], "words are ANDed, as in filters");
+    assert_eq!(open(&f, "buy & !@errands"), vec!["Buy stamps"]);
+    assert_eq!(open(&f, "bread | stamps").len(), 2);
+}
+
+#[test]
+fn a_query_that_does_not_parse_searches_as_text() {
+    let mut f = F::new();
+    f.add("Plan p1 & beyond", "", None, Priority::None);
+    f.add("Other", "", None, Priority::None);
+    // "p1 &" is not a filter (the & has nothing after it), so it is read as words.
+    let r = f.svc.search_at("p1 &", None, today()).unwrap();
+    assert_eq!(names(&r.open), vec!["Plan p1 & beyond"]);
+}
+
+#[test]
+fn comma_groups_are_one_list() {
+    let mut f = F::new();
+    f.add("Alpha", "", Some("2026-10-19"), Priority::None);
+    f.add("Beta", "", None, Priority::P1);
+    f.add("Gamma", "", None, Priority::None);
+    let r = f.svc.search_at("today, p1", None, today()).unwrap();
+    assert_eq!(names(&r.open), vec!["Alpha", "Beta"]);
+}
+
+#[test]
+fn filters_apply_to_completed_tasks_too() {
+    let mut f = F::new();
+    let done = f.add("Call the bank", "", None, Priority::P1);
+    let other = f.add("Call the vet", "", None, Priority::None);
+    f.complete(&done);
+    f.complete(&other);
+    let r = f.svc.search_at("call p1", None, today()).unwrap();
+    assert_eq!(names(&r.completed), vec!["Call the bank"]);
+}
+
+#[test]
+fn a_project_scope_limits_every_group() {
+    let mut f = F::new();
+    let home = f.run(Action::ProjectAdd { name: "Home".into() });
+    f.run(Action::ProjectAdd { name: "Work".into() });
+    f.add_in("Fix sink", Some(&home), &[], None, Priority::None);
+    f.add_in("Fix report", None, &[], None, Priority::None);
+    let scope = SearchScope::Project { id: home.clone().into() };
+    let r = f.svc.search_at("fix", Some(&scope), today()).unwrap();
+    assert_eq!(names(&r.open), vec!["Fix sink"]);
+    let both = f.svc.search_at("sink, report", Some(&scope), today()).unwrap();
+    assert_eq!(names(&both.open), vec!["Fix sink"], "the scope holds for each comma group");
+}
+
+#[test]
+fn a_label_scope_limits_the_search() {
+    let mut f = F::new();
+    f.run(Action::LabelAdd { name: "Errands".into() });
+    f.add_in("Buy milk", None, &["Errands"], None, Priority::None);
+    f.add_in("Buy desk", None, &[], None, Priority::None);
+    let scope = SearchScope::Label { name: "errands".into() };
+    let r = f.svc.search_at("buy", Some(&scope), today()).unwrap();
+    assert_eq!(names(&r.open), vec!["Buy milk"], "label names match without regard to case");
 }

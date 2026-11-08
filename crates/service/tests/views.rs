@@ -246,7 +246,7 @@ fn search_still_finds_subtasks() {
     let inbox = f.inbox.clone();
     let parent = f.task("Pack", &inbox, None, Priority::None);
     f.subtask("Chargers", &parent, None);
-    assert_eq!(names(f.svc.search_at("Chargers", today()).unwrap().open), vec!["Chargers"]);
+    assert_eq!(names(f.svc.search_at("Chargers", None, today()).unwrap().open), vec!["Chargers"]);
 }
 
 #[test]

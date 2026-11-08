@@ -282,12 +282,21 @@ const handlers: Handlers = {
     if (id !== null && cmd.temp_id != null) id_mapping[cmd.temp_id] = id;
     return { id_mapping, auto_completed: [] };
   },
-  search: async ({ query }) => {
+  search: async ({ query, scope }) => {
     const ids = fx.searchResults[query.trim()] ?? {
       open: fx.viewIds.searchOpen,
       completed: fx.viewIds.searchCompleted,
     };
-    return { open: openById(ids.open), completed: byId(ids.completed).filter(live) };
+    // Canned results, narrowed to the scope so the preview shows the chip working.
+    const inScope = (t: Task) =>
+      scope == null ||
+      (scope.kind === "project"
+        ? t.project_id === scope.id
+        : t.labels.some((l) => l.toLowerCase() === scope.name.toLowerCase()));
+    return {
+      open: openById(ids.open).filter(inScope),
+      completed: byId(ids.completed).filter(live).filter(inScope),
+    };
   },
   list_reminders: async () => alive(state.reminders),
   import_todoist_csv: async ({ project_name }) => ({

@@ -80,6 +80,9 @@ pub struct DispatchArgs {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct SearchArgs {
     pub query: String,
+    /// The page Search was opened from, when the results should stay in it.
+    #[serde(default)]
+    pub scope: Option<keel_core::search::SearchScope>,
 }
 
 #[derive(Debug, Deserialize)]

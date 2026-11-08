@@ -68,6 +68,7 @@ export type * from "./ReminderType";
 export type * from "./RepeatReading";
 export type * from "./SearchArgs";
 export type * from "./SearchResults";
+export type * from "./SearchScope";
 export type * from "./Section";
 export type * from "./SetDiagEnabledArgs";
 export type * from "./SetReminderSettingsArgs";
