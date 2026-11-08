@@ -22,7 +22,7 @@ use crate::model::{Label, Priority, Project, Section, Task};
 use crate::phrases::{
     closest,
     match_date, match_deadline, match_name, match_priority, match_repeat, match_time, repeat_matches, sigil_name, tokens,
-    unread_every, RepeatSpec, Token as Word,
+    unknown_name, unread_every, RepeatSpec, Token as Word,
 };
 use crate::quickadd::{Span, SpanKind};
 use crate::views::{due_date_of, due_time, occurs_after, occurs_in, occurs_on};
@@ -341,7 +341,8 @@ fn keyword(t: &[Word], i: usize) -> Option<(usize, Term)> {
 }
 
 /// A `#` / `##`, `/` or `@` name at word `i`: the longest known name, else
-/// the one word (a name that matches nothing).
+/// a name that matches nothing: the run of words nearest a known name, or
+/// the one word.
 fn name_at(t: &[Word], i: usize, names: &FilterNames) -> Option<(usize, Term, SpanKind)> {
     let raw = t[i].raw.as_str();
     let (sigil, list, kind) = match raw.chars().next()? {
@@ -359,8 +360,12 @@ fn name_at(t: &[Word], i: usize, names: &FilterNames) -> Option<(usize, Term, Sp
     if let Some((n, pos)) = match_name(t, i, sigil, &known) {
         return Some((n, make(list[pos].to_lowercase()), kind));
     }
-    let name = if sigil == "#" { sigil_name(raw, "##").or_else(|| sigil_name(raw, "#")) } else { sigil_name(raw, sigil) };
-    name.map(|n| (1, make(n.to_lowercase()), kind))
+    // `##name` counts as `#name`; the name needs a letter.
+    let strip = if sigil == "#" && sigil_name(raw, "##").is_some() { "##" } else { sigil };
+    sigil_name(raw, strip)?;
+    // An unknown name runs as far as the words nearest a known name ("/Nxt Up").
+    let (n, name) = unknown_name(t, i, &raw[strip.len()..], &known);
+    Some((n, make(name.to_lowercase()), kind))
 }
 
 /// A bare date phrase: today and tomorrow keep their own terms.
@@ -858,14 +863,45 @@ mod tests {
 
     #[test]
     fn unknown_section_and_label_messages() {
-        // An unknown name is one word (a known one may have several).
-        let r = read_with("/Nxt Up");
+        // An unknown name with no close known name is its first word only.
+        let r = read_with("/Nxt Zzzzzz");
         assert_eq!(r.problem.as_deref(), Some("No section named “Nxt”."));
         assert_eq!(r.fix, None);
         let r = read_with("today & @hom");
         assert_eq!(r.problem.as_deref(), Some("No label named “hom”."));
         assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("today & @home"));
         assert_eq!(read_with("@zzzzzz").fix, None);
+    }
+
+    #[test]
+    fn unknown_multi_word_name_reads_as_its_closest_run() {
+        // "Nxt Up" is one edit from "Next Up": the whole run is the term.
+        let r = read_with("/Nxt Up & today");
+        let bad: Vec<_> = r.segments.iter().filter(|s| s.unknown).map(|s| s.text.as_str()).collect();
+        assert_eq!(bad, ["/Nxt Up"]);
+        assert_eq!(r.problem.as_deref(), Some("No section named “Nxt Up”."));
+        assert_eq!(r.fix, Some(FilterFix { label: "Use /Next Up".into(), query: "/Next Up & today".into() }));
+        let today = d(2026, 10, 19);
+        let base = [crate::model::Project::new("Home Base")];
+        assert_eq!(read("#Hme Base", today, &base, &[], &[]).fix.map(|f| f.query).as_deref(), Some("#Home Base"));
+        // The single word is closer than "wrok stuff": only it is replaced.
+        let r = read_with("#wrok stuff");
+        assert_eq!(r.problem.as_deref(), Some("No project named “wrok”."));
+        assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("#Work stuff"));
+        // No close name for any run: the first word only, as before.
+        let r = read_with("#zzz qqq");
+        assert_eq!(r.problem.as_deref(), Some("No project named “zzz”."));
+        assert_eq!(r.fix, None);
+        let bad: Vec<_> = r.segments.iter().filter(|s| s.unknown).map(|s| s.text.as_str()).collect();
+        assert_eq!(bad, ["#zzz"]);
+    }
+
+    #[test]
+    fn unknown_multi_word_name_parses_as_one_term() {
+        assert_eq!(one("/Nxt Up"), term(Term::Section("nxt up".into())));
+        assert_eq!(one("/Nxt Up & today"), and(term(Term::Section("nxt up".into())), term(Term::Today)));
+        // Without a close name, the rest stays text.
+        assert_eq!(one("#zzz qqq"), and(term(Term::Project("zzz".into())), term(Term::Text("qqq".into()))));
     }
 
     #[test]

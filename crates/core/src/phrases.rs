@@ -506,13 +506,8 @@ pub(crate) fn match_repeat(t: &[Token], i: usize) -> Option<(usize, RepeatSpec)>
 pub(crate) fn match_name(t: &[Token], i: usize, sigil: &str, names: &[&str]) -> Option<(usize, usize)> {
     let first = t[i].raw.strip_prefix(sigil)?;
     let first = first.strip_prefix(sigil).unwrap_or(first); // "##Work"
-    for len in (1..=(t.len() - i).min(6)).rev() {
-        let mut text = first.to_string();
-        for tok in &t[i + 1..i + len] {
-            text.push(' ');
-            text.push_str(&tok.raw);
-        }
-        let text = text.trim_end_matches([',', '.', ';', '!', '?']).to_lowercase();
+    for len in (1..=(t.len() - i).min(MAX_NAME_WORDS)).rev() {
+        let text = run_text(first, &t[i + 1..i + len]).to_lowercase();
         if text.is_empty() {
             continue;
         }
@@ -523,9 +518,44 @@ pub(crate) fn match_name(t: &[Token], i: usize, sigil: &str, names: &[&str]) -> 
     None
 }
 
+/// The most words a name can have.
+const MAX_NAME_WORDS: usize = 6;
+
+/// `first` and the words of `rest`, one space apart, trailing `,.;!?` trimmed.
+fn run_text(first: &str, rest: &[Token]) -> String {
+    let mut text = first.to_string();
+    for tok in rest {
+        text.push(' ');
+        text.push_str(&tok.raw);
+    }
+    text.trim_end_matches([',', '.', ';', '!', '?']).to_string()
+}
+
+/// For a name whose first word is `first` (sigil stripped) at word `i`
+/// that matches nothing: the unknown name's words, 1 to 6, and its text. The
+/// run whose text has a [`closest`] name nearest wins (ties go to the longer
+/// run); with no close name for any run it is the one word.
+pub(crate) fn unknown_name(t: &[Token], i: usize, first: &str, names: &[&str]) -> (usize, String) {
+    let mut best: Option<(usize, usize, String)> = None; // (distance, len, text)
+    for len in 1..=(t.len() - i).min(MAX_NAME_WORDS) {
+        let text = run_text(first, &t[i + 1..i + len]);
+        if let Some((d, _)) = closest_by(&text, names) {
+            if best.as_ref().is_none_or(|(b, _, _)| d <= *b) {
+                best = Some((d, len, text));
+            }
+        }
+    }
+    best.map_or_else(|| (1, first.to_string()), |(_, len, text)| (len, text))
+}
+
 /// The name nearest `name`, ignoring case: within two edits and a third of
 /// its length (rounded up); ties go to the first.
 pub(crate) fn closest<'a>(name: &str, names: &[&'a str]) -> Option<&'a str> {
+    closest_by(name, names).map(|(_, n)| n)
+}
+
+/// [`closest`] with its edit distance.
+fn closest_by<'a>(name: &str, names: &[&'a str]) -> Option<(usize, &'a str)> {
     let want = name.to_lowercase();
     let limit = 2.min(want.chars().count().div_ceil(3));
     let mut best: Option<(usize, &'a str)> = None;
@@ -535,7 +565,7 @@ pub(crate) fn closest<'a>(name: &str, names: &[&'a str]) -> Option<&'a str> {
             best = Some((d, n));
         }
     }
-    best.map(|(_, n)| n)
+    best
 }
 
 fn edit_distance(a: &str, b: &str) -> usize {
