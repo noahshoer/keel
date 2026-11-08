@@ -480,26 +480,21 @@ pub fn due_date_of(task: &Task) -> Option<NaiveDate> {
 /// Whether the task has an occurrence `d` with `from <= d < to`. Its next date
 /// always counts (even when moved off the rule); a repeating task then also
 /// occurs on every later date the rule contains, up to its end (inclusive).
-/// An undated task has none. The walk stops at `to` or the end.
+/// An undated task has none.
 pub fn occurs_in(task: &Task, from: NaiveDate, to: NaiveDate) -> bool {
     let Some(first) = due_date_of(task) else { return false };
+    if first >= from {
+        return first < to;
+    }
     let due = task.due.as_ref();
+    let Some(rule) = due.and_then(|d| d.recurrence.as_ref()) else { return false };
     let until = due
         .and_then(|d| d.until.as_deref())
         .and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok());
-    let rule = due.and_then(|d| d.recurrence.as_ref());
-    let mut day = first;
-    while day < to {
-        if day >= from {
-            return true;
-        }
-        let Some(rule) = rule else { return false };
-        day = rule.next_after(day);
-        if until.is_some_and(|u| day > u) {
-            return false;
-        }
-    }
-    false
+    // The first date the rule contains on or after `from` (every later
+    // occurrence is a date the rule contains), without walking up to it.
+    let day = rule.next_after(from - chrono::Duration::days(1));
+    day < to && until.is_none_or(|u| day <= u)
 }
 
 /// Whether the task has an occurrence on `day`.
@@ -1690,6 +1685,18 @@ mod occurrence_tests {
         assert!(!occurs_on(&t, d(11, 17)));
         assert!(!occurs_in(&t, d(11, 10), d(11, 16)));
         assert!(occurs_in(&t, d(11, 10), d(11, 17)));
+    }
+
+    #[test]
+    fn old_daily_task_occurs_years_later() {
+        let t = task("2020-01-01", Some(Recurrence::Daily), None, None);
+        assert!(occurs_on(&t, d(11, 8)));
+        assert!(occurs_in(&t, d(11, 8), d(11, 9)));
+        let weekly = task("2020-01-06", Some(Recurrence::Weekly(vec![0])), None, None);
+        assert!(occurs_on(&weekly, d(11, 9)));
+        assert!(!occurs_on(&weekly, d(11, 10)));
+        let ended = task("2020-01-01", Some(Recurrence::Daily), Some("2025-12-31"), None);
+        assert!(!occurs_on(&ended, d(11, 8)));
     }
 
     #[test]

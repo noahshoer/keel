@@ -660,9 +660,11 @@ pub fn read(query: &str, today: NaiveDate, projects: &[Project], sections: &[Sec
                     Some(SpanKind::Section) => ("section", &names.sections),
                     _ => ("label", &names.labels),
                 };
-                let name = s.text.trim_start_matches(['#', '/', '@']);
-                let sigil = &s.text[..s.text.len() - name.len()];
-                if name.is_empty() || pool.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+                let Some(name) = crate::phrases::phrase_name(&s.text) else { continue };
+                let name = name.as_str();
+                let rest = s.text.trim_start_matches(['#', '/', '@']);
+                let sigil = &s.text[..s.text.len() - rest.len()];
+                if pool.iter().any(|n| crate::phrases::same_name(n, name)) {
                     continue;
                 }
                 s.unknown = true;
@@ -671,7 +673,7 @@ pub fn read(query: &str, today: NaiveDate, projects: &[Project], sections: &[Sec
                     let refs: Vec<&str> = pool.iter().map(String::as_str).collect();
                     if let Some(near) = closest(name, &refs) {
                         let mut q = query.to_string();
-                        q.replace_range(*start..*start + s.text.len(), &format!("{sigil}{near}"));
+                        q.replace_range(*start..*start + sigil.len() + name.len(), &format!("{sigil}{near}"));
                         fix = Some(FilterFix { label: format!("Use {sigil}{near}"), query: q });
                     }
                 }
@@ -777,6 +779,17 @@ mod tests {
         assert_eq!(bad, ["#wrok"]);
         assert_eq!(r.problem.as_deref(), Some("No project named “wrok”."));
         assert_eq!(r.fix, Some(FilterFix { label: "Use #Work".into(), query: "printer ink & today & #Work".into() }));
+    }
+
+    #[test]
+    fn known_name_with_punctuation_is_fine() {
+        let r = read_with("#Work. & today");
+        assert!(r.segments.iter().all(|s| !s.unknown));
+        assert_eq!(r.problem, None);
+        // The fix keeps the punctuation after the name.
+        let r = read_with("#wrok. & today");
+        assert_eq!(r.problem.as_deref(), Some("No project named “wrok”."));
+        assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("#Work. & today"));
     }
 
     #[test]

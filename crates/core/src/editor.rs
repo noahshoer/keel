@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::commands::{Action, DueEdit};
 use crate::ids::Id;
 use crate::model::{Due, Label, Priority, Project, Reminder, ReminderType, Section, Task};
+use crate::phrases::{phrase_name, same_name};
 use crate::quickadd::{self, QuickAdd, Span, SpanKind};
 use crate::recurrence::{self, Recurrence};
 use crate::reminders::offset_text;
@@ -986,10 +987,13 @@ pub fn editor_view(
     }
     let new_project = qa.as_ref().and_then(|q| q.new_project.clone());
     for s in &mut segments {
-        let name = s.text.get(1..).unwrap_or("");
+        let Some(name) = phrase_name(&s.text) else { continue };
         s.is_new = match s.kind {
-            Some(SpanKind::Project) => new_project.as_deref().is_some_and(|p| p.eq_ignore_ascii_case(name)),
-            Some(SpanKind::Label) => !labels.iter().any(|l| l.name.eq_ignore_ascii_case(name)),
+            Some(SpanKind::Project) => new_project.as_deref().is_some_and(|p| same_name(p, &name)),
+            // A picked label is created with the task, not asked about.
+            Some(SpanKind::Label) => {
+                !labels.iter().any(|l| same_name(&l.name, &name)) && !v.labels.iter().any(|n| same_name(n, &name))
+            }
             _ => false,
         };
     }
@@ -1028,9 +1032,9 @@ pub fn editor_view(
 fn typed_new_labels(qa: &QuickAdd, v: &EditorValues, labels: &[Label]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for name in &qa.labels {
-        let known = labels.iter().any(|l| l.name.eq_ignore_ascii_case(name));
-        let picked = v.labels.iter().any(|n| n.eq_ignore_ascii_case(name));
-        if !known && !picked && !out.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+        let known = labels.iter().any(|l| same_name(&l.name, name));
+        let picked = v.labels.iter().any(|n| same_name(n, name));
+        if !known && !picked && !out.iter().any(|n| same_name(n, name)) {
             out.push(name.clone());
         }
     }
@@ -1053,22 +1057,34 @@ pub fn new_names(v: &EditorValues, projects: &[Project], sections: &[Section], l
 
 /// `v` with the typed `#name` phrases for `names.projects` and `@name`
 /// phrases for `names.labels` (any case) left as plain text in the title.
-/// Each list only touches its own kind of phrase.
+/// Each list only touches its own kind of phrase. A `#` or `@` phrase that
+/// only reads once those are text (a later `#name`, now the first) stays
+/// text too: keeping a name never applies one the title didn't before.
 pub fn keep_as_text(v: &EditorValues, names: &NewNames, projects: &[Project], sections: &[Section], today: NaiveDate) -> EditorValues {
-    let qa = parse_title(v, projects, sections, today);
+    let named = |s: &Span| matches!(s.kind, SpanKind::Project | SpanKind::Label);
+    let applied: Vec<Span> = parse_title(v, projects, sections, today).spans.into_iter().filter(named).collect();
+    let before: Vec<(usize, usize)> = applied.iter().map(|s| (s.start, s.end)).collect();
     let mut v = v.clone();
-    for s in &qa.spans {
-        let list = match s.kind {
-            SpanKind::Project => &names.projects,
-            SpanKind::Label => &names.labels,
-            _ => continue,
-        };
-        let Some(name) = v.content.get(s.start..s.end).and_then(|t| t.get(1..)) else { continue };
-        if list.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+    for s in &applied {
+        let list = if s.kind == SpanKind::Project { &names.projects } else { &names.labels };
+        let name = v.content.get(s.start..s.end).and_then(phrase_name);
+        if name.is_some_and(|name| list.iter().any(|n| same_name(n, &name))) {
             v.plain.push((s.start, s.end));
         }
     }
-    v
+    // Each pass plains at least one new range, so this ends.
+    loop {
+        let fresh: Vec<(usize, usize)> = parse_title(&v, projects, sections, today)
+            .spans
+            .iter()
+            .filter(|s| named(s) && !before.contains(&(s.start, s.end)) && !v.plain.contains(&(s.start, s.end)))
+            .map(|s| (s.start, s.end))
+            .collect();
+        if fresh.is_empty() {
+            return v;
+        }
+        v.plain.extend(fresh);
+    }
 }
 
 /// `v` moved to a just-created project (its section no longer applies).
@@ -1994,6 +2010,59 @@ mod tests {
         assert_eq!(plan.project, None);
         match plan.task {
             Action::TaskAdd { project_id, content, .. } => assert_eq!((project_id, content.as_str()), (Id::from("P-WORK"), "Buy ink @work")),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn kept_names_ignore_trailing_punctuation() {
+        let (projects, labels) = known();
+        let names = NewNames { projects: vec!["wrok".into()], labels: vec!["errands".into()] };
+        let v = keep_as_text(&typed("Buy ink #wrok, then @errands."), &names, &projects, &[], day30());
+        let plan = add_plan(&v, &projects, &[], &labels, day30());
+        assert_eq!(plan.project, None);
+        assert!(plan.labels.is_empty());
+        match plan.task {
+            Action::TaskAdd { content, .. } => assert_eq!(content, "Buy ink #wrok, then @errands."),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn known_label_with_punctuation_is_not_new() {
+        let (projects, labels) = known();
+        let view = editor_view(&typed("call @home,"), true, None, None, &projects, &[], &labels, day30());
+        let seg = view.segments.iter().find(|s| s.text == "@home,").expect("@home,");
+        assert!(!seg.is_new);
+    }
+
+    #[test]
+    fn picked_typed_label_is_not_new() {
+        let (projects, labels) = known();
+        let mut v = typed("Buy ink @errands");
+        v.labels = vec!["errands".into()];
+        let view = editor_view(&v, true, None, None, &projects, &[], &labels, day30());
+        assert!(view.new_labels.is_empty());
+        assert!(view.segments.iter().all(|s| !s.is_new));
+    }
+
+    #[test]
+    fn kept_project_does_not_promote_the_next() {
+        let (projects, labels) = known();
+        let names = NewNames { projects: vec!["foo".into()], labels: vec![] };
+        let v = keep_as_text(&typed("Buy #foo #bar"), &names, &projects, &[], day30());
+        let plan = add_plan(&v, &projects, &[], &labels, day30());
+        assert_eq!(plan.project, None);
+        match plan.task {
+            Action::TaskAdd { content, .. } => assert_eq!(content, "Buy #foo #bar"),
+            other => panic!("{other:?}"),
+        }
+        // A known project behind it stays text too.
+        let v = keep_as_text(&typed("Buy #foo #work"), &names, &projects, &[], day30());
+        let plan = add_plan(&v, &projects, &[], &labels, day30());
+        assert_eq!(plan.project, None);
+        match plan.task {
+            Action::TaskAdd { content, project_id, .. } => assert_eq!((project_id, content.as_str()), (Id::from("P-IN"), "Buy #foo #work")),
             other => panic!("{other:?}"),
         }
     }

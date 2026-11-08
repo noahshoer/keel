@@ -260,7 +260,11 @@ fn read_date(text: &str, lang: &str, today: NaiveDate) -> DateRead {
         return DateRead::Read(d.format("%Y-%m-%d").to_string(), None);
     }
     let q = quickadd::parse(&format!("x {text}"), today, &[], &[]);
-    let only_a_date = q.content == "x" && q.priority.is_none() && q.labels.is_empty() && q.deadline.is_none();
+    let only_a_date = q.content == "x"
+        && q.priority.is_none()
+        && q.labels.is_empty()
+        && q.deadline.is_none()
+        && q.new_project.is_none();
     match (only_a_date, q.due_string()) {
         (true, Some(due)) => DateRead::Read(due, q.recurrence),
         _ => DateRead::Unknown,
@@ -323,6 +327,12 @@ meta,view_style=list,,,,,,,,,,,,\r\n";
         assert_eq!(trip.comments, vec!["Ask Sam about dates", "Budget: $800"]);
         assert_eq!(trip.deadline, "2026-11-15");
         assert_eq!(items[5], TodoistItem::Section { name: "Someday".into() });
+    }
+
+    #[test]
+    fn a_date_with_a_project_is_not_read() {
+        assert!(matches!(super::read_date("tomorrow #foo", "en", today()), super::DateRead::Unknown));
+        assert!(matches!(super::read_date("tomorrow", "en", today()), super::DateRead::Read(..)));
     }
 
     #[test]

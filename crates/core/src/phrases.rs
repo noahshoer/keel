@@ -525,8 +525,6 @@ pub(crate) fn match_name(t: &[Token], i: usize, sigil: &str, names: &[&str]) -> 
     None
 }
 
-/// Whether a word after `#` or `@` can be a name: it needs a letter ("#123"
-/// and "@1" stay text).
 /// The name nearest `name`, ignoring case: within two edits and a third of
 /// its length (rounded up); ties go to the first.
 pub(crate) fn closest<'a>(name: &str, names: &[&'a str]) -> Option<&'a str> {
@@ -557,6 +555,8 @@ fn edit_distance(a: &str, b: &str) -> usize {
     row[b.len()]
 }
 
+/// Whether a word after `#` or `@` can be a name: it needs a letter ("#123"
+/// and "@1" stay text).
 pub(crate) fn is_name(word: &str) -> bool {
     word.chars().any(|c| c.is_alphabetic())
 }
@@ -566,6 +566,23 @@ pub(crate) fn is_name(word: &str) -> bool {
 pub(crate) fn sigil_name(raw: &str, sigil: &str) -> Option<String> {
     let name = raw.strip_prefix(sigil)?.trim_end_matches([',', '.', ';', '!', '?']);
     is_name(name).then(|| name.to_string())
+}
+
+/// The name a typed `#`, `/` or `@` phrase gives, as the parsers read it:
+/// `##name` counts as `#name`, trailing `,.;!?` trimmed. `None` when the text
+/// isn't such a phrase.
+pub(crate) fn phrase_name(text: &str) -> Option<String> {
+    match text.chars().next()? {
+        '#' => sigil_name(text, "##").or_else(|| sigil_name(text, "#")),
+        '/' => sigil_name(text, "/"),
+        '@' => sigil_name(text, "@"),
+        _ => None,
+    }
+}
+
+/// Whether two names are the same, ignoring case.
+pub(crate) fn same_name(a: &str, b: &str) -> bool {
+    a.to_lowercase() == b.to_lowercase()
 }
 
 /// `p1`–`p4` at word `i` (`p4` is no priority).

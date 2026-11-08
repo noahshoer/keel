@@ -183,7 +183,8 @@ pub fn parse_time(text: &str) -> Option<NaiveTime> {
     }
 }
 
-/// Parses a quick-add title. Unknown projects/sections stay in the title. A
+/// Parses a quick-add title. The first `#name` no project has is taken as a
+/// new project (`new_project`); unknown sections stay in the title. A
 /// phrase on its own is still recognized (`content` is then empty); the
 /// editors won't save until there's a name besides it, as in Todoist.
 pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Section]) -> QuickAdd {
@@ -202,6 +203,7 @@ pub fn parse_repeat(text: &str, today: NaiveDate, start: NaiveDate) -> Option<Qu
             && q.labels.is_empty()
             && q.deadline.is_none()
             && q.project_id.is_none()
+            && q.new_project.is_none()
             && !q.streak;
         only.then_some(q)
     };
@@ -268,7 +270,7 @@ fn parse_tokens(
             }
         }
         if q.project_id.is_none() && q.new_project.is_none() {
-            if let Some(name) = sigil_name(&t[i].raw, "#") {
+            if let Some(name) = sigil_name(&t[i].raw, "##").or_else(|| sigil_name(&t[i].raw, "#")) {
                 q.new_project = Some(name);
                 take(&mut used, &mut spans, i, 1, SpanKind::Project);
                 i += 1;
@@ -672,6 +674,17 @@ mod tests {
         assert_eq!((q.spans[0].start, q.spans[0].end, q.spans[0].kind), (4, 8, SpanKind::Project));
         let q = p("Buy #work #foo");
         assert_eq!((q.project_id, q.new_project, q.content.as_str()), (Some(Id::from("P-WORK")), None, "Buy #foo"));
+    }
+
+    #[test]
+    fn double_hash_new_project() {
+        let q = p("Buy ##foo");
+        assert_eq!((q.new_project.as_deref(), q.content.as_str()), (Some("foo"), "Buy"));
+    }
+
+    #[test]
+    fn repeat_field_rejects_a_project() {
+        assert!(super::parse_repeat("every day #foo", d(2026, 10, 19), d(2026, 10, 19)).is_none());
     }
 
     #[test]
