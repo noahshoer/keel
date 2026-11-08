@@ -842,6 +842,21 @@ mod tests {
     }
 
     #[test]
+    fn bare_and_stacked_sigils_never_slice_past_the_word() {
+        for q in ["@", "#", "##", "@@@hme & today"] {
+            let r = read_with(q);
+            assert_eq!(r.segments.iter().map(|s| s.text.as_str()).collect::<String>(), q);
+            if let Some(f) = &r.fix {
+                assert!(f.query.ends_with(" & today"), "{q:?}: {f:?}");
+            }
+        }
+        // "@@@hme" names "@@hme": too far from "home" for a fix.
+        let r = read_with("@@@hme & today");
+        assert_eq!(r.problem.as_deref(), Some("No label named “@@hme”."));
+        assert_eq!(r.fix, None);
+    }
+
+    #[test]
     fn unknown_section_and_label_messages() {
         // An unknown name is one word (a known one may have several).
         let r = read_with("/Nxt Up");

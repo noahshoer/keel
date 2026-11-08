@@ -39,21 +39,25 @@ export function FilterField({
         onEscape={onEscape}
         onUnhighlight={unhighlight}
       />
-      {problem !== null ? (
-        <div className="filter-problem" id={problemId} aria-live="polite">
-          {problem}
-          {fix !== null ? (
-            <>
-              {" "}
-              <button type="button" className="filter-fix" onClick={() => setQuery(fix.query)}>
-                {fix.label}
-              </button>
-            </>
-          ) : null}
-        </div>
-      ) : (
-        <div className="filter-hint">{FILTER_HINT}</div>
-      )}
+      {/* Always mounted, so the first problem is announced (a live region
+          inserted with its content often isn't read). */}
+      <div aria-live="polite" aria-atomic="true">
+        {problem !== null ? (
+          <div className="filter-problem" id={problemId}>
+            {problem}
+            {fix !== null ? (
+              <>
+                {" "}
+                <button type="button" className="filter-fix" onClick={() => setQuery(fix.query)}>
+                  {fix.label}
+                </button>
+              </>
+            ) : null}
+          </div>
+        ) : (
+          <div className="filter-hint">{FILTER_HINT}</div>
+        )}
+      </div>
     </>
   );
 }

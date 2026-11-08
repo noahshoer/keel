@@ -499,10 +499,17 @@ it("the filter field's problem is announced and tied to the field", async () => 
   expect(screen.getByLabelText("Query")).toBe(query);
   expect(query.getAttribute("aria-invalid")).toBeNull();
   expect(query.getAttribute("aria-describedby")).toBeNull();
+  // The live region is there before any problem, so the first one is read.
+  const live = sidebar().querySelector("[aria-live]") as HTMLElement;
+  expect(live).not.toBeNull();
+  expect(live.getAttribute("aria-live")).toBe("polite");
+  expect(live.getAttribute("aria-atomic")).toBe("true");
   fireEvent.change(query, { target: { value: "today & #hom" } });
   await waitFor(() => expect(sidebar().querySelector(".filter-problem")).not.toBeNull());
   const line = sidebar().querySelector(".filter-problem") as HTMLElement;
-  expect(line.getAttribute("aria-live")).toBe("polite");
+  expect(sidebar().querySelector("[aria-live]")).toBe(live);
+  expect(live.contains(line)).toBe(true);
+  expect(live.textContent).toContain("No project named “hom”.");
   expect(query.getAttribute("aria-invalid")).toBe("true");
   expect(line.id).not.toBe("");
   expect(query.getAttribute("aria-describedby")).toBe(line.id);
