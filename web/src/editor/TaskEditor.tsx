@@ -495,7 +495,8 @@ export function TaskEditor({
       {/* biome-ignore lint/a11y/noStaticElementInteractions: a dimmed tap-away layer behind the card. */}
       <div
         className={open !== null ? "editor-scrim pop-backdrop" : "editor-scrim"}
-        onClick={open !== null ? () => setPop(null) : onCancel}
+        // While the save prompt is up, a tap outside goes back to the card, as Escape does.
+        onClick={open !== null ? () => setPop(null) : asking !== null ? leavePrompt : onCancel}
         onWheel={open !== null ? () => setPop(null) : undefined}
         onMouseDown={keepFocus}
       />

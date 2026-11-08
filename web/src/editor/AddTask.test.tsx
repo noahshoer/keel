@@ -3,6 +3,7 @@ import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import { blankValues } from "../core";
 import * as fx from "../ipc/fixtures";
 import { invoke } from "../ipc/invoke";
+import { mockHandlers } from "../ipc/mock";
 import { loadCoreForTests } from "../test/wasm";
 import { AddTask } from "./AddTask";
 
@@ -107,4 +108,38 @@ it("a title with no new names saves straight away", async () => {
   typeAndAdd("Call the bank @errand");
   expect(screen.queryByText("Create these with the task?")).toBeNull();
   await waitFor(async () => expect(await added("Call the bank")).toBeDefined());
+});
+
+it("the prompt takes focus on its first header check, and Escape goes back to the card", () => {
+  add(false);
+  fireEvent.click(screen.getByText("Add task"));
+  typeAndAdd("Buy ink #wrok @errands");
+  expect(document.activeElement).toBe(screen.getByRole("checkbox", { name: /^New project/ }));
+  fireEvent.keyDown(document.activeElement as Element, { key: "Escape" });
+  expect(screen.queryByText("Create these with the task?")).toBeNull();
+  expect(title().value).toBe("Buy ink #wrok @errands");
+});
+
+it("on touch, a tap outside the prompt goes back to the card, saving nothing", async () => {
+  vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+  const sent: string[] = [];
+  const dispatch = mockHandlers.dispatch;
+  const spy = vi.spyOn(mockHandlers, "dispatch").mockImplementation((args) => {
+    sent.push(args.cmd.action.type);
+    return dispatch(args);
+  });
+  try {
+    add(false);
+    fireEvent.click(screen.getByText("Add task"));
+    fireEvent.change(title(), { target: { value: "Mail ink #wrok2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+    expect(screen.getByText("Create these with the task?")).toBeTruthy();
+    fireEvent.click(document.querySelector(".editor-scrim") as Element);
+    expect(screen.queryByText("Create these with the task?")).toBeNull();
+    expect(title().value).toBe("Mail ink #wrok2");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(sent).toEqual([]);
+  } finally {
+    spy.mockRestore();
+  }
 });

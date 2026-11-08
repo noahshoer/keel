@@ -683,3 +683,11 @@ it("Back to editing keeps the retyped title with new names and saves nothing", a
   await new Promise((r) => setTimeout(r, 50));
   expect(sent).toEqual([]);
 });
+
+it("the task view's names prompt takes focus on its first header check", async () => {
+  await show(["t-bag"]);
+  fireEvent.change(titleField(), { target: { value: "Pack bag @brandnew" } });
+  fireEvent.blur(titleField());
+  expect(document.activeElement).toBe(screen.getByRole("checkbox", { name: /^New label/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Back to editing" }));
+});

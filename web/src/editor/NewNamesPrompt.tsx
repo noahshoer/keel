@@ -2,7 +2,7 @@
 // asks first, in the card's place: each new name with a tick (all ticked to
 // start), grouped by kind under a header check. Unticked names stay text in
 // the title (keel-core `keepAsText`).
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { NewNames } from "../bindings";
 import { CheckIcon, MinusIcon } from "../shell/icons";
 import { allTicked, countText, groupState, type Ticks, toggleGroup, unticked } from "./newNames";
@@ -78,8 +78,14 @@ export function NewNamesPrompt({
   onSave: (unticked: NewNames) => void;
 }) {
   const [ticks, setTicks] = useState<Ticks>(() => allTicked(names));
+  // The field that had focus is gone: the first header check takes it, so
+  // Escape (the card's, or the task view popup's) still reaches a handler.
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    root.current?.querySelector<HTMLElement>(".nn-head")?.focus();
+  }, []);
   return (
-    <div className="nn-prompt">
+    <div ref={root} className="nn-prompt">
       <div className="nn-title">Create these with the task?</div>
       <div className="nn-line">Untick any you don’t want. They stay as text in the title.</div>
       <Group
