@@ -1724,4 +1724,46 @@ mod occurrence_tests {
         assert!(occurs_after(&task("2026-11-11", None, None, None), d(11, 10)));
         assert!(!occurs_after(&task("2026-11-11", None, None, None), d(11, 11)));
     }
+
+    #[test]
+    fn next_date_past_until_still_counts() {
+        let t = task("2026-11-12", Some(Recurrence::Daily), Some("2026-11-10"), None);
+        assert!(occurs_on(&t, d(11, 12)));
+        assert!(!occurs_on(&t, d(11, 13)));
+        assert!(occurs_in(&t, d(11, 1), d(11, 30)));
+        assert!(occurs_after(&t, d(11, 11)));
+        assert!(!occurs_after(&t, d(11, 12)));
+    }
+
+    #[test]
+    fn empty_range_has_nothing() {
+        let one = task("2026-11-11", None, None, None);
+        let daily = task("2026-11-01", Some(Recurrence::Daily), None, None);
+        for t in [&one, &daily] {
+            assert!(!occurs_in(t, d(11, 11), d(11, 11)));
+            assert!(!occurs_in(t, d(11, 12), d(11, 11)));
+        }
+    }
+
+    #[test]
+    fn datetime_due_occurs_on_its_days() {
+        let t = task("2026-11-09T09:00:00", Some(Recurrence::Weekly(vec![0])), None, None);
+        assert!(occurs_on(&t, d(11, 9)));
+        assert!(occurs_on(&t, d(11, 16)));
+        assert!(!occurs_on(&t, d(11, 10)));
+        assert!(occurs_after(&t, d(11, 10)));
+        let one = task("2026-11-09T09:00:00", None, None, None);
+        assert!(occurs_on(&one, d(11, 9)) && !occurs_after(&one, d(11, 9)));
+    }
+
+    #[test]
+    fn recurring_flag_without_a_rule_is_one_off() {
+        let mut t = task("2026-11-09", None, None, None);
+        t.due.as_mut().unwrap().is_recurring = true;
+        assert!(occurs_on(&t, d(11, 9)));
+        assert!(!occurs_on(&t, d(11, 10)));
+        assert!(!occurs_in(&t, d(11, 10), d(11, 30)));
+        assert!(!occurs_after(&t, d(11, 9)));
+    }
+
 }

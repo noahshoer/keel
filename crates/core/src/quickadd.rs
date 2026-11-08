@@ -677,6 +677,20 @@ mod tests {
     }
 
     #[test]
+    fn new_project_with_trailing_punctuation() {
+        let q = p("Buy #wrok.");
+        assert_eq!((q.new_project.as_deref(), q.project_id.clone(), q.content.as_str()), (Some("wrok"), None, "Buy"));
+        assert_eq!(q.spans, vec![crate::quickadd::Span { start: 4, end: 10, kind: SpanKind::Project }]);
+    }
+
+    #[test]
+    fn hashtag_word_is_a_new_project() {
+        let q = p("#hashtag culture");
+        assert_eq!((q.new_project.as_deref(), q.content.as_str()), (Some("hashtag"), "culture"));
+        assert_eq!(q.spans, vec![crate::quickadd::Span { start: 0, end: 8, kind: SpanKind::Project }]);
+    }
+
+    #[test]
     fn double_hash_new_project() {
         let q = p("Buy ##foo");
         assert_eq!((q.new_project.as_deref(), q.content.as_str()), (Some("foo"), "Buy"));

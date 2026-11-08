@@ -660,10 +660,10 @@ pub fn read(query: &str, today: NaiveDate, projects: &[Project], sections: &[Sec
                     Some(SpanKind::Section) => ("section", &names.sections),
                     _ => ("label", &names.labels),
                 };
-                let Some(name) = crate::phrases::phrase_name(&s.text) else { continue };
+                // The sigil as the parser stripped it (`##` counts as `#`), so
+                // sigil + name is exactly the start of this segment.
+                let Some((sigil, name)) = crate::phrases::phrase_parts(&s.text) else { continue };
                 let name = name.as_str();
-                let rest = s.text.trim_start_matches(['#', '/', '@']);
-                let sigil = &s.text[..s.text.len() - rest.len()];
                 if pool.iter().any(|n| crate::phrases::same_name(n, name)) {
                     continue;
                 }
@@ -822,6 +822,75 @@ mod tests {
     fn fix_after_multibyte_text() {
         let r = read_with("café & #wrok");
         assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("café & #Work"));
+    }
+
+    #[test]
+    fn doubled_sigil_fix_replaces_only_that_word() {
+        // The fix rewrites exactly the typed word: sigil as the parser
+        // stripped it, then the name. These used to slice past the word (panic).
+        let fix = |q: &str| read_with(q).fix.map(|f| f.query);
+        let r = read_with("@@hme");
+        assert_eq!(r.problem.as_deref(), Some("No label named “@hme”."));
+        assert_eq!(fix("@@hme").as_deref(), Some("@home"));
+        assert_eq!(fix("@@hme & today").as_deref(), Some("@home & today"));
+        let r = read_with("###wrk");
+        assert_eq!(r.problem.as_deref(), Some("No project named “#wrk”."));
+        assert_eq!(fix("###wrk").as_deref(), Some("##Work"));
+        assert_eq!(read_with("###wrok").problem.as_deref(), Some("No project named “#wrok”."));
+        assert_eq!(fix("###wrok & today"), None); // "#wrok" is 3 edits from "Work"
+        assert_eq!(fix("###wrk & today").as_deref(), Some("##Work & today"));
+    }
+
+    #[test]
+    fn unknown_section_and_label_messages() {
+        // An unknown name is one word (a known one may have several).
+        let r = read_with("/Nxt Up");
+        assert_eq!(r.problem.as_deref(), Some("No section named “Nxt”."));
+        assert_eq!(r.fix, None);
+        let r = read_with("today & @hom");
+        assert_eq!(r.problem.as_deref(), Some("No label named “hom”."));
+        assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("today & @home"));
+        assert_eq!(read_with("@zzzzzz").fix, None);
+    }
+
+    #[test]
+    fn syntax_error_range_is_marked_unknown() {
+        let q = "p1 & due before: blah";
+        let r = read_with(q);
+        let e = parse(q, d(2026, 10, 19), &FilterNames::default()).unwrap_err();
+        let (a, b) = e.at.expect("a colon term's error has a range");
+        assert_eq!(&q[a..b], "due before: blah");
+        let bad: String = r.segments.iter().filter(|s| s.unknown).map(|s| s.text.as_str()).collect();
+        assert_eq!(bad, "due before: blah");
+        assert!(r.segments.iter().any(|s| s.text == "p1" && !s.unknown));
+        assert_eq!(r.problem, Some(e.message));
+    }
+
+    #[test]
+    fn date_segments_carry_their_bucket() {
+        use crate::views::DueBucket;
+        let r = read_with("today | tomorrow | oct 22 | nov 30");
+        let bucket = |t: &str| r.segments.iter().find(|s| s.text == t).unwrap_or_else(|| panic!("{t}")).bucket;
+        assert_eq!(bucket("today"), Some(DueBucket::Today));
+        assert_eq!(bucket("tomorrow"), Some(DueBucket::Tomorrow));
+        assert_eq!(bucket("oct 22"), Some(DueBucket::ThisWeek));
+        assert_eq!(bucket("nov 30"), Some(DueBucket::Later));
+    }
+
+    #[test]
+    fn closest_prefers_the_first_and_ignores_case() {
+        use crate::model::{Label, Project};
+        let today = d(2026, 10, 19);
+        // "wrk" is one edit from both; the first listed wins.
+        let r = read("#wrk", today, &[Project::new("Work"), Project::new("Wark")], &[], &[]);
+        assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("#Work"));
+        let r = read("#wrk", today, &[Project::new("Wark"), Project::new("Work")], &[], &[]);
+        assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("#Wark"));
+        // Case never counts as an edit: "ERRANDZ" is one edit from "errands".
+        let r = read("@ERRANDZ", today, &[], &[], &[Label::new("errands")]);
+        assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("@errands"));
+        // And a name differing only in case is known.
+        assert_eq!(read("@ERRANDS", today, &[], &[], &[Label::new("errands")]).problem, None);
     }
 
     #[test]
@@ -1010,6 +1079,54 @@ mod tests {
     fn next_seven_days_is_a_range() {
         assert_eq!(one("next 7 days"), term(Term::NextDays(7)));
         assert_eq!(one("7 days"), term(Term::NextDays(7)));
+    }
+
+    #[test]
+    fn more_parse_forms() {
+        assert_eq!(one("\u{201C}tomorrow\u{201D}"), term(Term::Text("tomorrow".into())));
+        assert_eq!(one("due before: next friday"), term(Term::DueBefore(DateRef::On(d(2026, 10, 30)))));
+        assert_eq!(one("7days"), term(Term::NextDays(7)));
+    }
+
+    #[test]
+    fn next_n_days_ends_before_day_n() {
+        // Sundays since Oct 11; today is Monday Oct 19, so the next is Oct 25 (day 6).
+        let mut weekly = due(task("w"), "2026-10-11");
+        if let Some(d) = weekly.due.as_mut() {
+            d.is_recurring = true;
+            d.recurrence = Some(Recurrence::Weekly(vec![6]));
+        }
+        assert!(!m("next 6 days", &weekly));
+        assert!(m("next 7 days", &weekly));
+        // The same for a next date that is itself day N.
+        let one_off = due(task("o"), "2026-10-25");
+        assert!(!m("next 6 days", &one_off) && m("next 7 days", &one_off));
+    }
+
+    #[test]
+    fn due_after_is_strict() {
+        let t = due(task("o"), "2026-10-22");
+        assert!(!m("due after: oct 22", &t));
+        assert!(m("due after: oct 21", &t));
+        let mut daily = due(task("d"), "2026-10-18");
+        if let Some(d) = daily.due.as_mut() {
+            d.is_recurring = true;
+            d.recurrence = Some(Recurrence::Daily);
+            d.until = Some("2026-10-22".into());
+        }
+        assert!(m("due after: oct 21", &daily));
+        assert!(!m("due after: oct 22", &daily));
+    }
+
+    #[test]
+    fn repeating_time_matches_a_later_day_at_that_time() {
+        let mut daily = due(task("d"), "2026-10-18T17:00:00");
+        if let Some(d) = daily.due.as_mut() {
+            d.is_recurring = true;
+            d.recurrence = Some(Recurrence::Daily);
+        }
+        assert!(m("in 3 days at 5pm", &daily));
+        assert!(!m("in 3 days at 6pm", &daily));
     }
 
     #[test]

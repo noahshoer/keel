@@ -1967,6 +1967,13 @@ mod tests {
     }
 
     #[test]
+    fn repeated_new_label_is_listed_once() {
+        let (projects, labels) = known();
+        let n = new_names(&typed("Buy ink @errands @Errands @errands"), &projects, &[], &labels, day30());
+        assert_eq!(n, NewNames { projects: vec![], labels: vec!["errands".into()] });
+    }
+
+    #[test]
     fn picked_label_is_not_offered() {
         let (projects, labels) = known();
         let mut v = typed(NEW_TITLE);
