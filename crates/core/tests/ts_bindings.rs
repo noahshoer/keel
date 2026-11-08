@@ -12,7 +12,7 @@ use keel_core::editor::{
     AddPlan, EditPlan, EditorValues, EditorView, LocationChoice, LocationKind, NewNames, Pick, ReminderDraft, RepeatReading,
     TaskPatch, TitleSegment,
 };
-use keel_core::filter::FilterGroup;
+use keel_core::filter::{FilterFix, FilterGroup, FilterReading};
 use keel_core::ids::Id;
 use keel_core::import::todoist::ImportSummary;
 use keel_core::model::{
@@ -68,7 +68,7 @@ fn bindings_cover_ipc_types() {
         CardRow, Card, CardMode, LabelChoice, LabelGroup, ProjectCount, SidebarCounts, DateGroup, DateGroupMode, Progress, DueBucket, QuickAdd, Span, SpanKind, MonthView, DayCell,
         // the editor (the wasm boundary)
         EditorValues, EditorView, ReminderDraft, Pick, TaskPatch, LocationChoice, LocationKind, TitleSegment,
-        AddPlan, EditPlan, RepeatReading, NewNames,
+        AddPlan, EditPlan, RepeatReading, NewNames, FilterReading, FilterFix,
         // the task view (the wasm boundary)
         Field, Missing, MissingPill, FieldLayout, TaskDetail,
         // settings (the wasm boundary)

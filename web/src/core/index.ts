@@ -15,6 +15,7 @@ import type {
   EditorView,
   EditPlan,
   FieldLayout,
+  FilterReading,
   Id,
   ImportSummary,
   Label,
@@ -272,6 +273,24 @@ export function toggleLabel(
 ): EditorValues {
   ready();
   return core.toggleLabel(v, name, quickAdd, projects, sections, today);
+}
+
+/** A filter query cut into segments, with its first problem and a one-tap fix. */
+export function filterReading(
+  query: string,
+  today: string,
+  projects: Project[],
+  sections: Section[],
+  labels: Label[],
+): FilterReading {
+  ready();
+  return core.filterReading(query, today, projects, sections, labels);
+}
+
+/** The filter query with the term ending at `caret` (UTF-16) quoted; `null` when none ends there. */
+export function filterUnhighlightAt(query: string, today: string, caret: number): string | null {
+  ready();
+  return core.filterUnhighlightAt(query, today, caret) ?? null;
 }
 
 /** Turns the highlight ending at `caret` (UTF-16) into plain text; `null` when none ends there. */

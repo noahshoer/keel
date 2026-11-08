@@ -12,6 +12,7 @@
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Weekday};
 use keel_core::calendar;
+use keel_core::filter;
 use keel_core::editor::{self, EditorValues, Pick, ReminderDraft};
 use keel_core::ids::Id;
 use keel_core::model::{Label, Project, Reminder, Section, Task};
@@ -456,6 +457,28 @@ pub fn unhighlight_at(
     let sections: Vec<Section> = input("sections", sections)?;
     let changed = editor::unhighlight_at(&mut v, &projects, &sections, date(today)?, caret);
     output(&changed.then_some(v))
+}
+
+/// `filter::read`: a filter query cut into segments, with its problem and fix.
+#[wasm_bindgen(js_name = filterReading, unchecked_return_type = "import('../../bindings').FilterReading")]
+pub fn filter_reading(
+    query: &str,
+    today: &str,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Label[]")] labels: JsValue,
+) -> Result<JsValue, JsError> {
+    let projects: Vec<Project> = input("projects", projects)?;
+    let sections: Vec<Section> = input("sections", sections)?;
+    let labels: Vec<Label> = input("labels", labels)?;
+    output(&filter::read(query, date(today)?, &projects, &sections, &labels))
+}
+
+/// `filter::unhighlight`: the query with the term ending at the caret
+/// (UTF-16 units) quoted; `null` when no term ends there.
+#[wasm_bindgen(js_name = filterUnhighlightAt)]
+pub fn filter_unhighlight_at(query: &str, today: &str, caret: usize) -> Result<Option<String>, JsError> {
+    Ok(filter::unhighlight(query, date(today)?, editor::byte_at_utf16(query, caret)))
 }
 
 /// `editor::location_choices`: the project / section menu's items.

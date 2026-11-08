@@ -527,6 +527,36 @@ pub(crate) fn match_name(t: &[Token], i: usize, sigil: &str, names: &[&str]) -> 
 
 /// Whether a word after `#` or `@` can be a name: it needs a letter ("#123"
 /// and "@1" stay text).
+/// The name nearest `name`, ignoring case: within two edits and a third of
+/// its length (rounded up); ties go to the first.
+pub(crate) fn closest<'a>(name: &str, names: &[&'a str]) -> Option<&'a str> {
+    let want = name.to_lowercase();
+    let limit = 2.min(want.chars().count().div_ceil(3));
+    let mut best: Option<(usize, &'a str)> = None;
+    for n in names {
+        let d = edit_distance(&want, &n.to_lowercase());
+        if d <= limit && best.map_or(true, |(b, _)| d < b) {
+            best = Some((d, n));
+        }
+    }
+    best.map(|(_, n)| n)
+}
+
+fn edit_distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut prev = row[0];
+        row[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let cur = row[j + 1];
+            row[j + 1] = (prev + usize::from(ca != *cb)).min(row[j] + 1).min(cur + 1);
+            prev = cur;
+        }
+    }
+    row[b.len()]
+}
+
 pub(crate) fn is_name(word: &str) -> bool {
     word.chars().any(|c| c.is_alphabetic())
 }
@@ -619,6 +649,14 @@ pub(crate) fn repeat_matches(spec: &RepeatSpec, rule: &Recurrence) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn closest_name() {
+        use super::closest;
+        assert_eq!(closest("wrok", &["Work", "Home"]), Some("Work"));
+        assert_eq!(closest("xyz", &["Work"]), None);
+        assert_eq!(closest("hme", &["Home", "Work"]), Some("Home"));
+    }
+
     use super::*;
 
     fn d(y: i32, m: u32, day: u32) -> NaiveDate {

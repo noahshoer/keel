@@ -15,8 +15,12 @@ use std::fmt;
 use chrono::{Duration, NaiveDate, NaiveTime};
 
 use crate::ids::Id;
-use crate::model::{Priority, Task};
+use serde::Serialize;
+
+use crate::editor::{title_segments, TitleSegment};
+use crate::model::{Label, Priority, Project, Section, Task};
 use crate::phrases::{
+    closest,
     match_date, match_deadline, match_name, match_priority, match_repeat, match_time, repeat_matches, sigil_name, tokens,
     unread_every, RepeatSpec, Token as Word,
 };
@@ -588,6 +592,112 @@ pub fn parse(query: &str, today: NaiveDate, names: &FilterNames) -> Result<Vec<E
     }
 }
 
+/// What the filter editors draw: the query cut into segments, the first
+/// problem (a syntax error, else an unknown name) and a one-tap fix.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct FilterReading {
+    pub segments: Vec<TitleSegment>,
+    pub problem: Option<String>,
+    pub fix: Option<FilterFix>,
+}
+
+/// A suggested rewrite: the button's label and the whole corrected query.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct FilterFix {
+    pub label: String,
+    pub query: String,
+}
+
+/// Reads `query` for the editors (see [`FilterReading`]).
+pub fn read(query: &str, today: NaiveDate, projects: &[Project], sections: &[Section], labels: &[Label]) -> FilterReading {
+    let names = FilterNames {
+        projects: projects.iter().map(|p| p.name.clone()).collect(),
+        sections: sections.iter().map(|s| s.name.clone()).collect(),
+        labels: labels.iter().map(|l| l.name.clone()).collect(),
+    };
+    let spans = spans(query, today, &names);
+    let mut segments = title_segments(query, &spans);
+    let mut offset = 0;
+    let mut offsets = Vec::new();
+    for s in &segments {
+        offsets.push(offset);
+        offset += s.text.len();
+    }
+    let error = parse(query, today, &names).err();
+    if let Some((a, b)) = error.as_ref().and_then(|e| e.at) {
+        let mut out = Vec::new();
+        for (s, start) in segments.into_iter().zip(&offsets) {
+            let end = start + s.text.len();
+            let (lo, hi) = (a.max(*start), b.min(end));
+            if lo >= hi || !s.text.is_char_boundary(lo - start) || !s.text.is_char_boundary(hi - start) {
+                out.push(s);
+                continue;
+            }
+            for (from, to, unknown) in [(*start, lo, false), (lo, hi, true), (hi, end, false)] {
+                if from < to {
+                    out.push(TitleSegment { text: s.text[from - start..to - start].to_string(), unknown: unknown || s.unknown, ..s.clone() });
+                }
+            }
+        }
+        segments = out;
+        offsets.clear();
+        let mut offset = 0;
+        for s in &segments {
+            offsets.push(offset);
+            offset += s.text.len();
+        }
+    }
+    let mut problem = None;
+    let mut fix = None;
+    for (s, start) in segments.iter_mut().zip(&offsets) {
+        match s.kind {
+            Some(SpanKind::Date | SpanKind::Time) => {
+                let t = crate::phrases::tokens(&s.text);
+                let date = crate::phrases::match_date(&t, 0, today).map(|(_, d)| d);
+                let time = crate::phrases::match_time(&t, date.map_or(0, |_| 1)).map(|(_, t)| t);
+                s.bucket = crate::editor::date_chip(date, time, today).1;
+            }
+            Some(SpanKind::Project | SpanKind::Section | SpanKind::Label) => {
+                let (noun, pool) = match s.kind {
+                    Some(SpanKind::Project) => ("project", &names.projects),
+                    Some(SpanKind::Section) => ("section", &names.sections),
+                    _ => ("label", &names.labels),
+                };
+                let name = s.text.trim_start_matches(['#', '/', '@']);
+                let sigil = &s.text[..s.text.len() - name.len()];
+                if name.is_empty() || pool.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+                    continue;
+                }
+                s.unknown = true;
+                if problem.is_none() {
+                    problem = Some(format!("No {noun} named “{name}”."));
+                    let refs: Vec<&str> = pool.iter().map(String::as_str).collect();
+                    if let Some(near) = closest(name, &refs) {
+                        let mut q = query.to_string();
+                        q.replace_range(*start..start + s.text.len(), &format!("{sigil}{near}"));
+                        fix = Some(FilterFix { label: format!("Use {sigil}{near}"), query: q });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(e) = error {
+        problem = Some(e.message);
+        fix = None;
+    }
+    FilterReading { segments, problem, fix }
+}
+
+/// `query` with the term ending at byte `end` turned into quoted text
+/// (`tomorrow` becomes `"tomorrow"`); `None` when no term ends there.
+pub fn unhighlight(query: &str, today: NaiveDate, end: usize) -> Option<String> {
+    let span = spans(query, today, &FilterNames::default()).into_iter().find(|s| s.end == end)?;
+    Some(format!("{}\"{}\"{}", &query[..span.start], &query[span.start..span.end], &query[span.end..]))
+}
+
 /// Every recognized term's byte range and kind, for highlighting. Best
 /// effort: a piece that doesn't read (or an operator error) costs only its
 /// own spans.
@@ -657,7 +767,49 @@ fn term_matches(term: &Term, task: &Task, ctx: &FilterContext) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{matches, parse, spans, DateRef, Expr, FilterContext, FilterNames, Term};
+
+    fn read_with(q: &str) -> super::FilterReading {
+        use crate::model::{Label, Project, Section};
+        let work = Project::new("Work");
+        let sec = Section::new(work.id.clone(), "Next Up", 0);
+        read(q, d(2026, 10, 19), &[work, Project::new("Home")], &[sec], &[Label::new("home")])
+    }
+
+    #[test]
+    fn unknown_project_is_red_with_a_fix() {
+        let r = read_with("printer ink & today & #wrok");
+        let bad: Vec<_> = r.segments.iter().filter(|s| s.unknown).map(|s| s.text.as_str()).collect();
+        assert_eq!(bad, ["#wrok"]);
+        assert_eq!(r.problem.as_deref(), Some("No project named “wrok”."));
+        assert_eq!(r.fix, Some(FilterFix { label: "Use #Work".into(), query: "printer ink & today & #Work".into() }));
+    }
+
+    #[test]
+    fn known_names_are_fine() {
+        let r = read_with("#work & @home & /next up");
+        assert!(r.segments.iter().all(|s| !s.unknown));
+        assert_eq!(r.problem, None);
+    }
+
+    #[test]
+    fn syntax_error_wins() {
+        let r = read_with("today &");
+        assert_eq!(r.problem, parse("today &", d(2026, 10, 19), &FilterNames::default()).err().map(|e| e.message));
+        assert!(r.problem.is_some() && r.fix.is_none());
+    }
+
+    #[test]
+    fn backspace_quotes_the_term() {
+        let t = d(2026, 10, 19);
+        assert_eq!(unhighlight("call mom tomorrow", t, 17).as_deref(), Some("call mom \"tomorrow\""));
+        assert_eq!(unhighlight("call mom tomorrow", t, 8), None);
+    }
+
+    #[test]
+    fn backspace_after_multibyte() {
+        assert_eq!(unhighlight("café tomorrow", d(2026, 10, 19), 14).as_deref(), Some("café \"tomorrow\""));
+    }
+    use super::{matches, parse, read, spans, unhighlight, FilterFix, DateRef, Expr, FilterContext, FilterNames, Term};
     use crate::ids::Id;
     use crate::model::{Due, Priority, Task};
     use crate::phrases::RepeatSpec;
