@@ -7,6 +7,7 @@ import { sidebarCounts } from "../core";
 import { ROW_PRESS } from "../gestures/long-press";
 import { addLabel } from "../ipc/actions";
 import { invoke } from "../ipc/invoke";
+import { rejectFilterCheck } from "../test/rejectCheck";
 import { loadCoreForTests } from "../test/wasm";
 
 vi.mock("../core", async (original) => {
@@ -252,7 +253,7 @@ it("a new filter: Save waits for a valid query, then opens the filter", async ()
   fireEvent.change(name, { target: { value: "Urgent" } });
   fireEvent.change(query, { target: { value: "p1 &" } });
   await waitFor(() =>
-    expect(sidebar().querySelector(".filter-problem")?.textContent).toBe("expected a term after '&'"),
+    expect(sidebar().querySelector(".filter-problem")?.textContent).toBe("Expected a filter term"),
   );
   expect(save.disabled).toBe(true);
   fireEvent.change(query, { target: { value: "p1" } });
@@ -261,41 +262,6 @@ it("a new filter: Save waits for a valid query, then opens the filter", async ()
   fireEvent.submit(query);
   await waitFor(() => expect(title()).toBe("Urgent"));
   expect(document.querySelector(".view-sub")?.textContent).toBe("p1");
-});
-
-it("a stale filter check never overrides a newer one", async () => {
-  const resolvers: ((v: unknown) => void)[] = [];
-  const rejecters: ((e: unknown) => void)[] = [];
-  const real = (await import("../ipc/mock")).mockHandlers;
-  window.__TAURI__ = {
-    core: {
-      invoke: (cmd, args) => {
-        if (cmd === "check_filter") {
-          return new Promise((res, rej) => {
-            resolvers.push(res);
-            rejecters.push(rej);
-          });
-        }
-        const a = (args as { args: unknown }).args;
-        return (
-          (real as unknown as Record<string, (x: unknown) => Promise<unknown>>)[cmd]?.(a) ??
-          Promise.resolve(null)
-        );
-      },
-    },
-  };
-  try {
-    await start();
-    fireEvent.click(screen.getByTitle("Add filter"));
-    const query = screen.getByPlaceholderText("Query, e.g. today & p1");
-    fireEvent.change(query, { target: { value: "p1 &" } });
-    fireEvent.change(query, { target: { value: "p1" } });
-    await act(async () => resolvers[1]?.(null));
-    await act(async () => rejecters[0]?.("expected a term after '&'"));
-    expect(sidebar().querySelector(".filter-problem")).toBeNull();
-  } finally {
-    delete window.__TAURI__;
-  }
 });
 
 it("editing and deleting a filter", async () => {
@@ -505,6 +471,116 @@ it("a filter row goes straight to its new name", async () => {
   const save = screen.getByText("Save") as HTMLButtonElement;
   await waitFor(() => expect(save.disabled).toBe(false));
   fireEvent.click(save);
-  expect(within(sidebar()).getByText("Top")).toBeTruthy();
+  await waitFor(() => expect(within(sidebar()).getByText("Top")).toBeTruthy());
   expect(within(sidebar()).queryByText("Important")).toBeNull();
+});
+
+async function openFilterForm() {
+  await start();
+  fireEvent.click(screen.getByTitle("Add filter"));
+  return screen.getByPlaceholderText("Query, e.g. today & p1") as HTMLTextAreaElement;
+}
+
+it("an unknown project in a filter shows red, says so and offers the fix", async () => {
+  const query = await openFilterForm();
+  fireEvent.change(screen.getByPlaceholderText("Filter name"), { target: { value: "Ink" } });
+  fireEvent.change(query, { target: { value: "printer ink & today & #hom" } });
+  const save = screen.getByText("Add filter") as HTMLButtonElement;
+  await waitFor(() => expect(sidebar().querySelector("mark.hl-unknown")?.textContent).toBe("#hom"));
+  expect(sidebar().querySelector(".filter-problem")?.textContent).toContain("No project named “hom”.");
+  expect(save.disabled).toBe(true);
+  fireEvent.click(screen.getByText("Use #Home"));
+  expect(query.value).toBe("printer ink & today & #Home");
+  await waitFor(() => expect(save.disabled).toBe(false));
+});
+
+it("the filter field's problem is announced and tied to the field", async () => {
+  const query = await openFilterForm();
+  expect(screen.getByLabelText("Query")).toBe(query);
+  expect(query.getAttribute("aria-invalid")).toBeNull();
+  expect(query.getAttribute("aria-describedby")).toBeNull();
+  // The live region is there before any problem, so the first one is read.
+  const live = sidebar().querySelector("[aria-live]") as HTMLElement;
+  expect(live).not.toBeNull();
+  expect(live.getAttribute("aria-live")).toBe("polite");
+  expect(live.getAttribute("aria-atomic")).toBe("true");
+  expect(live.textContent).toBe("");
+  const hint = sidebar().querySelector(".filter-hint") as HTMLElement;
+  expect(hint).not.toBeNull();
+  expect(live.contains(hint)).toBe(false);
+  fireEvent.change(query, { target: { value: "today & #hom" } });
+  await waitFor(() => expect(sidebar().querySelector(".filter-problem")).not.toBeNull());
+  const line = sidebar().querySelector(".filter-problem") as HTMLElement;
+  expect(sidebar().querySelector("[aria-live]")).toBe(live);
+  expect(live.contains(line)).toBe(true);
+  expect(live.textContent).toContain("No project named “hom”.");
+  expect(query.getAttribute("aria-invalid")).toBe("true");
+  expect(line.id).not.toBe("");
+  expect(query.getAttribute("aria-describedby")).toBe(line.id);
+  fireEvent.change(query, { target: { value: "today" } });
+  await waitFor(() => expect(query.getAttribute("aria-invalid")).toBeNull());
+  // Cleared: the region empties and the hint comes back, outside it.
+  expect(sidebar().querySelector("[aria-live]")).toBe(live);
+  expect(live.textContent).toBe("");
+  const back = sidebar().querySelector(".filter-hint") as HTMLElement;
+  expect(back).not.toBeNull();
+  expect(live.contains(back)).toBe(false);
+  expect(query.getAttribute("aria-describedby")).toBeNull();
+});
+
+it("backspace after a highlighted term in a filter turns it into quoted text", async () => {
+  const query = await openFilterForm();
+  fireEvent.change(query, { target: { value: "call mom tomorrow" } });
+  query.setSelectionRange(17, 17);
+  fireEvent.keyDown(query, { key: "Backspace" });
+  expect(query.value).toBe('call mom "tomorrow"');
+  expect(sidebar().querySelector("mark")).toBeNull();
+});
+
+it("a date in a filter is highlighted as on the card", async () => {
+  const query = await openFilterForm();
+  fireEvent.change(query, { target: { value: "today" } });
+  const mark = sidebar().querySelector("mark.hl") as HTMLElement;
+  expect(mark.textContent).toBe("today");
+  expect(mark.className).toContain("hl-due-today");
+});
+
+it("a filter the backend rejects on save shows its message and stays open, unsaved", async () => {
+  const sent = await rejectFilterCheck("Invalid filter: boom");
+  try {
+    const query = await openFilterForm();
+    fireEvent.change(screen.getByPlaceholderText("Filter name"), { target: { value: "Urgent" } });
+    fireEvent.change(query, { target: { value: "p1" } });
+    const save = screen.getByText("Add filter") as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(sidebar().querySelector(".filter-problem")?.textContent).toBe("Invalid filter: boom"),
+    );
+    expect(sidebar().querySelector(".filter-form")).not.toBeNull();
+    expect(query.value).toBe("p1");
+    expect(sent).not.toContain("filter_add");
+  } finally {
+    delete window.__TAURI__;
+  }
+});
+
+it("a second save while the first is still being checked adds one filter", async () => {
+  const sent = await rejectFilterCheck(null);
+  try {
+    const query = await openFilterForm();
+    fireEvent.change(screen.getByPlaceholderText("Filter name"), { target: { value: "Urgent" } });
+    fireEvent.change(query, { target: { value: "p1" } });
+    const save = screen.getByText("Add filter") as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
+    fireEvent.click(save);
+    await waitFor(() => expect(sent).toContain("filter_add"));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(sent.filter((t) => t === "filter_add")).toHaveLength(1);
+  } finally {
+    delete window.__TAURI__;
+  }
 });

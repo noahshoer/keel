@@ -3,7 +3,8 @@
 import { type RefObject, useRef, useState } from "react";
 import type { Filter } from "../bindings";
 import { useCloseOnClickOutside } from "./clickOutside";
-import { FILTER_HINT, useQueryCheck } from "./filterQuery";
+import { FilterField } from "./FilterField";
+import { type FilterNames, useQueryCheck } from "./filterQuery";
 import { openAndFocus } from "./focus";
 import { FunnelIcon } from "./icons";
 import { RowMenu } from "./RowMenu";
@@ -18,6 +19,7 @@ export function FilterForm({
   initialQuery,
   submitText,
   nameRef,
+  names,
   onSave,
   onCancel,
 }: {
@@ -25,12 +27,17 @@ export function FilterForm({
   initialQuery: string;
   submitText: string;
   nameRef?: RefObject<HTMLInputElement | null>;
+  names: FilterNames;
   onSave: (name: string, query: string) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(initialName);
-  const { query, setQuery, problem } = useQueryCheck(initialQuery);
+  const check = useQueryCheck(initialQuery, names);
+  const { query, problem } = check;
   const canSave = name.trim() !== "" && query.trim() !== "" && problem === null;
+  const submit = () => {
+    if (canSave) void check.confirm().then((ok) => ok && onSave(name.trim(), query.trim()));
+  };
   const form = useRef<HTMLFormElement>(null);
   useCloseOnClickOutside(form, onCancel);
 
@@ -40,7 +47,7 @@ export function FilterForm({
       className="filter-form"
       onSubmit={(e) => {
         e.preventDefault();
-        if (canSave) onSave(name.trim(), query.trim());
+        submit();
       }}
     >
       <input
@@ -50,20 +57,7 @@ export function FilterForm({
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
-      <input
-        className={problem !== null ? "project-input mono invalid" : "project-input mono"}
-        placeholder="Query, e.g. today & p1"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") onCancel();
-        }}
-      />
-      {problem !== null ? (
-        <div className="filter-problem">{problem}</div>
-      ) : (
-        <div className="filter-hint">{FILTER_HINT}</div>
-      )}
+      <FilterField check={check} labels={names.labels} label="Query" onSubmit={submit} onEscape={onCancel} />
       <div className="confirm-actions">
         <button type="button" className="btn btn-cancel" onClick={onCancel}>
           Cancel
@@ -82,6 +76,7 @@ export function FilterRow({
   filter,
   active,
   warning,
+  names,
   onOpen,
   onSave,
   onDelete,
@@ -90,6 +85,7 @@ export function FilterRow({
   active: boolean;
   /** What Delete asks first. */
   warning: string;
+  names: FilterNames;
   onOpen: () => void;
   onSave: (name: string, query: string) => void;
   onDelete: () => void;
@@ -104,6 +100,7 @@ export function FilterRow({
         initialQuery={filter.query}
         submitText="Save"
         nameRef={nameRef}
+        names={names}
         onSave={(n, q) => {
           setMode("normal");
           onSave(n, q);

@@ -1,7 +1,9 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import { blankValues } from "../core";
 import * as fx from "../ipc/fixtures";
+import { invoke } from "../ipc/invoke";
+import { mockHandlers } from "../ipc/mock";
 import { loadCoreForTests } from "../test/wasm";
 import { AddTask } from "./AddTask";
 
@@ -60,4 +62,100 @@ it("on a desktop, the editor takes the row's place", () => {
   const { container } = add(false);
   fireEvent.click(screen.getByText("Add task"));
   expect(container.querySelector(".add-task-row")).toBeNull();
+});
+
+const title = () => screen.getByPlaceholderText(PLACEHOLDER) as HTMLTextAreaElement;
+const typeAndAdd = (text: string) => {
+  fireEvent.change(title(), { target: { value: text } });
+  fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+};
+const added = async (content: string) => (await invoke("all_tasks", {})).find((t) => t.content === content);
+
+it("new names ask first; Back returns to the card, and Save creates the ticked ones", async () => {
+  add(false);
+  fireEvent.click(screen.getByText("Add task"));
+  typeAndAdd("Buy ink #wrok @errands");
+  expect(screen.getByText("Create these with the task?")).toBeTruthy();
+  expect(screen.getByText("Untick any you don’t want. They stay as text in the title.")).toBeTruthy();
+  const project = screen.getByRole("checkbox", { name: /^New project/ });
+  const label = screen.getByRole("checkbox", { name: /^New label/ });
+  expect(project.getAttribute("aria-checked")).toBe("true");
+  expect(label.getAttribute("aria-checked")).toBe("true");
+  expect(project.textContent).toContain("1 of 1");
+  expect(screen.getByRole("checkbox", { name: "#wrok" }).getAttribute("aria-checked")).toBe("true");
+
+  fireEvent.click(screen.getByRole("button", { name: "Back to editing" }));
+  expect(screen.queryByText("Create these with the task?")).toBeNull();
+  expect(title().value).toBe("Buy ink #wrok @errands");
+  expect(await added("Buy ink")).toBeUndefined();
+
+  fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "@errands" }));
+  expect(screen.getByRole("checkbox", { name: /^New label/ }).getAttribute("aria-checked")).toBe("false");
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(screen.queryByText("Create these with the task?")).toBeNull();
+  await waitFor(async () => expect(await added("Buy ink @errands")).toBeDefined());
+  const saved = await added("Buy ink @errands");
+  expect(saved?.labels).toEqual([]);
+  const wrok = (await invoke("list_projects", {})).find((p) => p.name === "wrok");
+  expect(saved?.project_id).toBe(wrok?.id);
+  expect((await invoke("list_labels", {})).some((l) => l.name === "errands")).toBe(false);
+});
+
+it("a title with no new names saves straight away", async () => {
+  add(false);
+  fireEvent.click(screen.getByText("Add task"));
+  typeAndAdd("Call the bank @errand");
+  expect(screen.queryByText("Create these with the task?")).toBeNull();
+  await waitFor(async () => expect(await added("Call the bank")).toBeDefined());
+});
+
+it("the prompt takes focus on its first header check, and Escape goes back to the card", () => {
+  add(false);
+  fireEvent.click(screen.getByText("Add task"));
+  typeAndAdd("Buy ink #wrok @errands");
+  expect(document.activeElement).toBe(screen.getByRole("checkbox", { name: /^New project/ }));
+  fireEvent.keyDown(document.activeElement as Element, { key: "Escape" });
+  expect(screen.queryByText("Create these with the task?")).toBeNull();
+  expect(title().value).toBe("Buy ink #wrok @errands");
+});
+
+it("on touch, a tap outside the prompt goes back to the card, saving nothing", async () => {
+  vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+  const sent: string[] = [];
+  const dispatch = mockHandlers.dispatch;
+  const spy = vi.spyOn(mockHandlers, "dispatch").mockImplementation((args) => {
+    sent.push(args.cmd.action.type);
+    return dispatch(args);
+  });
+  try {
+    add(false);
+    fireEvent.click(screen.getByText("Add task"));
+    fireEvent.change(title(), { target: { value: "Mail ink #wrok2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+    expect(screen.getByText("Create these with the task?")).toBeTruthy();
+    fireEvent.click(document.querySelector(".editor-scrim") as Element);
+    expect(screen.queryByText("Create these with the task?")).toBeNull();
+    expect(title().value).toBe("Mail ink #wrok2");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(sent).toEqual([]);
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+it("on touch, the prompt shows in the card on the keyboard, and Save creates the project", async () => {
+  vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+  const { container } = add(false);
+  fireEvent.click(screen.getByText("Add task"));
+  typeAndAdd("Order toner #wrok3");
+  const heading = screen.getByText("Create these with the task?");
+  // The card is portaled to body, on the keyboard; the prompt goes with it.
+  const card = heading.closest(".on-keyboard");
+  expect(card).not.toBeNull();
+  expect(container.contains(card)).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(async () => expect(await added("Order toner")).toBeDefined());
+  const wrok = (await invoke("list_projects", {})).find((p) => p.name === "wrok3");
+  expect((await added("Order toner"))?.project_id).toBe(wrok?.id);
 });

@@ -96,6 +96,7 @@ export function LabelPicker({
   labels,
   selected,
   text,
+  hasNew = false,
   open,
   setOpen,
   onToggle,
@@ -107,6 +108,8 @@ export function LabelPicker({
   selected: string[];
   /** The chip's text. */
   text: string;
+  /** A typed label doesn't exist yet: the chip is yellow on the card. */
+  hasNew?: boolean;
   onToggle: (name: string) => void;
   /** After a label was created (reload the lists). */
   onChanged: () => void;
@@ -116,7 +119,8 @@ export function LabelPicker({
   const isOpen = open === "labels";
   // The chip reads in the color of the label chosen last.
   const lastChosen = selected[selected.length - 1];
-  const tint = lastChosen === undefined ? undefined : labelGroups([lastChosen], labels)[0];
+  const isNew = hasNew && face === undefined;
+  const tint = isNew || lastChosen === undefined ? undefined : labelGroups([lastChosen], labels)[0];
   return (
     <div className="chip-wrap">
       <button
@@ -124,6 +128,7 @@ export function LabelPicker({
         className={cx(
           face?.className ?? "chip chip-btn",
           face === undefined && tint !== undefined && "pill-tinted pill-set",
+          isNew && "pill-new",
           isOpen && "chip-open",
         )}
         title="Labels"

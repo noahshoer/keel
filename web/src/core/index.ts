@@ -15,6 +15,7 @@ import type {
   EditorView,
   EditPlan,
   FieldLayout,
+  FilterReading,
   Id,
   ImportSummary,
   Label,
@@ -23,6 +24,7 @@ import type {
   LocationChoice,
   MenuKind,
   MonthView,
+  NewNames,
   Progress,
   Project,
   Recurrence,
@@ -234,10 +236,11 @@ export function editorView(
   existing: Recurrence | null,
   projects: Project[],
   sections: Section[],
+  labels: Label[],
   today: string,
 ): EditorView {
   ready();
-  return core.editorView(v, quickAdd, keepLabel, existing, projects, sections, today);
+  return core.editorView(v, quickAdd, keepLabel, existing, projects, sections, labels, today);
 }
 
 /** The values after the title is retyped (kept-plain phrases follow the text). */
@@ -270,6 +273,31 @@ export function toggleLabel(
 ): EditorValues {
   ready();
   return core.toggleLabel(v, name, quickAdd, projects, sections, today);
+}
+
+/** A filter query cut into segments, with its first problem and a one-tap fix. */
+export function filterReading(
+  query: string,
+  today: string,
+  projects: Project[],
+  sections: Section[],
+  labels: Label[],
+): FilterReading {
+  ready();
+  return core.filterReading(query, today, projects, sections, labels);
+}
+
+/** The filter query with the term ending at `caret` (UTF-16) quoted; `null` when none ends there. */
+export function filterUnhighlightAt(
+  query: string,
+  projects: Project[],
+  sections: Section[],
+  labels: Label[],
+  today: string,
+  caret: number,
+): string | null {
+  ready();
+  return core.filterUnhighlightAt(query, projects, sections, labels, today, caret) ?? null;
 }
 
 /** Turns the highlight ending at `caret` (UTF-16) into plain text; `null` when none ends there. */
@@ -374,6 +402,42 @@ export function addPlan(
 ): AddPlan {
   ready();
   return core.addPlan(v, projects, sections, labels, today);
+}
+
+/** The new `#project` / `@label` names the save prompt lists. */
+export function newNames(
+  v: EditorValues,
+  projects: Project[],
+  sections: Section[],
+  labels: Label[],
+  today: string,
+): NewNames {
+  ready();
+  return core.newNames(v, projects, sections, labels, today);
+}
+
+/** The values with those typed names left as plain text in the title. */
+export function keepAsText(
+  v: EditorValues,
+  names: NewNames,
+  projects: Project[],
+  sections: Section[],
+  today: string,
+): EditorValues {
+  ready();
+  return core.keepAsText(v, names, projects, sections, today);
+}
+
+/** The values moved to a just-created project (its section cleared). */
+export function withProject(v: EditorValues, projectId: Id): EditorValues {
+  ready();
+  return core.withProject(v, projectId);
+}
+
+/** A task add moved to a just-created project (its section cleared). */
+export function taskWithProject(task: Action, projectId: Id): Action {
+  ready();
+  return core.taskWithProject(task, projectId);
 }
 
 /** What saving an edit sends: the move, reminder changes, then the field changes. */

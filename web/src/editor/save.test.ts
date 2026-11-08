@@ -32,6 +32,25 @@ it("puts picked reminders on the new task", async () => {
   expect(mine.map((r) => r.minute_offset)).toEqual([60]);
 });
 
+it("a new #project is created first, and the task goes into it", async () => {
+  const sent: string[] = [];
+  const dispatch = mockHandlers.dispatch;
+  const spy = vi.spyOn(mockHandlers, "dispatch").mockImplementation((args) => {
+    const a = args.cmd.action;
+    sent.push(a.type === "project_add" ? `project_add ${a.name}` : a.type);
+    return dispatch(args);
+  });
+  try {
+    await addFromEditor(typed("Buy ink #wrok"), fx.projects, fx.sections, fx.labels, TODAY);
+  } finally {
+    spy.mockRestore();
+  }
+  expect(sent.slice(0, 2)).toEqual(["project_add wrok", "task_add"]);
+  const wrok = (await invoke("list_projects", {})).find((p) => p.name === "wrok");
+  expect(wrok).toBeDefined();
+  expect((await task("Buy ink"))?.project_id).toBe(wrok?.id);
+});
+
 it("rejects when the task isn't added", async () => {
   const dispatch = mockHandlers.dispatch;
   const spy = vi

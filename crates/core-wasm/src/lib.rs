@@ -12,6 +12,7 @@
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Weekday};
 use keel_core::calendar;
+use keel_core::filter;
 use keel_core::editor::{self, EditorValues, Pick, ReminderDraft};
 use keel_core::ids::Id;
 use keel_core::model::{Label, Project, Reminder, Section, Task};
@@ -338,6 +339,7 @@ pub fn values_from_task(
 }
 
 /// `editor::editor_view`: everything the editor draws for its values.
+#[allow(clippy::too_many_arguments)]
 #[wasm_bindgen(js_name = editorView, unchecked_return_type = "import('../../bindings').EditorView")]
 pub fn editor_view(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] values: JsValue,
@@ -346,6 +348,7 @@ pub fn editor_view(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")] existing: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Label[]")] labels: JsValue,
     today: &str,
 ) -> Result<JsValue, JsError> {
     let v: EditorValues = input("values", values)?;
@@ -353,7 +356,8 @@ pub fn editor_view(
     let existing: Option<Recurrence> = input("existing", existing)?;
     let projects: Vec<Project> = input("projects", projects)?;
     let sections: Vec<Section> = input("sections", sections)?;
-    output(&editor::editor_view(&v, quick_add, keep.as_deref(), existing, &projects, &sections, date(today)?))
+    let labels: Vec<Label> = input("labels", labels)?;
+    output(&editor::editor_view(&v, quick_add, keep.as_deref(), existing, &projects, &sections, &labels, date(today)?))
 }
 
 /// `editor::with_title`: the values after the title is retyped.
@@ -456,6 +460,39 @@ pub fn unhighlight_at(
     output(&changed.then_some(v))
 }
 
+/// `filter::read`: a filter query cut into segments, with its problem and fix.
+#[wasm_bindgen(js_name = filterReading, unchecked_return_type = "import('../../bindings').FilterReading")]
+pub fn filter_reading(
+    query: &str,
+    today: &str,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Label[]")] labels: JsValue,
+) -> Result<JsValue, JsError> {
+    let projects: Vec<Project> = input("projects", projects)?;
+    let sections: Vec<Section> = input("sections", sections)?;
+    let labels: Vec<Label> = input("labels", labels)?;
+    output(&filter::read(query, date(today)?, &projects, &sections, &labels))
+}
+
+/// `filter::unhighlight`: the query with the term ending at the caret
+/// (UTF-16 units) quoted; `null` when no term ends there.
+#[wasm_bindgen(js_name = filterUnhighlightAt)]
+pub fn filter_unhighlight_at(
+    query: &str,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Label[]")] labels: JsValue,
+    today: &str,
+    caret: usize,
+) -> Result<Option<String>, JsError> {
+    let projects: Vec<Project> = input("projects", projects)?;
+    let sections: Vec<Section> = input("sections", sections)?;
+    let labels: Vec<Label> = input("labels", labels)?;
+    let names = filter::names_of(&projects, &sections, &labels);
+    Ok(filter::unhighlight(query, date(today)?, &names, editor::byte_at_utf16(query, caret)))
+}
+
 /// `editor::location_choices`: the project / section menu's items.
 #[wasm_bindgen(js_name = locationChoices, unchecked_return_type = "import('../../bindings').LocationChoice[]")]
 pub fn location_choices(
@@ -526,6 +563,60 @@ pub fn add_plan(
     let sections: Vec<Section> = input("sections", sections)?;
     let labels: Vec<Label> = input("labels", labels)?;
     output(&editor::add_plan(&v, &projects, &sections, &labels, date(today)?))
+}
+
+/// `editor::new_names`: the names the save prompt lists.
+#[wasm_bindgen(js_name = newNames, unchecked_return_type = "import('../../bindings').NewNames")]
+pub fn new_names(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] values: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Label[]")] labels: JsValue,
+    today: &str,
+) -> Result<JsValue, JsError> {
+    let v: EditorValues = input("values", values)?;
+    let projects: Vec<Project> = input("projects", projects)?;
+    let sections: Vec<Section> = input("sections", sections)?;
+    let labels: Vec<Label> = input("labels", labels)?;
+    output(&editor::new_names(&v, &projects, &sections, &labels, date(today)?))
+}
+
+/// `editor::keep_as_text`: the typed names left as plain text.
+#[wasm_bindgen(js_name = keepAsText, unchecked_return_type = "import('../../bindings').EditorValues")]
+pub fn keep_as_text(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] values: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').NewNames")] names: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
+    today: &str,
+) -> Result<JsValue, JsError> {
+    let v: EditorValues = input("values", values)?;
+    let names: editor::NewNames = input("names", names)?;
+    let projects: Vec<Project> = input("projects", projects)?;
+    let sections: Vec<Section> = input("sections", sections)?;
+    output(&editor::keep_as_text(&v, &names, &projects, &sections, date(today)?))
+}
+
+/// `editor::with_project`: the values moved to a just-created project.
+#[wasm_bindgen(js_name = withProject, unchecked_return_type = "import('../../bindings').EditorValues")]
+pub fn with_project(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] values: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id")] project_id: JsValue,
+) -> Result<JsValue, JsError> {
+    let v: EditorValues = input("values", values)?;
+    let project_id: Id = input("projectId", project_id)?;
+    output(&editor::with_project(&v, project_id))
+}
+
+/// `editor::task_with_project`: a `TaskAdd` moved to a just-created project.
+#[wasm_bindgen(js_name = taskWithProject, unchecked_return_type = "import('../../bindings').Action")]
+pub fn task_with_project(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Action")] task: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id")] project_id: JsValue,
+) -> Result<JsValue, JsError> {
+    let task: keel_core::commands::Action = input("task", task)?;
+    let project_id: Id = input("projectId", project_id)?;
+    output(&editor::task_with_project(task, project_id))
 }
 
 /// `editor::edit_plan`: what saving an edit sends.

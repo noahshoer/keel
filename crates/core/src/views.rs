@@ -477,6 +477,46 @@ pub fn due_date_of(task: &Task) -> Option<NaiveDate> {
         .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
 }
 
+/// Whether the task has an occurrence `d` with `from <= d < to`. Its next date
+/// always counts (even when moved off the rule); a repeating task then also
+/// occurs on every later date the rule contains, up to its end (inclusive).
+/// An undated task has none.
+pub fn occurs_in(task: &Task, from: NaiveDate, to: NaiveDate) -> bool {
+    let Some(first) = due_date_of(task) else { return false };
+    if first >= from {
+        return first < to;
+    }
+    let due = task.due.as_ref();
+    let Some(rule) = due.and_then(|d| d.recurrence.as_ref()) else { return false };
+    let until = due
+        .and_then(|d| d.until.as_deref())
+        .and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok());
+    // The first date the rule contains on or after `from` (every later
+    // occurrence is a date the rule contains), without walking up to it.
+    let day = rule.next_after(from - chrono::Duration::days(1));
+    day < to && until.is_none_or(|u| day <= u)
+}
+
+/// Whether the task has an occurrence on `day`.
+pub fn occurs_on(task: &Task, day: NaiveDate) -> bool {
+    occurs_in(task, day, day + chrono::Duration::days(1))
+}
+
+/// Whether the task has any occurrence after `day`.
+pub fn occurs_after(task: &Task, day: NaiveDate) -> bool {
+    let Some(first) = due_date_of(task) else { return false };
+    if first > day {
+        return true;
+    }
+    let Some(due) = task.due.as_ref() else { return false };
+    let Some(rule) = due.recurrence.as_ref() else { return false };
+    let next = rule.next_after(day.max(first));
+    match due.until.as_deref().and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok()) {
+        Some(u) => next <= u,
+        None => true,
+    }
+}
+
 /// A titled run of tasks in the dated views (Today, Upcoming).
 #[derive(Clone, PartialEq, Debug, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -1594,4 +1634,136 @@ mod moved_tests {
         assert_eq!(moved_note(&every_wed("2026-10-28", Some("2026-10-21"))), None);
         assert_eq!(moved_note(&Task::new("Plain", Id::from("P"))), None);
     }
+}
+
+#[cfg(test)]
+mod occurrence_tests {
+    use super::{occurs_after, occurs_in, occurs_on};
+    use crate::ids::Id;
+    use crate::model::{Due, Task};
+    use crate::recurrence::Recurrence;
+    use chrono::NaiveDate;
+
+    fn d(m: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, m, day).unwrap()
+    }
+
+    fn task(date: &str, rule: Option<Recurrence>, until: Option<&str>, moved: Option<&str>) -> Task {
+        let mut t = Task::new("x", Id::new());
+        t.due = Some(Due {
+            date: date.to_string(),
+            timezone: None,
+            string: String::new(),
+            lang: "en".to_string(),
+            is_recurring: rule.is_some(),
+            recurrence: rule,
+            until: until.map(String::from),
+            moved_from: moved.map(String::from),
+        });
+        t
+    }
+
+    #[test]
+    fn one_off() {
+        let t = task("2026-11-11", None, None, None);
+        assert!(occurs_on(&t, d(11, 11)));
+        assert!(!occurs_on(&t, d(11, 12)));
+        assert!(!occurs_on(&Task::new("x", Id::new()), d(11, 11)));
+    }
+
+    #[test]
+    fn daily_starts_at_next_date() {
+        let t = task("2026-11-08", Some(Recurrence::Daily), None, None);
+        assert!(occurs_on(&t, d(11, 11)));
+        assert!(!occurs_on(&t, d(11, 7)));
+    }
+
+    #[test]
+    fn weekly_ranges() {
+        let t = task("2026-11-09", Some(Recurrence::Weekly(vec![0])), None, None);
+        assert!(occurs_on(&t, d(11, 16)));
+        assert!(!occurs_on(&t, d(11, 17)));
+        assert!(!occurs_in(&t, d(11, 10), d(11, 16)));
+        assert!(occurs_in(&t, d(11, 10), d(11, 17)));
+    }
+
+    #[test]
+    fn old_daily_task_occurs_years_later() {
+        let t = task("2020-01-01", Some(Recurrence::Daily), None, None);
+        assert!(occurs_on(&t, d(11, 8)));
+        assert!(occurs_in(&t, d(11, 8), d(11, 9)));
+        let weekly = task("2020-01-06", Some(Recurrence::Weekly(vec![0])), None, None);
+        assert!(occurs_on(&weekly, d(11, 9)));
+        assert!(!occurs_on(&weekly, d(11, 10)));
+        let ended = task("2020-01-01", Some(Recurrence::Daily), Some("2025-12-31"), None);
+        assert!(!occurs_on(&ended, d(11, 8)));
+    }
+
+    #[test]
+    fn stops_at_until() {
+        let t = task("2026-11-08", Some(Recurrence::Daily), Some("2026-11-10"), None);
+        assert!(!occurs_on(&t, d(11, 11)));
+        assert!(occurs_on(&t, d(11, 10)));
+    }
+
+    #[test]
+    fn moved_date_counts() {
+        let t = task("2026-11-11", Some(Recurrence::Weekly(vec![0])), None, Some("2026-11-09"));
+        assert!(occurs_on(&t, d(11, 11)));
+        assert!(!occurs_on(&t, d(11, 9)));
+        assert!(occurs_on(&t, d(11, 16)));
+    }
+
+    #[test]
+    fn after() {
+        let open = task("2026-11-08", Some(Recurrence::Daily), None, None);
+        assert!(occurs_after(&open, d(11, 30)));
+        let ended = task("2026-11-08", Some(Recurrence::Daily), Some("2026-11-10"), None);
+        assert!(!occurs_after(&ended, d(11, 10)));
+        assert!(occurs_after(&ended, d(11, 9)));
+        assert!(occurs_after(&task("2026-11-11", None, None, None), d(11, 10)));
+        assert!(!occurs_after(&task("2026-11-11", None, None, None), d(11, 11)));
+    }
+
+    #[test]
+    fn next_date_past_until_still_counts() {
+        let t = task("2026-11-12", Some(Recurrence::Daily), Some("2026-11-10"), None);
+        assert!(occurs_on(&t, d(11, 12)));
+        assert!(!occurs_on(&t, d(11, 13)));
+        assert!(occurs_in(&t, d(11, 1), d(11, 30)));
+        assert!(occurs_after(&t, d(11, 11)));
+        assert!(!occurs_after(&t, d(11, 12)));
+    }
+
+    #[test]
+    fn empty_range_has_nothing() {
+        let one = task("2026-11-11", None, None, None);
+        let daily = task("2026-11-01", Some(Recurrence::Daily), None, None);
+        for t in [&one, &daily] {
+            assert!(!occurs_in(t, d(11, 11), d(11, 11)));
+            assert!(!occurs_in(t, d(11, 12), d(11, 11)));
+        }
+    }
+
+    #[test]
+    fn datetime_due_occurs_on_its_days() {
+        let t = task("2026-11-09T09:00:00", Some(Recurrence::Weekly(vec![0])), None, None);
+        assert!(occurs_on(&t, d(11, 9)));
+        assert!(occurs_on(&t, d(11, 16)));
+        assert!(!occurs_on(&t, d(11, 10)));
+        assert!(occurs_after(&t, d(11, 10)));
+        let one = task("2026-11-09T09:00:00", None, None, None);
+        assert!(occurs_on(&one, d(11, 9)) && !occurs_after(&one, d(11, 9)));
+    }
+
+    #[test]
+    fn recurring_flag_without_a_rule_is_one_off() {
+        let mut t = task("2026-11-09", None, None, None);
+        t.due.as_mut().unwrap().is_recurring = true;
+        assert!(occurs_on(&t, d(11, 9)));
+        assert!(!occurs_on(&t, d(11, 10)));
+        assert!(!occurs_in(&t, d(11, 10), d(11, 30)));
+        assert!(!occurs_after(&t, d(11, 9)));
+    }
+
 }

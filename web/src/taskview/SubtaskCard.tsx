@@ -73,6 +73,7 @@ export function SubtaskCard({
               existing={null}
               submitText="Add sub-task"
               quickAdd
+              askNewNames
               keepOpen
               onSubmit={(v) => {
                 void settle(addFromEditor(v, projects, sections, labels, localToday())).then(onChanged);

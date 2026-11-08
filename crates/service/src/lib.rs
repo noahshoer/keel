@@ -8,7 +8,7 @@ use chrono::{Local, NaiveDate, NaiveDateTime};
 use keel_core::commands::{apply_at, Action, ApplyResult, Command};
 use keel_core::import::todoist::{self, ImportOp, ImportSummary};
 use keel_core::ids::Id;
-use keel_core::filter::{self, FilterContext, FilterError, FilterGroup};
+use keel_core::filter::{self, FilterContext, FilterError, FilterGroup, FilterNames};
 use keel_core::model::{Due, Filter, Label, Project, Reminder, Section, Task};
 use keel_core::reminders::{self, PlannedReminder, ReminderSettings};
 use keel_core::repository::{RepoError, Repository};
@@ -290,7 +290,24 @@ impl AppService {
 
     /// Validates a filter query without running it.
     pub fn check_filter(&self, query: &str) -> Result<(), FilterError> {
-        filter::parse(query).map(|_| ())
+        // Without the names (a storage error), multi-word names read as one word.
+        let names = self.filter_names().map(|(n, _, _)| n).unwrap_or_default();
+        filter::parse(query, today(), &names).map(|_| ())
+    }
+
+    /// The names a filter can mention, plus the projects and sections they came from.
+    fn filter_names(&self) -> Result<(FilterNames, Vec<Project>, Vec<Section>), RepoError> {
+        let projects = self.repo.list_projects()?;
+        let mut sections = Vec::new();
+        for p in &projects {
+            sections.extend(self.repo.list_sections(&p.id)?);
+        }
+        let names = FilterNames {
+            projects: projects.iter().map(|p| p.name.clone()).collect(),
+            sections: sections.iter().map(|s| s.name.clone()).collect(),
+            labels: self.repo.list_labels()?.into_iter().map(|l| l.name).collect(),
+        };
+        Ok((names, projects, sections))
     }
 
     pub fn filter_view(&self, query: &str) -> Result<Vec<FilterGroup>, RepoError> {
@@ -300,12 +317,8 @@ impl AppService {
     /// Open tasks matching each comma group of `query`, sorted by due date
     /// (undated last) then priority.
     pub fn filter_view_at(&self, query: &str, today: NaiveDate) -> Result<Vec<FilterGroup>, RepoError> {
-        let groups = filter::parse(query).map_err(|e| RepoError::Backend(format!("Invalid filter: {e}")))?;
-        let projects = self.repo.list_projects()?;
-        let mut sections = Vec::new();
-        for p in &projects {
-            sections.extend(self.repo.list_sections(&p.id)?);
-        }
+        let (names, projects, sections) = self.filter_names()?;
+        let groups = filter::parse(query, today, &names).map_err(|e| RepoError::Backend(format!("Invalid filter: {e}")))?;
         let ctx = FilterContext {
             today,
             projects: projects.into_iter().map(|p| (p.id, p.name)).collect(),

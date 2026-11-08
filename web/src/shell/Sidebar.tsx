@@ -288,6 +288,7 @@ export function Sidebar({
           initialQuery=""
           submitText="Add filter"
           nameRef={filterField}
+          names={loaded}
           onSave={(name, query) => {
             setAdding(null);
             addFilter(name, query).then((res) => {
@@ -308,6 +309,7 @@ export function Sidebar({
               filter={f}
               active={view.kind === "filter" && view.id === f.id}
               warning={actions.warning}
+              names={loaded}
               onOpen={() => setView({ kind: "filter", id: f.id, name: f.name, query: f.query })}
               onSave={actions.save}
               onDelete={actions.remove}

@@ -48,6 +48,7 @@
   --shadow-md: 0 4px 14px rgba(0,0,0,.07), 0 1px 3px rgba(0,0,0,.05);
   --shadow-lg: 0 12px 32px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06);
   --p1: #b83328; --p1-bg: rgba(209,69,59,.10);
+  --new-fill: #f8e7bd; --new-text: #7a4a00; --new-line: #b07800;
   --p2: #eb8909; --p2-bg: rgba(235,137,9,.10);
   --p3: #246fe0; --p3-bg: rgba(36,111,224,.10);
   --p2-text: #8a5200; --p3-text: #1d5fc4;
@@ -119,6 +120,7 @@
   --shadow-md: 0 4px 14px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.3);
   --shadow-lg: 0 12px 32px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.35);
   --p1: #ff7a70; --p1-bg: rgba(255,112,102,.14);
+  --new-fill: #4a3a12; --new-text: #ffd97a; --new-line: #e0a820;
   --p2: #ff9a14; --p2-bg: rgba(255,154,20,.14);
   --p3: #5297ff; --p3-bg: rgba(82,151,255,.14);
   --p2-text: #ff9a14; --p3-text: #7ab0ff;
@@ -190,6 +192,7 @@
   --shadow-md: 0 4px 14px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.3);
   --shadow-lg: 0 12px 32px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.35);
   --p1: #ff7a70; --p1-bg: rgba(255,112,102,.14);
+  --new-fill: #4a3a12; --new-text: #ffd97a; --new-line: #e0a820;
   --p2: #ff9a14; --p2-bg: rgba(255,154,20,.14);
   --p3: #5297ff; --p3-bg: rgba(82,151,255,.14);
   --p2-text: #ff9a14; --p3-text: #7ab0ff;
@@ -567,6 +570,42 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 .chip { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px;
   border: 1px solid var(--chip-border); border-radius: var(--r-full); font-size: 12px; color: var(--subtle); background: var(--chip-bg); }
 @media (hover: hover) { .chip:hover { background: var(--chip-hover); border-color: var(--border-strong); } }
+/* A name quick add found that doesn't exist yet: yellow, whatever the project's or label's color. */
+.chip-btn.pill-new, .on-keyboard .chip-btn.pill-new { color: var(--new-text); background: var(--new-fill); border: 1.5px dotted var(--new-line); }
+.chip-btn.pill-new .chip-icon, .chip-btn.pill-new .chip-icon .icon { color: inherit; }
+@media (hover: hover) { .chip-btn.pill-new:hover { background: var(--new-fill); border-color: var(--new-line); } }
+/* A new-name pill whose picker is open keeps its yellow but reads as open:
+   a solid border and bold text (outranks the open and tinted-open rules above). */
+.chip-btn.pill-new.chip-open, .on-keyboard .chip-btn.pill-new.chip-open, .on-keyboard .pill-tinted.chip-btn.pill-new.chip-open {
+  color: var(--new-text); background: var(--new-fill); border: 1.5px solid var(--new-line); font-weight: 600; }
+/* Saving a title with new names asks first, in the card's place (the task view hangs it from the title). */
+.nn-prompt { display: flex; flex-direction: column; gap: 2px; }
+.editor .nn-prompt { padding-bottom: 12px; }
+.nn-title { font-size: 15px; font-weight: 600; line-height: 20px; }
+.nn-line { font-size: 13px; line-height: 18px; color: var(--muted); margin-bottom: 6px; }
+.nn-group { display: flex; flex-direction: column; }
+.nn-head, .nn-row { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 4px 0; border: none; background: none;
+  color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.nn-head { font-weight: 600; }
+.nn-row { padding-left: 32px; }
+.nn-count { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 500; }
+.nn-prompt .check { flex: none; }
+.nn-prompt .check.done { background: var(--accent); border-color: var(--accent); color: #fff; }
+.nn-prompt .check.done .icon { opacity: 1; transform: none; }
+.nn-pill { min-width: 0; max-width: 100%; height: 26px; padding: 0 10px; border-radius: var(--r-full); display: inline-flex; align-items: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500;
+  color: var(--new-text); background: var(--new-fill); border: 1.5px dotted var(--new-line); }
+.nn-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.popover.nn-popover { z-index: 60; width: 300px; max-width: calc(100vw - 32px); padding: 14px; border: 1px solid var(--border); }
+@media (pointer: coarse) {
+  .nn-title { font-size: 17px; line-height: 22px; }
+  .nn-line { font-size: 15px; line-height: 20px; }
+  .nn-head, .nn-row { min-height: 44px; font-size: 16px; }
+  .nn-row { padding-left: 36px; }
+  .nn-count { font-size: 15px; }
+  .nn-pill { height: 32px; padding: 0 12px; }
+  .nn-actions .btn { flex: 1; min-height: 44px; padding: 0 18px; font-size: 15px; }
+}
 @media (hover: hover) { .chip-btn.pill-set:hover { background: color-mix(in srgb, currentColor 24%, var(--bg)); border-color: transparent; } }
 .chip:focus-within { box-shadow: 0 0 0 3px var(--focus-ring); }
 .chip input, .chip select { border: none; outline: none; background: transparent; font-size: 12px; color: var(--chip-text); }
@@ -715,6 +754,8 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 .hl-p3 { --hl-color: var(--p3-text); }
 .hl-p4 { --hl-color: var(--p4); }
 .hl-project { --hl-color: var(--c-project); }
+.hl-new { --hl-color: var(--new-line); text-decoration: underline dotted var(--new-line) 2px; text-underline-offset: 3px; }
+.hl-unknown { text-decoration: underline dotted var(--p1) 2px; text-underline-offset: 3px; }
 /* A label's own color comes inline (`--hl-color`); a label without one keeps the accent. */
 .hl-deadline { --hl-color: var(--p4); }
 .hl-deadline.hl-urgent { --hl-color: var(--due-overdue); }
@@ -1153,8 +1194,20 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 .filter-form { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 10px; }
 .project-input.invalid { border-color: var(--due-overdue); }
 .filter-problem { color: var(--due-overdue); font-size: 12px; line-height: 16px; }
+.filter-fix { background: none; border: none; padding: 0; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+/* A filter's query: the title field's highlighting, in a form field's shape. */
+.title-wrap.filter-field { box-sizing: border-box; border-radius: var(--r-card); background: var(--field-fill); }
+.title-wrap.filter-field > .title-mirror, .title-wrap.filter-field > .title-input { padding: 9px 12px; font-size: 14px; font-weight: 400; line-height: 18px; }
+.title-wrap.filter-field:focus-within { box-shadow: 0 0 0 3px var(--focus-ring); }
+.title-wrap.filter-field.invalid { box-shadow: inset 0 0 0 1px var(--due-overdue); }
+.view-edit-query .title-wrap.filter-field > .title-mirror, .view-edit-query .title-wrap.filter-field > .title-input { padding: 12px 16px; }
+@media (max-width: 899px) { .title-wrap.filter-field > .title-mirror, .title-wrap.filter-field > .title-input { font-size: 16px; line-height: 20px; } }
 .filter-hint { color: var(--muted); font-size: 11px; line-height: 15px; }
+/* The filter field's live region stays in the form while empty; it takes no room then. */
+.filter-form > .filter-live:empty { margin-top: -6px; }
 .big-problem { font-size: 13px; padding: 16px 0; }
+/* Under a saved filter's query: why part of it finds nothing (a name that's gone). */
+.view-problem { font-size: 13px; line-height: 18px; margin: -6px 0 12px; }
 
 .empty { text-align: center; color: var(--muted); padding: 56px 0 24px; }
 .empty .big { font-size: 15px; color: var(--text); font-weight: 600; margin-bottom: 4px; }

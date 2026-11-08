@@ -97,3 +97,14 @@ fn sorted_by_due_then_priority() {
     let groups = f.svc.filter_view_at("all", today()).unwrap();
     assert_eq!(names(&groups[0].tasks), vec!["z-19", "y-20-p1", "x-20-p4", "w-undated"]);
 }
+
+#[test]
+fn saved_filter_with_deleted_project_still_runs() {
+    let mut f = F::new();
+    f.task("a-today", Some("2026-10-19"), Priority::None, &[]);
+    f.task("b-today", Some("2026-10-19"), Priority::None, &[]);
+    let groups = f.svc.filter_view_at("#Gone, today", today()).unwrap();
+    assert_eq!(groups.len(), 2);
+    assert!(groups[0].tasks.is_empty());
+    assert_eq!(groups[1].tasks.len(), 2);
+}

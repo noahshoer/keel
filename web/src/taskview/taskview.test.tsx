@@ -532,6 +532,28 @@ it("Add sub-task opens the editor; Enter adds under this task and it stays open"
   expect((top().querySelector(".tv-add-editor .editor textarea") as HTMLTextAreaElement).value).toBe("");
 });
 
+it("Add sub-task with a new #name asks first, and Save creates the project", async () => {
+  await show(["t-trip"]);
+  fireEvent.click(top().querySelector(".tv-add-sub") as HTMLElement);
+  const title = top().querySelector(".tv-add-editor .editor textarea") as HTMLTextAreaElement;
+  fireEvent.change(title, { target: { value: "Pack plugs #gear" } });
+  await act(async () => {
+    fireEvent.keyDown(title, { key: "Enter" });
+  });
+  expect(screen.getByText("Create these with the task?")).toBeTruthy();
+  expect((await allTasks()).find((t) => t.content === "Pack plugs")).toBeUndefined();
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  });
+  await waitFor(async () => {
+    const gear = (await invoke("list_projects", {})).find((p) => p.name === "gear");
+    expect(gear).toBeDefined();
+    const added = (await allTasks()).find((t) => t.content === "Pack plugs");
+    expect(added?.parent_id).toBe("t-trip");
+    expect(added?.project_id).toBe(gear?.id);
+  });
+});
+
 it("the view under the top one has no header and ignores a close request", async () => {
   await show(["t-trip", "t-bag"], true);
   const under = document.querySelector('.task-view[data-view-id="t-trip"]') as HTMLElement;
@@ -654,4 +676,40 @@ it("a typed move asks before the view closes, then closes once answered", async 
   fireEvent.click(within(document.querySelector(".move-prompt") as HTMLElement).getByText("Move"));
   expect(stack()).toBe("");
   await waitFor(() => expect(sent.filter((a) => a.type === "task_update")).toHaveLength(1));
+});
+
+it("a retyped title with new names asks first; Save creates them, moves the task and saves the title", async () => {
+  await show(["t-trip"]);
+  fireEvent.change(titleField(), { target: { value: "Buy ink #wrok @errands" } });
+  fireEvent.blur(titleField());
+  expect(screen.getByText("Create these with the task?")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(screen.queryByText("Create these with the task?")).toBeNull();
+  await waitFor(async () => expect((await task("t-trip"))?.content).toBe("Buy ink"));
+  const wrok = (await invoke("list_projects", {})).find((p) => p.name === "wrok");
+  expect(wrok).toBeDefined();
+  const saved = await task("t-trip");
+  expect(saved?.project_id).toBe(wrok?.id);
+  expect(saved?.labels).toContain("errands");
+  expect((await invoke("list_labels", {})).some((l) => l.name === "errands")).toBe(true);
+});
+
+it("Back to editing keeps the retyped title with new names and saves nothing", async () => {
+  await show(["t-bag"]);
+  const sent = spyActions();
+  fireEvent.change(titleField(), { target: { value: "Pack bag #newproj" } });
+  fireEvent.blur(titleField());
+  fireEvent.click(screen.getByRole("button", { name: "Back to editing" }));
+  expect(screen.queryByText("Create these with the task?")).toBeNull();
+  expect(titleField().value).toBe("Pack bag #newproj");
+  await new Promise((r) => setTimeout(r, 50));
+  expect(sent).toEqual([]);
+});
+
+it("the task view's names prompt takes focus on its first header check", async () => {
+  await show(["t-bag"]);
+  fireEvent.change(titleField(), { target: { value: "Pack bag @brandnew" } });
+  fireEvent.blur(titleField());
+  expect(document.activeElement).toBe(screen.getByRole("checkbox", { name: /^New label/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Back to editing" }));
 });

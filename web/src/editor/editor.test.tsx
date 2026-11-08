@@ -470,6 +470,34 @@ describe("on touch", () => {
     });
   });
 
+  describe("a name that doesn't exist yet", () => {
+    it("fills the project and labels pills yellow", () => {
+      const title = adding();
+      type(title, "Buy ink #wrok @errands");
+      const loc = screen.getByTitle("Project / section");
+      expect(loc.className).toContain("pill-new");
+      expect(loc.textContent).toContain("wrok");
+      expect(loc.textContent).not.toContain("#");
+      expect(screen.getByTitle("Labels").className).toContain("pill-new");
+    });
+
+    it("stays yellow when its picker opens, and is marked open", () => {
+      const title = adding();
+      type(title, "Buy ink #wrok");
+      const loc = screen.getByTitle("Project / section");
+      fireEvent.click(loc);
+      expect(loc.className).toContain("pill-new");
+      expect(loc.className).toContain("chip-open");
+    });
+
+    it("a known label doesn't", () => {
+      const title = adding();
+      type(title, "@errand");
+      expect(screen.getByTitle("Labels").className).not.toContain("pill-new");
+      expect(document.querySelector(".pill-new")).toBeNull();
+    });
+  });
+
   it("the Priority pill shows a flag, in its color once one is set", () => {
     adding();
     const pill = () => screen.getByTitle("Priority");

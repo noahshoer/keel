@@ -12,13 +12,14 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { holdPage } from "../app/pageHold";
 import type {
   EditorPick,
   EditorValues,
   EditorView,
   Label,
+  NewNames,
   Project,
   Recurrence,
   Section,
@@ -28,7 +29,9 @@ import { localToday } from "../clock";
 import {
   applyPick,
   editorView,
+  keepAsText,
   locationPick,
+  newNames,
   readRepeat,
   toggleLabel,
   unhighlightAt,
@@ -43,6 +46,7 @@ import { CARD_GAP, lowerKeyboardNow, useHeldKeyboard, useKeyboard } from "./keyb
 import { LabelPicker } from "./LabelPicker";
 import { isTouch } from "./locale";
 import { Menu, type MenuItem } from "./Menu";
+import { NewNamesPrompt } from "./NewNamesPrompt";
 import { type TypedPills, usePillFade, useRevealFilled } from "./pillFade";
 import { cx, DEADLINE_TITLE, type Pop } from "./pop";
 import { ReminderPicker } from "./ReminderPicker";
@@ -61,7 +65,8 @@ function streakPillText(view: EditorView): string {
 
 /** What each pill with a phrase in the title says, by the pill's `title`. */
 function typedPills(view: EditorView): TypedPills {
-  const pills: Record<SpanKind, [string, string]> = {
+  // Keywords are filters' alone: no pill.
+  const pills: Record<Exclude<SpanKind, "Keyword">, [string, string]> = {
     Date: ["Date", view.date_chip[0]],
     Time: ["Date", view.date_chip[0]],
     Deadline: [DEADLINE_TITLE, view.deadline_text],
@@ -74,7 +79,7 @@ function typedPills(view: EditorView): TypedPills {
   };
   const typed: TypedPills = {};
   for (const { kind } of view.segments) {
-    if (kind !== null) {
+    if (kind !== null && kind !== "Keyword") {
       const [title, text] = pills[kind];
       typed[title] = text;
     }
@@ -94,6 +99,7 @@ export function TaskEditor({
   submitText,
   quickAdd,
   keepOpen,
+  askNewNames = false,
   onSubmit,
   onCancel,
   onChanged,
@@ -112,6 +118,11 @@ export function TaskEditor({
   quickAdd: boolean;
   /** Stay open after submitting, reset to `initial` (Todoist's add flow). */
   keepOpen: boolean;
+  /**
+   * Saving a title that names projects or labels that don't exist yet asks
+   * first which to create (the prompt takes the card's place).
+   */
+  askNewNames?: boolean;
   onSubmit: (v: EditorValues) => void;
   onCancel: () => void;
   /** After a label was created from the labels menu. */
@@ -181,20 +192,44 @@ export function TaskEditor({
   const latest = useRef(values);
   latest.current = values;
   const today = localToday();
-  const view = editorView(values, quickAdd, keepLabel, existing, projects, sections, today);
+  const view = editorView(values, quickAdd, keepLabel, existing, projects, sections, labels, today);
   const pick = (p: EditorPick) => setValues((v) => applyPick(v, p, quickAdd, projects, sections, today));
   const typedRepeat = {
     read: (text: string) => readRepeat(text, view.shown.date, today)?.text ?? null,
     onSubmit: (text: string) => pick({ type: "repeatText", text }),
   };
 
+  // The save prompt: the new names and the values they were read from.
+  const [asking, setAsking] = useState<{ names: NewNames; values: EditorValues } | null>(null);
   const submit = () => {
     const v = latest.current;
     if (
       submitted.current ||
-      !editorView(v, quickAdd, keepLabel, existing, projects, sections, today).can_submit
+      asking !== null ||
+      !editorView(v, quickAdd, keepLabel, existing, projects, sections, labels, today).can_submit
     )
       return;
+    if (askNewNames) {
+      const names = newNames(v, projects, sections, labels, today);
+      if (names.projects.length > 0 || names.labels.length > 0) {
+        setPop(null);
+        setAsking({ names, values: v });
+        return;
+      }
+    }
+    finish(v);
+  };
+  // The title comes back inside the tap, so iOS raises the keyboard again.
+  const leavePrompt = () => {
+    flushSync(() => setAsking(null));
+    title.current?.focus();
+  };
+  const saveFromPrompt = (unticked: NewNames) => {
+    const v = asking === null ? latest.current : asking.values;
+    leavePrompt();
+    finish(keepAsText(v, unticked, projects, sections, today));
+  };
+  const finish = (v: EditorValues) => {
     if (keepOpen) {
       latest.current = initial;
       setValues(initial);
@@ -274,18 +309,25 @@ export function TaskEditor({
         title="Project / section"
         icon={locationFace(view.locations, view.location).icon}
         iconClass={locationFace(view.locations, view.location).iconClass}
-        text={view.location_text}
+        text={view.new_project ?? view.location_text}
         items={locationItems(view.locations)}
         selected={view.location}
         open={open}
         setOpen={setPop}
-        chipClass={locationChosen(view.locations, view.location) ? "pill-set pill-project" : ""}
+        chipClass={
+          view.new_project !== null
+            ? "pill-new"
+            : locationChosen(view.locations, view.location)
+              ? "pill-set pill-project"
+              : ""
+        }
         onSelect={(value) => pick(locationPick(value))}
       />
       <LabelPicker
         labels={labels}
         selected={view.shown.labels}
         text={view.labels_text}
+        hasNew={view.new_labels.length > 0}
         open={open}
         setOpen={setPop}
         onToggle={(name) => setValues((v) => toggleLabel(v, name, quickAdd, projects, sections, today))}
@@ -337,38 +379,9 @@ export function TaskEditor({
     <div className="pop-backdrop" onClick={() => setPop(null)} onWheel={() => setPop(null)} />
   );
 
-  const form = (
-    <form
-      className={cx(
-        "editor",
-        touch && "on-keyboard",
-        touch && !keyboard.up && "keyboard-down",
-        touch && open !== null && "picking",
-      )}
-      style={
-        touch
-          ? ({
-              bottom: keyboard.inset + CARD_GAP,
-              "--card-room": `${keyboard.room}px`,
-            } as CSSProperties)
-          : undefined
-      }
-      // Pressing anything but a text field keeps the title focused, so the keyboard stays up.
-      onMouseDown={touch ? keepFocus : undefined}
-      onPointerUp={tapField}
-      onSubmit={(e) => {
-        e.preventDefault();
-        submit();
-      }}
-      onKeyDown={(e) => {
-        if (e.key !== "Escape") return;
-        e.preventDefault();
-        if (open !== null) setPop(null);
-        else onCancel();
-      }}
-    >
-      {!touch && open !== null ? clickAway : null}
-      {/* The part that scrolls once the card fills the room above the keyboard. */}
+  // The card itself, which the save prompt stands in for.
+  const fields = (
+    <>
       <div className="editor-text">
         <HighlightedTitle
           segments={view.segments}
@@ -430,6 +443,46 @@ export function TaskEditor({
           </button>
         </div>
       )}
+    </>
+  );
+
+  const form = (
+    <form
+      className={cx(
+        "editor",
+        touch && "on-keyboard",
+        touch && !keyboard.up && "keyboard-down",
+        touch && open !== null && "picking",
+      )}
+      style={
+        touch
+          ? ({
+              bottom: keyboard.inset + CARD_GAP,
+              "--card-room": `${keyboard.room}px`,
+            } as CSSProperties)
+          : undefined
+      }
+      // Pressing anything but a text field keeps the title focused, so the keyboard stays up.
+      onMouseDown={touch ? keepFocus : undefined}
+      onPointerUp={tapField}
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        if (asking !== null) leavePrompt();
+        else if (open !== null) setPop(null);
+        else onCancel();
+      }}
+    >
+      {!touch && open !== null ? clickAway : null}
+      {asking !== null ? (
+        <NewNamesPrompt names={asking.names} onBack={leavePrompt} onSave={saveFromPrompt} />
+      ) : (
+        fields
+      )}
     </form>
   );
   // On touch it leaves the page: a moving sheet or pane above it would carry a fixed card along.
@@ -442,7 +495,8 @@ export function TaskEditor({
       {/* biome-ignore lint/a11y/noStaticElementInteractions: a dimmed tap-away layer behind the card. */}
       <div
         className={open !== null ? "editor-scrim pop-backdrop" : "editor-scrim"}
-        onClick={open !== null ? () => setPop(null) : onCancel}
+        // While the save prompt is up, a tap outside goes back to the card, as Escape does.
+        onClick={open !== null ? () => setPop(null) : asking !== null ? leavePrompt : onCancel}
         onWheel={open !== null ? () => setPop(null) : undefined}
         onMouseDown={keepFocus}
       />

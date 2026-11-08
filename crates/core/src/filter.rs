@@ -2,15 +2,30 @@
 //!
 //! Precedence (loosest first): `,` separates result groups, then `|`, then
 //! `&`, then `!`; parentheses group. Terms are case-insensitive.
+//!
+//! Between operators is a piece. A piece that starts with a colon keyword
+//! (`due before:`, `search:` …) is that one term. Otherwise it is read word
+//! by word like quick add: keywords, priorities, `{deadline}`, names, repeat,
+//! date and time phrases each make a term, the words left over make one text
+//! term, and the piece is all of them ANDed. `"…"` is always text.
 
 use std::collections::HashMap;
 use std::fmt;
 
-use chrono::{Duration, NaiveDate};
+use chrono::{Duration, NaiveDate, NaiveTime};
 
 use crate::ids::Id;
-use crate::model::{Priority, Task};
-use crate::views::due_date_of;
+use serde::Serialize;
+
+use crate::editor::{title_segments, TitleSegment};
+use crate::model::{Label, Priority, Project, Section, Task};
+use crate::phrases::{
+    closest,
+    match_date, match_deadline, match_name, match_priority, match_repeat, match_time, repeat_matches, sigil_name, tokens,
+    unread_every, RepeatSpec, Token as Word,
+};
+use crate::quickadd::{Span, SpanKind};
+use crate::views::{due_date_of, due_time, occurs_after, occurs_in, occurs_on};
 
 /// What a query is evaluated against besides the task itself.
 #[derive(Clone, Debug)]
@@ -36,19 +51,31 @@ pub fn group_texts(query: &str) -> Vec<String> {
     query.split(',').map(|s| s.trim().to_string()).collect()
 }
 
+/// The names that exist, so a multi-word name reads whole (`/Next Up`).
+#[derive(Clone, Debug, Default)]
+pub struct FilterNames {
+    pub projects: Vec<String>,
+    pub sections: Vec<String>,
+    pub labels: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct FilterError(pub String);
+pub struct FilterError {
+    pub message: String,
+    /// The byte range of the query the error is about, when known.
+    pub at: Option<(usize, usize)>,
+}
 
 impl fmt::Display for FilterError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+        f.write_str(&self.message)
     }
 }
 
 impl std::error::Error for FilterError {}
 
 fn err<T>(msg: impl Into<String>) -> Result<T, FilterError> {
-    Err(FilterError(msg.into()))
+    Err(FilterError { message: msg.into(), at: None })
 }
 
 /// A date relative to today, or a fixed date.
@@ -83,6 +110,7 @@ pub enum Term {
     Project(String),
     Section(String),
     Label(String),
+    /// `search: …`.
     Search(String),
     DueBefore(DateRef),
     DueAfter(DateRef),
@@ -92,6 +120,13 @@ pub enum Term {
     DeadlineOn(DateRef),
     /// today ≤ due < today + n.
     NextDays(i64),
+    /// Plain or quoted words: the task contains them all (like search).
+    Text(String),
+    /// A repeat phrase: the task's rule has that kind and interval.
+    Repeat(RepeatSpec),
+    /// A date with a time ("tomorrow at 5pm"; a time alone is today).
+    DueAt(NaiveDate, NaiveTime),
+    Streak,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -102,6 +137,22 @@ pub enum Expr {
     Term(Term),
 }
 
+/// A stretch of a piece: plain words, or a quote's inside.
+#[derive(Debug, Clone, PartialEq)]
+struct Part {
+    start: usize,
+    end: usize,
+    quoted: bool,
+}
+
+/// The text between operators: its parts and byte range (quotes included).
+#[derive(Debug, Clone, PartialEq)]
+struct Piece {
+    start: usize,
+    end: usize,
+    parts: Vec<Part>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 enum Token {
     And,
@@ -110,20 +161,37 @@ enum Token {
     Open,
     Close,
     Comma,
-    Text(String),
+    Piece(Piece),
+}
+
+fn closing_quote(c: char) -> bool {
+    matches!(c, '"' | '\u{201D}')
 }
 
 fn tokenize(query: &str) -> Vec<Token> {
-    let mut tokens = Vec::new();
-    let mut text = String::new();
-    let flush = |text: &mut String, tokens: &mut Vec<Token>| {
-        let t = text.trim();
-        if !t.is_empty() {
-            tokens.push(Token::Text(t.to_string()));
+    let mut out = Vec::new();
+    let mut piece: Option<Piece> = None;
+    let mut plain: Option<usize> = None;
+    fn add(piece: &mut Option<Piece>, part: Part, end: usize) {
+        let p = piece.get_or_insert(Piece { start: part.start, end, parts: Vec::new() });
+        p.end = end;
+        p.parts.push(part);
+    }
+    // Ends the plain run at `upto`, adding its trimmed text as a part.
+    let flush_plain = |piece: &mut Option<Piece>, plain: &mut Option<usize>, upto: usize| {
+        if let Some(s) = plain.take() {
+            let text = &query[s..upto];
+            let lead = text.len() - text.trim_start().len();
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                let (a, b) = (s + lead, s + lead + trimmed.len());
+                add(piece, Part { start: a, end: b, quoted: false }, b);
+            }
         }
-        text.clear();
     };
-    for c in query.chars() {
+    let mut i = 0;
+    while let Some(c) = query[i..].chars().next() {
+        let next = i + c.len_utf8();
         let op = match c {
             '&' => Some(Token::And),
             '|' => Some(Token::Or),
@@ -133,16 +201,42 @@ fn tokenize(query: &str) -> Vec<Token> {
             ',' => Some(Token::Comma),
             _ => None,
         };
-        match op {
-            Some(tok) => {
-                flush(&mut text, &mut tokens);
-                tokens.push(tok);
+        if let Some(op) = op {
+            flush_plain(&mut piece, &mut plain, i);
+            if let Some(p) = piece.take() {
+                out.push(Token::Piece(p));
             }
-            None => text.push(c),
+            out.push(op);
+            i = next;
+        } else if c == '"' || c == '\u{201C}' {
+            // A quote runs to its closing quote, or to the end of the query.
+            flush_plain(&mut piece, &mut plain, i);
+            let (inner_end, after) = match query[next..].char_indices().find(|(_, c)| closing_quote(*c)) {
+                Some((k, q)) => (next + k, next + k + q.len_utf8()),
+                None => (query.len(), query.len()),
+            };
+            let inner = &query[next..inner_end];
+            let trimmed = inner.trim();
+            if !trimmed.is_empty() {
+                let a = next + (inner.len() - inner.trim_start().len());
+                let quote = Part { start: a, end: a + trimmed.len(), quoted: true };
+                let p = piece.get_or_insert(Piece { start: i, end: after, parts: Vec::new() });
+                p.end = after;
+                p.parts.push(quote);
+            }
+            i = after;
+        } else {
+            if plain.is_none() && !c.is_whitespace() {
+                plain = Some(i);
+            }
+            i = next;
         }
     }
-    flush(&mut text, &mut tokens);
-    tokens
+    flush_plain(&mut piece, &mut plain, query.len());
+    if let Some(p) = piece.take() {
+        out.push(Token::Piece(p));
+    }
+    out
 }
 
 /// `N days`, `N day`, `+N days`, `-N days` → N (sign kept).
@@ -153,7 +247,7 @@ fn parse_days(s: &str) -> Option<i64> {
     num.parse::<i64>().ok()
 }
 
-fn parse_date(raw: &str) -> Result<DateRef, FilterError> {
+fn parse_date(raw: &str, today: NaiveDate) -> Result<DateRef, FilterError> {
     let s = raw.trim().to_lowercase();
     match s.as_str() {
         "" => err("A date is missing after the colon"),
@@ -164,78 +258,255 @@ fn parse_date(raw: &str) -> Result<DateRef, FilterError> {
             if let Some(n) = parse_days(&s) {
                 return Ok(DateRef::Offset(n));
             }
-            NaiveDate::parse_from_str(&s, "%Y-%m-%d")
-                .map(DateRef::On)
-                .or_else(|_| err(format!("Unrecognized date “{}” (try today, +3 days, or 2026-10-31)", raw.trim())))
-        }
-    }
-}
-
-fn named(rest: &str, what: &str, raw: &str) -> Result<String, FilterError> {
-    let name = rest.trim().to_lowercase();
-    if name.is_empty() {
-        err(format!("“{raw}” needs a {what} name"))
-    } else {
-        Ok(name)
-    }
-}
-
-fn parse_term(raw: &str) -> Result<Term, FilterError> {
-    let lower = raw.to_lowercase();
-    let t = lower.as_str();
-    Ok(match t {
-        "all" => Term::All,
-        "today" => Term::Today,
-        "tomorrow" => Term::Tomorrow,
-        "overdue" => Term::Overdue,
-        "no date" => Term::NoDate,
-        "no deadline" => Term::NoDeadline,
-        "recurring" => Term::Recurring,
-        "no labels" => Term::NoLabels,
-        "subtask" => Term::Subtask,
-        "p1" => Term::Priority(Priority::P1),
-        "p2" => Term::Priority(Priority::P2),
-        "p3" => Term::Priority(Priority::P3),
-        "p4" => Term::Priority(Priority::None),
-        _ => {
-            if let Some(rest) = t.strip_prefix("##").or_else(|| t.strip_prefix('#')) {
-                Term::Project(named(rest, "project", raw)?)
-            } else if let Some(rest) = t.strip_prefix('/') {
-                Term::Section(named(rest, "section", raw)?)
-            } else if let Some(rest) = t.strip_prefix('@') {
-                Term::Label(named(rest, "label", raw)?)
-            } else if let Some(rest) = t.strip_prefix("search:") {
-                Term::Search(named(rest, "search", raw)?)
-            } else if let Some(rest) = t.strip_prefix("due before:") {
-                Term::DueBefore(parse_date(rest)?)
-            } else if let Some(rest) = t.strip_prefix("due after:") {
-                Term::DueAfter(parse_date(rest)?)
-            } else if let Some(rest) = t.strip_prefix("due:") {
-                Term::DueOn(parse_date(rest)?)
-            } else if let Some(rest) = t.strip_prefix("deadline before:") {
-                Term::DeadlineBefore(parse_date(rest)?)
-            } else if let Some(rest) = t.strip_prefix("deadline after:") {
-                Term::DeadlineAfter(parse_date(rest)?)
-            } else if let Some(rest) = t.strip_prefix("deadline:") {
-                Term::DeadlineOn(parse_date(rest)?)
-            } else if let Some(n) = parse_days(t.strip_prefix("next ").unwrap_or(t)) {
-                if n < 1 {
-                    return err(format!("“{raw}” needs at least 1 day"));
-                }
-                Term::NextDays(n)
-            } else {
-                return err(format!("Unknown filter term “{raw}”"));
+            if let Ok(d) = NaiveDate::parse_from_str(&s, "%Y-%m-%d") {
+                return Ok(DateRef::On(d));
+            }
+            // Quick add's date phrases, when they are the whole date.
+            let words = tokens(&s);
+            match match_date(&words, 0, today) {
+                Some((n, d)) if n == words.len() => Ok(DateRef::On(d)),
+                _ => err(format!("Unrecognized date “{}” (try today, +3 days, or 2026-10-31)", raw.trim())),
             }
         }
+    }
+}
+
+/// The colon keywords, each read with the rest of its piece.
+const COLON_TERMS: [&str; 7] =
+    ["due before:", "due after:", "due:", "deadline before:", "deadline after:", "deadline:", "search:"];
+
+fn colon_term(raw: &str, today: NaiveDate) -> Result<Term, FilterError> {
+    let lower = raw.to_lowercase();
+    let t = lower.as_str();
+    if let Some(rest) = t.strip_prefix("search:") {
+        let words = rest.trim();
+        return if words.is_empty() { err(format!("“{}” needs a search name", raw.trim())) } else { Ok(Term::Search(words.to_string())) };
+    }
+    let date = |rest: &str| parse_date(rest, today);
+    Ok(if let Some(rest) = t.strip_prefix("due before:") {
+        Term::DueBefore(date(rest)?)
+    } else if let Some(rest) = t.strip_prefix("due after:") {
+        Term::DueAfter(date(rest)?)
+    } else if let Some(rest) = t.strip_prefix("due:") {
+        Term::DueOn(date(rest)?)
+    } else if let Some(rest) = t.strip_prefix("deadline before:") {
+        Term::DeadlineBefore(date(rest)?)
+    } else if let Some(rest) = t.strip_prefix("deadline after:") {
+        Term::DeadlineAfter(date(rest)?)
+    } else if let Some(rest) = t.strip_prefix("deadline:") {
+        Term::DeadlineOn(date(rest)?)
+    } else {
+        return err(format!("Unknown filter term “{}”", raw.trim()));
     })
 }
 
-struct Parser {
-    tokens: Vec<Token>,
-    pos: usize,
+/// `N days` / `Ndays` at word `j` (N ≥ 1): (N, words).
+fn days_at(t: &[Word], j: usize) -> Option<(i64, usize)> {
+    let w = |k: usize| t.get(j + k).map(|x| x.norm.as_str()).unwrap_or("");
+    let count = |s: &str| s.strip_prefix('+').unwrap_or(s).parse::<i64>().ok();
+    let found = if matches!(w(1), "day" | "days") {
+        count(w(0)).map(|n| (n, 2))
+    } else {
+        w(0).strip_suffix("days").or_else(|| w(0).strip_suffix("day")).and_then(count).map(|n| (n, 1))
+    };
+    found.filter(|(n, _)| *n >= 1)
 }
 
-impl Parser {
+/// A filter keyword at word `i`: (words, term).
+fn keyword(t: &[Word], i: usize) -> Option<(usize, Term)> {
+    let w = |k: usize| t.get(i + k).map(|x| x.norm.as_str()).unwrap_or("");
+    match (w(0), w(1)) {
+        ("no", "deadline") => return Some((2, Term::NoDeadline)),
+        ("no", "labels") => return Some((2, Term::NoLabels)),
+        ("no", "date") => return Some((2, Term::NoDate)),
+        _ => {}
+    }
+    if w(0) == "next" {
+        if let Some((n, used)) = days_at(t, i + 1) {
+            return Some((1 + used, Term::NextDays(n)));
+        }
+    }
+    if let Some((n, used)) = days_at(t, i) {
+        return Some((used, Term::NextDays(n)));
+    }
+    let term = match w(0) {
+        "overdue" => Term::Overdue,
+        "recurring" => Term::Recurring,
+        "subtask" => Term::Subtask,
+        "all" => Term::All,
+        "streak" => Term::Streak,
+        _ => return None,
+    };
+    Some((1, term))
+}
+
+/// A `#` / `##`, `/` or `@` name at word `i`: the longest known name, else
+/// the one word (a name that matches nothing).
+fn name_at(t: &[Word], i: usize, names: &FilterNames) -> Option<(usize, Term, SpanKind)> {
+    let raw = t[i].raw.as_str();
+    let (sigil, list, kind) = match raw.chars().next()? {
+        '#' => ("#", &names.projects, SpanKind::Project),
+        '/' => ("/", &names.sections, SpanKind::Section),
+        '@' => ("@", &names.labels, SpanKind::Label),
+        _ => return None,
+    };
+    let make = |name: String| match kind {
+        SpanKind::Project => Term::Project(name),
+        SpanKind::Section => Term::Section(name),
+        _ => Term::Label(name),
+    };
+    let known: Vec<&str> = list.iter().map(String::as_str).collect();
+    if let Some((n, pos)) = match_name(t, i, sigil, &known) {
+        return Some((n, make(list[pos].to_lowercase()), kind));
+    }
+    let name = if sigil == "#" { sigil_name(raw, "##").or_else(|| sigil_name(raw, "#")) } else { sigil_name(raw, sigil) };
+    name.map(|n| (1, make(n.to_lowercase()), kind))
+}
+
+/// A bare date phrase: today and tomorrow keep their own terms.
+fn date_term(d: NaiveDate, today: NaiveDate) -> Term {
+    if d == today {
+        Term::Today
+    } else if d == today + Duration::days(1) {
+        Term::Tomorrow
+    } else {
+        Term::DueOn(DateRef::On(d))
+    }
+}
+
+/// What a piece reads as: its terms (by position) and their spans.
+struct Read<'a> {
+    terms: Vec<(usize, Term)>,
+    spans: Vec<Span>,
+    text: Vec<&'a str>,
+    text_at: Option<usize>,
+}
+
+impl<'a> Read<'a> {
+    fn text(&mut self, at: usize, words: &'a str) {
+        self.text_at.get_or_insert(at);
+        self.text.push(words);
+    }
+
+    fn term(&mut self, t: &[Word], i: usize, n: usize, term: Term, kind: SpanKind) {
+        self.terms.push((t[i].start, term));
+        self.spans.push(Span { start: t[i].start, end: t[i + n - 1].end, kind });
+    }
+}
+
+/// Reads one run of plain words (`t` has byte ranges into `query`).
+fn read_words<'a>(query: &'a str, t: &[Word], today: NaiveDate, names: &FilterNames, r: &mut Read<'a>) {
+    let mut i = 0;
+    while i < t.len() {
+        if let Some((n, term)) = keyword(t, i) {
+            r.term(t, i, n, term, SpanKind::Keyword);
+            i += n;
+            continue;
+        }
+        if let Some(p) = match_priority(t, i) {
+            r.term(t, i, 1, Term::Priority(p), SpanKind::Priority);
+            i += 1;
+            continue;
+        }
+        if t[i].raw.starts_with('{') {
+            if let Some((n, d)) = match_deadline(query, t, i, today) {
+                r.term(t, i, n, Term::DeadlineOn(DateRef::On(d)), SpanKind::Deadline);
+                i += n;
+                continue;
+            }
+        }
+        if let Some((n, term, kind)) = name_at(t, i, names) {
+            r.term(t, i, n, term, kind);
+            i += n;
+            continue;
+        }
+        if let Some((n, spec)) = match_repeat(t, i) {
+            r.term(t, i, n, Term::Repeat(spec), SpanKind::Repeat);
+            i += n;
+            continue;
+        }
+        // An "every ..." phrase it can't read stays text as a whole.
+        let every = unread_every(t, i);
+        if every > 0 {
+            r.text(t[i].start, &query[t[i].start..t[i + every - 1].end]);
+            i += every;
+            continue;
+        }
+        if let Some((n, d)) = match_date(t, i, today) {
+            r.spans.push(Span { start: t[i].start, end: t[i + n - 1].end, kind: SpanKind::Date });
+            match match_time(t, i + n) {
+                Some((m, time)) => {
+                    r.terms.push((t[i].start, Term::DueAt(d, time)));
+                    r.spans.push(Span { start: t[i + n].start, end: t[i + n + m - 1].end, kind: SpanKind::Time });
+                    i += n + m;
+                }
+                None => {
+                    r.terms.push((t[i].start, date_term(d, today)));
+                    i += n;
+                }
+            }
+            continue;
+        }
+        // A time, with the date phrase right after it if there is one ("5pm tomorrow").
+        if let Some((n, time)) = match_time(t, i) {
+            r.spans.push(Span { start: t[i].start, end: t[i + n - 1].end, kind: SpanKind::Time });
+            match match_date(t, i + n, today) {
+                Some((m, d)) => {
+                    r.terms.push((t[i].start, Term::DueAt(d, time)));
+                    r.spans.push(Span { start: t[i + n].start, end: t[i + n + m - 1].end, kind: SpanKind::Date });
+                    i += n + m;
+                }
+                None => {
+                    r.terms.push((t[i].start, Term::DueAt(today, time)));
+                    i += n;
+                }
+            }
+            continue;
+        }
+        r.text(t[i].start, &query[t[i].start..t[i].end]);
+        i += 1;
+    }
+}
+
+/// A piece's terms, in order, and their spans.
+fn read_piece(query: &str, p: &Piece, today: NaiveDate, names: &FilterNames) -> Result<(Vec<Term>, Vec<Span>), FilterError> {
+    if let Some(first) = p.parts.first().filter(|f| !f.quoted) {
+        let lower = query[first.start..first.end].to_lowercase();
+        if COLON_TERMS.iter().any(|k| lower.starts_with(k)) {
+            let whole: Vec<&str> = p.parts.iter().map(|x| &query[x.start..x.end]).collect();
+            let term = colon_term(&whole.join(" "), today).map_err(|e| FilterError { at: Some((p.start, p.end)), ..e })?;
+            return Ok((vec![term], vec![Span { start: p.start, end: p.end, kind: SpanKind::Keyword }]));
+        }
+    }
+    let mut r = Read { terms: Vec::new(), spans: Vec::new(), text: Vec::new(), text_at: None };
+    for part in &p.parts {
+        if part.quoted {
+            r.text(part.start, &query[part.start..part.end]);
+            continue;
+        }
+        let mut words = tokens(&query[part.start..part.end]);
+        for w in &mut words {
+            w.start += part.start;
+            w.end += part.start;
+        }
+        read_words(query, &words, today, names, &mut r);
+    }
+    if let Some(at) = r.text_at {
+        r.terms.push((at, Term::Text(r.text.join(" "))));
+    }
+    r.terms.sort_by_key(|(at, _)| *at);
+    Ok((r.terms.into_iter().map(|(_, t)| t).collect(), r.spans))
+}
+
+struct Parser<'a> {
+    tokens: Vec<Token>,
+    pos: usize,
+    query: &'a str,
+    today: NaiveDate,
+    names: &'a FilterNames,
+}
+
+impl Parser<'_> {
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.pos)
     }
@@ -281,7 +552,12 @@ impl Parser {
                     _ => err("Missing a closing parenthesis"),
                 }
             }
-            Some(Token::Text(text)) => Ok(Expr::Term(parse_term(&text)?)),
+            Some(Token::Piece(p)) => {
+                let (terms, _) = read_piece(self.query, &p, self.today, self.names)?;
+                let mut terms = terms.into_iter().map(Expr::Term);
+                let first = terms.next().map_or_else(|| err("Expected a filter term"), Ok)?;
+                Ok(terms.fold(first, |a, b| Expr::And(Box::new(a), Box::new(b))))
+            }
             Some(Token::Close) => err("Unexpected “)”"),
             Some(Token::Comma) | None => err("Expected a filter term"),
             Some(op) => err(format!("Expected a filter term before {}", op_name(&op))),
@@ -298,9 +574,10 @@ fn op_name(t: &Token) -> &'static str {
     }
 }
 
-/// Parses a query into its comma-separated groups.
-pub fn parse(query: &str) -> Result<Vec<Expr>, FilterError> {
-    let mut p = Parser { tokens: tokenize(query), pos: 0 };
+/// Parses a query into its comma-separated groups. Relative phrases resolve
+/// against `today`, so parse on every run.
+pub fn parse(query: &str, today: NaiveDate, names: &FilterNames) -> Result<Vec<Expr>, FilterError> {
+    let mut p = Parser { tokens: tokenize(query), pos: 0, query, today, names };
     if p.tokens.is_empty() {
         return err("The query is empty");
     }
@@ -313,6 +590,125 @@ pub fn parse(query: &str) -> Result<Vec<Expr>, FilterError> {
             Some(_) => return err("Expected “&”, “|” or “,” between terms"),
         }
     }
+}
+
+/// What the filter editors draw: the query cut into segments, the first
+/// problem (a syntax error, else an unknown name) and a one-tap fix.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct FilterReading {
+    pub segments: Vec<TitleSegment>,
+    pub problem: Option<String>,
+    pub fix: Option<FilterFix>,
+}
+
+/// A suggested rewrite: the button's label and the whole corrected query.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct FilterFix {
+    pub label: String,
+    pub query: String,
+}
+
+/// The names that exist, as the filter reads them.
+pub fn names_of(projects: &[Project], sections: &[Section], labels: &[Label]) -> FilterNames {
+    FilterNames {
+        projects: projects.iter().map(|p| p.name.clone()).collect(),
+        sections: sections.iter().map(|s| s.name.clone()).collect(),
+        labels: labels.iter().map(|l| l.name.clone()).collect(),
+    }
+}
+
+/// Reads `query` for the editors (see [`FilterReading`]).
+pub fn read(query: &str, today: NaiveDate, projects: &[Project], sections: &[Section], labels: &[Label]) -> FilterReading {
+    let names = names_of(projects, sections, labels);
+    let spans = spans(query, today, &names);
+    let error = parse(query, today, &names).err();
+    let bad = error.as_ref().and_then(|e| e.at);
+    // Each segment with its byte start, computed once; a syntax error's range
+    // splits the segments it crosses.
+    let mut parts: Vec<(usize, TitleSegment)> = Vec::new();
+    let mut start = 0;
+    for s in title_segments(query, &spans) {
+        let end = start + s.text.len();
+        match bad.map(|(a, b)| (a.max(start), b.min(end))) {
+            Some((lo, hi)) if lo < hi && query.is_char_boundary(lo) && query.is_char_boundary(hi) => {
+                for (from, to, unknown) in [(start, lo, false), (lo, hi, true), (hi, end, false)] {
+                    if from < to {
+                        parts.push((from, TitleSegment { text: query[from..to].to_string(), unknown: unknown || s.unknown, ..s.clone() }));
+                    }
+                }
+            }
+            _ => parts.push((start, s)),
+        }
+        start = end;
+    }
+    debug_assert_eq!(parts.iter().map(|(_, s)| s.text.as_str()).collect::<String>(), query);
+    let mut problem = None;
+    let mut fix = None;
+    for (start, s) in parts.iter_mut() {
+        match s.kind {
+            Some(SpanKind::Date | SpanKind::Time) => {
+                let t = crate::phrases::tokens(&s.text);
+                let date = crate::phrases::match_date(&t, 0, today).map(|(_, d)| d);
+                let time = crate::phrases::match_time(&t, date.map_or(0, |_| 1)).map(|(_, t)| t);
+                s.bucket = crate::editor::date_chip(date, time, today).1;
+            }
+            Some(SpanKind::Project | SpanKind::Section | SpanKind::Label) => {
+                let (noun, pool) = match s.kind {
+                    Some(SpanKind::Project) => ("project", &names.projects),
+                    Some(SpanKind::Section) => ("section", &names.sections),
+                    _ => ("label", &names.labels),
+                };
+                // The sigil as the parser stripped it (`##` counts as `#`), so
+                // sigil + name is exactly the start of this segment.
+                let Some((sigil, name)) = crate::phrases::phrase_parts(&s.text) else { continue };
+                let name = name.as_str();
+                if pool.iter().any(|n| crate::phrases::same_name(n, name)) {
+                    continue;
+                }
+                s.unknown = true;
+                if problem.is_none() {
+                    problem = Some(format!("No {noun} named “{name}”."));
+                    let refs: Vec<&str> = pool.iter().map(String::as_str).collect();
+                    if let Some(near) = closest(name, &refs) {
+                        let mut q = query.to_string();
+                        q.replace_range(*start..*start + sigil.len() + name.len(), &format!("{sigil}{near}"));
+                        fix = Some(FilterFix { label: format!("Use {sigil}{near}"), query: q });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(e) = error {
+        problem = Some(e.message);
+        fix = None;
+    }
+    FilterReading { segments: parts.into_iter().map(|(_, s)| s).collect(), problem, fix }
+}
+
+/// `query` with the term ending at byte `end` turned into quoted text
+/// (`tomorrow` becomes `"tomorrow"`); `None` when no term ends there.
+pub fn unhighlight(query: &str, today: NaiveDate, names: &FilterNames, end: usize) -> Option<String> {
+    let span = spans(query, today, names).into_iter().find(|s| s.end == end)?;
+    Some(format!("{}\"{}\"{}", &query[..span.start], &query[span.start..span.end], &query[span.end..]))
+}
+
+/// Every recognized term's byte range and kind, for highlighting. Best
+/// effort: a piece that doesn't read (or an operator error) costs only its
+/// own spans.
+pub fn spans(query: &str, today: NaiveDate, names: &FilterNames) -> Vec<Span> {
+    let mut out: Vec<Span> = tokenize(query)
+        .iter()
+        .filter_map(|t| match t {
+            Token::Piece(p) => read_piece(query, p, today, names).ok().map(|(_, s)| s),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    out.sort_by_key(|s| s.start);
+    out
 }
 
 /// Whether `task` satisfies `expr`.
@@ -332,8 +728,8 @@ fn term_matches(term: &Term, task: &Task, ctx: &FilterContext) -> bool {
     let lower_eq = |a: &str, b: &str| a.to_lowercase() == b;
     match term {
         Term::All => true,
-        Term::Today => due == Some(today),
-        Term::Tomorrow => due == Some(today + Duration::days(1)),
+        Term::Today => occurs_on(task, today),
+        Term::Tomorrow => occurs_on(task, today + Duration::days(1)),
         Term::Overdue => due.is_some_and(|d| d < today),
         Term::NoDate => due.is_none(),
         Term::NoDeadline => deadline.is_none(),
@@ -348,24 +744,181 @@ fn term_matches(term: &Term, task: &Task, ctx: &FilterContext) -> bool {
             .and_then(|s| ctx.sections.get(s))
             .is_some_and(|n| lower_eq(n, name)),
         Term::Label(name) => task.labels.iter().any(|l| lower_eq(l, name)),
-        Term::Search(text) => crate::search::matches(task, &crate::search::words(text)),
+        Term::Search(text) | Term::Text(text) => crate::search::matches(task, &crate::search::words(text)),
         Term::DueBefore(r) => due.is_some_and(|d| d < r.resolve(today)),
-        Term::DueAfter(r) => due.is_some_and(|d| d > r.resolve(today)),
-        Term::DueOn(r) => due == Some(r.resolve(today)),
+        Term::DueAfter(r) => occurs_after(task, r.resolve(today)),
+        Term::DueOn(r) => occurs_on(task, r.resolve(today)),
         Term::DeadlineBefore(r) => deadline.is_some_and(|d| d < r.resolve(today)),
         Term::DeadlineAfter(r) => deadline.is_some_and(|d| d > r.resolve(today)),
         Term::DeadlineOn(r) => deadline == Some(r.resolve(today)),
-        Term::NextDays(n) => due.is_some_and(|d| d >= today && d < today + Duration::days(*n)),
+        Term::NextDays(n) => occurs_in(task, today, today + Duration::days(*n)),
+        Term::Repeat(spec) => task
+            .due
+            .as_ref()
+            .and_then(|d| d.recurrence.as_ref())
+            .is_some_and(|rule| repeat_matches(spec, rule)),
+        Term::DueAt(d, t) => occurs_on(task, *d) && due_time(task) == Some(*t),
+        Term::Streak => task.streak_enabled,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{matches, parse, FilterContext};
+
+    fn read_with(q: &str) -> super::FilterReading {
+        use crate::model::{Label, Project, Section};
+        let work = Project::new("Work");
+        let sec = Section::new(work.id.clone(), "Next Up", 0);
+        read(q, d(2026, 10, 19), &[work, Project::new("Home")], &[sec], &[Label::new("home")])
+    }
+
+    #[test]
+    fn unknown_project_is_red_with_a_fix() {
+        let r = read_with("printer ink & today & #wrok");
+        let bad: Vec<_> = r.segments.iter().filter(|s| s.unknown).map(|s| s.text.as_str()).collect();
+        assert_eq!(bad, ["#wrok"]);
+        assert_eq!(r.problem.as_deref(), Some("No project named “wrok”."));
+        assert_eq!(r.fix, Some(FilterFix { label: "Use #Work".into(), query: "printer ink & today & #Work".into() }));
+    }
+
+    #[test]
+    fn known_name_with_punctuation_is_fine() {
+        let r = read_with("#Work. & today");
+        assert!(r.segments.iter().all(|s| !s.unknown));
+        assert_eq!(r.problem, None);
+        // The fix keeps the punctuation after the name.
+        let r = read_with("#wrok. & today");
+        assert_eq!(r.problem.as_deref(), Some("No project named “wrok”."));
+        assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("#Work. & today"));
+    }
+
+    #[test]
+    fn known_names_are_fine() {
+        let r = read_with("#work & @home & /next up");
+        assert!(r.segments.iter().all(|s| !s.unknown));
+        assert_eq!(r.problem, None);
+    }
+
+    #[test]
+    fn syntax_error_wins() {
+        let r = read_with("today &");
+        assert_eq!(r.problem, parse("today &", d(2026, 10, 19), &FilterNames::default()).err().map(|e| e.message));
+        assert!(r.problem.is_some() && r.fix.is_none());
+    }
+
+    #[test]
+    fn backspace_quotes_the_term() {
+        let t = d(2026, 10, 19);
+        assert_eq!(unhighlight("call mom tomorrow", t, &FilterNames::default(), 17).as_deref(), Some("call mom \"tomorrow\""));
+        assert_eq!(unhighlight("call mom tomorrow", t, &FilterNames::default(), 8), None);
+    }
+
+    #[test]
+    fn backspace_quotes_a_known_multi_word_name() {
+        assert_eq!(unhighlight("/Next Up & today", d(2026, 10, 19), &names(), 8).as_deref(), Some("\"/Next Up\" & today"));
+    }
+
+    #[test]
+    fn fix_after_multibyte_text() {
+        let r = read_with("café & #wrok");
+        assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("café & #Work"));
+    }
+
+    #[test]
+    fn doubled_sigil_fix_replaces_only_that_word() {
+        // The fix rewrites exactly the typed word: sigil as the parser
+        // stripped it, then the name. These used to slice past the word (panic).
+        let fix = |q: &str| read_with(q).fix.map(|f| f.query);
+        let r = read_with("@@hme");
+        assert_eq!(r.problem.as_deref(), Some("No label named “@hme”."));
+        assert_eq!(fix("@@hme").as_deref(), Some("@home"));
+        assert_eq!(fix("@@hme & today").as_deref(), Some("@home & today"));
+        let r = read_with("###wrk");
+        assert_eq!(r.problem.as_deref(), Some("No project named “#wrk”."));
+        assert_eq!(fix("###wrk").as_deref(), Some("##Work"));
+        assert_eq!(read_with("###wrok").problem.as_deref(), Some("No project named “#wrok”."));
+        assert_eq!(fix("###wrok & today"), None); // "#wrok" is 3 edits from "Work"
+        assert_eq!(fix("###wrk & today").as_deref(), Some("##Work & today"));
+    }
+
+    #[test]
+    fn bare_and_stacked_sigils_never_slice_past_the_word() {
+        for q in ["@", "#", "##", "@@@hme & today"] {
+            let r = read_with(q);
+            assert_eq!(r.segments.iter().map(|s| s.text.as_str()).collect::<String>(), q);
+            if let Some(f) = &r.fix {
+                assert!(f.query.ends_with(" & today"), "{q:?}: {f:?}");
+            }
+        }
+        // "@@@hme" names "@@hme": too far from "home" for a fix.
+        let r = read_with("@@@hme & today");
+        assert_eq!(r.problem.as_deref(), Some("No label named “@@hme”."));
+        assert_eq!(r.fix, None);
+    }
+
+    #[test]
+    fn unknown_section_and_label_messages() {
+        // An unknown name is one word (a known one may have several).
+        let r = read_with("/Nxt Up");
+        assert_eq!(r.problem.as_deref(), Some("No section named “Nxt”."));
+        assert_eq!(r.fix, None);
+        let r = read_with("today & @hom");
+        assert_eq!(r.problem.as_deref(), Some("No label named “hom”."));
+        assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("today & @home"));
+        assert_eq!(read_with("@zzzzzz").fix, None);
+    }
+
+    #[test]
+    fn syntax_error_range_is_marked_unknown() {
+        let q = "p1 & due before: blah";
+        let r = read_with(q);
+        let e = parse(q, d(2026, 10, 19), &FilterNames::default()).unwrap_err();
+        let (a, b) = e.at.expect("a colon term's error has a range");
+        assert_eq!(&q[a..b], "due before: blah");
+        let bad: String = r.segments.iter().filter(|s| s.unknown).map(|s| s.text.as_str()).collect();
+        assert_eq!(bad, "due before: blah");
+        assert!(r.segments.iter().any(|s| s.text == "p1" && !s.unknown));
+        assert_eq!(r.problem, Some(e.message));
+    }
+
+    #[test]
+    fn date_segments_carry_their_bucket() {
+        use crate::views::DueBucket;
+        let r = read_with("today | tomorrow | oct 22 | nov 30");
+        let bucket = |t: &str| r.segments.iter().find(|s| s.text == t).unwrap_or_else(|| panic!("{t}")).bucket;
+        assert_eq!(bucket("today"), Some(DueBucket::Today));
+        assert_eq!(bucket("tomorrow"), Some(DueBucket::Tomorrow));
+        assert_eq!(bucket("oct 22"), Some(DueBucket::ThisWeek));
+        assert_eq!(bucket("nov 30"), Some(DueBucket::Later));
+    }
+
+    #[test]
+    fn closest_prefers_the_first_and_ignores_case() {
+        use crate::model::{Label, Project};
+        let today = d(2026, 10, 19);
+        // "wrk" is one edit from both; the first listed wins.
+        let r = read("#wrk", today, &[Project::new("Work"), Project::new("Wark")], &[], &[]);
+        assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("#Work"));
+        let r = read("#wrk", today, &[Project::new("Wark"), Project::new("Work")], &[], &[]);
+        assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("#Wark"));
+        // Case never counts as an edit: "ERRANDZ" is one edit from "errands".
+        let r = read("@ERRANDZ", today, &[], &[], &[Label::new("errands")]);
+        assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("@errands"));
+        // And a name differing only in case is known.
+        assert_eq!(read("@ERRANDS", today, &[], &[], &[Label::new("errands")]).problem, None);
+    }
+
+    #[test]
+    fn backspace_after_multibyte() {
+        assert_eq!(unhighlight("café tomorrow", d(2026, 10, 19), &FilterNames::default(), 14).as_deref(), Some("café \"tomorrow\""));
+    }
+    use super::{matches, parse, read, spans, unhighlight, FilterFix, DateRef, Expr, FilterContext, FilterNames, Term};
     use crate::ids::Id;
     use crate::model::{Due, Priority, Task};
+    use crate::phrases::RepeatSpec;
+    use crate::quickadd::{Span, SpanKind};
     use crate::recurrence::Recurrence;
-    use chrono::NaiveDate;
+    use chrono::{NaiveDate, NaiveTime};
     use std::collections::HashMap;
 
     fn d(y: i32, m: u32, day: u32) -> NaiveDate {
@@ -379,6 +932,29 @@ mod tests {
         let mut sections = HashMap::new();
         sections.insert(Id::from("S-NEXT"), "Next Up".to_string());
         FilterContext { today: d(2026, 10, 19), projects, sections }
+    }
+
+    fn names() -> FilterNames {
+        FilterNames {
+            projects: vec!["Work".into(), "Home".into()],
+            sections: vec!["Next Up".into()],
+            labels: vec!["home".into()],
+        }
+    }
+
+    /// The single group `query` parses to.
+    fn one(query: &str) -> Expr {
+        let mut groups = parse(query, ctx().today, &names()).unwrap_or_else(|e| panic!("{query:?} should parse: {e}"));
+        assert_eq!(groups.len(), 1, "{query:?}");
+        groups.remove(0)
+    }
+
+    fn term(t: Term) -> Expr {
+        Expr::Term(t)
+    }
+
+    fn and(a: Expr, b: Expr) -> Expr {
+        Expr::And(Box::new(a), Box::new(b))
     }
 
     fn task(name: &str) -> Task {
@@ -401,16 +977,269 @@ mod tests {
 
     /// Does `query` (single group) match `t`?
     fn m(query: &str, t: &Task) -> bool {
-        let groups = parse(query).unwrap_or_else(|e| panic!("{query:?} should parse: {e}"));
-        assert_eq!(groups.len(), 1);
-        matches(&groups[0], t, &ctx())
+        matches(&one(query), t, &ctx())
     }
 
     #[test]
     fn invalid_queries_error() {
-        for q in ["", "   ", "p5", "(today", "today)", "& today", "today &", "today | ", "!", "foo", "#", "@", "due before:", "due before: someday", "3 dayz"] {
-            assert!(parse(q).is_err(), "{q:?} should be rejected");
+        let today = ctx().today;
+        for q in ["", "   ", "&", "(today", "today)", "& today", "today &", "today | ", "!", "due before:", "due before: someday", "due: blursday"] {
+            assert!(parse(q, today, &names()).is_err(), "{q:?} should be rejected");
         }
+        for q in ["foo", "p5", "3 dayz", "#", "@"] {
+            assert!(parse(q, today, &names()).is_ok(), "{q:?} should parse as text");
+        }
+        assert_eq!(one("foo"), term(Term::Text("foo".into())));
+        assert_eq!(one("3 dayz"), term(Term::Text("3 dayz".into())));
+    }
+
+    #[test]
+    fn colon_term_error_has_its_range() {
+        let e = parse("today & due: blursday", ctx().today, &names()).unwrap_err();
+        assert_eq!(e.at, Some((8, 21)));
+        assert!(e.to_string().contains("blursday"), "{e}");
+    }
+
+    #[test]
+    fn multi_word_names_read_whole() {
+        assert_eq!(one("/Next Up & tomorrow"), and(term(Term::Section("next up".into())), term(Term::Tomorrow)));
+        assert_eq!(one("#Gone today"), and(term(Term::Project("gone".into())), term(Term::Today)));
+    }
+
+    #[test]
+    fn words_and_phrases_are_anded() {
+        let q = "buy milk tomorrow";
+        assert!(m(q, &due(task("Buy milk"), "2026-10-20")));
+        assert!(!m(q, &due(task("Buy milk"), "2026-10-21")));
+        assert!(!m(q, &due(task("Buy bread"), "2026-10-20")));
+        assert_eq!(one(q), and(term(Term::Text("buy milk".into())), term(Term::Tomorrow)));
+    }
+
+    #[test]
+    fn quoted_word_is_text() {
+        assert!(m("\"tomorrow\"", &task("Call mom tomorrow")));
+        assert!(!m("\"tomorrow\"", &due(task(""), "2026-10-20")));
+    }
+
+    #[test]
+    fn quotes_keep_operators() {
+        assert_eq!(one("\"a & b\""), term(Term::Text("a & b".into())));
+    }
+
+    #[test]
+    fn unclosed_and_empty_quotes() {
+        assert_eq!(one("\"tomorrow"), term(Term::Text("tomorrow".into())));
+        assert_eq!(one("buy \"\""), term(Term::Text("buy".into())));
+        let e = parse("\"\"", ctx().today, &names()).unwrap_err();
+        assert_eq!(e.message, "The query is empty");
+    }
+
+    #[test]
+    fn quick_add_dates_in_filters() {
+        assert_eq!(one("in 3 days"), term(Term::DueOn(DateRef::On(d(2026, 10, 22)))));
+        // Mon 10-19: Friday 10-23 is this week, so "next friday" is 10-30.
+        assert_eq!(one("next friday"), term(Term::DueOn(DateRef::On(d(2026, 10, 30)))));
+        assert_eq!(one("nov 30"), term(Term::DueOn(DateRef::On(d(2026, 11, 30)))));
+    }
+
+    #[test]
+    fn repeat_phrase_term() {
+        assert_eq!(one("every 2 weeks"), term(Term::Repeat(RepeatSpec::EveryNWeeks(2, None))));
+    }
+
+    #[test]
+    fn unreadable_every_stays_text() {
+        assert_eq!(one("every 5th monday"), term(Term::Text("every 5th monday".into())));
+    }
+
+    #[test]
+    fn date_and_time() {
+        let five = NaiveTime::from_hms_opt(17, 0, 0).unwrap();
+        assert_eq!(one("tomorrow at 5pm"), term(Term::DueAt(d(2026, 10, 20), five)));
+        assert_eq!(one("5pm"), term(Term::DueAt(d(2026, 10, 19), five)));
+    }
+
+    #[test]
+    fn time_before_date_pairs_up() {
+        let today = ctx().today;
+        let span = |start, end, kind| Span { start, end, kind };
+        let want = one("tomorrow at 5pm");
+        assert_eq!(one("5pm tomorrow"), want);
+        assert_eq!(one("at 5pm tomorrow"), want);
+        assert_eq!(spans("tomorrow at 5pm", today, &names()), vec![span(0, 8, SpanKind::Date), span(9, 15, SpanKind::Time)]);
+        assert_eq!(spans("5pm tomorrow", today, &names()), vec![span(0, 3, SpanKind::Time), span(4, 12, SpanKind::Date)]);
+        assert_eq!(spans("at 5pm tomorrow", today, &names()), vec![span(0, 6, SpanKind::Time), span(7, 15, SpanKind::Date)]);
+    }
+
+    #[test]
+    fn old_queries_still_parse() {
+        for q in [
+            "today",
+            "overdue | @home",
+            "#Work & p1",
+            "(today | overdue) & !@x",
+            "due before: +3 days",
+            "deadline: 2026-10-31",
+            "7 days",
+            "next 7 days",
+            "no date, overdue",
+            "search: Milk",
+            "/Next Up",
+        ] {
+            assert!(parse(q, ctx().today, &names()).is_ok(), "{q:?} should parse");
+        }
+    }
+
+    #[test]
+    fn next_seven_days_is_a_range() {
+        assert_eq!(one("next 7 days"), term(Term::NextDays(7)));
+        assert_eq!(one("7 days"), term(Term::NextDays(7)));
+    }
+
+    #[test]
+    fn more_parse_forms() {
+        assert_eq!(one("\u{201C}tomorrow\u{201D}"), term(Term::Text("tomorrow".into())));
+        assert_eq!(one("due before: next friday"), term(Term::DueBefore(DateRef::On(d(2026, 10, 30)))));
+        assert_eq!(one("7days"), term(Term::NextDays(7)));
+    }
+
+    #[test]
+    fn next_n_days_ends_before_day_n() {
+        // Sundays since Oct 11; today is Monday Oct 19, so the next is Oct 25 (day 6).
+        let mut weekly = due(task("w"), "2026-10-11");
+        if let Some(d) = weekly.due.as_mut() {
+            d.is_recurring = true;
+            d.recurrence = Some(Recurrence::Weekly(vec![6]));
+        }
+        assert!(!m("next 6 days", &weekly));
+        assert!(m("next 7 days", &weekly));
+        // The same for a next date that is itself day N.
+        let one_off = due(task("o"), "2026-10-25");
+        assert!(!m("next 6 days", &one_off) && m("next 7 days", &one_off));
+    }
+
+    #[test]
+    fn due_after_is_strict() {
+        let t = due(task("o"), "2026-10-22");
+        assert!(!m("due after: oct 22", &t));
+        assert!(m("due after: oct 21", &t));
+        let mut daily = due(task("d"), "2026-10-18");
+        if let Some(d) = daily.due.as_mut() {
+            d.is_recurring = true;
+            d.recurrence = Some(Recurrence::Daily);
+            d.until = Some("2026-10-22".into());
+        }
+        assert!(m("due after: oct 21", &daily));
+        assert!(!m("due after: oct 22", &daily));
+    }
+
+    #[test]
+    fn repeating_time_matches_a_later_day_at_that_time() {
+        let mut daily = due(task("d"), "2026-10-18T17:00:00");
+        if let Some(d) = daily.due.as_mut() {
+            d.is_recurring = true;
+            d.recurrence = Some(Recurrence::Daily);
+        }
+        assert!(m("in 3 days at 5pm", &daily));
+        assert!(!m("in 3 days at 6pm", &daily));
+    }
+
+    #[test]
+    fn spans_for_highlighting() {
+        let today = ctx().today;
+        let span = |start, end, kind| Span { start, end, kind };
+        assert_eq!(
+            spans("buy milk tomorrow & #Work", today, &names()),
+            vec![span(9, 17, SpanKind::Date), span(20, 25, SpanKind::Project)]
+        );
+        assert_eq!(spans("\"tomorrow\" p1", today, &names()), vec![span(11, 13, SpanKind::Priority)]);
+        assert_eq!(
+            spans("due before: +3 days | overdue & streak", today, &names()),
+            vec![span(0, 19, SpanKind::Keyword), span(22, 29, SpanKind::Keyword), span(32, 38, SpanKind::Keyword)]
+        );
+        // Best effort: the bad piece has no span, the good ones still do.
+        assert_eq!(spans("p1 & (", today, &names()), vec![span(0, 2, SpanKind::Priority)]);
+    }
+
+    #[test]
+    fn new_terms_match() {
+        let mut daily = due(task("water"), "2026-10-19T17:00:00");
+        if let Some(d) = daily.due.as_mut() {
+            d.is_recurring = true;
+            d.recurrence = Some(Recurrence::EveryNWeeks { n: 2, days: vec![0], anchor: d_anchor() });
+        }
+        assert!(m("every 2 weeks", &daily) && !m("every 3 weeks", &daily));
+        assert!(m("5pm", &daily) && !m("6pm", &daily) && !m("tomorrow 5pm", &daily));
+        assert!(!m("streak", &daily));
+        daily.streak_enabled = true;
+        assert!(m("streak", &daily));
+    }
+
+    fn rep(mut t: Task, rule: Recurrence, until: Option<&str>) -> Task {
+        if let Some(d) = t.due.as_mut() {
+            d.is_recurring = true;
+            d.recurrence = Some(rule);
+            d.until = until.map(String::from);
+        }
+        t
+    }
+
+    #[test]
+    fn dates_match_occurrences() {
+        let daily = rep(due(task("a"), "2026-10-19"), Recurrence::Daily, None);
+        for q in ["today", "tomorrow", "in 3 days", "next 7 days", "due: +5 days", "due after: +10 days"] {
+            assert!(m(q, &daily), "{q}");
+        }
+        let ends = rep(due(task("a"), "2026-10-19"), Recurrence::Daily, Some("2026-10-20"));
+        assert!(m("tomorrow", &ends));
+        assert!(!m("in 3 days", &ends));
+    }
+
+    #[test]
+    fn weekly_task_in_three_days() {
+        let t = rep(due(task("a"), "2026-10-22"), Recurrence::Weekly(vec![3]), None);
+        assert!(m("in 3 days", &t));
+        let mut c = ctx();
+        c.today = d(2026, 10, 20);
+        let e = parse("in 3 days", c.today, &names()).unwrap().remove(0);
+        assert!(!matches(&e, &t, &c));
+    }
+
+    #[test]
+    fn overdue_is_next_date_only() {
+        assert!(m("overdue", &rep(due(task("a"), "2026-10-17"), Recurrence::Daily, None)));
+        assert!(!m("overdue", &rep(due(task("a"), "2026-10-19"), Recurrence::Daily, None)));
+    }
+
+    #[test]
+    fn repeat_terms_match_shape() {
+        let t = rep(
+            due(task("a"), "2026-10-22"),
+            Recurrence::EveryNWeeks { n: 2, days: vec![3], anchor: d(2026, 10, 1) },
+            Some("2026-12-31"),
+        );
+        assert!(m("every 2 weeks", &t));
+        let w = rep(due(task("a"), "2026-10-19"), Recurrence::Weekly(vec![0, 2]), None);
+        assert!(m("every monday", &w));
+    }
+
+    #[test]
+    fn streak_term() {
+        let mut t = due(task("a"), "2026-10-19");
+        assert!(!m("streak", &t));
+        t.streak_enabled = true;
+        assert!(m("streak", &t));
+    }
+
+    #[test]
+    fn time_term() {
+        let t = due(task("a"), "2026-10-20T17:00:00");
+        assert!(m("tomorrow at 5pm", &t));
+        assert!(!m("tomorrow at 6pm", &t));
+    }
+
+    fn d_anchor() -> NaiveDate {
+        d(2026, 10, 19)
     }
 
     #[test]
@@ -468,7 +1297,7 @@ mod tests {
 
     #[test]
     fn comma_makes_groups() {
-        let groups = parse("today, overdue,  @home").unwrap();
+        let groups = parse("today, overdue,  @home", ctx().today, &names()).unwrap();
         assert_eq!(groups.len(), 3);
     }
 
