@@ -263,7 +263,7 @@ fn parse_tokens(
                 continue;
             }
         }
-        if q.project_id.is_none() && t[i].raw.starts_with('#') {
+        if q.project_id.is_none() && q.new_project.is_none() && t[i].raw.starts_with('#') {
             if let Some((n, pos)) = match_name(&t, i, "#", &project_names) {
                 q.project_id = Some(projects[pos].id.clone());
                 take(&mut used, &mut spans, i, n, SpanKind::Project);
@@ -672,6 +672,16 @@ mod tests {
         let q = p("Buy ink #wrok");
         assert_eq!((q.content.as_str(), q.project_id.clone(), q.new_project.as_deref()), ("Buy ink", None, Some("wrok")));
         assert_eq!(q.spans, vec![crate::quickadd::Span { start: 8, end: 13, kind: SpanKind::Project }]);
+    }
+
+    #[test]
+    fn first_hash_phrase_wins() {
+        let q = p("Buy #foo #work");
+        assert_eq!((q.new_project.as_deref(), q.project_id.clone(), q.content.as_str()), (Some("foo"), None, "Buy #work"));
+        assert_eq!(q.spans.len(), 1);
+        assert_eq!((q.spans[0].start, q.spans[0].end, q.spans[0].kind), (4, 8, SpanKind::Project));
+        let q = p("Buy #work #foo");
+        assert_eq!((q.project_id, q.new_project, q.content.as_str()), (Some(Id::from("P-WORK")), None, "Buy #foo"));
     }
 
     #[test]
