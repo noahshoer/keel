@@ -24,6 +24,9 @@ export const moveTask = (id: Id, projectId: Id, sectionId: Id | null) =>
   send({ type: "task_move", id, project_id: projectId, section_id: sectionId });
 export const setStreak = (id: Id, enabled: boolean, goal: number | null) =>
   send({ type: "task_set_streak", id, enabled, goal });
+/** Turns on/off a task completing itself once its sub-tasks are all done. */
+export const setDoneWithSubtasks = (id: Id, enabled: boolean) =>
+  send({ type: "task_set_done_with_subtasks", id, enabled });
 
 export const addProject = (name: string) => send({ type: "project_add", name }, true);
 export const renameProject = (id: Id, name: string) => send({ type: "project_update", id, name });

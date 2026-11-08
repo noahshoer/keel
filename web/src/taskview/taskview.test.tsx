@@ -465,11 +465,51 @@ it("Delete task in ••• deletes, and the view closes after the reload", asy
   fireEvent.click(top().querySelector(".tv-more") as HTMLElement);
   const items = [...top().querySelectorAll(".popover.menu .menu-item")];
   // Not repeating: no Streak.
-  expect(items.map((i) => i.textContent)).toEqual(["Delete task"]);
-  expect(items[0]?.className).toBe("menu-item danger");
-  fireEvent.click(items[0] as HTMLElement);
+  expect(items.map((i) => i.textContent)).toEqual(["Done with sub-tasks", "Delete task"]);
+  expect(items[1]?.className).toBe("menu-item danger");
+  fireEvent.click(items[1] as HTMLElement);
   await waitFor(() => expect(stack()).toBe(""));
   expect((await allTasks()).some((t) => t.id === "t-trip")).toBe(false);
+});
+
+it("Done with sub-tasks in ••• turns the setting on and closes the menu", async () => {
+  const sent = spyActions();
+  await show(["t-trip"]);
+  fireEvent.click(top().querySelector(".tv-more") as HTMLElement);
+  const item = within(top()).getByText("Done with sub-tasks").closest(".menu-item") as HTMLElement;
+  expect(item.classList.contains("checked")).toBe(false);
+  fireEvent.click(item);
+  await waitFor(() =>
+    expect(sent).toContainEqual({ type: "task_set_done_with_subtasks", id: "t-trip", enabled: true }),
+  );
+  expect(top().querySelector(".popover.menu")).toBeNull();
+  await waitFor(async () => expect((await task("t-trip"))?.done_with_subtasks).toBe(true));
+});
+
+it("Done with sub-tasks shows checked when on, and a tap turns it off", async () => {
+  await invoke("dispatch", {
+    cmd: {
+      uuid: "on",
+      temp_id: null,
+      action: { type: "task_set_done_with_subtasks", id: "t-trip", enabled: true },
+    },
+  });
+  const sent = spyActions();
+  await show(["t-trip"]);
+  fireEvent.click(top().querySelector(".tv-more") as HTMLElement);
+  const item = within(top()).getByText("Done with sub-tasks").closest(".menu-item") as HTMLElement;
+  expect(item.classList.contains("checked")).toBe(true);
+  expect(item.querySelector(".menu-check")).not.toBeNull();
+  fireEvent.click(item);
+  await waitFor(() =>
+    expect(sent).toContainEqual({ type: "task_set_done_with_subtasks", id: "t-trip", enabled: false }),
+  );
+});
+
+it("a task without sub-tasks has no Done with sub-tasks item", async () => {
+  await show(["t-inbox"]);
+  fireEvent.click(top().querySelector(".tv-more") as HTMLElement);
+  expect(within(top()).queryByText("Done with sub-tasks")).toBeNull();
 });
 
 it("Add sub-task opens the editor; Enter adds under this task and it stays open", async () => {

@@ -28,7 +28,7 @@ import { usePillFade } from "../editor/pillFade";
 import type { Pop } from "../editor/pop";
 import { saveEdit } from "../editor/save";
 import { slideClose } from "../gestures/sheet";
-import { completeTask, deleteTask, uncompleteTask } from "../ipc/actions";
+import { completeTask, deleteTask, setDoneWithSubtasks, uncompleteTask } from "../ipc/actions";
 import { CHECK_CLASS } from "../lists/chips";
 import { openAndFocus } from "../shell/focus";
 import { haptic } from "../shell/haptics";
@@ -390,6 +390,11 @@ export function TaskView({
               <MoreMenu
                 recurring={recurring}
                 onStreak={() => openStreak("streak-more")}
+                doneWith={detail.has_subtasks || task.done_with_subtasks ? task.done_with_subtasks : null}
+                onDoneWith={() => {
+                  setMoreOpen(false);
+                  void settle(setDoneWithSubtasks(id, !task.done_with_subtasks)).then(onChanged);
+                }}
                 onDelete={() => {
                   setMoreOpen(false);
                   // The reload prunes the stack: this view and any above it close.
