@@ -22,7 +22,7 @@ use keel_core::model::{
 use keel_core::quickadd::{QuickAdd, Span, SpanKind};
 use keel_core::recurrence::Recurrence;
 use keel_core::reminders::{PlannedReminder, ReminderSettings};
-use keel_core::search::SearchResults;
+use keel_core::search::{SearchResults, SearchScope};
 use keel_core::settings::{MenuKind, ReminderMenus, SettingChoice, SettingMenu};
 use keel_core::task_view::{Field, FieldLayout, Missing, MissingPill, TaskDetail};
 use keel_core::views::{Card, CardMode, CardRow, DateGroup, DateGroupMode, DueBucket, LabelChoice, LabelGroup, Progress, ProjectCount, SidebarCounts};
@@ -74,7 +74,7 @@ fn bindings_cover_ipc_types() {
         // settings (the wasm boundary)
         SettingChoice, SettingMenu, ReminderMenus, MenuKind,
         // query results
-        PlannedReminder, ReminderSettings, SearchResults, FilterGroup, ImportSummary,
+        PlannedReminder, ReminderSettings, SearchResults, SearchScope, FilterGroup, ImportSummary,
     );
     let dir = bindings_dir();
     write_index(&dir);

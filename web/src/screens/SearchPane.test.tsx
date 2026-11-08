@@ -177,3 +177,32 @@ it("a slow earlier search never replaces newer results", async () => {
     delete window.__TAURI__;
   }
 });
+
+it("from Today the search covers everything: no scope chip", async () => {
+  const { container } = await openSearch();
+  expect(container.querySelector(".scope-chip")).toBeNull();
+});
+
+it("opened from a project, the search stays inside it until the chip is removed", async () => {
+  const r = render(<App />);
+  await screen.findByText("Do laundry");
+  const nav = r.container.querySelector(".sidebar") as HTMLElement;
+  fireEvent.click(within(nav).getByText("Home"));
+  await waitFor(() => expect(document.querySelector(".view-title")?.textContent).toBe("Home"));
+  fireEvent.click(document.querySelector(".search-btn") as HTMLElement);
+  const chip = await screen.findByRole("button", { name: /Searching in #Home/ });
+  expect(chip.textContent).toBe("#Home");
+  // Leaving and opening from Today searches everything again.
+  fireEvent.click(chip);
+  expect(r.container.querySelector(".scope-chip")).toBeNull();
+});
+
+it("a query that isn't a filter says it is searched as words", async () => {
+  const { container, input } = await openSearch();
+  fireEvent.change(input, { target: { value: "laundry &" } });
+  await waitFor(() =>
+    expect(container.querySelector(".search-problem")?.textContent).toContain("Searching for the words"),
+  );
+  fireEvent.change(input, { target: { value: "laundry" } });
+  await waitFor(() => expect(container.querySelector(".search-problem")).toBeNull());
+});

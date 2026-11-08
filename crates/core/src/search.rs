@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::ids::Id;
 use crate::model::Task;
 
 /// Search results for the Search view.
@@ -13,6 +14,27 @@ pub struct SearchResults {
     pub open: Vec<Task>,
     /// Completed tasks, newest first (capped).
     pub completed: Vec<Task>,
+}
+
+/// What a search is limited to, on top of the query (the page Search was
+/// opened from). It holds for every comma group of the query.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub enum SearchScope {
+    /// Tasks in this project (by id), sections and sub-tasks included.
+    Project { id: Id },
+    /// Tasks carrying this label (by name, case-insensitive).
+    Label { name: String },
+}
+
+impl SearchScope {
+    pub fn contains(&self, task: &Task) -> bool {
+        match self {
+            SearchScope::Project { id } => task.project_id == *id,
+            SearchScope::Label { name } => task.labels.iter().any(|l| l.eq_ignore_ascii_case(name)),
+        }
+    }
 }
 
 /// The query's words, lower-cased (a leading `@` on a word is ignored).
@@ -43,7 +65,7 @@ pub fn rank(task: &Task, words: &[String]) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::{matches, rank, words};
+    use super::{matches, rank, words, SearchScope};
     use crate::ids::Id;
     use crate::model::Task;
 
@@ -86,5 +108,20 @@ mod tests {
         let w = words("milk");
         assert_eq!(rank(&task("Buy milk", "", &[]), &w), 0);
         assert_eq!(rank(&task("Groceries", "milk, eggs", &[]), &w), 1);
+    }
+
+    #[test]
+    fn scopes_limit_by_project_id_or_label_name() {
+        let t = task("Buy milk", "", &["Errands"]);
+        assert!(SearchScope::Project { id: Id::from("P") }.contains(&t));
+        assert!(!SearchScope::Project { id: Id::from("Q") }.contains(&t));
+        assert!(SearchScope::Label { name: "errands".into() }.contains(&t));
+        assert!(!SearchScope::Label { name: "home".into() }.contains(&t));
+    }
+
+    #[test]
+    fn scope_json_is_tagged_by_kind() {
+        let json = serde_json::to_string(&SearchScope::Label { name: "home".into() }).unwrap();
+        assert_eq!(json, r#"{"kind":"label","name":"home"}"#);
     }
 }

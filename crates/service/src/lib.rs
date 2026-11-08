@@ -8,11 +8,11 @@ use chrono::{Local, NaiveDate, NaiveDateTime};
 use keel_core::commands::{apply_at, Action, ApplyResult, Command};
 use keel_core::import::todoist::{self, ImportOp, ImportSummary};
 use keel_core::ids::Id;
-use keel_core::filter::{self, FilterContext, FilterError, FilterGroup, FilterNames};
+use keel_core::filter::{self, Expr, FilterContext, FilterError, FilterGroup, FilterNames, Term};
 use keel_core::model::{Due, Filter, Label, Project, Reminder, Section, Task};
 use keel_core::reminders::{self, PlannedReminder, ReminderSettings};
 use keel_core::repository::{RepoError, Repository};
-use keel_core::search::{self, SearchResults};
+use keel_core::search::{self, SearchResults, SearchScope};
 use keel_core::streak;
 use keel_core::views;
 use keel_storage::SqliteRepo;
@@ -182,18 +182,30 @@ impl AppService {
         })
     }
 
-    /// Text search over open tasks (title matches first, then due date,
-    /// then priority) plus the newest matching completed tasks.
-    pub fn search(&self, query: &str) -> Result<SearchResults, RepoError> {
-        self.search_at(query, today())
+    /// Search over open tasks (title matches first, then due date, then
+    /// priority) plus the newest matching completed tasks. `query` is the
+    /// filter language, so plain words still mean "contains all of these";
+    /// when it doesn't parse it is searched as plain words. Comma groups are
+    /// one list, and `scope` (the page Search was opened from) limits all of them.
+    pub fn search(&self, query: &str, scope: Option<&SearchScope>) -> Result<SearchResults, RepoError> {
+        self.search_at(query, scope, today())
     }
 
-    pub fn search_at(&self, query: &str, today: NaiveDate) -> Result<SearchResults, RepoError> {
-        let words = search::words(query);
-        if words.is_empty() {
+    pub fn search_at(&self, query: &str, scope: Option<&SearchScope>, today: NaiveDate) -> Result<SearchResults, RepoError> {
+        if query.trim().is_empty() {
             return Ok(SearchResults::default());
         }
-        let mut open: Vec<Task> = self.open_tasks(today)?.into_iter().filter(|t| search::matches(t, &words)).collect();
+        let (names, projects, sections) = self.filter_names()?;
+        let groups = filter::parse(query, today, &names)
+            .unwrap_or_else(|_| vec![Expr::Term(Term::Text(query.trim().to_string()))]);
+        let ctx = FilterContext {
+            today,
+            projects: projects.into_iter().map(|p| (p.id, p.name)).collect(),
+            sections: sections.into_iter().map(|s| (s.id, s.name)).collect(),
+        };
+        let keep = |t: &Task| scope.is_none_or(|s| s.contains(t)) && groups.iter().any(|g| filter::matches(g, t, &ctx));
+        let words = filter::text_words(&groups);
+        let mut open: Vec<Task> = self.open_tasks(today)?.into_iter().filter(|t| keep(t)).collect();
         open.sort_by(|a, b| {
             let (da, db) = (views::due_date_of(a), views::due_date_of(b));
             search::rank(a, &words)
@@ -203,7 +215,7 @@ impl AppService {
                 .then(b.priority.to_api().cmp(&a.priority.to_api()))
                 .then(a.child_order.cmp(&b.child_order))
         });
-        let mut completed = self.completed(|t| search::matches(t, &words))?;
+        let mut completed = self.completed(keep)?;
         completed.truncate(50);
         Ok(SearchResults { open, completed })
     }

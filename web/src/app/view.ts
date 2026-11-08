@@ -2,7 +2,7 @@
 // subtitle, empty text, motion, and which keel-core card mode it asks for
 // (crates/ui/src/main.rs `View`, `view_mode`, `view_motion`, `MainPane`).
 // Picking a mode decides nothing about a task; the grouping is keel-core's.
-import type { CardMode, Id } from "../bindings";
+import type { CardMode, Id, SearchScope } from "../bindings";
 import { daySubtitle } from "../core";
 
 export type View =
@@ -15,6 +15,13 @@ export type View =
   | { kind: "search" };
 
 export type Motion = "fade" | "push" | "pop" | "still";
+
+/** What a search opened from `v` stays inside: a project's or a label's tasks. Other pages search everything. */
+export function searchScopeFor(v: View): SearchScope | null {
+  if (v.kind === "project") return { kind: "project", id: v.id };
+  if (v.kind === "label") return { kind: "label", name: v.name };
+  return null;
+}
 
 /** How many days Upcoming shows. */
 export const UPCOMING_DAYS = 14;

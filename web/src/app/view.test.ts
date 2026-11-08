@@ -4,6 +4,7 @@ import {
   canShowCompleted,
   emptyText,
   sameView,
+  searchScopeFor,
   showsProject,
   type View,
   viewMode,
@@ -102,4 +103,10 @@ describe("viewPlace", () => {
     ].map((v) => viewPlace(v as View));
     expect(new Set(places).size).toBe(places.length);
   });
+});
+
+it("a search opened from a project or label stays inside it; other pages search everything", () => {
+  expect(searchScopeFor(project)).toEqual({ kind: "project", id: "p" });
+  expect(searchScopeFor(label)).toEqual({ kind: "label", name: "home" });
+  for (const v of [today, inbox, upcoming, filter, search]) expect(searchScopeFor(v)).toBeNull();
 });

@@ -4,6 +4,7 @@
 // motion, and the task view's sheet. Liquid Glass is parked, so there are no
 // glass buttons; the header's menu button opens the drawer.
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SearchScope } from "../bindings";
 import { localToday } from "../clock";
 import { installDrag } from "../gestures/drag";
 import { installLongPress } from "../gestures/long-press";
@@ -29,7 +30,7 @@ import { useHeldNames } from "./heldNames";
 import { type Loaded, useLoaded } from "./load";
 import { holdPage } from "./pageHold";
 import { isSearchShortcut, isTyping } from "./shortcuts";
-import { type Motion, sameView, type View, viewKey, viewMotion } from "./view";
+import { type Motion, sameView, searchScopeFor, type View, viewKey, viewMotion } from "./view";
 
 export function App() {
   const [view, setView] = useState<View>({ kind: "today" });
@@ -62,6 +63,14 @@ export function App() {
   // Where the Search screen's Back goes.
   const beforeSearch = useRef(view);
   if (view.kind !== "search") beforeSearch.current = view;
+  // What the search is limited to: the project or label it was opened from,
+  // taken each time Search opens, and dropped with the chip's ×.
+  const [searchScope, setSearchScope] = useState<SearchScope | null>(null);
+  const [inSearch, setInSearch] = useState(false);
+  if ((view.kind === "search") !== inSearch) {
+    setInSearch(view.kind === "search");
+    if (view.kind === "search") setSearchScope(searchScopeFor(beforeSearch.current));
+  }
 
   // Touch: a long press shows a row's actions.
   useEffect(() => installLongPress(document), []);
@@ -286,6 +295,8 @@ export function App() {
             <SearchPane
               query={searchQuery}
               setQuery={setSearchQuery}
+              scope={searchScope}
+              setScope={setSearchScope}
               today={localToday()}
               showCompleted={showCompleted}
               loaded={loaded}

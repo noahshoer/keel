@@ -70,8 +70,8 @@ test("a production build without Tauri throws", async () => {
 });
 
 test("mock views are static lists; only a task's own flags change them", async () => {
-  const a = await invoke("search", { query: "laundry" });
-  const b = await invoke("search", { query: "zzz" });
+  const a = await invoke("search", { query: "laundry", scope: null });
+  const b = await invoke("search", { query: "zzz", scope: null });
   expect(b).toEqual(a);
   await invoke("dispatch", { cmd: { uuid: "u3", action: { type: "task_complete", id: "t-sheets" } } });
   const today = await invoke("today_view", {});

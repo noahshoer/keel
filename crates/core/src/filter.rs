@@ -716,6 +716,25 @@ pub fn spans(query: &str, today: NaiveDate, names: &FilterNames) -> Vec<Span> {
     out
 }
 
+/// The lower-cased words of the query's plain-text terms, for ranking search
+/// results (a term under `!` is something to avoid, so it is left out).
+pub fn text_words(groups: &[Expr]) -> Vec<String> {
+    fn walk(expr: &Expr, out: &mut Vec<String>) {
+        match expr {
+            Expr::And(a, b) | Expr::Or(a, b) => {
+                walk(a, out);
+                walk(b, out);
+            }
+            Expr::Not(_) => {}
+            Expr::Term(Term::Text(t) | Term::Search(t)) => out.extend(crate::search::words(t)),
+            Expr::Term(_) => {}
+        }
+    }
+    let mut out = Vec::new();
+    groups.iter().for_each(|g| walk(g, &mut out));
+    out
+}
+
 /// Whether `task` satisfies `expr`.
 pub fn matches(expr: &Expr, task: &Task, ctx: &FilterContext) -> bool {
     match expr {
@@ -950,7 +969,7 @@ mod tests {
     fn backspace_after_multibyte() {
         assert_eq!(unhighlight("café tomorrow", d(2026, 10, 19), &FilterNames::default(), 14).as_deref(), Some("café \"tomorrow\""));
     }
-    use super::{matches, parse, read, spans, unhighlight, FilterFix, DateRef, Expr, FilterContext, FilterNames, Term};
+    use super::{matches, parse, read, spans, text_words, unhighlight, FilterFix, DateRef, Expr, FilterContext, FilterNames, Term};
     use crate::ids::Id;
     use crate::model::{Due, Priority, Task};
     use crate::phrases::RepeatSpec;
@@ -978,6 +997,12 @@ mod tests {
             sections: vec!["Next Up".into()],
             labels: vec!["home".into()],
         }
+    }
+
+    #[test]
+    fn text_words_collects_plain_terms_but_not_negated_ones() {
+        let groups = parse("Milk & p1, !bread | eggs", ctx().today, &names()).unwrap();
+        assert_eq!(text_words(&groups), vec!["milk", "eggs"]);
     }
 
     /// The single group `query` parses to.
