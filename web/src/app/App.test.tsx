@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { mockPageScrollHeld } from "../ipc/mock";
 import { rejectFilterCheck } from "../test/rejectCheck";
 import { setWidth, touch } from "../test/touch";
@@ -403,4 +403,17 @@ describe("the ••• on a project, label or filter page", () => {
     fireEvent.click(document.body);
     expect(popup()).toBeNull();
   });
+});
+
+it("opening Search and leaving at once doesn't focus the box after the app is gone", async () => {
+  const r = render(<App />);
+  await screen.findByText("Do laundry");
+  fireEvent.click(document.querySelector(".search-btn") as HTMLElement);
+  r.unmount();
+  // The focus is queued for after the screen mounts; once the app is gone it must not run
+  // (in a test file's teardown there is no document left for it to search).
+  const lookup = vi.spyOn(document, "querySelector");
+  await new Promise((done) => setTimeout(done, 150));
+  expect(lookup).not.toHaveBeenCalled();
+  lookup.mockRestore();
 });

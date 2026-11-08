@@ -74,6 +74,7 @@ export function App() {
   drawerNow.current = drawer;
   const viewNow = useRef(view);
   viewNow.current = view;
+  const focusTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const openSearchNow = useRef<() => void>(() => {});
   const leaveSearchNow = useRef<() => void>(() => {});
   leaveSearchNow.current = () => setView(beforeSearch.current);
@@ -142,7 +143,9 @@ export function App() {
   // desktop, where the screen has none.
   const openSearch = useCallback(() => {
     setView({ kind: "search" });
-    setTimeout(
+    // Kept so a second open replaces it and leaving the app cancels it (below).
+    clearTimeout(focusTimer.current);
+    focusTimer.current = setTimeout(
       () =>
         document
           .querySelector<HTMLInputElement>(".search-input, .sidebar-search-input:not([readonly])")
@@ -150,6 +153,7 @@ export function App() {
       60,
     );
   }, []);
+  useEffect(() => () => clearTimeout(focusTimer.current), []);
   openSearchNow.current = openSearch;
   // "/" (when not typing) or Ctrl/Cmd+K does too.
   useEffect(() => {
