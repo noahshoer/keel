@@ -17,8 +17,8 @@ use chrono::{Duration, NaiveDate, NaiveTime};
 use crate::ids::Id;
 use crate::model::{Priority, Task};
 use crate::phrases::{
-    is_name, match_date, match_deadline, match_name, match_repeat, match_time, repeat_matches, repeat_word, tokens,
-    RepeatSpec, Token as Word,
+    match_date, match_deadline, match_name, match_priority, match_repeat, match_time, repeat_matches, sigil_name, tokens,
+    unread_every, RepeatSpec, Token as Word,
 };
 use crate::quickadd::{Span, SpanKind};
 use crate::views::{due_date_of, due_time};
@@ -355,10 +355,8 @@ fn name_at(t: &[Word], i: usize, names: &FilterNames) -> Option<(usize, Term, Sp
     if let Some((n, pos)) = match_name(t, i, sigil, &known) {
         return Some((n, make(list[pos].to_lowercase()), kind));
     }
-    let rest = raw.strip_prefix(sigil)?;
-    let rest = if sigil == "#" { rest.strip_prefix('#').unwrap_or(rest) } else { rest };
-    let name = rest.trim_end_matches([',', '.', ';', '!', '?']);
-    is_name(name).then(|| (1, make(name.to_lowercase()), kind))
+    let name = if sigil == "#" { sigil_name(raw, "##").or_else(|| sigil_name(raw, "#")) } else { sigil_name(raw, sigil) };
+    name.map(|n| (1, make(n.to_lowercase()), kind))
 }
 
 /// A bare date phrase: today and tomorrow keep their own terms.
@@ -396,20 +394,12 @@ impl<'a> Read<'a> {
 fn read_words<'a>(query: &'a str, t: &[Word], today: NaiveDate, names: &FilterNames, r: &mut Read<'a>) {
     let mut i = 0;
     while i < t.len() {
-        let norm = t[i].norm.as_str();
         if let Some((n, term)) = keyword(t, i) {
             r.term(t, i, n, term, SpanKind::Keyword);
             i += n;
             continue;
         }
-        let priority = match norm {
-            "p1" => Some(Priority::P1),
-            "p2" => Some(Priority::P2),
-            "p3" => Some(Priority::P3),
-            "p4" => Some(Priority::None),
-            _ => None,
-        };
-        if let Some(p) = priority {
+        if let Some(p) = match_priority(t, i) {
             r.term(t, i, 1, Term::Priority(p), SpanKind::Priority);
             i += 1;
             continue;
@@ -432,13 +422,10 @@ fn read_words<'a>(query: &'a str, t: &[Word], today: NaiveDate, names: &FilterNa
             continue;
         }
         // An "every ..." phrase it can't read stays text as a whole.
-        if norm == "every" {
-            let from = i;
-            i += 1;
-            while i < t.len() && repeat_word(&t[i].norm) {
-                i += 1;
-            }
-            r.text(t[from].start, &query[t[from].start..t[i - 1].end]);
+        let every = unread_every(t, i);
+        if every > 0 {
+            r.text(t[i].start, &query[t[i].start..t[i + every - 1].end]);
+            i += every;
             continue;
         }
         if let Some((n, d)) = match_date(t, i, today) {
@@ -456,9 +443,20 @@ fn read_words<'a>(query: &'a str, t: &[Word], today: NaiveDate, names: &FilterNa
             }
             continue;
         }
+        // A time, with the date phrase right after it if there is one ("5pm tomorrow").
         if let Some((n, time)) = match_time(t, i) {
-            r.term(t, i, n, Term::DueAt(today, time), SpanKind::Time);
-            i += n;
+            r.spans.push(Span { start: t[i].start, end: t[i + n - 1].end, kind: SpanKind::Time });
+            match match_date(t, i + n, today) {
+                Some((m, d)) => {
+                    r.terms.push((t[i].start, Term::DueAt(d, time)));
+                    r.spans.push(Span { start: t[i + n].start, end: t[i + n + m - 1].end, kind: SpanKind::Date });
+                    i += n + m;
+                }
+                None => {
+                    r.terms.push((t[i].start, Term::DueAt(today, time)));
+                    i += n;
+                }
+            }
             continue;
         }
         r.text(t[i].start, &query[t[i].start..t[i].end]);
@@ -804,6 +802,18 @@ mod tests {
         let five = NaiveTime::from_hms_opt(17, 0, 0).unwrap();
         assert_eq!(one("tomorrow at 5pm"), term(Term::DueAt(d(2026, 10, 20), five)));
         assert_eq!(one("5pm"), term(Term::DueAt(d(2026, 10, 19), five)));
+    }
+
+    #[test]
+    fn time_before_date_pairs_up() {
+        let today = ctx().today;
+        let span = |start, end, kind| Span { start, end, kind };
+        let want = one("tomorrow at 5pm");
+        assert_eq!(one("5pm tomorrow"), want);
+        assert_eq!(one("at 5pm tomorrow"), want);
+        assert_eq!(spans("tomorrow at 5pm", today, &names()), vec![span(0, 8, SpanKind::Date), span(9, 15, SpanKind::Time)]);
+        assert_eq!(spans("5pm tomorrow", today, &names()), vec![span(0, 3, SpanKind::Time), span(4, 12, SpanKind::Date)]);
+        assert_eq!(spans("at 5pm tomorrow", today, &names()), vec![span(0, 6, SpanKind::Time), span(7, 15, SpanKind::Date)]);
     }
 
     #[test]

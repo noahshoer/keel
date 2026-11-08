@@ -10,8 +10,8 @@ use chrono::{Duration, Months, NaiveDate, NaiveTime};
 use crate::ids::Id;
 use crate::model::{Priority, Project, Section};
 use crate::phrases::{
-    is_name, match_date, match_deadline, match_name, match_repeat, match_time, number_word, repeat_word, resolve_repeat, tokens,
-    RepeatSpec, Token,
+    match_date, match_deadline, match_name, match_priority, match_repeat, match_time, number_word, resolve_repeat, sigil_name,
+    tokens, unread_every, RepeatSpec, Token,
 };
 use crate::recurrence::Recurrence;
 
@@ -251,13 +251,7 @@ fn parse_tokens(
             }
         }
         if q.priority.is_none() {
-            let p = match norm {
-                "p1" => Some(Priority::P1),
-                "p2" => Some(Priority::P2),
-                "p3" => Some(Priority::P3),
-                "p4" => Some(Priority::None),
-                _ => None,
-            };
+            let p = match_priority(&t, i);
             if p.is_some() {
                 q.priority = p;
                 take(&mut used, &mut spans, i, 1, SpanKind::Priority);
@@ -273,25 +267,21 @@ fn parse_tokens(
                 continue;
             }
         }
-        if q.project_id.is_none() && q.new_project.is_none() && t[i].raw.starts_with('#') {
-            let name = t[i].raw[1..].trim_end_matches([',', '.', ';', '!', '?']);
-            if is_name(name) {
-                q.new_project = Some(name.to_string());
+        if q.project_id.is_none() && q.new_project.is_none() {
+            if let Some(name) = sigil_name(&t[i].raw, "#") {
+                q.new_project = Some(name);
                 take(&mut used, &mut spans, i, 1, SpanKind::Project);
                 i += 1;
                 continue;
             }
         }
-        if t[i].raw.len() > 1 && t[i].raw.starts_with('@') {
-            let name = t[i].raw[1..].trim_end_matches([',', '.', ';', '!', '?']).to_string();
-            if is_name(&name) {
-                if !q.labels.iter().any(|l| l.eq_ignore_ascii_case(&name)) {
-                    q.labels.push(name);
-                }
-                take(&mut used, &mut spans, i, 1, SpanKind::Label);
-                i += 1;
-                continue;
+        if let Some(name) = sigil_name(&t[i].raw, "@") {
+            if !q.labels.iter().any(|l| l.eq_ignore_ascii_case(&name)) {
+                q.labels.push(name);
             }
+            take(&mut used, &mut spans, i, 1, SpanKind::Label);
+            i += 1;
+            continue;
         }
         if repeat.is_none() {
             if let Some((n, spec)) = match_repeat(&t, i) {
@@ -333,11 +323,9 @@ fn parse_tokens(
         // An "every ..." phrase we didn't understand (or a second repeat)
         // stays text as a whole, so e.g. "every 5th monday" doesn't turn
         // "monday" into a due date.
-        if norm == "every" {
-            i += 1;
-            while i < t.len() && repeat_word(&t[i].norm) {
-                i += 1;
-            }
+        let every = unread_every(&t, i);
+        if every > 0 {
+            i += every;
             continue;
         }
         if q.date.is_none() {

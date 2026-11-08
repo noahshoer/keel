@@ -3,6 +3,7 @@
 
 use chrono::{Datelike, Duration, Months, NaiveDate, NaiveTime};
 
+use crate::model::Priority;
 use crate::recurrence::Recurrence;
 
 pub(crate) struct Token {
@@ -530,6 +531,33 @@ pub(crate) fn is_name(word: &str) -> bool {
     word.chars().any(|c| c.is_alphabetic())
 }
 
+/// The one-word name after `sigil` in `raw` (trailing `,.;!?` trimmed),
+/// when it can be a name.
+pub(crate) fn sigil_name(raw: &str, sigil: &str) -> Option<String> {
+    let name = raw.strip_prefix(sigil)?.trim_end_matches([',', '.', ';', '!', '?']);
+    is_name(name).then(|| name.to_string())
+}
+
+/// `p1`–`p4` at word `i` (`p4` is no priority).
+pub(crate) fn match_priority(t: &[Token], i: usize) -> Option<Priority> {
+    match t.get(i)?.norm.as_str() {
+        "p1" => Some(Priority::P1),
+        "p2" => Some(Priority::P2),
+        "p3" => Some(Priority::P3),
+        "p4" => Some(Priority::None),
+        _ => None,
+    }
+}
+
+/// The words an `every …` phrase at `i` covers when it couldn't be read as a
+/// repeat (it stays text as a whole); 0 when `t[i]` isn't "every".
+pub(crate) fn unread_every(t: &[Token], i: usize) -> usize {
+    if t.get(i).is_none_or(|w| w.norm != "every") {
+        return 0;
+    }
+    1 + t[i + 1..].iter().take_while(|w| repeat_word(&w.norm)).count()
+}
+
 /// The rule a repeat phrase means when the task starts on `start`.
 pub(crate) fn resolve_repeat(spec: RepeatSpec, start: NaiveDate) -> Recurrence {
     match spec {
@@ -609,6 +637,18 @@ mod tests {
 
     fn weeks(n: u32, days: &[u8], anchor: NaiveDate) -> Recurrence {
         Recurrence::EveryNWeeks { n, days: days.to_vec(), anchor }
+    }
+
+    #[test]
+    fn shared_word_helpers() {
+        assert_eq!(sigil_name("#Work,", "#"), Some("Work".into()));
+        assert_eq!(sigil_name("#123", "#"), None);
+        assert_eq!(sigil_name("@x", "#"), None);
+        let t = tokens("p2 every 5th monday later");
+        assert_eq!(match_priority(&t, 0), Some(Priority::P2));
+        assert_eq!(match_priority(&t, 1), None);
+        assert_eq!(unread_every(&t, 1), 3);
+        assert_eq!(unread_every(&t, 0), 0);
     }
 
     #[test]
