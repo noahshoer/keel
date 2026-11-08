@@ -1,7 +1,7 @@
 // A filter's query while it's edited: the hint, and keel-core's live reading
 // (highlighted terms, the first problem, a one-tap fix). No round trip; the
 // backend's `check_filter` is the backstop when the query is saved.
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { Label, Project, Section, TitleSegment } from "../bindings";
 import { localToday } from "../clock";
 import { filterReading, filterUnhighlightAt } from "../core";
@@ -21,13 +21,15 @@ export type QueryCheck = {
   fix: { label: string; query: string } | null;
   /** Quotes the term ending at `caret`; whether there was one. */
   unhighlight: (caret: number) => boolean;
-  /** The backend's last word on the query, for saving; `false` shows its message. */
+  /** The backend's last word on the query, for saving; `false` shows its message. A second call
+   * while one is pending gives `false` and does nothing, so a double Enter saves once. */
   confirm: () => Promise<boolean>;
 };
 
 export function useQueryCheck(initialQuery: string, names: FilterNames): QueryCheck {
   const [query, setRaw] = useState(initialQuery);
   const [backend, setBackend] = useState<string | null>(null);
+  const checking = useRef(false);
   const today = localToday();
   const { projects, sections, labels } = names;
   const reading = useMemo(
@@ -51,13 +53,20 @@ export function useQueryCheck(initialQuery: string, names: FilterNames): QueryCh
       setQuery(next);
       return true;
     },
-    confirm: () =>
-      invoke("check_filter", { query }).then(
-        () => true,
-        (e: unknown) => {
-          setBackend(String(e));
-          return false;
-        },
-      ),
+    confirm: () => {
+      if (checking.current) return Promise.resolve(false);
+      checking.current = true;
+      return invoke("check_filter", { query })
+        .then(
+          () => true,
+          (e: unknown) => {
+            setBackend(String(e));
+            return false;
+          },
+        )
+        .finally(() => {
+          checking.current = false;
+        });
+    },
   };
 }

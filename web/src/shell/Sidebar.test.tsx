@@ -530,3 +530,23 @@ it("a filter the backend rejects on save shows its message and stays open, unsav
     delete window.__TAURI__;
   }
 });
+
+it("a second save while the first is still being checked adds one filter", async () => {
+  const sent = await rejectFilterCheck(null);
+  try {
+    const query = await openFilterForm();
+    fireEvent.change(screen.getByPlaceholderText("Filter name"), { target: { value: "Urgent" } });
+    fireEvent.change(query, { target: { value: "p1" } });
+    const save = screen.getByText("Add filter") as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
+    fireEvent.click(save);
+    await waitFor(() => expect(sent).toContain("filter_add"));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(sent.filter((t) => t === "filter_add")).toHaveLength(1);
+  } finally {
+    delete window.__TAURI__;
+  }
+});
