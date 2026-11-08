@@ -223,7 +223,8 @@ describe("the ••• on a project, label or filter page", () => {
     // A filter's Enter waits for its live check, which the field starts valid.
     await act(async () => {});
     fireEvent.submit(field);
-    expect(titleField(container)).toBeNull();
+    // A filter's save also asks the backend, so it lands a tick later.
+    await waitFor(() => expect(titleField(container)).toBeNull());
     expect(heading()).toBe(to);
     await waitFor(() =>
       expect(within(container.querySelector(".sidebar") as HTMLElement).getByText(to)).toBeTruthy(),
@@ -247,12 +248,12 @@ describe("the ••• on a project, label or filter page", () => {
   it("a filter's new query shows at once", async () => {
     const { container } = await open("Important");
     pick(container, "Edit");
-    const query = container.querySelector(".view-edit-query input") as HTMLInputElement;
+    const query = container.querySelector(".view-edit-query textarea") as HTMLTextAreaElement;
     fireEvent.change(query, { target: { value: "p2" } });
     await waitFor(() => expect(container.querySelector(".view-edit-query .filter-problem")).toBeNull());
     await act(async () => {});
     fireEvent.submit(titleField(container));
-    expect(container.querySelector(".view-sub.mono")?.textContent).toBe("p2");
+    await waitFor(() => expect(container.querySelector(".view-sub.mono")?.textContent).toBe("p2"));
   });
 
   it("a name can go back to what it was", async () => {
@@ -326,7 +327,7 @@ describe("the ••• on a project, label or filter page", () => {
     expect(document.activeElement).toBe(name);
     expect(name.value).toBe("Important");
     expect(container.querySelector(".view-sub.mono")).toBeNull();
-    const query = container.querySelector(".list-body .view-edit-query input") as HTMLInputElement;
+    const query = container.querySelector(".list-body .view-edit-query textarea") as HTMLTextAreaElement;
     // Moving between the two isn't leaving.
     fireEvent.click(query);
     expect(titleField(container)).not.toBeNull();

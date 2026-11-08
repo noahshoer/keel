@@ -314,7 +314,13 @@ export function MainPane({
               {title.text}
             </h1>
             {editing ? (
-              <PageEdit editing={editing} field={titleField} querySlot={querySlot} onClose={stopEditing} />
+              <PageEdit
+                editing={editing}
+                field={titleField}
+                querySlot={querySlot}
+                names={loaded}
+                onClose={stopEditing}
+              />
             ) : null}
             {toggle ? (
               <button

@@ -15,6 +15,10 @@ export function HighlightedTitle({
   onEnter,
   onUnhighlight,
   inputRef,
+  autoFocus = true,
+  label,
+  onEscape,
+  className,
 }: {
   segments: TitleSegment[];
   /** For a label phrase's color. */
@@ -26,9 +30,17 @@ export function HighlightedTitle({
   /** Turns the highlight ending at `caret` plain. */
   onUnhighlight: (caret: number) => void;
   inputRef?: RefObject<HTMLTextAreaElement | null> | undefined;
+  /** Focus on mount (the editor); a form field that sits among others turns it off. */
+  autoFocus?: boolean;
+  /** The textarea's accessible name. */
+  label?: string | undefined;
+  /** Escape pressed in the field. */
+  onEscape?: () => void;
+  /** Extra classes on the wrapper. */
+  className?: string;
 }) {
   return (
-    <div className="title-wrap">
+    <div className={className ? `title-wrap ${className}` : "title-wrap"}>
       <div className="title-mirror" aria-hidden="true">
         {segments.map((s, i) =>
           s.kind === null ? (
@@ -49,12 +61,17 @@ export function HighlightedTitle({
         className="name title-input"
         rows={1}
         placeholder={placeholder}
+        aria-label={label}
         // biome-ignore lint/a11y/noAutofocus: the editor opens to type a title, as the Dioxus one does.
-        autoFocus
+        autoFocus={autoFocus}
         spellCheck={false}
         value={value}
         onChange={(e) => onInput(e.target.value.replace(/[\n\r]/g, " "))}
         onKeyDown={(e) => {
+          if (e.key === "Escape" && onEscape) {
+            onEscape();
+            return;
+          }
           if (e.key === "Enter") {
             e.preventDefault();
             onEnter();

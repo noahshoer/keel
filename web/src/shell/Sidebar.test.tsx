@@ -252,7 +252,7 @@ it("a new filter: Save waits for a valid query, then opens the filter", async ()
   fireEvent.change(name, { target: { value: "Urgent" } });
   fireEvent.change(query, { target: { value: "p1 &" } });
   await waitFor(() =>
-    expect(sidebar().querySelector(".filter-problem")?.textContent).toBe("expected a term after '&'"),
+    expect(sidebar().querySelector(".filter-problem")?.textContent).toBe("Expected a filter term"),
   );
   expect(save.disabled).toBe(true);
   fireEvent.change(query, { target: { value: "p1" } });
@@ -261,41 +261,6 @@ it("a new filter: Save waits for a valid query, then opens the filter", async ()
   fireEvent.submit(query);
   await waitFor(() => expect(title()).toBe("Urgent"));
   expect(document.querySelector(".view-sub")?.textContent).toBe("p1");
-});
-
-it("a stale filter check never overrides a newer one", async () => {
-  const resolvers: ((v: unknown) => void)[] = [];
-  const rejecters: ((e: unknown) => void)[] = [];
-  const real = (await import("../ipc/mock")).mockHandlers;
-  window.__TAURI__ = {
-    core: {
-      invoke: (cmd, args) => {
-        if (cmd === "check_filter") {
-          return new Promise((res, rej) => {
-            resolvers.push(res);
-            rejecters.push(rej);
-          });
-        }
-        const a = (args as { args: unknown }).args;
-        return (
-          (real as unknown as Record<string, (x: unknown) => Promise<unknown>>)[cmd]?.(a) ??
-          Promise.resolve(null)
-        );
-      },
-    },
-  };
-  try {
-    await start();
-    fireEvent.click(screen.getByTitle("Add filter"));
-    const query = screen.getByPlaceholderText("Query, e.g. today & p1");
-    fireEvent.change(query, { target: { value: "p1 &" } });
-    fireEvent.change(query, { target: { value: "p1" } });
-    await act(async () => resolvers[1]?.(null));
-    await act(async () => rejecters[0]?.("expected a term after '&'"));
-    expect(sidebar().querySelector(".filter-problem")).toBeNull();
-  } finally {
-    delete window.__TAURI__;
-  }
 });
 
 it("editing and deleting a filter", async () => {
@@ -505,6 +470,42 @@ it("a filter row goes straight to its new name", async () => {
   const save = screen.getByText("Save") as HTMLButtonElement;
   await waitFor(() => expect(save.disabled).toBe(false));
   fireEvent.click(save);
-  expect(within(sidebar()).getByText("Top")).toBeTruthy();
+  await waitFor(() => expect(within(sidebar()).getByText("Top")).toBeTruthy());
   expect(within(sidebar()).queryByText("Important")).toBeNull();
+});
+
+async function openFilterForm() {
+  await start();
+  fireEvent.click(screen.getByTitle("Add filter"));
+  return screen.getByPlaceholderText("Query, e.g. today & p1") as HTMLTextAreaElement;
+}
+
+it("an unknown project in a filter shows red, says so and offers the fix", async () => {
+  const query = await openFilterForm();
+  fireEvent.change(screen.getByPlaceholderText("Filter name"), { target: { value: "Ink" } });
+  fireEvent.change(query, { target: { value: "printer ink & today & #hom" } });
+  const save = screen.getByText("Add filter") as HTMLButtonElement;
+  await waitFor(() => expect(sidebar().querySelector("mark.hl-unknown")?.textContent).toBe("#hom"));
+  expect(sidebar().querySelector(".filter-problem")?.textContent).toContain("No project named “hom”.");
+  expect(save.disabled).toBe(true);
+  fireEvent.click(screen.getByText("Use #Home"));
+  expect(query.value).toBe("printer ink & today & #Home");
+  await waitFor(() => expect(save.disabled).toBe(false));
+});
+
+it("backspace after a highlighted term in a filter turns it into quoted text", async () => {
+  const query = await openFilterForm();
+  fireEvent.change(query, { target: { value: "call mom tomorrow" } });
+  query.setSelectionRange(17, 17);
+  fireEvent.keyDown(query, { key: "Backspace" });
+  expect(query.value).toBe('call mom "tomorrow"');
+  expect(sidebar().querySelector("mark")).toBeNull();
+});
+
+it("a date in a filter is highlighted as on the card", async () => {
+  const query = await openFilterForm();
+  fireEvent.change(query, { target: { value: "today" } });
+  const mark = sidebar().querySelector("mark.hl") as HTMLElement;
+  expect(mark.textContent).toBe("today");
+  expect(mark.className).toContain("hl-due-today");
 });

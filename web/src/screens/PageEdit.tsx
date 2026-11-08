@@ -6,7 +6,8 @@ import { createPortal } from "react-dom";
 import { holdPage } from "../app/pageHold";
 import type { Filter } from "../bindings";
 import { useCloseOnClickOutside } from "../shell/clickOutside";
-import { FILTER_HINT, useQueryCheck } from "../shell/filterQuery";
+import { FilterField } from "../shell/FilterField";
+import { type FilterNames, useQueryCheck } from "../shell/filterQuery";
 import type { PageEditing } from "../shell/listActions";
 
 function TitleField({
@@ -84,25 +85,31 @@ function FilterEdit({
   filter,
   field,
   querySlot,
+  names,
   onSave,
   onClose,
 }: {
   filter: Filter;
+  names: FilterNames;
   field: RefObject<HTMLInputElement | null>;
   querySlot: HTMLElement | null;
   onSave: (name: string, query: string) => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(filter.name);
-  const { query, setQuery, problem } = useQueryCheck(filter.query);
+  const check = useQueryCheck(filter.query, names);
+  const { query, problem } = check;
   const titleForm = useRef<HTMLFormElement>(null);
   const queryForm = useRef<HTMLFormElement>(null);
   useCloseOnClickOutside([titleForm, queryForm], onClose);
   const canSave = name.trim() !== "" && query.trim() !== "" && problem === null;
   const submit = () => {
     if (!canSave) return;
-    onClose();
-    onSave(name.trim(), query.trim());
+    void check.confirm().then((ok) => {
+      if (!ok) return;
+      onClose();
+      onSave(name.trim(), query.trim());
+    });
   };
   return (
     <>
@@ -125,21 +132,13 @@ function FilterEdit({
                 submit();
               }}
             >
-              <input
-                className={problem !== null ? "project-input mono invalid" : "project-input mono"}
-                aria-label="Query"
-                placeholder="Query, e.g. today & p1"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") onClose();
-                }}
+              <FilterField
+                check={check}
+                labels={names.labels}
+                label="Query"
+                onSubmit={submit}
+                onEscape={onClose}
               />
-              {problem !== null ? (
-                <div className="filter-problem">{problem}</div>
-              ) : (
-                <div className="filter-hint">{FILTER_HINT}</div>
-              )}
               <div className="confirm-actions">
                 <button type="button" className="btn btn-cancel" onClick={onClose}>
                   Cancel
@@ -160,9 +159,11 @@ export function PageEdit({
   editing,
   field,
   querySlot,
+  names,
   onClose,
 }: {
   editing: PageEditing;
+  names: FilterNames;
   field: RefObject<HTMLInputElement | null>;
   /** Where a filter's query goes: the line under the title. */
   querySlot: HTMLElement | null;
@@ -177,6 +178,7 @@ export function PageEdit({
       filter={editing.filter}
       field={field}
       querySlot={querySlot}
+      names={names}
       onSave={editing.save}
       onClose={onClose}
     />
