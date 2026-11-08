@@ -19,6 +19,8 @@ export function HighlightedTitle({
   label,
   onEscape,
   className,
+  invalid = false,
+  describedBy,
 }: {
   segments: TitleSegment[];
   /** For a label phrase's color. */
@@ -38,6 +40,10 @@ export function HighlightedTitle({
   onEscape?: () => void;
   /** Extra classes on the wrapper. */
   className?: string;
+  /** The value has a problem (`aria-invalid`). */
+  invalid?: boolean;
+  /** The id of the line that describes the field (`aria-describedby`). */
+  describedBy?: string | undefined;
 }) {
   return (
     <div className={className ? `title-wrap ${className}` : "title-wrap"}>
@@ -62,6 +68,8 @@ export function HighlightedTitle({
         rows={1}
         placeholder={placeholder}
         aria-label={label}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         // biome-ignore lint/a11y/noAutofocus: the editor opens to type a title, as the Dioxus one does.
         autoFocus={autoFocus}
         spellCheck={false}

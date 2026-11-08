@@ -370,6 +370,21 @@ it("a saved filter that can't run says why", async () => {
   expect(container.querySelector(".empty")).toBeNull();
 });
 
+it("a saved filter naming a missing project says so and still lists the rest", async () => {
+  const { container } = await show({ kind: "filter", id: "f-gone", name: "Gone", query: "#Gone, today" });
+  const line = container.querySelector(".filter-problem.view-problem");
+  expect(line?.textContent).toBe("No project named “Gone”.");
+  expect(container.querySelector(".big-problem")).toBeNull();
+  expect([...container.querySelectorAll(".section-title .mono")].map((e) => e.textContent)).toEqual([
+    "#Gone",
+    "today",
+  ]);
+  expect(container.querySelectorAll(".task-row").length).toBeGreaterThan(0);
+  // A query whose names all exist has no such line.
+  const fine = await show({ kind: "filter", id: "f-p1", name: "Important", query: "p1" });
+  expect(fine.container.querySelector(".view-problem")).toBeNull();
+});
+
 it("show completed lists the view's completed tasks", async () => {
   const { container } = await show({ kind: "today" });
   const toggle = container.querySelector<HTMLButtonElement>(".view-toggle");

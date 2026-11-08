@@ -494,6 +494,23 @@ it("an unknown project in a filter shows red, says so and offers the fix", async
   await waitFor(() => expect(save.disabled).toBe(false));
 });
 
+it("the filter field's problem is announced and tied to the field", async () => {
+  const query = await openFilterForm();
+  expect(screen.getByLabelText("Query")).toBe(query);
+  expect(query.getAttribute("aria-invalid")).toBeNull();
+  expect(query.getAttribute("aria-describedby")).toBeNull();
+  fireEvent.change(query, { target: { value: "today & #hom" } });
+  await waitFor(() => expect(sidebar().querySelector(".filter-problem")).not.toBeNull());
+  const line = sidebar().querySelector(".filter-problem") as HTMLElement;
+  expect(line.getAttribute("aria-live")).toBe("polite");
+  expect(query.getAttribute("aria-invalid")).toBe("true");
+  expect(line.id).not.toBe("");
+  expect(query.getAttribute("aria-describedby")).toBe(line.id);
+  fireEvent.change(query, { target: { value: "today" } });
+  await waitFor(() => expect(query.getAttribute("aria-invalid")).toBeNull());
+  expect(query.getAttribute("aria-describedby")).toBeNull();
+});
+
 it("backspace after a highlighted term in a filter turns it into quoted text", async () => {
   const query = await openFilterForm();
   fireEvent.change(query, { target: { value: "call mom tomorrow" } });

@@ -19,7 +19,7 @@ import {
 } from "../app/view";
 import type { Section, Task } from "../bindings";
 import { localToday } from "../clock";
-import { blankValues, cards, dateGroups } from "../core";
+import { blankValues, cards, dateGroups, filterReading } from "../core";
 import { AddTask } from "../editor/AddTask";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
@@ -155,6 +155,17 @@ export function MainPane({
   const locationsValue = useMemo(
     () => ({ projects: loaded.projects, sections: loaded.sections }),
     [loaded.projects, loaded.sections],
+  );
+  // A saved filter naming something that's gone (a deleted project, say) still
+  // runs; the page says why that part is empty. keel-core's reading, with the
+  // same names the query field checks against.
+  const filterQuery = view.kind === "filter" ? subtitle : "";
+  const queryProblem = useMemo(
+    () =>
+      filterQuery === ""
+        ? null
+        : filterReading(filterQuery, today, loaded.projects, loaded.sections, loaded.labels).problem,
+    [filterQuery, today, loaded.projects, loaded.sections, loaded.labels],
   );
   const locations = locationsOf([...loaded.all, ...loaded.completed], loaded.projects, loaded.sections);
   const namesProject = showsProject(view);
@@ -376,6 +387,9 @@ export function MainPane({
                 <div ref={setQuerySlot} className="view-edit-query" />
               ) : subtitle ? (
                 <p className={view.kind === "filter" ? "view-sub mono" : "view-sub"}>{subtitle}</p>
+              ) : null}
+              {loaded.filterError === null && queryProblem !== null && editing === null ? (
+                <p className="filter-problem view-problem">{queryProblem}</p>
               ) : null}
               {loaded.filterError !== null ? (
                 <div className="filter-problem big-problem">{`This filter can’t run: ${loaded.filterError}`}</div>

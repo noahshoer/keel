@@ -57,7 +57,7 @@ export function FilterForm({
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
-      <FilterField check={check} labels={names.labels} onSubmit={submit} onEscape={onCancel} />
+      <FilterField check={check} labels={names.labels} label="Query" onSubmit={submit} onEscape={onCancel} />
       <div className="confirm-actions">
         <button type="button" className="btn btn-cancel" onClick={onCancel}>
           Cancel

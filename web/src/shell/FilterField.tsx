@@ -1,6 +1,7 @@
 // A filter's query field: the terms keel-core recognizes are highlighted as on
 // the task card, an unknown name is underlined red, and the line under it says
 // what's wrong, with the fix as a button (or the hint while there's nothing to say).
+import { useId } from "react";
 import type { Label } from "../bindings";
 import { HighlightedTitle } from "../editor/HighlightedTitle";
 import { FILTER_HINT, type QueryCheck } from "./filterQuery";
@@ -20,6 +21,7 @@ export function FilterField({
   onEscape: () => void;
 }) {
   const { query, setQuery, segments, problem, fix, unhighlight } = check;
+  const problemId = useId();
   return (
     <>
       <HighlightedTitle
@@ -29,6 +31,8 @@ export function FilterField({
         value={query}
         placeholder="Query, e.g. today & p1"
         label={label}
+        invalid={problem !== null}
+        describedBy={problem !== null ? problemId : undefined}
         autoFocus={false}
         onInput={setQuery}
         onEnter={onSubmit}
@@ -36,7 +40,7 @@ export function FilterField({
         onUnhighlight={unhighlight}
       />
       {problem !== null ? (
-        <div className="filter-problem">
+        <div className="filter-problem" id={problemId} aria-live="polite">
           {problem}
           {fix !== null ? (
             <>
