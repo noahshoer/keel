@@ -481,6 +481,15 @@ describe("on touch", () => {
       expect(screen.getByTitle("Labels").className).toContain("pill-new");
     });
 
+    it("stays yellow when its picker opens, and is marked open", () => {
+      const title = adding();
+      type(title, "Buy ink #wrok");
+      const loc = screen.getByTitle("Project / section");
+      fireEvent.click(loc);
+      expect(loc.className).toContain("pill-new");
+      expect(loc.className).toContain("chip-open");
+    });
+
     it("a known label doesn't", () => {
       const title = adding();
       type(title, "@errand");

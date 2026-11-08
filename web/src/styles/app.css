@@ -574,6 +574,10 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 .chip-btn.pill-new, .on-keyboard .chip-btn.pill-new { color: var(--new-text); background: var(--new-fill); border: 1.5px dotted var(--new-line); }
 .chip-btn.pill-new .chip-icon, .chip-btn.pill-new .chip-icon .icon { color: inherit; }
 @media (hover: hover) { .chip-btn.pill-new:hover { background: var(--new-fill); border-color: var(--new-line); } }
+/* A new-name pill whose picker is open keeps its yellow but reads as open:
+   a solid border and bold text (outranks the open and tinted-open rules above). */
+.chip-btn.pill-new.chip-open, .on-keyboard .chip-btn.pill-new.chip-open, .on-keyboard .pill-tinted.chip-btn.pill-new.chip-open {
+  color: var(--new-text); background: var(--new-fill); border: 1.5px solid var(--new-line); font-weight: 600; }
 /* Saving a title with new names asks first, in the card's place (the task view hangs it from the title). */
 .nn-prompt { display: flex; flex-direction: column; gap: 2px; }
 .editor .nn-prompt { padding-bottom: 12px; }

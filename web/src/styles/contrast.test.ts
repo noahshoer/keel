@@ -298,3 +298,23 @@ describe("radii", () => {
     expect(css).toMatch(/@media \(min-width: 900px\) \{ :root \{ --r-card: 16px; \} \}/);
   });
 });
+
+describe("a new-name pill with its picker open", () => {
+  // Every rule whose selector names `.pill-new.chip-open`: selector and body.
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const rules = [...bare.matchAll(/([^{}]*\.pill-new\.chip-open[^{}]*)\{([^}]*)\}/g)].map((m) => ({
+    selector: m[1] ?? "",
+    body: m[2] ?? "",
+  }));
+
+  it("turns its border solid and its text bold, in both cards", () => {
+    const rule = rules.find(
+      (r) => /border(-style)?:[^;]*solid/.test(r.body) && /font-weight:\s*600/.test(r.body),
+    );
+    expect(rule).toBeDefined();
+    const selectors = (rule?.selector ?? "").split(",").map((s) => s.trim());
+    expect(selectors).toContain(".chip-btn.pill-new.chip-open");
+    expect(selectors).toContain(".on-keyboard .pill-tinted.chip-btn.pill-new.chip-open");
+    expect(rule?.body).toContain("var(--new-");
+  });
+});
