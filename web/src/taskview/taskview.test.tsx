@@ -706,6 +706,91 @@ it("Back to editing keeps the retyped title with new names and saves nothing", a
   expect(sent).toEqual([]);
 });
 
+const titleCircle = () => top().querySelector(".tv-titleline button.check") as HTMLButtonElement;
+
+it("completing with a retyped title naming new names asks first, and completes nothing yet", async () => {
+  await show(["t-trip"]);
+  const sent = spyActions();
+  fireEvent.change(titleField(), { target: { value: "Buy ink #wrok @errands" } });
+  fireEvent.click(titleCircle());
+  expect(screen.getByText("Create these with the task?")).toBeTruthy();
+  await new Promise((r) => setTimeout(r, 50));
+  expect(sent).toEqual([]);
+  expect((await task("t-trip"))?.checked).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Back to editing" }));
+});
+
+it("Save from the completion's names prompt creates them, saves the title, then completes", async () => {
+  await show(["t-trip"]);
+  fireEvent.change(titleField(), { target: { value: "Buy ink #wrok @errands" } });
+  fireEvent.click(titleCircle());
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(async () => expect((await task("t-trip"))?.checked).toBe(true));
+  const saved = await task("t-trip");
+  expect(saved?.content).toBe("Buy ink");
+  const wrok = (await invoke("list_projects", {})).find((p) => p.name === "wrok");
+  expect(wrok).toBeDefined();
+  expect(saved?.project_id).toBe(wrok?.id);
+  expect(saved?.labels).toContain("errands");
+  expect((await invoke("list_labels", {})).some((l) => l.name === "errands")).toBe(true);
+});
+
+it("Back to editing from the completion's names prompt saves and completes nothing", async () => {
+  await show(["t-trip"]);
+  const sent = spyActions();
+  fireEvent.change(titleField(), { target: { value: "Buy ink #wrok @errands" } });
+  fireEvent.click(titleCircle());
+  fireEvent.click(screen.getByRole("button", { name: "Back to editing" }));
+  expect(screen.queryByText("Create these with the task?")).toBeNull();
+  expect(titleField().value).toBe("Buy ink #wrok @errands");
+  await new Promise((r) => setTimeout(r, 50));
+  expect(sent).toEqual([]);
+  expect((await task("t-trip"))?.checked).toBe(false);
+  expect(stack()).toBe("t-trip");
+});
+
+it("blur then a tap on the circle shows one names prompt, whose Save completes once", async () => {
+  await show(["t-trip"]);
+  const sent = spyActions();
+  fireEvent.change(titleField(), { target: { value: "Buy ink #wrok @errands" } });
+  // On a device the field blurs first (its save asks), then the tap lands:
+  // the outside click closes that prompt and the circle asks again.
+  fireEvent.blur(titleField());
+  expect(screen.getByText("Create these with the task?")).toBeTruthy();
+  fireEvent.pointerDown(titleCircle());
+  fireEvent.click(titleCircle());
+  expect(screen.getAllByText("Create these with the task?")).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(async () => expect((await task("t-trip"))?.checked).toBe(true));
+  const saved = await task("t-trip");
+  expect(saved?.content).toBe("Buy ink");
+  const wrok = (await invoke("list_projects", {})).find((p) => p.name === "wrok");
+  expect(saved?.project_id).toBe(wrok?.id);
+  expect((await invoke("list_labels", {})).some((l) => l.name === "errands")).toBe(true);
+  await new Promise((r) => setTimeout(r, 50));
+  expect(sent.filter((a) => a.type === "task_complete")).toHaveLength(1);
+});
+
+it("an unticked label in the completion's names prompt stays text, and the task completes", async () => {
+  await show(["t-trip"]);
+  fireEvent.change(titleField(), { target: { value: "Buy ink @errands" } });
+  fireEvent.click(titleCircle());
+  fireEvent.click(screen.getByRole("checkbox", { name: /errands/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(async () => expect((await task("t-trip"))?.checked).toBe(true));
+  expect((await task("t-trip"))?.content).toBe("Buy ink @errands");
+  expect((await invoke("list_labels", {})).some((l) => l.name === "errands")).toBe(false);
+});
+
+it("completing with a retyped title without new names saves and completes at once", async () => {
+  await show(["t-trip"]);
+  fireEvent.change(titleField(), { target: { value: "Pack for Rome" } });
+  fireEvent.click(titleCircle());
+  expect(screen.queryByText("Create these with the task?")).toBeNull();
+  await waitFor(async () => expect((await task("t-trip"))?.checked).toBe(true));
+  expect((await task("t-trip"))?.content).toBe("Pack for Rome");
+});
+
 it("the task view's names prompt takes focus on its first header check", async () => {
   await show(["t-bag"]);
   fireEvent.change(titleField(), { target: { value: "Pack bag @brandnew" } });

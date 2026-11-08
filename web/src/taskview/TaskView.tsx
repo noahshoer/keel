@@ -249,12 +249,13 @@ export function TaskView({
     const names = newNames(typedValues(), projects, sections, labels, today);
     return names.projects.length > 0 || names.labels.length > 0 ? names : null;
   };
-  // Saves the drafts, then `then`. A retyped title naming new projects or
-  // labels asks which to create; Back to editing saves nothing and stays.
-  const saveDrafts = (then?: () => void) => {
+  // Runs `go` with the names to create: none when the retyped title names no
+  // new projects or labels, else the ones ticked in the prompt (the unticked
+  // ones stay text in the title). Back to editing never runs it.
+  const withNewNames = (go: (create: NewNames) => void) => {
     const names = retypedNames();
     if (names === null) {
-      saveRead(readDrafts(), NO_NAMES, then);
+      go(NO_NAMES);
       return;
     }
     setOpen(null);
@@ -262,16 +263,17 @@ export function TaskView({
       kind: "names",
       names,
       save: (unticked) => {
-        // The unticked names stay text in the title.
         setPlain(keepAsText(typedValues(), unticked, projects, sections, today).plain);
-        const create = {
+        go({
           projects: names.projects.filter((n) => !unticked.projects.includes(n)),
           labels: names.labels.filter((n) => !unticked.labels.includes(n)),
-        };
-        saveRead(readDrafts(), create, then);
+        });
       },
     });
   };
+  // Saves the drafts, then `then`. A retyped title naming new projects or
+  // labels asks which to create; Back to editing saves nothing and stays.
+  const saveDrafts = (then?: () => void) => withNewNames((create) => saveRead(readDrafts(), create, then));
   // A typed date that would reset a streak asks first; Cancel keeps the
   // description but not the retyped title.
   const saveRead = (d: Draft, create: NewNames, then?: () => void) => {
@@ -355,16 +357,19 @@ export function TaskView({
     }, goalField);
   };
 
-  const completeHere = () => {
+  // Completing saves the drafts first. A streak reset doesn't ask (the
+  // occurrence is done either way); new names in a retyped title do, and Back
+  // to editing neither saves nor completes.
+  const completeHere = () => withNewNames(completeWith);
+  const completeWith = (create: NewNames) => {
     if (!nav.holdCircles()) return;
-    // Completing saves the drafts first, without asking: the occurrence is done either way.
     const { pair, title } = readDrafts();
     if (title !== titleRef.current) setTitle(title);
     if (pair !== null) setBase(pair.after);
     const done = detail.done;
     if (!done) haptic("complete");
     void (async () => {
-      if (pair !== null) await settle(save(pair));
+      if (pair !== null) await settle(save(pair, create));
       if (done) await settle(uncompleteTask(id));
       // Back to the parent, or closed at the top.
       else if (await settle(completeTask(id))) nav.completedHere();
