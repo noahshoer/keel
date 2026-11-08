@@ -24,6 +24,7 @@ import { TaskNavProvider } from "../taskview/nav";
 import { useTaskNav } from "../taskview/nav-context";
 import { prune as pruned, top } from "../taskview/stack";
 import { TaskSheet } from "../taskview/TaskSheet";
+import { watchDayChange } from "./dayChange";
 import { useHeldNames } from "./heldNames";
 import { type Loaded, useLoaded } from "./load";
 import { holdPage } from "./pageHold";
@@ -54,6 +55,8 @@ export function App() {
   }, [theme]);
   const { loaded, error } = useLoaded(view, showCompleted, reloadKey);
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+  // Today and Upcoming depend on the date: reload when it rolls over.
+  useEffect(() => watchDayChange(reload), [reload]);
   // Kept across visits to the Search view.
   const [searchQuery, setSearchQuery] = useState("");
   // Where the Search screen's Back goes.
