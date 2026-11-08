@@ -143,3 +143,19 @@ it("on touch, a tap outside the prompt goes back to the card, saving nothing", a
     spy.mockRestore();
   }
 });
+
+it("on touch, the prompt shows in the card on the keyboard, and Save creates the project", async () => {
+  vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+  const { container } = add(false);
+  fireEvent.click(screen.getByText("Add task"));
+  typeAndAdd("Order toner #wrok3");
+  const heading = screen.getByText("Create these with the task?");
+  // The card is portaled to body, on the keyboard; the prompt goes with it.
+  const card = heading.closest(".on-keyboard");
+  expect(card).not.toBeNull();
+  expect(container.contains(card)).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(async () => expect(await added("Order toner")).toBeDefined());
+  const wrok = (await invoke("list_projects", {})).find((p) => p.name === "wrok3");
+  expect((await added("Order toner"))?.project_id).toBe(wrok?.id);
+});

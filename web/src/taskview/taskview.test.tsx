@@ -532,6 +532,28 @@ it("Add sub-task opens the editor; Enter adds under this task and it stays open"
   expect((top().querySelector(".tv-add-editor .editor textarea") as HTMLTextAreaElement).value).toBe("");
 });
 
+it("Add sub-task with a new #name asks first, and Save creates the project", async () => {
+  await show(["t-trip"]);
+  fireEvent.click(top().querySelector(".tv-add-sub") as HTMLElement);
+  const title = top().querySelector(".tv-add-editor .editor textarea") as HTMLTextAreaElement;
+  fireEvent.change(title, { target: { value: "Pack plugs #gear" } });
+  await act(async () => {
+    fireEvent.keyDown(title, { key: "Enter" });
+  });
+  expect(screen.getByText("Create these with the task?")).toBeTruthy();
+  expect((await allTasks()).find((t) => t.content === "Pack plugs")).toBeUndefined();
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  });
+  await waitFor(async () => {
+    const gear = (await invoke("list_projects", {})).find((p) => p.name === "gear");
+    expect(gear).toBeDefined();
+    const added = (await allTasks()).find((t) => t.content === "Pack plugs");
+    expect(added?.parent_id).toBe("t-trip");
+    expect(added?.project_id).toBe(gear?.id);
+  });
+});
+
 it("the view under the top one has no header and ignores a close request", async () => {
   await show(["t-trip", "t-bag"], true);
   const under = document.querySelector('.task-view[data-view-id="t-trip"]') as HTMLElement;
