@@ -329,3 +329,36 @@ Pure move; no behavior change. The quick-add and editor tests are the proof.
 - [ ] **Step 3: Update** CLAUDE.md and the roadmap row.
 - [ ] **Step 4: Commit** `docs: shared phrase vocabulary in CLAUDE.md`
 - [ ] **Step 5: Stop and ask** Noah about merging (and filing the issue); don't push.
+
+---
+
+## Note for #10 and #7: building on this work
+
+What landed, and where the next two issues plug in. Data rules stay in `keel-core`; the web only wires them.
+
+**The pieces**
+
+- `filter::parse(query, today, &FilterNames) -> Result<Vec<Expr>, FilterError>` reads any query in the hybrid language (text, `"quotes"`, quick add's phrases, operators, `,` groups). Parse on every run so relative dates stay dynamic. `filter::names_of(projects, sections, labels)` builds the `FilterNames`; the service's private `filter_names()` does the same from the repo.
+- `filter::matches(&expr, &task, &FilterContext)` decides one task. Date terms match occurrences (`views::occurs_on / occurs_in / occurs_after`); `Term::Text` matches like `search::matches`.
+- `filter::read(query, today, projects, sections, labels) -> FilterReading` gives a field everything it draws: `segments` (same `TitleSegment` as the task card, `unknown` for red names), `problem`, and `fix` ("Use #Name"). `filter::unhighlight(query, today, &names, end)` is Backspace-to-quotes. wasm: `filterReading`, `filterUnhighlightAt` (`web/src/core`).
+- Web: `useQueryCheck(initialQuery, names)` (`web/src/shell/filterQuery.ts`) holds a query with its live reading, and `FilterField` (`web/src/shell/FilterField.tsx`) renders it over `HighlightedTitle` with the error line, fix button and live region. Reuse both instead of building a new field.
+- New phrases go in `phrases.rs` only; both quick add and filters pick them up.
+
+**#10: filter syntax in search**
+
+- In `AppService::search_at`, replace `search::words` / `search::matches` with `filter::parse(query, today, &names)` and match open and completed tasks with `filter::matches` (AND across `,` groups or show them as groups; decide in #10's design). A query of plain words parses to one `Term::Text`, so today's word search keeps working unchanged. Keep the title-first ordering by ranking on the query's text terms (`search::rank`).
+- When the query has a parse error, don't show an empty list: fall back to treating the whole query as text, and show `FilterReading.problem` under the field.
+- The search field becomes a `FilterField` driven by `useQueryCheck`, so it highlights, flags unknown names and quotes on Backspace like the filter editors. Live results can come from the same `filterReading` call (no extra IPC per keystroke for the highlighting; results still go through the search command).
+- "Default-scope search to the current project/label": AND an implicit `#Project` / `@label` term onto the parsed query (build it as an `Expr::And` around the parsed groups, not by string concatenation, so a user's own `#` still parses cleanly), with a visible chip the user can remove.
+
+**#7: filter and sort on list pages**
+
+- A list page's filter is just a query run through `filter::parse` + `filter::matches` over that page's tasks; reuse `FilterField` for the dynamic filter box, and store pre-made filters as query strings like saved filters.
+- Sorting is new: add sort keys (priority, project, label, due, deadline) as a separate, ordered list beside the query rather than new filter terms, so the language stays about which tasks match. If sort ever gets typed syntax, add its words to `phrases.rs` or the filter keyword list, never a second parser.
+- Occurrence matching means a repeating task can match a date range more than once; a task still appears once. If #7 wants a calendar-like "each occurrence" view, build it on `views::occurs_in` / `Recurrence::next_after`, not on filter results.
+
+**Known follow-ups from this issue**
+
+- Completing a task from its circle in the task view applies a retyped `#new` / `@new` without the save prompt.
+- An unknown multi-word name is reported by its first word only (`/Nxt Up` → “Nxt”).
+- Workspace-wide clippy and a CI clippy step: #21.
