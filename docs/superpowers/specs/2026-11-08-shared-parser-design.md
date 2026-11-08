@@ -1,6 +1,6 @@
 # One phrase vocabulary for quick add and filters
 
-Date: 2026-11-08. Status: design, for a new GitHub issue (not yet filed) that comes before #10 (filter support in search) and #7 (filter and sort on list pages).
+Date: 2026-11-08. Status: design for issue #20, which comes before #10 (filter support in search) and #7 (filter and sort on list pages).
 
 Mockup: https://claude.ai/artifact/VtYcUCsDiJdSkDBGZgDehB (private to Noah): quick add with new names, the save prompt, and search with an unknown name.
 
