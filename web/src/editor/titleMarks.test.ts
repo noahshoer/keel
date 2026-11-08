@@ -42,3 +42,13 @@ it("paints a label in its own color, the accent when it has none or is new", () 
   expect(markStyle(seg("Label", { text: "@new" }), labels)).toBeUndefined();
   expect(markStyle(seg("Date"), labels)).toBeUndefined();
 });
+
+it("marks a name that doesn't exist yet as new, and an unreadable one as unknown", () => {
+  const labels = [label("new", "red")];
+  const fresh = seg("Label", { text: "@new", is_new: true });
+  expect(markClass(fresh)).toContain("hl-new");
+  expect(markStyle(fresh, labels)).toBeUndefined();
+  expect(markClass(seg("Project", { is_new: true }))).toBe("hl hl-project hl-new");
+  expect(markClass(seg("Keyword", { unknown: true }))).toContain("hl-unknown");
+  expect(markClass(seg("Label"))).not.toContain("hl-new");
+});

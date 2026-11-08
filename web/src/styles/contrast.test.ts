@@ -83,6 +83,15 @@ const PILL_TEXT = [
   ...LABEL_COLORS.map((c) => `--label-${c.id}`),
 ];
 
+describe.each(THEMES)("a new name's pill, %s", (_theme, tokens) => {
+  it("text on its fill is at least 4.5:1", () => {
+    expect(tokens["--new-text"]).toBeDefined();
+    expect(contrast(tokens["--new-text"] as string, tokens["--new-fill"] as string)).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  });
+});
+
 describe.each(THEMES)("a filled pill, %s", (_theme, tokens) => {
   it.each(PILL_TEXT)("%s on its own tint is at least 4.5:1", (t) => {
     const fg = tokens[t] as string;

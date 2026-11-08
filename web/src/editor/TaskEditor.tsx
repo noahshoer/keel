@@ -275,18 +275,25 @@ export function TaskEditor({
         title="Project / section"
         icon={locationFace(view.locations, view.location).icon}
         iconClass={locationFace(view.locations, view.location).iconClass}
-        text={view.location_text}
+        text={view.new_project ?? view.location_text}
         items={locationItems(view.locations)}
         selected={view.location}
         open={open}
         setOpen={setPop}
-        chipClass={locationChosen(view.locations, view.location) ? "pill-set pill-project" : ""}
+        chipClass={
+          view.new_project !== null
+            ? "pill-new"
+            : locationChosen(view.locations, view.location)
+              ? "pill-set pill-project"
+              : ""
+        }
         onSelect={(value) => pick(locationPick(value))}
       />
       <LabelPicker
         labels={labels}
         selected={view.shown.labels}
         text={view.labels_text}
+        hasNew={view.new_labels.length > 0}
         open={open}
         setOpen={setPop}
         onToggle={(name) => setValues((v) => toggleLabel(v, name, quickAdd, projects, sections, today))}

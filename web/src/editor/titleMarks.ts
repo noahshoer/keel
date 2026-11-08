@@ -10,6 +10,10 @@ import { labelTagColor } from "./labelColors";
  * comes from [`markStyle`].
  */
 export function markClass(s: TitleSegment): string {
+  return `${baseClass(s)}${s.is_new ? " hl-new" : ""}${s.unknown ? " hl-unknown" : ""}`;
+}
+
+function baseClass(s: TitleSegment): string {
   switch (s.kind) {
     case "Date":
     case "Time":
@@ -34,7 +38,7 @@ export function markClass(s: TitleSegment): string {
 
 /** A label phrase's color (`@home`), `undefined` when the label has none or doesn't exist yet. */
 export function markStyle(s: TitleSegment, labels: Label[]): CSSProperties | undefined {
-  if (s.kind !== "Label") return undefined;
+  if (s.kind !== "Label" || s.is_new) return undefined;
   const name = s.text.replace(/^@/, "").toLowerCase();
   const found = labels.find((l) => l.name.toLowerCase() === name);
   const color = found === undefined ? undefined : labelTagColor(found.color);
