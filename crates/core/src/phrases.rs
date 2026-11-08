@@ -175,10 +175,8 @@ pub(crate) fn match_date(t: &[Token], i: usize, today: NaiveDate) -> Option<(usi
 fn clock_ampm(word: &str) -> Option<NaiveTime> {
     let (num, pm) = if let Some(n) = word.strip_suffix("pm").or(word.strip_suffix('p')) {
         (n, true)
-    } else if let Some(n) = word.strip_suffix("am").or(word.strip_suffix('a')) {
-        (n, false)
     } else {
-        return None;
+        (word.strip_suffix("am").or(word.strip_suffix('a'))?, false)
     };
     hm_ampm(num, pm)
 }
@@ -533,7 +531,7 @@ pub(crate) fn closest<'a>(name: &str, names: &[&'a str]) -> Option<&'a str> {
     let mut best: Option<(usize, &'a str)> = None;
     for n in names {
         let d = edit_distance(&want, &n.to_lowercase());
-        if d <= limit && best.map_or(true, |(b, _)| d < b) {
+        if d <= limit && best.is_none_or(|(b, _)| d < b) {
             best = Some((d, n));
         }
     }

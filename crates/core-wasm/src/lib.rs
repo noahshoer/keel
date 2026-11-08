@@ -339,6 +339,7 @@ pub fn values_from_task(
 }
 
 /// `editor::editor_view`: everything the editor draws for its values.
+#[allow(clippy::too_many_arguments)]
 #[wasm_bindgen(js_name = editorView, unchecked_return_type = "import('../../bindings').EditorView")]
 pub fn editor_view(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] values: JsValue,

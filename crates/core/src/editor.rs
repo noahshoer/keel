@@ -928,6 +928,7 @@ pub struct EditorView {
 /// What the editor shows for `v`. `quick_add` parses the title (adding);
 /// `keep_label` names an existing custom rule and `existing` is that rule
 /// (editing).
+#[allow(clippy::too_many_arguments)]
 pub fn editor_view(
     v: &EditorValues,
     quick_add: bool,
@@ -1316,7 +1317,7 @@ mod tests {
         inbox.is_inbox = true;
         let home = Project::new("Home");
         let garden = Section::new(home.id.clone(), "Garden", 0);
-        let items = location_choices(&[inbox.clone(), home.clone()], &[garden.clone()]);
+        let items = location_choices(&[inbox.clone(), home.clone()], std::slice::from_ref(&garden));
         assert_eq!(items.len(), 3);
         assert_eq!(items[0].kind, LocationKind::Inbox);
         assert_eq!(items[1], LocationChoice { value: home.id.to_string(), label: "Home".into(), kind: LocationKind::Project });
