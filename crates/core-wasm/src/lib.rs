@@ -550,13 +550,13 @@ pub fn new_names(
 #[wasm_bindgen(js_name = keepAsText, unchecked_return_type = "import('../../bindings').EditorValues")]
 pub fn keep_as_text(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] values: JsValue,
-    #[wasm_bindgen(unchecked_param_type = "string[]")] names: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').NewNames")] names: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
     today: &str,
 ) -> Result<JsValue, JsError> {
     let v: EditorValues = input("values", values)?;
-    let names: Vec<String> = input("names", names)?;
+    let names: editor::NewNames = input("names", names)?;
     let projects: Vec<Project> = input("projects", projects)?;
     let sections: Vec<Section> = input("sections", sections)?;
     output(&editor::keep_as_text(&v, &names, &projects, &sections, date(today)?))

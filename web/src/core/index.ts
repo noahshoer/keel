@@ -393,7 +393,7 @@ export function newNames(
 /** The values with those typed names left as plain text in the title. */
 export function keepAsText(
   v: EditorValues,
-  names: string[],
+  names: NewNames,
   projects: Project[],
   sections: Section[],
   today: string,

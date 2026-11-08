@@ -1039,7 +1039,7 @@ fn typed_new_labels(qa: &QuickAdd, v: &EditorValues, labels: &[Label]) -> Vec<St
 
 /// What the save prompt lists: names typed with `#` / `@` that nothing has
 /// yet. Empty when nothing is new.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct NewNames {
     pub projects: Vec<String>,
@@ -1051,17 +1051,20 @@ pub fn new_names(v: &EditorValues, projects: &[Project], sections: &[Section], l
     NewNames { projects: qa.new_project.iter().cloned().collect(), labels: typed_new_labels(&qa, v, labels) }
 }
 
-/// `v` with the typed `#name` / `@name` phrases for `names` (any case) left
-/// as plain text in the title.
-pub fn keep_as_text(v: &EditorValues, names: &[String], projects: &[Project], sections: &[Section], today: NaiveDate) -> EditorValues {
+/// `v` with the typed `#name` phrases for `names.projects` and `@name`
+/// phrases for `names.labels` (any case) left as plain text in the title.
+/// Each list only touches its own kind of phrase.
+pub fn keep_as_text(v: &EditorValues, names: &NewNames, projects: &[Project], sections: &[Section], today: NaiveDate) -> EditorValues {
     let qa = parse_title(v, projects, sections, today);
     let mut v = v.clone();
     for s in &qa.spans {
-        if !matches!(s.kind, SpanKind::Project | SpanKind::Label) {
-            continue;
-        }
+        let list = match s.kind {
+            SpanKind::Project => &names.projects,
+            SpanKind::Label => &names.labels,
+            _ => continue,
+        };
         let Some(name) = v.content.get(s.start..s.end).and_then(|t| t.get(1..)) else { continue };
-        if names.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+        if list.iter().any(|n| n.eq_ignore_ascii_case(name)) {
             v.plain.push((s.start, s.end));
         }
     }
@@ -1971,7 +1974,7 @@ mod tests {
     #[test]
     fn kept_names_become_text() {
         let (projects, labels) = known();
-        let v = keep_as_text(&typed(NEW_TITLE), &["office".into(), "wrok".into()], &projects, &[], day30());
+        let v = keep_as_text(&typed(NEW_TITLE), &NewNames { projects: vec!["wrok".into()], labels: vec!["office".into()] }, &projects, &[], day30());
         let plan = add_plan(&v, &projects, &[], &labels, day30());
         assert_eq!(plan.project, None);
         assert_eq!(plan.labels, ["errands"]);
@@ -1982,8 +1985,22 @@ mod tests {
     }
 
     #[test]
+    fn kept_label_leaves_same_named_project() {
+        let (projects, _) = known();
+        let names = NewNames { projects: vec![], labels: vec!["work".into()] };
+        let v = keep_as_text(&typed("Buy ink #Work @work"), &names, &projects, &[], day30());
+        let plan = add_plan(&v, &projects, &[], &[], day30());
+        assert!(plan.labels.is_empty());
+        assert_eq!(plan.project, None);
+        match plan.task {
+            Action::TaskAdd { project_id, content, .. } => assert_eq!((project_id, content.as_str()), (Id::from("P-WORK"), "Buy ink @work")),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
     fn kept_name_after_multibyte_text() {
-        let v = keep_as_text(&typed("café @office"), &["office".into()], &[], &[], day30());
+        let v = keep_as_text(&typed("café @office"), &NewNames { projects: vec![], labels: vec!["office".into()] }, &[], &[], day30());
         assert_eq!(v.plain, vec![(6, 13)]);
     }
 
