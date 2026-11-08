@@ -344,7 +344,7 @@ What landed, and where the next two issues plug in. Data rules stay in `keel-cor
 - Web: `useQueryCheck(initialQuery, names)` (`web/src/shell/filterQuery.ts`) holds a query with its live reading, and `FilterField` (`web/src/shell/FilterField.tsx`) renders it over `HighlightedTitle` with the error line, fix button and live region. Reuse both instead of building a new field.
 - New phrases go in `phrases.rs` only; both quick add and filters pick them up.
 
-**#10: filter syntax in search**
+**#10: filter syntax in search** (built: `docs/superpowers/plans/2026-11-08-search-filters.md`, which lists where it differs from this note)
 
 - In `AppService::search_at`, replace `search::words` / `search::matches` with `filter::parse(query, today, &names)` and match open and completed tasks with `filter::matches` (AND across `,` groups or show them as groups; decide in #10's design). A query of plain words parses to one `Term::Text`, so today's word search keeps working unchanged. Keep the title-first ordering by ranking on the query's text terms (`search::rank`).
 - When the query has a parse error, don't show an empty list: fall back to treating the whole query as text, and show `FilterReading.problem` under the field.

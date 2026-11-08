@@ -18,3 +18,23 @@ Search reads its query as the filter language and can be limited to the page it 
 - [x] Bindings, mock backend (narrows its canned results by scope)
 - [x] `searchScopeFor`, App state, SearchPane chip and problem line, tests
 - [x] `cargo test`, `pnpm check`, browser preview at 375px (dark)
+
+## Status
+
+PR [#25](https://github.com/noahshoer/keel/pull/25), open (2026-11-08). Verified with `cargo test`, `pnpm check` and the browser preview (mock backend, 375px, dark). Not yet on the phone.
+
+## Where this differs from the shared-parser plan's note for #10
+
+- The scope is a predicate on each task (`SearchScope::contains`), not an `Expr::And` around the parsed groups.
+- The search boxes are not `FilterField`s, so there is no term highlighting, red names or Backspace-to-quote in search.
+- Comma groups are unioned into one list (the note left this open).
+
+## To check on the phone
+
+- The "Searching in" chip's size and tap target, and that removing it keeps the keyboard and query as they were.
+- Opening Search by swipe (not the header button) from a project page starts scoped.
+
+## Follow-ups (not started)
+
+- Highlight terms in the search box (a `FilterField`, once its keyboard behavior is proven on the phone).
+- Mention filter syntax in the empty Search state (`searchHint`; its text is pinned by tests today).
