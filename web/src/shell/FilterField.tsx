@@ -40,8 +40,9 @@ export function FilterField({
         onUnhighlight={unhighlight}
       />
       {/* Always mounted, so the first problem is announced (a live region
-          inserted with its content often isn't read). */}
-      <div aria-live="polite" aria-atomic="true">
+          inserted with its content often isn't read). Only the problem goes
+          in it; the long hint stays outside, so it isn't read on every fix. */}
+      <div className="filter-live" aria-live="polite" aria-atomic="true">
         {problem !== null ? (
           <div className="filter-problem" id={problemId}>
             {problem}
@@ -54,10 +55,9 @@ export function FilterField({
               </>
             ) : null}
           </div>
-        ) : (
-          <div className="filter-hint">{FILTER_HINT}</div>
-        )}
+        ) : null}
       </div>
+      {problem === null ? <div className="filter-hint">{FILTER_HINT}</div> : null}
     </>
   );
 }

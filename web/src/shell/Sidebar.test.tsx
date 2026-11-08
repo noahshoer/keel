@@ -504,6 +504,10 @@ it("the filter field's problem is announced and tied to the field", async () => 
   expect(live).not.toBeNull();
   expect(live.getAttribute("aria-live")).toBe("polite");
   expect(live.getAttribute("aria-atomic")).toBe("true");
+  expect(live.textContent).toBe("");
+  const hint = sidebar().querySelector(".filter-hint") as HTMLElement;
+  expect(hint).not.toBeNull();
+  expect(live.contains(hint)).toBe(false);
   fireEvent.change(query, { target: { value: "today & #hom" } });
   await waitFor(() => expect(sidebar().querySelector(".filter-problem")).not.toBeNull());
   const line = sidebar().querySelector(".filter-problem") as HTMLElement;
@@ -515,6 +519,12 @@ it("the filter field's problem is announced and tied to the field", async () => 
   expect(query.getAttribute("aria-describedby")).toBe(line.id);
   fireEvent.change(query, { target: { value: "today" } });
   await waitFor(() => expect(query.getAttribute("aria-invalid")).toBeNull());
+  // Cleared: the region empties and the hint comes back, outside it.
+  expect(sidebar().querySelector("[aria-live]")).toBe(live);
+  expect(live.textContent).toBe("");
+  const back = sidebar().querySelector(".filter-hint") as HTMLElement;
+  expect(back).not.toBeNull();
+  expect(live.contains(back)).toBe(false);
   expect(query.getAttribute("aria-describedby")).toBeNull();
 });
 
