@@ -5,6 +5,7 @@ pub mod filter;
 pub mod import;
 pub mod ids;
 pub mod model;
+pub mod phrases;
 pub mod quickadd;
 pub mod recurrence;
 pub mod reminders;
