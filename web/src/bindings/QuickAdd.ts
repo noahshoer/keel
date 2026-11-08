@@ -11,7 +11,12 @@ export type QuickAdd = {
 /**
  * The title with recognized phrases removed.
  */
-content: string, date: string | null, time: string | null, recurrence: Recurrence | null, priority: Priority | null, project_id: Id | null, section_id: Id | null, labels: Array<string>, 
+content: string, date: string | null, time: string | null, recurrence: Recurrence | null, priority: Priority | null, project_id: Id | null, section_id: Id | null, 
+/**
+ * From `#name` when no project has that name: the typed name (case kept),
+ * to be created on save. `project_id` stays `None`.
+ */
+new_project: string | null, labels: Array<string>, 
 /**
  * From `{oct 30}`: the "must be done by" date.
  */

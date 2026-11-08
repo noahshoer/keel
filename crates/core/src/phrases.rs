@@ -524,6 +524,12 @@ pub(crate) fn match_name(t: &[Token], i: usize, sigil: &str, names: &[&str]) -> 
     None
 }
 
+/// Whether a word after `#` or `@` can be a name: it needs a letter ("#123"
+/// and "@1" stay text).
+pub(crate) fn is_name(word: &str) -> bool {
+    word.chars().any(|c| c.is_alphabetic())
+}
+
 /// The rule a repeat phrase means when the task starts on `start`.
 pub(crate) fn resolve_repeat(spec: RepeatSpec, start: NaiveDate) -> Recurrence {
     match spec {

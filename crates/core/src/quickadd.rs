@@ -10,7 +10,7 @@ use chrono::{Duration, Months, NaiveDate, NaiveTime};
 use crate::ids::Id;
 use crate::model::{Priority, Project, Section};
 use crate::phrases::{
-    match_date, match_deadline, match_name, match_repeat, match_time, number_word, repeat_word, resolve_repeat, tokens,
+    is_name, match_date, match_deadline, match_name, match_repeat, match_time, number_word, repeat_word, resolve_repeat, tokens,
     RepeatSpec, Token,
 };
 use crate::recurrence::Recurrence;
@@ -27,6 +27,9 @@ pub struct QuickAdd {
     pub priority: Option<Priority>,
     pub project_id: Option<Id>,
     pub section_id: Option<Id>,
+    /// From `#name` when no project has that name: the typed name (case kept),
+    /// to be created on save. `project_id` stays `None`.
+    pub new_project: Option<String>,
     pub labels: Vec<String>,
     /// From `{oct 30}`: the "must be done by" date.
     pub deadline: Option<NaiveDate>,
@@ -86,6 +89,7 @@ impl QuickAdd {
             && self.priority.is_none()
             && self.project_id.is_none()
             && self.section_id.is_none()
+            && self.new_project.is_none()
             && self.labels.is_empty()
             && self.deadline.is_none()
     }
@@ -267,9 +271,18 @@ fn parse_tokens(
                 continue;
             }
         }
+        if q.project_id.is_none() && q.new_project.is_none() && t[i].raw.starts_with('#') {
+            let name = t[i].raw[1..].trim_end_matches([',', '.', ';', '!', '?']);
+            if is_name(name) {
+                q.new_project = Some(name.to_string());
+                take(&mut used, &mut spans, i, 1, SpanKind::Project);
+                i += 1;
+                continue;
+            }
+        }
         if t[i].raw.len() > 1 && t[i].raw.starts_with('@') {
             let name = t[i].raw[1..].trim_end_matches([',', '.', ';', '!', '?']).to_string();
-            if !name.is_empty() {
+            if is_name(&name) {
                 if !q.labels.iter().any(|l| l.eq_ignore_ascii_case(&name)) {
                     q.labels.push(name);
                 }
@@ -355,7 +368,8 @@ fn parse_tokens(
 
     // Sections resolve within the chosen project (or the Inbox).
     let inbox = projects.iter().find(|p| p.is_inbox).map(|p| p.id.clone());
-    if let Some(scope) = q.project_id.clone().or(inbox.clone()) {
+    let scope = if q.new_project.is_some() { None } else { q.project_id.clone().or(inbox.clone()) };
+    if let Some(scope) = scope {
         let scoped: Vec<&Section> = sections.iter().filter(|s| s.project_id == scope).collect();
         let names: Vec<&str> = scoped.iter().map(|s| s.name.as_str()).collect();
         for i in 0..t.len() {
@@ -650,7 +664,28 @@ mod tests {
         let q = p("x #Side Project");
         assert_eq!((q.project_id, q.content.as_str()), (Some(Id::from("P-SIDE")), "x"));
         let q = p("x #unknown");
-        assert_eq!((q.project_id, q.content.as_str()), (None, "x #unknown"));
+        assert_eq!((q.project_id, q.content.as_str(), q.new_project.as_deref()), (None, "x", Some("unknown")));
+    }
+
+    #[test]
+    fn unknown_project_is_taken_as_new() {
+        let q = p("Buy ink #wrok");
+        assert_eq!((q.content.as_str(), q.project_id.clone(), q.new_project.as_deref()), ("Buy ink", None, Some("wrok")));
+        assert_eq!(q.spans, vec![crate::quickadd::Span { start: 8, end: 13, kind: SpanKind::Project }]);
+    }
+
+    #[test]
+    fn known_project_still_wins() {
+        let q = p("Buy ink #work");
+        assert_eq!((q.project_id, q.new_project), (Some(Id::from("P-WORK")), None));
+    }
+
+    #[test]
+    fn numbers_are_not_names() {
+        let q = p("fix bug #123");
+        assert_eq!((q.content.as_str(), q.new_project, q.spans.len()), ("fix bug #123", None, 0));
+        let q = p("call @1 now");
+        assert_eq!((q.content.as_str(), q.labels.len()), ("call @1 now", 0));
     }
 
     #[test]
@@ -694,7 +729,7 @@ mod tests {
 
     #[test]
     fn whole_words_only() {
-        for input in ["Plan today's agenda", "Mondays are hard", "Buy todays paper", "#hashtag culture", "email@example.com"] {
+        for input in ["Plan today's agenda", "Mondays are hard", "Buy todays paper", "email@example.com"] {
             let q = p(input);
             assert_eq!(q.date, None, "{input}");
             assert_eq!(q.content, input, "{input}");
