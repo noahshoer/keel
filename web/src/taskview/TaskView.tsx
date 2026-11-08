@@ -6,20 +6,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { Loaded } from "../app/load";
-import type { EditorPick, EditorValues, Id, Recurrence, TaskDetail } from "../bindings";
+import type { EditorPick, EditorValues, Id, NewNames, Recurrence, TaskDetail } from "../bindings";
 import { localToday } from "../clock";
 import {
   applyPick,
   applyTitle,
   editorView,
   fieldLayout,
+  keepAsText,
   movesOccurrence,
+  newNames,
   reminderDraftOf,
   repeatText,
   streakText,
   toggleLabel,
   unhighlightAt,
   valuesFromTask,
+  withProject,
   withStoredPlain,
   withTitle,
 } from "../core";
@@ -28,7 +31,14 @@ import { usePillFade } from "../editor/pillFade";
 import type { Pop } from "../editor/pop";
 import { saveEdit } from "../editor/save";
 import { slideClose } from "../gestures/sheet";
-import { completeTask, deleteTask, setDoneWithSubtasks, uncompleteTask } from "../ipc/actions";
+import {
+  addLabel,
+  addProjectGetId,
+  completeTask,
+  deleteTask,
+  setDoneWithSubtasks,
+  uncompleteTask,
+} from "../ipc/actions";
 import { CHECK_CLASS } from "../lists/chips";
 import { openAndFocus } from "../shell/focus";
 import { haptic } from "../shell/haptics";
@@ -46,6 +56,7 @@ import { FieldControl } from "./FieldControl";
 import { GrowingText } from "./GrowingText";
 import { MoreMenu } from "./MoreMenu";
 import { MovePrompt } from "./MovePrompt";
+import { NewNamesPopup } from "./NewNamesPopup";
 import { useTaskNav } from "./nav-context";
 import { StreakOnKeyboard, StreakPopover } from "./StreakPopover";
 import { SubtaskCard } from "./SubtaskCard";
@@ -53,6 +64,9 @@ import { fieldsShown, sameValues, settle } from "./view-rules";
 
 /** Where the view goes after saving a pending title or description. */
 type NavTo = { push: Id } | "back" | "close";
+
+/** Nothing new to create. */
+const NO_NAMES: NewNames = { projects: [], labels: [] };
 
 export function TaskView({
   detail,
@@ -153,8 +167,11 @@ export function TaskView({
   const [open, setOpen] = useState<Pop>(null);
 
   type Pair = { before: EditorValues; after: EditorValues; rule: Recurrence | null };
-  // A move of one occurrence resets a streak going, so it waits for an answer.
-  type PendingMove = { move: () => void; cancel: () => void };
+  // A move of one occurrence resets a streak going, so it waits for an answer;
+  // so does a retyped title naming projects or labels that don't exist yet.
+  type PendingMove =
+    | { kind: "move"; move: () => void; cancel: () => void }
+    | { kind: "names"; names: NewNames; save: (unticked: NewNames) => void };
   const [pendingMove, setPendingMoveState] = useState<PendingMove | null>(null);
   const pendingRef = useRef<PendingMove | null>(null);
   const setPendingMove = (p: PendingMove | null) => {
@@ -164,13 +181,22 @@ export function TaskView({
   const asksFirst = (before: EditorValues, after: EditorValues) =>
     task.streak_enabled && task.streak_current > 0 && movesOccurrence(before, after, rule);
   // Reads the ref, so it keeps its identity (the prompt's outside-click close).
+  // The names prompt goes back to editing: the typed title stays, unsaved.
   const cancelMove = useCallback(() => {
     const p = pendingRef.current;
     pendingRef.current = null;
     setPendingMoveState(null);
-    p?.cancel();
+    if (p?.kind === "move") p.cancel();
   }, []);
-  const save = (pair: Pair) => saveEdit(id, pair.before, pair.after, pair.rule, localToday());
+  // Creates the ticked names first (labels best effort), then saves; a
+  // created project takes the task.
+  const save = async (pair: Pair, create: NewNames = NO_NAMES) => {
+    for (const name of create.labels) await settle(addLabel(name));
+    const project = create.projects[0];
+    const projectId = project === undefined ? null : await addProjectGetId(project).catch(() => null);
+    const after = projectId === null ? pair.after : withProject(pair.after, projectId);
+    await saveEdit(id, pair.before, after, pair.rule, localToday());
+  };
   // The title / description edit to save, if any (`base` moves ahead). An
   // emptied title goes back to the saved one. A retyped title applies what it
   // says (a date, a priority, ...) and loses those words; one with nothing
@@ -201,23 +227,60 @@ export function TaskView({
     const drafts = commitDrafts(before, retyped ? before.content : titleRef.current, descRef.current);
     return { pair: drafts.save === null ? null : { ...drafts.save, rule }, title: drafts.title };
   };
-  const take = (d: Draft) => {
+  const take = (d: Draft, create: NewNames = NO_NAMES) => {
     if (d.title !== titleRef.current) setTitle(d.title);
     if (d.pair !== null) {
       setBase(d.pair.after);
       // Not tied to the view: it may close before the save lands.
-      void settle(save(d.pair)).then(onChanged);
+      void settle(save(d.pair, create)).then(onChanged);
     }
   };
-  // Saves the drafts, then `then`. A typed date that would reset a streak
-  // asks first; Cancel keeps the description but not the retyped title.
+  // The values the typed title and description would save from.
+  const typedValues = (): EditorValues => ({
+    ...baseRef.current,
+    content: titleRef.current,
+    description: descRef.current,
+    plain: plainRef.current,
+  });
+  // The new names a retyped title has, if any.
+  const retypedNames = (): NewNames | null => {
+    const typed = titleRef.current.trim();
+    if (typed === "" || typed === baseRef.current.content) return null;
+    const names = newNames(typedValues(), projects, sections, labels, today);
+    return names.projects.length > 0 || names.labels.length > 0 ? names : null;
+  };
+  // Saves the drafts, then `then`. A retyped title naming new projects or
+  // labels asks which to create; Back to editing saves nothing and stays.
   const saveDrafts = (then?: () => void) => {
-    const d = readDrafts();
+    const names = retypedNames();
+    if (names === null) {
+      saveRead(readDrafts(), NO_NAMES, then);
+      return;
+    }
+    setOpen(null);
+    setPendingMove({
+      kind: "names",
+      names,
+      save: (unticked) => {
+        // The unticked names stay text in the title.
+        setPlain(keepAsText(typedValues(), unticked, projects, sections, today).plain);
+        const create = {
+          projects: names.projects.filter((n) => !unticked.projects.includes(n)),
+          labels: names.labels.filter((n) => !unticked.labels.includes(n)),
+        };
+        saveRead(readDrafts(), create, then);
+      },
+    });
+  };
+  // A typed date that would reset a streak asks first; Cancel keeps the
+  // description but not the retyped title.
+  const saveRead = (d: Draft, create: NewNames, then?: () => void) => {
     if (d.pair !== null && asksFirst(d.pair.before, d.pair.after)) {
       setOpen(null);
       setPendingMove({
+        kind: "move",
         move: () => {
-          take(d);
+          take(d, create);
           then?.();
         },
         cancel: () => {
@@ -229,7 +292,7 @@ export function TaskView({
       });
       return;
     }
-    take(d);
+    take(d, create);
     then?.();
   };
   // Moves at once (a second fast tap on Back acts on the view below, not
@@ -260,6 +323,7 @@ export function TaskView({
 
   // A picker's change, saved now; a move that would reset a streak asks first.
   const fieldsCard = useRef<HTMLDivElement>(null);
+  const titleLine = useRef<HTMLDivElement>(null);
   const commitValues = (after: EditorValues) => {
     const before = baseRef.current;
     if (sameValues(before, after)) return;
@@ -269,7 +333,7 @@ export function TaskView({
   const saveValues = (after: EditorValues) => {
     if (asksFirst(baseRef.current, after)) {
       setOpen(null);
-      setPendingMove({ move: () => commitValues(after), cancel: () => {} });
+      setPendingMove({ kind: "move", move: () => commitValues(after), cancel: () => {} });
     } else {
       commitValues(after);
     }
@@ -410,7 +474,7 @@ export function TaskView({
       )}
       <div className="tv-body">
         <div className="tv-scroll">
-          <div className={detail.done ? "tv-titleline done" : "tv-titleline"}>
+          <div ref={titleLine} className={detail.done ? "tv-titleline done" : "tv-titleline"}>
             <button
               type="button"
               className={detail.done ? "check done" : CHECK_CLASS[task.priority]}
@@ -506,7 +570,22 @@ export function TaskView({
               </div>
             </div>
           ) : null}
-          {pendingMove !== null ? (
+          {pendingMove?.kind === "names" ? (
+            <NewNamesPopup
+              anchor={titleLine}
+              names={pendingMove.names}
+              onClose={cancelMove}
+              onBack={() => {
+                cancelMove();
+                titleLine.current?.querySelector("textarea")?.focus();
+              }}
+              onSave={(unticked) => {
+                setPendingMove(null);
+                pendingMove.save(unticked);
+              }}
+            />
+          ) : null}
+          {pendingMove?.kind === "move" ? (
             <MovePrompt
               anchor={fieldsCard}
               streak={task.streak_current}

@@ -2,8 +2,8 @@
 // `editPlan`), and this sends it in order, as crates/ui/src/editor.rs
 // `add_from_editor` and `save_edit` do.
 import type { EditorValues, Id, Label, Project, Recurrence, Section } from "../bindings";
-import { addPlan, editPlan, reminderActions } from "../core";
-import { addLabel, dispatchAction, setStreak } from "../ipc/actions";
+import { addPlan, editPlan, reminderActions, taskWithProject } from "../core";
+import { addLabel, addProjectGetId, dispatchAction, setStreak } from "../ipc/actions";
 
 /** Sends each action, ignoring failures (reminders and labels are best effort). */
 async function bestEffort(sends: Array<() => Promise<unknown>>): Promise<void> {
@@ -17,8 +17,9 @@ async function bestEffort(sends: Array<() => Promise<unknown>>): Promise<void> {
 }
 
 /**
- * Adds the task the editor describes (quick add applied), creating any labels
- * it mentions that don't exist yet. Rejects when the task wasn't added.
+ * Adds the task the editor describes (quick add applied), creating the new
+ * project it names first (the task goes into it) and any labels it mentions
+ * that don't exist yet. Rejects when the project or the task wasn't added.
  */
 export async function addFromEditor(
   v: EditorValues,
@@ -28,8 +29,10 @@ export async function addFromEditor(
   today: string,
 ): Promise<void> {
   const plan = addPlan(v, projects, sections, labels, today);
+  const task =
+    plan.project === null ? plan.task : taskWithProject(plan.task, await addProjectGetId(plan.project));
   await bestEffort(plan.labels.map((name) => () => addLabel(name)));
-  const result = await dispatchAction(plan.task, true);
+  const result = await dispatchAction(task, true);
   const id = Object.values(result.id_mapping)[0];
   if (id === undefined) return;
   await bestEffort(reminderActions(id, [], plan.reminders).map((a) => () => dispatchAction(a)));

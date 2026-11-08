@@ -29,6 +29,14 @@ export const setDoneWithSubtasks = (id: Id, enabled: boolean) =>
   send({ type: "task_set_done_with_subtasks", id, enabled });
 
 export const addProject = (name: string) => send({ type: "project_add", name }, true);
+/** Adds a project and gives its id (to put a task in it). */
+export async function addProjectGetId(name: string): Promise<Id> {
+  const cmd = command({ type: "project_add", name }, true);
+  const result = await invoke("dispatch", { cmd });
+  const id = cmd.temp_id ? result.id_mapping[cmd.temp_id] : undefined;
+  if (id === undefined) throw new Error("the new project has no id");
+  return id;
+}
 export const renameProject = (id: Id, name: string) => send({ type: "project_update", id, name });
 export const deleteProject = (id: Id) => send({ type: "project_delete", id });
 

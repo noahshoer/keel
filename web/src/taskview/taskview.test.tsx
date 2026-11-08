@@ -655,3 +655,31 @@ it("a typed move asks before the view closes, then closes once answered", async 
   expect(stack()).toBe("");
   await waitFor(() => expect(sent.filter((a) => a.type === "task_update")).toHaveLength(1));
 });
+
+it("a retyped title with new names asks first; Save creates them, moves the task and saves the title", async () => {
+  await show(["t-trip"]);
+  fireEvent.change(titleField(), { target: { value: "Buy ink #wrok @errands" } });
+  fireEvent.blur(titleField());
+  expect(screen.getByText("Create these with the task?")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(screen.queryByText("Create these with the task?")).toBeNull();
+  await waitFor(async () => expect((await task("t-trip"))?.content).toBe("Buy ink"));
+  const wrok = (await invoke("list_projects", {})).find((p) => p.name === "wrok");
+  expect(wrok).toBeDefined();
+  const saved = await task("t-trip");
+  expect(saved?.project_id).toBe(wrok?.id);
+  expect(saved?.labels).toContain("errands");
+  expect((await invoke("list_labels", {})).some((l) => l.name === "errands")).toBe(true);
+});
+
+it("Back to editing keeps the retyped title with new names and saves nothing", async () => {
+  await show(["t-bag"]);
+  const sent = spyActions();
+  fireEvent.change(titleField(), { target: { value: "Pack bag #newproj" } });
+  fireEvent.blur(titleField());
+  fireEvent.click(screen.getByRole("button", { name: "Back to editing" }));
+  expect(screen.queryByText("Create these with the task?")).toBeNull();
+  expect(titleField().value).toBe("Pack bag #newproj");
+  await new Promise((r) => setTimeout(r, 50));
+  expect(sent).toEqual([]);
+});

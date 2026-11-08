@@ -23,6 +23,7 @@ import { Gear } from "@phosphor-icons/react/dist/csr/Gear";
 import { Hash } from "@phosphor-icons/react/dist/csr/Hash";
 import { List } from "@phosphor-icons/react/dist/csr/List";
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { Minus } from "@phosphor-icons/react/dist/csr/Minus";
 import { Monitor } from "@phosphor-icons/react/dist/csr/Monitor";
 import { Moon } from "@phosphor-icons/react/dist/csr/Moon";
 import { PencilSimple } from "@phosphor-icons/react/dist/csr/PencilSimple";
@@ -261,6 +262,11 @@ export function ChevronRightIcon() {
 
 export function CheckIcon() {
   return <Ph icon={Check} size={11} />;
+}
+
+/** The dash of a check that's partly ticked (a group with some of its names). */
+export function MinusIcon() {
+  return <Ph icon={Minus} size={11} />;
 }
 
 export function CheckSmallIcon() {
