@@ -157,6 +157,10 @@ pub struct LastCompletion {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub moved_from: Option<String>,
+    /// The day it was completed (`YYYY-MM-DD`); missing on older saves.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
+    pub completed_on: Option<String>,
 }
 
 impl Task {

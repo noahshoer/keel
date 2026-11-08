@@ -313,3 +313,36 @@ fn reopening_climbs_two_levels() {
     assert!(!f.get(&parent).checked);
     assert!(!f.get(&grandparent).checked);
 }
+
+#[test]
+fn reopening_days_later_leaves_a_weekly_parent_alone() {
+    let mut f = Fx::new();
+    let friday = Recurrence::Weekly(vec![FRIDAY]);
+    let parent = f.add(None, Some(friday.clone()));
+    f.streak(&parent);
+    f.done_with(&parent);
+    let sub = f.add(Some(&parent), Some(friday));
+    f.complete_on(&sub, day(9));
+    assert_eq!(f.get_on(&parent, day(9)).due.unwrap().date, "2026-01-16");
+
+    // Saturday: a mis-tap reopens the sub-task done yesterday.
+    f.reopen_on(&sub, day(10));
+
+    let p = f.get_on(&parent, day(10));
+    assert_eq!(p.due.unwrap().date, "2026-01-16", "Friday's completion stands");
+    assert_eq!(p.streak_current, 1);
+}
+
+#[test]
+fn reopening_an_open_sub_task_leaves_the_parent_alone() {
+    let mut f = Fx::new();
+    let parent = f.add(None, Some(Recurrence::Daily));
+    // Due Friday, so completing the parent today leaves it open.
+    let sub = f.add(Some(&parent), Some(Recurrence::Weekly(vec![FRIDAY])));
+    f.complete(&parent);
+    assert_eq!(f.date(&parent), "2026-01-06");
+
+    f.reopen_on(&sub, today());
+
+    assert_eq!(f.date(&parent), "2026-01-06");
+}

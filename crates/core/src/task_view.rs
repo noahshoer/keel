@@ -328,6 +328,7 @@ mod tests {
             streak_best: 0,
             streak_last_period: None,
             moved_from: None,
+            completed_on: None,
         });
         let all = vec![
             repeats(task("P", None, 0), "2026-11-03"),

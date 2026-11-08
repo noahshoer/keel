@@ -619,12 +619,16 @@ pub fn apply_at<R: Repository>(
             }
         }
         Action::TaskUncomplete { id } => {
+            let was_done = repo.get_task(&id)?.is_some_and(|t| views::done_for_now(&t, today));
             uncomplete_task(repo, &id, today)?;
-            // A parent that was done isn't any more.
+            if !was_done {
+                return finish(repo, &cmd.uuid, type_name, &args_json, result);
+            }
+            // A parent done today isn't any more.
             let mut child = id;
             while let Some(parent) = repo.get_task(&child)?.and_then(|t| t.parent_id) {
                 match repo.get_task(&parent)? {
-                    Some(p) if views::done_for_now(&p, today) => uncomplete_task(repo, &parent, today)?,
+                    Some(p) if views::done_today(&p, today) => uncomplete_task(repo, &parent, today)?,
                     _ => break,
                 }
                 child = parent;
@@ -871,6 +875,7 @@ fn complete_occurrence(
             streak_best: task.streak_best,
             streak_last_period: task.streak_last_period.clone(),
             moved_from: was_moved,
+            completed_on: Some(iso(today)),
         });
     }
     task.last_completion = undo;

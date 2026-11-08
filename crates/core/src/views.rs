@@ -200,6 +200,15 @@ pub fn done_for_now(t: &Task, today: NaiveDate) -> bool {
             && streak::undoable_completion(t, today).is_some())
 }
 
+/// Whether a task was done today: checked, or a repeating task whose saved
+/// completion was made today (an earlier day's completion stands).
+pub fn done_today(t: &Task, today: NaiveDate) -> bool {
+    t.checked
+        || (done_for_now(t, today)
+            && streak::undoable_completion(t, today)
+                .is_some_and(|u| u.completed_on.as_deref() == Some(today.format("%Y-%m-%d").to_string().as_str())))
+}
+
 /// Whether every sub-task its "x of y" counts is done (false with none).
 pub fn all_done(parent: &Id, all: &[Task], today: NaiveDate) -> bool {
     progress(parent, all, today).is_some_and(|p| p.done == p.total)
@@ -863,6 +872,7 @@ mod progress_tests {
             streak_best: 0,
             streak_last_period: None,
             moved_from: None,
+            completed_on: None,
         });
         task
     }
@@ -1013,6 +1023,7 @@ mod card_tests {
             streak_best: 0,
             streak_last_period: None,
             moved_from: None,
+            completed_on: None,
         });
         let cs = cards(vec![f.pack.clone(), done.clone()], &all(&f), CardMode::Grouped, some_day());
         assert_eq!(heads(&cs), ["Pack"]);
