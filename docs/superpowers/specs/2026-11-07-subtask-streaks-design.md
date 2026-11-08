@@ -41,7 +41,7 @@ A per-task setting, off by default, so existing tasks behave as they do now.
 
 When a sub-task is reopened (`TaskUncomplete`) and its parent is currently done, the parent is reopened too (`TaskUncomplete` on it, which also takes back its streak count when it repeats), and so on up the tree. This applies whether or not the parent has the setting on (Noah, 2026-11-07, "the way Todoist does").
 
-- "Parent is currently done" is: it's checked, or it repeats, its date is after today, and it has an undoable completion (`streak::undoable_completion` is `Some`). This is `views::repeating_done` without its sub-task-only condition, so it applies to a top-level parent too. *My call:* the date condition stops a reopen today from undoing yesterday's completion of the parent.
+- "Parent is currently done" means done *today*: it's checked, or it repeats and its saved completion (`LastCompletion.completed_on`) was made today. *My call, widened after review:* an earlier day's completion stands, so a mis-tap on Saturday can't undo a weekly parent's Friday completion and reset its streak. Reopening a sub-task that was already open does nothing to its parent.
 - Reopening the parent does not reopen its other sub-tasks.
 
 ## Where the logic lives
