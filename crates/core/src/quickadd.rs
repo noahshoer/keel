@@ -70,6 +70,8 @@ pub enum SpanKind {
     Label,
     Deadline,
     Streak,
+    // A filter keyword: `overdue`, `no date`, `next 7 days`, `due before: …`.
+    Keyword,
 }
 
 impl QuickAdd {

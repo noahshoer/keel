@@ -231,7 +231,7 @@ pub(crate) fn match_time(t: &[Token], i: usize) -> Option<(usize, NaiveTime)> {
 
 /// A repeat that may need the task's date to anchor on.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum RepeatSpec {
+pub enum RepeatSpec {
     Rule(Recurrence),
     /// "every week" — weekday of the date.
     Weekly,

@@ -61,7 +61,8 @@ function streakPillText(view: EditorView): string {
 
 /** What each pill with a phrase in the title says, by the pill's `title`. */
 function typedPills(view: EditorView): TypedPills {
-  const pills: Record<SpanKind, [string, string]> = {
+  // Keywords are filters' alone: no pill.
+  const pills: Record<Exclude<SpanKind, "Keyword">, [string, string]> = {
     Date: ["Date", view.date_chip[0]],
     Time: ["Date", view.date_chip[0]],
     Deadline: [DEADLINE_TITLE, view.deadline_text],
@@ -74,7 +75,7 @@ function typedPills(view: EditorView): TypedPills {
   };
   const typed: TypedPills = {};
   for (const { kind } of view.segments) {
-    if (kind !== null) {
+    if (kind !== null && kind !== "Keyword") {
       const [title, text] = pills[kind];
       typed[title] = text;
     }
