@@ -477,8 +477,19 @@ pub fn filter_reading(
 /// `filter::unhighlight`: the query with the term ending at the caret
 /// (UTF-16 units) quoted; `null` when no term ends there.
 #[wasm_bindgen(js_name = filterUnhighlightAt)]
-pub fn filter_unhighlight_at(query: &str, today: &str, caret: usize) -> Result<Option<String>, JsError> {
-    Ok(filter::unhighlight(query, date(today)?, editor::byte_at_utf16(query, caret)))
+pub fn filter_unhighlight_at(
+    query: &str,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Label[]")] labels: JsValue,
+    today: &str,
+    caret: usize,
+) -> Result<Option<String>, JsError> {
+    let projects: Vec<Project> = input("projects", projects)?;
+    let sections: Vec<Section> = input("sections", sections)?;
+    let labels: Vec<Label> = input("labels", labels)?;
+    let names = filter::names_of(&projects, &sections, &labels);
+    Ok(filter::unhighlight(query, date(today)?, &names, editor::byte_at_utf16(query, caret)))
 }
 
 /// `editor::location_choices`: the project / section menu's items.

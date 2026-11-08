@@ -288,9 +288,16 @@ export function filterReading(
 }
 
 /** The filter query with the term ending at `caret` (UTF-16) quoted; `null` when none ends there. */
-export function filterUnhighlightAt(query: string, today: string, caret: number): string | null {
+export function filterUnhighlightAt(
+  query: string,
+  projects: Project[],
+  sections: Section[],
+  labels: Label[],
+  today: string,
+  caret: number,
+): string | null {
   ready();
-  return core.filterUnhighlightAt(query, today, caret) ?? null;
+  return core.filterUnhighlightAt(query, projects, sections, labels, today, caret) ?? null;
 }
 
 /** Turns the highlight ending at `caret` (UTF-16) into plain text; `null` when none ends there. */

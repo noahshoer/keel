@@ -610,48 +610,43 @@ pub struct FilterFix {
     pub query: String,
 }
 
-/// Reads `query` for the editors (see [`FilterReading`]).
-pub fn read(query: &str, today: NaiveDate, projects: &[Project], sections: &[Section], labels: &[Label]) -> FilterReading {
-    let names = FilterNames {
+/// The names that exist, as the filter reads them.
+pub fn names_of(projects: &[Project], sections: &[Section], labels: &[Label]) -> FilterNames {
+    FilterNames {
         projects: projects.iter().map(|p| p.name.clone()).collect(),
         sections: sections.iter().map(|s| s.name.clone()).collect(),
         labels: labels.iter().map(|l| l.name.clone()).collect(),
-    };
-    let spans = spans(query, today, &names);
-    let mut segments = title_segments(query, &spans);
-    let mut offset = 0;
-    let mut offsets = Vec::new();
-    for s in &segments {
-        offsets.push(offset);
-        offset += s.text.len();
     }
+}
+
+/// Reads `query` for the editors (see [`FilterReading`]).
+pub fn read(query: &str, today: NaiveDate, projects: &[Project], sections: &[Section], labels: &[Label]) -> FilterReading {
+    let names = names_of(projects, sections, labels);
+    let spans = spans(query, today, &names);
     let error = parse(query, today, &names).err();
-    if let Some((a, b)) = error.as_ref().and_then(|e| e.at) {
-        let mut out = Vec::new();
-        for (s, start) in segments.into_iter().zip(&offsets) {
-            let end = start + s.text.len();
-            let (lo, hi) = (a.max(*start), b.min(end));
-            if lo >= hi || !s.text.is_char_boundary(lo - start) || !s.text.is_char_boundary(hi - start) {
-                out.push(s);
-                continue;
-            }
-            for (from, to, unknown) in [(*start, lo, false), (lo, hi, true), (hi, end, false)] {
-                if from < to {
-                    out.push(TitleSegment { text: s.text[from - start..to - start].to_string(), unknown: unknown || s.unknown, ..s.clone() });
+    let bad = error.as_ref().and_then(|e| e.at);
+    // Each segment with its byte start, computed once; a syntax error's range
+    // splits the segments it crosses.
+    let mut parts: Vec<(usize, TitleSegment)> = Vec::new();
+    let mut start = 0;
+    for s in title_segments(query, &spans) {
+        let end = start + s.text.len();
+        match bad.map(|(a, b)| (a.max(start), b.min(end))) {
+            Some((lo, hi)) if lo < hi && query.is_char_boundary(lo) && query.is_char_boundary(hi) => {
+                for (from, to, unknown) in [(start, lo, false), (lo, hi, true), (hi, end, false)] {
+                    if from < to {
+                        parts.push((from, TitleSegment { text: query[from..to].to_string(), unknown: unknown || s.unknown, ..s.clone() }));
+                    }
                 }
             }
+            _ => parts.push((start, s)),
         }
-        segments = out;
-        offsets.clear();
-        let mut offset = 0;
-        for s in &segments {
-            offsets.push(offset);
-            offset += s.text.len();
-        }
+        start = end;
     }
+    debug_assert_eq!(parts.iter().map(|(_, s)| s.text.as_str()).collect::<String>(), query);
     let mut problem = None;
     let mut fix = None;
-    for (s, start) in segments.iter_mut().zip(&offsets) {
+    for (start, s) in parts.iter_mut() {
         match s.kind {
             Some(SpanKind::Date | SpanKind::Time) => {
                 let t = crate::phrases::tokens(&s.text);
@@ -676,7 +671,7 @@ pub fn read(query: &str, today: NaiveDate, projects: &[Project], sections: &[Sec
                     let refs: Vec<&str> = pool.iter().map(String::as_str).collect();
                     if let Some(near) = closest(name, &refs) {
                         let mut q = query.to_string();
-                        q.replace_range(*start..start + s.text.len(), &format!("{sigil}{near}"));
+                        q.replace_range(*start..*start + s.text.len(), &format!("{sigil}{near}"));
                         fix = Some(FilterFix { label: format!("Use {sigil}{near}"), query: q });
                     }
                 }
@@ -688,13 +683,13 @@ pub fn read(query: &str, today: NaiveDate, projects: &[Project], sections: &[Sec
         problem = Some(e.message);
         fix = None;
     }
-    FilterReading { segments, problem, fix }
+    FilterReading { segments: parts.into_iter().map(|(_, s)| s).collect(), problem, fix }
 }
 
 /// `query` with the term ending at byte `end` turned into quoted text
 /// (`tomorrow` becomes `"tomorrow"`); `None` when no term ends there.
-pub fn unhighlight(query: &str, today: NaiveDate, end: usize) -> Option<String> {
-    let span = spans(query, today, &FilterNames::default()).into_iter().find(|s| s.end == end)?;
+pub fn unhighlight(query: &str, today: NaiveDate, names: &FilterNames, end: usize) -> Option<String> {
+    let span = spans(query, today, names).into_iter().find(|s| s.end == end)?;
     Some(format!("{}\"{}\"{}", &query[..span.start], &query[span.start..span.end], &query[span.end..]))
 }
 
@@ -801,13 +796,24 @@ mod tests {
     #[test]
     fn backspace_quotes_the_term() {
         let t = d(2026, 10, 19);
-        assert_eq!(unhighlight("call mom tomorrow", t, 17).as_deref(), Some("call mom \"tomorrow\""));
-        assert_eq!(unhighlight("call mom tomorrow", t, 8), None);
+        assert_eq!(unhighlight("call mom tomorrow", t, &FilterNames::default(), 17).as_deref(), Some("call mom \"tomorrow\""));
+        assert_eq!(unhighlight("call mom tomorrow", t, &FilterNames::default(), 8), None);
+    }
+
+    #[test]
+    fn backspace_quotes_a_known_multi_word_name() {
+        assert_eq!(unhighlight("/Next Up & today", d(2026, 10, 19), &names(), 8).as_deref(), Some("\"/Next Up\" & today"));
+    }
+
+    #[test]
+    fn fix_after_multibyte_text() {
+        let r = read_with("café & #wrok");
+        assert_eq!(r.fix.map(|f| f.query).as_deref(), Some("café & #Work"));
     }
 
     #[test]
     fn backspace_after_multibyte() {
-        assert_eq!(unhighlight("café tomorrow", d(2026, 10, 19), 14).as_deref(), Some("café \"tomorrow\""));
+        assert_eq!(unhighlight("café tomorrow", d(2026, 10, 19), &FilterNames::default(), 14).as_deref(), Some("café \"tomorrow\""));
     }
     use super::{matches, parse, read, spans, unhighlight, FilterFix, DateRef, Expr, FilterContext, FilterNames, Term};
     use crate::ids::Id;
