@@ -3,7 +3,7 @@ import type { Label, SpanKind, TitleSegment } from "../bindings";
 import { markClass, markStyle } from "./titleMarks";
 
 function seg(kind: SpanKind, extra: Partial<TitleSegment> = {}): TitleSegment {
-  return { text: "x", kind, level: 0, bucket: null, urgent: false, ...extra };
+  return { text: "x", kind, level: 0, bucket: null, urgent: false, is_new: false, unknown: false, ...extra };
 }
 
 function label(name: string, color: string): Label {

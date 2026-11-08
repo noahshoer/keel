@@ -181,7 +181,7 @@ export function TaskEditor({
   const latest = useRef(values);
   latest.current = values;
   const today = localToday();
-  const view = editorView(values, quickAdd, keepLabel, existing, projects, sections, today);
+  const view = editorView(values, quickAdd, keepLabel, existing, projects, sections, labels, today);
   const pick = (p: EditorPick) => setValues((v) => applyPick(v, p, quickAdd, projects, sections, today));
   const typedRepeat = {
     read: (text: string) => readRepeat(text, view.shown.date, today)?.text ?? null,
@@ -192,7 +192,7 @@ export function TaskEditor({
     const v = latest.current;
     if (
       submitted.current ||
-      !editorView(v, quickAdd, keepLabel, existing, projects, sections, today).can_submit
+      !editorView(v, quickAdd, keepLabel, existing, projects, sections, labels, today).can_submit
     )
       return;
     if (keepOpen) {

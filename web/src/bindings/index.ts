@@ -48,6 +48,7 @@ export type * from "./MenuKind";
 export type * from "./Missing";
 export type * from "./MissingPill";
 export type * from "./MonthView";
+export type * from "./NewNames";
 export type * from "./NoArgs";
 export type * from "./PlannedReminder";
 export type * from "./Priority";

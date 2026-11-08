@@ -312,7 +312,7 @@ export function TaskView({
   // The fields show what the title being typed says (and the stored values
   // again once a phrase is backspaced to plain).
   const draft: EditorValues = { ...base, content: title, description: desc, plain };
-  const view = editorView(draft, true, keepLabel, rule, projects, sections, today);
+  const view = editorView(draft, true, keepLabel, rule, projects, sections, labels, today);
   const v: EditorValues = { ...view.shown, content: base.content, description: desc };
   const { fields, missing } = fieldsShown(fieldLayout(v, loaded.inbox.id), descOpen);
   const rows = fields.filter((f) => f !== "Description");

@@ -7,7 +7,12 @@ import type { ReminderDraft } from "./ReminderDraft";
  * that don't exist yet, the task, then (once the task has its id) its
  * reminders through [`reminder_actions`].
  */
-export type AddPlan = { labels: Array<string>, task: Action, reminders: Array<ReminderDraft>, 
+export type AddPlan = { 
+/**
+ * The new project to create first (the task then moves into it, see
+ * [`task_with_project`]).
+ */
+project: string | null, labels: Array<string>, task: Action, reminders: Array<ReminderDraft>, 
 /**
  * Track a streak, once the task has its id. Never without a repeat.
  */

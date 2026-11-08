@@ -23,4 +23,12 @@ bucket: DueBucket | null,
 /**
  * A deadline phrase falls on today or earlier (see [`views::deadline_urgent`]).
  */
-urgent: boolean, };
+urgent: boolean, 
+/**
+ * A `#project` or `@label` naming nothing yet: saving offers to create it.
+ */
+is_new: boolean, 
+/**
+ * A phrase the title can't resolve (set by a later parser step).
+ */
+unknown: boolean, };

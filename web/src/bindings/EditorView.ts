@@ -46,4 +46,13 @@ deadline_urgent: boolean | null, reminders_text: string,
 /**
  * Each reminder's text, in order.
  */
-reminder_labels: Array<string>, };
+reminder_labels: Array<string>, 
+/**
+ * The typed `#project` that names no project yet.
+ */
+new_project: string | null, 
+/**
+ * The typed `@labels` that name no label yet, in title order (picked
+ * ones excluded).
+ */
+new_labels: Array<string>, };

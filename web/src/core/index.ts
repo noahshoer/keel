@@ -23,6 +23,7 @@ import type {
   LocationChoice,
   MenuKind,
   MonthView,
+  NewNames,
   Progress,
   Project,
   Recurrence,
@@ -234,10 +235,11 @@ export function editorView(
   existing: Recurrence | null,
   projects: Project[],
   sections: Section[],
+  labels: Label[],
   today: string,
 ): EditorView {
   ready();
-  return core.editorView(v, quickAdd, keepLabel, existing, projects, sections, today);
+  return core.editorView(v, quickAdd, keepLabel, existing, projects, sections, labels, today);
 }
 
 /** The values after the title is retyped (kept-plain phrases follow the text). */
@@ -374,6 +376,42 @@ export function addPlan(
 ): AddPlan {
   ready();
   return core.addPlan(v, projects, sections, labels, today);
+}
+
+/** The new `#project` / `@label` names the save prompt lists. */
+export function newNames(
+  v: EditorValues,
+  projects: Project[],
+  sections: Section[],
+  labels: Label[],
+  today: string,
+): NewNames {
+  ready();
+  return core.newNames(v, projects, sections, labels, today);
+}
+
+/** The values with those typed names left as plain text in the title. */
+export function keepAsText(
+  v: EditorValues,
+  names: string[],
+  projects: Project[],
+  sections: Section[],
+  today: string,
+): EditorValues {
+  ready();
+  return core.keepAsText(v, names, projects, sections, today);
+}
+
+/** The values moved to a just-created project (its section cleared). */
+export function withProject(v: EditorValues, projectId: Id): EditorValues {
+  ready();
+  return core.withProject(v, projectId);
+}
+
+/** A task add moved to a just-created project (its section cleared). */
+export function taskWithProject(task: Action, projectId: Id): Action {
+  ready();
+  return core.taskWithProject(task, projectId);
 }
 
 /** What saving an edit sends: the move, reminder changes, then the field changes. */

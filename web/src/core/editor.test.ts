@@ -32,11 +32,11 @@ beforeAll(() => {
 
 const typed = (text: string) => withTitle(blankValues("p-inbox", null, "", []), text);
 const kinds = (text: string) =>
-  editorView(typed(text), true, null, null, [], [], TODAY).segments.map((s) => s.kind);
+  editorView(typed(text), true, null, null, [], [], [], TODAY).segments.map((s) => s.kind);
 
 describe("editor over wasm", () => {
   it("highlights the title and can submit", () => {
-    const view = editorView(typed("Call mom tomorrow p1"), true, null, null, [], [], TODAY);
+    const view = editorView(typed("Call mom tomorrow p1"), true, null, null, [], [], [], TODAY);
     expect(view.segments.map((s) => s.kind)).toEqual([null, "Date", null, "Priority"]);
     expect(view.segments[3]?.level).toBe(1);
     expect(view.can_submit).toBe(true);
@@ -62,7 +62,7 @@ describe("editor over wasm", () => {
     const after = unhighlightAt(v, [], [], TODAY, "Call mom tomorrow".length);
     expect(after).not.toBeNull();
     if (after === null) return;
-    expect(editorView(after, true, null, null, [], [], TODAY).segments.map((s) => s.kind)).not.toContain(
+    expect(editorView(after, true, null, null, [], [], [], TODAY).segments.map((s) => s.kind)).not.toContain(
       "Date",
     );
     expect(kinds("Café tomorrow")).toContain("Date");

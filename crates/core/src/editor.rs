@@ -824,12 +824,16 @@ pub struct TitleSegment {
     pub bucket: Option<DueBucket>,
     /// A deadline phrase falls on today or earlier (see [`views::deadline_urgent`]).
     pub urgent: bool,
+    /// A `#project` or `@label` naming nothing yet: saving offers to create it.
+    pub is_new: bool,
+    /// A phrase the title can't resolve (set by a later parser step).
+    pub unknown: bool,
 }
 
 /// The title cut into plain and recognized stretches, covering all of it
 /// (overlapping or misaligned spans are skipped).
 pub fn title_segments(value: &str, spans: &[Span]) -> Vec<TitleSegment> {
-    let plain = |text: &str| TitleSegment { text: text.to_string(), kind: None, level: 0, bucket: None, urgent: false };
+    let plain = |text: &str| TitleSegment { text: text.to_string(), kind: None, level: 0, bucket: None, urgent: false, is_new: false, unknown: false };
     let mut segments = Vec::new();
     let mut at = 0;
     for s in spans.iter().filter(|s| s.end <= value.len() && value.is_char_boundary(s.start) && value.is_char_boundary(s.end)) {
@@ -844,7 +848,7 @@ pub fn title_segments(value: &str, spans: &[Span]) -> Vec<TitleSegment> {
             SpanKind::Priority => text.chars().rev().find_map(|c| c.to_digit(10)).filter(|d| (1..=3).contains(d)).unwrap_or(4) as u8,
             _ => 0,
         };
-        segments.push(TitleSegment { text: text.to_string(), kind: Some(s.kind), level, bucket: None, urgent: false });
+        segments.push(TitleSegment { text: text.to_string(), kind: Some(s.kind), level, bucket: None, urgent: false, is_new: false, unknown: false });
         at = s.end;
     }
     if at < value.len() {
@@ -913,6 +917,11 @@ pub struct EditorView {
     pub reminders_text: String,
     /// Each reminder's text, in order.
     pub reminder_labels: Vec<String>,
+    /// The typed `#project` that names no project yet.
+    pub new_project: Option<String>,
+    /// The typed `@labels` that name no label yet, in title order (picked
+    /// ones excluded).
+    pub new_labels: Vec<String>,
 }
 
 /// What the editor shows for `v`. `quick_add` parses the title (adding);
@@ -925,6 +934,7 @@ pub fn editor_view(
     existing: Option<Recurrence>,
     projects: &[Project],
     sections: &[Section],
+    labels: &[Label],
     today: NaiveDate,
 ) -> EditorView {
     let qa = quick_add.then(|| parse_title(v, projects, sections, today));
@@ -974,6 +984,16 @@ pub fn editor_view(
             _ => {}
         }
     }
+    let new_project = qa.as_ref().and_then(|q| q.new_project.clone());
+    for s in &mut segments {
+        let name = s.text.get(1..).unwrap_or("");
+        s.is_new = match s.kind {
+            Some(SpanKind::Project) => new_project.as_deref().is_some_and(|p| p.eq_ignore_ascii_case(name)),
+            Some(SpanKind::Label) => !labels.iter().any(|l| l.name.eq_ignore_ascii_case(name)),
+            _ => false,
+        };
+    }
+    let new_labels = qa.as_ref().map(|q| typed_new_labels(q, v, labels)).unwrap_or_default();
     let repeat_chip_text = with_end(
         typed_repeat.as_ref().map(repeat_text).unwrap_or_else(|| repeat_chip_text(&v.repeat, &opts)),
         repeat_rule.is_some().then_some(shown.until.as_str()),
@@ -997,7 +1017,78 @@ pub fn editor_view(
         deadline_urgent,
         reminders_text: reminders_text(&v.reminders, today),
         reminder_labels: v.reminders.iter().map(|r| r.label(today)).collect(),
+        new_project,
+        new_labels,
         shown,
+    }
+}
+
+/// The typed `@labels` no label has (any case), once each, in title order;
+/// labels already picked are left out.
+fn typed_new_labels(qa: &QuickAdd, v: &EditorValues, labels: &[Label]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for name in &qa.labels {
+        let known = labels.iter().any(|l| l.name.eq_ignore_ascii_case(name));
+        let picked = v.labels.iter().any(|n| n.eq_ignore_ascii_case(name));
+        if !known && !picked && !out.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+            out.push(name.clone());
+        }
+    }
+    out
+}
+
+/// What the save prompt lists: names typed with `#` / `@` that nothing has
+/// yet. Empty when nothing is new.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct NewNames {
+    pub projects: Vec<String>,
+    pub labels: Vec<String>,
+}
+
+pub fn new_names(v: &EditorValues, projects: &[Project], sections: &[Section], labels: &[Label], today: NaiveDate) -> NewNames {
+    let qa = parse_title(v, projects, sections, today);
+    NewNames { projects: qa.new_project.iter().cloned().collect(), labels: typed_new_labels(&qa, v, labels) }
+}
+
+/// `v` with the typed `#name` / `@name` phrases for `names` (any case) left
+/// as plain text in the title.
+pub fn keep_as_text(v: &EditorValues, names: &[String], projects: &[Project], sections: &[Section], today: NaiveDate) -> EditorValues {
+    let qa = parse_title(v, projects, sections, today);
+    let mut v = v.clone();
+    for s in &qa.spans {
+        if !matches!(s.kind, SpanKind::Project | SpanKind::Label) {
+            continue;
+        }
+        let Some(name) = v.content.get(s.start..s.end).and_then(|t| t.get(1..)) else { continue };
+        if names.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+            v.plain.push((s.start, s.end));
+        }
+    }
+    v
+}
+
+/// `v` moved to a just-created project (its section no longer applies).
+pub fn with_project(v: &EditorValues, project_id: Id) -> EditorValues {
+    EditorValues { project_id, section_id: None, ..v.clone() }
+}
+
+/// A `TaskAdd` moved to a just-created project; other actions are unchanged.
+pub fn task_with_project(task: Action, project_id: Id) -> Action {
+    match task {
+        Action::TaskAdd { content, description, priority, due, labels, parent_id, recurrence, deadline, .. } => Action::TaskAdd {
+            content,
+            project_id,
+            description,
+            priority,
+            due,
+            labels,
+            parent_id,
+            section_id: None,
+            recurrence,
+            deadline,
+        },
+        other => other,
     }
 }
 
@@ -1067,6 +1158,9 @@ pub fn reminder_actions(task_id: &Id, before: &[ReminderDraft], after: &[Reminde
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct AddPlan {
+    /// The new project to create first (the task then moves into it, see
+    /// [`task_with_project`]).
+    pub project: Option<String>,
     pub labels: Vec<String>,
     pub task: Action,
     pub reminders: Vec<ReminderDraft>,
@@ -1090,7 +1184,7 @@ pub fn add_plan(v: &EditorValues, projects: &[Project], sections: &[Section], la
     let task = new_task_from(v, &qa, today);
     let streak = (v.streak || qa.streak) && task.recurrence.is_some();
     let streak_goal = if streak { qa.streak_goal.or(v.streak_goal) } else { None };
-    AddPlan { labels: new_labels, task: task.into_action(), reminders: v.reminders.clone(), streak, streak_goal }
+    AddPlan { project: qa.new_project.clone(), labels: new_labels, task: task.into_action(), reminders: v.reminders.clone(), streak, streak_goal }
 }
 
 /// What saving an edit sends, in order: the move (it carries the sub-tree),
@@ -1237,7 +1331,7 @@ mod tests {
     }
 
     fn view_of(v: &EditorValues, quick_add: bool) -> EditorView {
-        editor_view(v, quick_add, None, None, &[], &[], day30())
+        editor_view(v, quick_add, None, None, &[], &[], &[], day30())
     }
 
     #[test]
@@ -1292,7 +1386,7 @@ mod tests {
         let mut home = Project::new("Home");
         home.id = Id::from("P-HOME");
         let v = typed("x tomorrow 5pm every day p1 #Home @phone {nov 2}");
-        let view = editor_view(&v, true, None, None, &[home], &[], day30());
+        let view = editor_view(&v, true, None, None, &[home], &[], &[], day30());
         assert_eq!(view.date_chip.0, "Tomorrow 5 PM");
         assert_eq!(view.repeat_chip_text, "Every day");
         assert_eq!(view.priority_text, "P1");
@@ -1312,7 +1406,7 @@ mod tests {
         v.priority = "3".into();
         v.date = "2026-11-06".into();
         v.time = "09:00".into();
-        let view = editor_view(&v, true, None, None, &[], &[], day30());
+        let view = editor_view(&v, true, None, None, &[], &[], &[], day30());
         assert_eq!(view.priority_text, "P2");
         assert_eq!(view.shown.date, "2026-10-31");
         assert_eq!(view.shown.time, "09:00", "a picked time goes with a typed date");
@@ -1325,15 +1419,15 @@ mod tests {
     fn picks_show_when_nothing_is_typed_and_come_back_when_the_phrase_goes() {
         let mut v = typed("x p2");
         v.priority = "3".into();
-        assert_eq!(editor_view(&v, true, None, None, &[], &[], day30()).priority_text, "P2");
+        assert_eq!(editor_view(&v, true, None, None, &[], &[], &[], day30()).priority_text, "P2");
         v.content = "x".into();
-        assert_eq!(editor_view(&v, true, None, None, &[], &[], day30()).priority_text, "P3");
+        assert_eq!(editor_view(&v, true, None, None, &[], &[], &[], day30()).priority_text, "P3");
     }
 
     #[test]
     fn editing_never_reads_the_title_for_the_pills() {
         let v = typed("x p2 tomorrow");
-        let view = editor_view(&v, false, None, None, &[], &[], day30());
+        let view = editor_view(&v, false, None, None, &[], &[], &[], day30());
         assert_eq!(view.priority_text, "Priority");
         assert_eq!(view.shown.date, v.date);
     }
@@ -1342,7 +1436,7 @@ mod tests {
     fn a_phrase_turned_back_into_text_leaves_the_pill() {
         let mut v = typed("x p2");
         assert!(unhighlight(&mut v, &[], &[], day30(), 4));
-        assert_eq!(editor_view(&v, true, None, None, &[], &[], day30()).priority_text, "Priority");
+        assert_eq!(editor_view(&v, true, None, None, &[], &[], &[], day30()).priority_text, "Priority");
     }
 
     #[test]
@@ -1435,7 +1529,7 @@ mod tests {
     #[test]
     fn a_typed_streak_shows_and_is_planned() {
         let v = typed("Run every day streak");
-        let view = editor_view(&v, true, None, None, &[], &[], day30());
+        let view = editor_view(&v, true, None, None, &[], &[], &[], day30());
         assert!(view.streak_offered);
         assert!(view.shown.streak);
         assert!(view.can_submit);
@@ -1445,7 +1539,7 @@ mod tests {
     #[test]
     fn a_typed_goal_shows_is_planned_and_survives_a_picked_repeat() {
         let mut v = typed("Run every day streak 30");
-        assert_eq!(editor_view(&v, true, None, None, &[], &[], day30()).shown.streak_goal, Some(30));
+        assert_eq!(editor_view(&v, true, None, None, &[], &[], &[], day30()).shown.streak_goal, Some(30));
         assert_eq!(add_plan(&v, &[], &[], &[], day30()).streak_goal, Some(30));
 
         apply_pick(&mut v, &Pick::Repeat { value: "weekly".into() }, true, &[], &[], day30());
@@ -1466,7 +1560,7 @@ mod tests {
         apply_pick(&mut v, &on(Some(40)), true, &[], &[], day30());
         // The word goes, and the repeat it went with stays.
         assert_eq!(v.content, "Run every day");
-        let view = editor_view(&v, true, None, None, &[], &[], day30());
+        let view = editor_view(&v, true, None, None, &[], &[], &[], day30());
         assert!(view.shown.streak);
         assert_eq!(view.shown.streak_goal, Some(40));
         assert_eq!(add_plan(&v, &[], &[], &[], day30()).streak_goal, Some(40));
@@ -1487,20 +1581,20 @@ mod tests {
     #[test]
     fn the_streak_pill_shows_only_with_a_repeat() {
         let v = typed("Run");
-        assert!(!editor_view(&v, true, None, None, &[], &[], day30()).streak_offered);
+        assert!(!editor_view(&v, true, None, None, &[], &[], &[], day30()).streak_offered);
 
         let mut v = typed("Run");
         apply_pick(&mut v, &Pick::Repeat { value: "daily".into() }, true, &[], &[], day30());
-        let view = editor_view(&v, true, None, None, &[], &[], day30());
+        let view = editor_view(&v, true, None, None, &[], &[], &[], day30());
         assert!(view.streak_offered);
         assert!(!view.shown.streak, "offered, not on");
 
         apply_pick(&mut v, &Pick::Streak { on: true, goal: None }, true, &[], &[], day30());
-        assert!(editor_view(&v, true, None, None, &[], &[], day30()).shown.streak);
+        assert!(editor_view(&v, true, None, None, &[], &[], &[], day30()).shown.streak);
         assert!(add_plan(&v, &[], &[], &[], day30()).streak);
 
         // Not when editing: the task view has its own.
-        assert!(!editor_view(&v, false, None, None, &[], &[], day30()).streak_offered);
+        assert!(!editor_view(&v, false, None, None, &[], &[], &[], day30()).streak_offered);
     }
 
     #[test]
@@ -1510,7 +1604,7 @@ mod tests {
         apply_pick(&mut v, &Pick::Streak { on: true, goal: None }, true, &[], &[], day30());
         apply_pick(&mut v, &Pick::Repeat { value: "none".into() }, true, &[], &[], day30());
         assert!(!v.streak);
-        assert!(!editor_view(&v, true, None, None, &[], &[], day30()).streak_offered);
+        assert!(!editor_view(&v, true, None, None, &[], &[], &[], day30()).streak_offered);
         assert!(!add_plan(&v, &[], &[], &[], day30()).streak);
     }
 
@@ -1519,7 +1613,7 @@ mod tests {
         // On from the pill, then the typed repeat is deleted from the title.
         let mut v = typed("Run");
         v.streak = true;
-        assert!(!editor_view(&v, true, None, None, &[], &[], day30()).shown.streak);
+        assert!(!editor_view(&v, true, None, None, &[], &[], &[], day30()).shown.streak);
         assert!(!add_plan(&v, &[], &[], &[], day30()).streak);
     }
 
@@ -1537,7 +1631,7 @@ mod tests {
         let mut v = typed("Run every day streak");
         apply_pick(&mut v, &Pick::Streak { on: false, goal: None }, true, &[], &[], day30());
         assert_eq!(v.content, "Run every day");
-        let view = editor_view(&v, true, None, None, &[], &[], day30());
+        let view = editor_view(&v, true, None, None, &[], &[], &[], day30());
         assert!(view.streak_offered);
         assert!(!view.shown.streak);
     }
@@ -1677,7 +1771,7 @@ mod tests {
         assert_eq!(v.repeat, "custom");
         assert_eq!(v.rule, Some(Recurrence::EveryNWeeks { n: 3, days: vec![1], anchor: NaiveDate::from_ymd_opt(2026, 10, 27).unwrap() }));
         assert_eq!((v.date.as_str(), v.time.as_str(), v.until.as_str()), ("2026-10-27", "07:00", "2026-12-31"));
-        let view = editor_view(&v, false, None, None, &[], &[], day19());
+        let view = editor_view(&v, false, None, None, &[], &[], &[], day19());
         assert_eq!(view.repeat_chip_text, "Every 3 weeks on Tue until Dec 31");
         assert_eq!(view.repeat_rule, v.rule);
         assert!(view.repeat_options.iter().any(|(value, label)| value == "custom" && label == "Every 3 weeks on Tue"));
@@ -1695,7 +1789,7 @@ mod tests {
     #[test]
     fn a_repeat_typed_in_the_title_is_the_menus_checked_row() {
         let v = typed("Gym every third fri");
-        let view = editor_view(&v, true, None, None, &[], &[], day19());
+        let view = editor_view(&v, true, None, None, &[], &[], &[], day19());
         assert_eq!(view.repeat_selected, "typed");
         assert!(view.repeat_options.iter().any(|(value, label)| value == "typed" && label == "Every third Fri"));
         // Picking it again keeps the title as it is.
@@ -1703,7 +1797,7 @@ mod tests {
         apply_pick(&mut after, &Pick::Repeat { value: "typed".into() }, true, &[], &[], day19());
         assert_eq!(after, v);
         // Without one, the checked row is the chosen option.
-        let view = editor_view(&typed("Gym"), true, None, None, &[], &[], day19());
+        let view = editor_view(&typed("Gym"), true, None, None, &[], &[], &[], day19());
         assert_eq!(view.repeat_selected, "none");
         assert!(!view.repeat_options.iter().any(|(value, _)| value == "typed"));
     }
@@ -1757,12 +1851,12 @@ mod tests {
         let wed = Some(Recurrence::Weekly(vec![2]));
         let v = EditorValues::from_task(&weekly_wed(Some("2026-10-21"), "2026-10-22"));
         assert_eq!(v.moved_from, "2026-10-21");
-        let view = editor_view(&v, false, None, wed.clone(), &[], &[], day19());
+        let view = editor_view(&v, false, None, wed.clone(), &[], &[], &[], day19());
         assert_eq!(view.date_chip.0, "Thursday · moved from Wed 21 Oct");
         // Back on the repeat's own day, there's no move to show.
         let mut back = v.clone();
         back.date = "2026-10-21".into();
-        let view = editor_view(&back, false, None, wed, &[], &[], day19());
+        let view = editor_view(&back, false, None, wed, &[], &[], &[], day19());
         assert_eq!(view.date_chip.0, "Wednesday");
     }
 
@@ -1798,7 +1892,7 @@ mod tests {
         let Action::TaskAdd { due, recurrence, .. } = plan.task else { panic!("a task add") };
         assert_eq!(recurrence, Some(Recurrence::Daily));
         assert_eq!(due.and_then(|d| d.until).as_deref(), Some("2026-10-21"));
-        let view = editor_view(&typed("Stretch every day for 3 days"), true, None, None, &[], &[], day19());
+        let view = editor_view(&typed("Stretch every day for 3 days"), true, None, None, &[], &[], &[], day19());
         assert_eq!(view.repeat_chip_text, "Every day until Oct 21");
     }
 
@@ -1818,7 +1912,7 @@ mod tests {
         });
         let before = EditorValues::from_task(&task);
         assert_eq!(before.until, "2026-10-21");
-        let view = editor_view(&before, false, None, Some(Recurrence::Daily), &[], &[], day19());
+        let view = editor_view(&before, false, None, Some(Recurrence::Daily), &[], &[], &[], day19());
         assert_eq!(view.repeat_chip_text, "Every day until Oct 21");
 
         // Untouched, the end isn't sent (the task keeps it).
@@ -1834,5 +1928,116 @@ mod tests {
         let (after, rule) = apply_title(&with_title(&before, "Stretch every day".into()), Some(Recurrence::Daily), &[], &[], day19()).unwrap();
         let (patch, _) = changes(&before, &after, rule, day19());
         assert_eq!(patch.due.unwrap().until.as_deref(), Some(""));
+    }
+
+    fn known() -> (Vec<Project>, Vec<Label>) {
+        let mut work = Project::new("Work");
+        work.id = Id::from("P-WORK");
+        (vec![work], vec![Label::new("home")])
+    }
+
+    const NEW_TITLE: &str = "Buy ink #wrok @errands @Home @office";
+
+    #[test]
+    fn new_names_lists_typed_projects_and_labels() {
+        let (projects, labels) = known();
+        let n = new_names(&typed(NEW_TITLE), &projects, &[], &labels, day30());
+        assert_eq!(n, NewNames { projects: vec!["wrok".into()], labels: vec!["errands".into(), "office".into()] });
+        assert_eq!(new_names(&typed("Buy ink #work @home"), &projects, &[], &labels, day30()), NewNames { projects: vec![], labels: vec![] });
+    }
+
+    #[test]
+    fn picked_label_is_not_offered() {
+        let (projects, labels) = known();
+        let mut v = typed(NEW_TITLE);
+        v.labels = vec!["errands".into()];
+        let n = new_names(&v, &projects, &[], &labels, day30());
+        assert_eq!(n.labels, ["office"]);
+        let view = editor_view(&v, true, None, None, &projects, &[], &labels, day30());
+        assert_eq!(view.new_labels, ["office"]);
+    }
+
+    #[test]
+    fn segments_mark_new_names() {
+        let (projects, labels) = known();
+        let view = editor_view(&typed(NEW_TITLE), true, None, None, &projects, &[], &labels, day30());
+        let flag = |t: &str| view.segments.iter().find(|s| s.text == t).unwrap_or_else(|| panic!("{t}")).is_new;
+        assert!(flag("#wrok") && flag("@errands") && flag("@office"));
+        assert!(!flag("@Home"));
+        assert_eq!(view.new_project.as_deref(), Some("wrok"));
+        assert!(view.segments.iter().all(|s| !s.unknown));
+    }
+
+    #[test]
+    fn kept_names_become_text() {
+        let (projects, labels) = known();
+        let v = keep_as_text(&typed(NEW_TITLE), &["office".into(), "wrok".into()], &projects, &[], day30());
+        let plan = add_plan(&v, &projects, &[], &labels, day30());
+        assert_eq!(plan.project, None);
+        assert_eq!(plan.labels, ["errands"]);
+        match plan.task {
+            Action::TaskAdd { content, .. } => assert_eq!(content, "Buy ink #wrok @office"),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn kept_name_after_multibyte_text() {
+        let v = keep_as_text(&typed("café @office"), &["office".into()], &[], &[], day30());
+        assert_eq!(v.plain, vec![(6, 13)]);
+    }
+
+    #[test]
+    fn add_plan_names_the_new_project() {
+        let (projects, labels) = known();
+        let plan = add_plan(&typed("Buy ink #wrok"), &projects, &[], &labels, day30());
+        assert_eq!(plan.project.as_deref(), Some("wrok"));
+        match plan.task {
+            Action::TaskAdd { project_id, content, .. } => assert_eq!((project_id, content.as_str()), (Id::from("P-IN"), "Buy ink")),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn task_with_project_moves_the_add() {
+        let add = Action::TaskAdd {
+            content: "x".into(),
+            project_id: Id::from("P-IN"),
+            description: None,
+            priority: None,
+            due: None,
+            labels: None,
+            parent_id: None,
+            section_id: Some(Id::from("S")),
+            recurrence: None,
+            deadline: None,
+        };
+        match task_with_project(add, Id::from("P-NEW")) {
+            Action::TaskAdd { project_id, section_id, .. } => assert_eq!((project_id, section_id), (Id::from("P-NEW"), None)),
+            other => panic!("{other:?}"),
+        }
+        let other = Action::TaskDelete { id: Id::from("T") };
+        assert_eq!(task_with_project(other.clone(), Id::from("P-NEW")), other);
+    }
+
+    #[test]
+    fn retyped_title_with_new_project() {
+        let mut home = Project::new("Home");
+        home.id = Id::from("P-HOME");
+        let projects = vec![home];
+        let mut task = Task::new("Old", Id::from("P-HOME"));
+        task.id = Id::from("T-1");
+        let before = EditorValues::from_task(&task);
+        let retyped = with_title(&before, "Buy ink #wrok".into());
+        assert_eq!(new_names(&retyped, &projects, &[], &[], day30()).projects, ["wrok"]);
+        let (after, _) = apply_title(&retyped, None, &projects, &[], day30()).unwrap();
+        assert_eq!(after.project_id, Id::from("P-HOME"));
+        let after = with_project(&after, Id::from("P-NEW"));
+        let plan = edit_plan(&Id::from("T-1"), &before, &after, None, day30());
+        assert_eq!(plan.moved, Some(Action::TaskMove { id: Id::from("T-1"), project_id: Id::from("P-NEW"), section_id: None }));
+        match plan.update {
+            Some(Action::TaskUpdate { content, .. }) => assert_eq!(content.as_deref(), Some("Buy ink")),
+            other => panic!("{other:?}"),
+        }
     }
 }
