@@ -902,6 +902,8 @@ mod tests {
         assert_eq!(one("/Nxt Up & today"), and(term(Term::Section("nxt up".into())), term(Term::Today)));
         // Without a close name, the rest stays text.
         assert_eq!(one("#zzz qqq"), and(term(Term::Project("zzz".into())), term(Term::Text("qqq".into()))));
+        // The fallback name is trimmed like the message's.
+        assert_eq!(one("#zzz."), term(Term::Project("zzz".into())));
     }
 
     #[test]

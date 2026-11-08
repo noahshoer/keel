@@ -545,7 +545,7 @@ pub(crate) fn unknown_name(t: &[Token], i: usize, first: &str, names: &[&str]) -
             }
         }
     }
-    best.map_or_else(|| (1, first.to_string()), |(_, len, text)| (len, text))
+    best.map_or_else(|| (1, run_text(first, &[])), |(_, len, text)| (len, text))
 }
 
 /// The name nearest `name`, ignoring case: within two edits and a third of
