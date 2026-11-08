@@ -78,6 +78,7 @@ pub fn undoable_completion(task: &Task, today: NaiveDate) -> Option<LastCompleti
         streak_best: if task.streak_best == task.streak_current { streak_current } else { task.streak_best },
         streak_last_period: (streak_current > 0).then(|| rule.prev_before(today).format("%Y-%m-%d").to_string()),
         moved_from: None,
+        completed_on: Some(today.format("%Y-%m-%d").to_string()),
     })
 }
 

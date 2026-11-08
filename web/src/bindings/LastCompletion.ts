@@ -12,4 +12,8 @@ moved_to: string, date: string, streak_current: number, streak_best: number, str
 /**
  * The occurrence the due stood in for, when it had been moved.
  */
-moved_from?: string | null, };
+moved_from?: string | null, 
+/**
+ * The day it was completed (`YYYY-MM-DD`); missing on older saves.
+ */
+completed_on?: string | null, };

@@ -242,11 +242,12 @@ fn already_credited_changes_nothing() {
     let (parent, a, ..) = checked_tree(&mut h);
     h.run_on(DAY, Action::TaskSetStreak { id: parent.clone(), enabled: true, goal: None });
     h.run_on(DAY, Action::TaskComplete { id: parent.clone() });
-    h.run_on(DAY, Action::TaskUncomplete { id: a.clone() });
-    // Same occurrence again: a no-op, so A stays open.
+    let moved = h.get(&parent).due.unwrap().date;
+    // Same occurrence again (a double tap): a no-op.
     h.run_on(DAY, Action::TaskComplete { id: parent.clone() });
-    assert!(!h.get(&a).checked);
+    assert_eq!(h.get(&parent).due.unwrap().date, moved);
     assert_eq!(h.get(&parent).streak_current, 1);
+    assert!(h.get(&a).checked);
 }
 
 #[test]
@@ -262,14 +263,15 @@ fn one_off_parent_still_completes_children() {
 }
 
 #[test]
-fn uncomplete_child_leaves_parent_completed() {
+fn uncomplete_child_reopens_parent() {
     let mut h = H::new();
     let parent = h.task_on(DAY, "P", None, None);
     let child = h.task_on(DAY, "C", Some(&parent), None);
     h.run_on(DAY, Action::TaskComplete { id: parent.clone() });
     assert!(h.get(&child).checked);
     h.run_on(DAY, Action::TaskUncomplete { id: child.clone() });
-    assert!(h.get(&parent).checked);
+    // Issue #11: a parent isn't done once one of its sub-tasks isn't.
+    assert!(!h.get(&parent).checked);
     assert!(!h.get(&child).checked);
 }
 

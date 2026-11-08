@@ -17,4 +17,8 @@ last_completion: LastCompletion | null,
  * When a plain sub-task completed with its repeating parent reopens: the
  * parent's next date (`YYYY-MM-DD`).
  */
-reopens_on: string | null, };
+reopens_on: string | null, 
+/**
+ * Completes itself once its sub-tasks are all done (issue #11).
+ */
+done_with_subtasks: boolean, };
