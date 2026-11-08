@@ -21,7 +21,7 @@ use crate::phrases::{
     unread_every, RepeatSpec, Token as Word,
 };
 use crate::quickadd::{Span, SpanKind};
-use crate::views::{due_date_of, due_time};
+use crate::views::{due_date_of, due_time, occurs_after, occurs_in, occurs_on};
 
 /// What a query is evaluated against besides the task itself.
 #[derive(Clone, Debug)]
@@ -621,8 +621,8 @@ fn term_matches(term: &Term, task: &Task, ctx: &FilterContext) -> bool {
     let lower_eq = |a: &str, b: &str| a.to_lowercase() == b;
     match term {
         Term::All => true,
-        Term::Today => due == Some(today),
-        Term::Tomorrow => due == Some(today + Duration::days(1)),
+        Term::Today => occurs_on(task, today),
+        Term::Tomorrow => occurs_on(task, today + Duration::days(1)),
         Term::Overdue => due.is_some_and(|d| d < today),
         Term::NoDate => due.is_none(),
         Term::NoDeadline => deadline.is_none(),
@@ -639,18 +639,18 @@ fn term_matches(term: &Term, task: &Task, ctx: &FilterContext) -> bool {
         Term::Label(name) => task.labels.iter().any(|l| lower_eq(l, name)),
         Term::Search(text) | Term::Text(text) => crate::search::matches(task, &crate::search::words(text)),
         Term::DueBefore(r) => due.is_some_and(|d| d < r.resolve(today)),
-        Term::DueAfter(r) => due.is_some_and(|d| d > r.resolve(today)),
-        Term::DueOn(r) => due == Some(r.resolve(today)),
+        Term::DueAfter(r) => occurs_after(task, r.resolve(today)),
+        Term::DueOn(r) => occurs_on(task, r.resolve(today)),
         Term::DeadlineBefore(r) => deadline.is_some_and(|d| d < r.resolve(today)),
         Term::DeadlineAfter(r) => deadline.is_some_and(|d| d > r.resolve(today)),
         Term::DeadlineOn(r) => deadline == Some(r.resolve(today)),
-        Term::NextDays(n) => due.is_some_and(|d| d >= today && d < today + Duration::days(*n)),
+        Term::NextDays(n) => occurs_in(task, today, today + Duration::days(*n)),
         Term::Repeat(spec) => task
             .due
             .as_ref()
             .and_then(|d| d.recurrence.as_ref())
             .is_some_and(|rule| repeat_matches(spec, rule)),
-        Term::DueAt(d, t) => due == Some(*d) && due_time(task) == Some(*t),
+        Term::DueAt(d, t) => occurs_on(task, *d) && due_time(task) == Some(*t),
         Term::Streak => task.streak_enabled,
     }
 }
@@ -870,6 +870,69 @@ mod tests {
         assert!(!m("streak", &daily));
         daily.streak_enabled = true;
         assert!(m("streak", &daily));
+    }
+
+    fn rep(mut t: Task, rule: Recurrence, until: Option<&str>) -> Task {
+        if let Some(d) = t.due.as_mut() {
+            d.is_recurring = true;
+            d.recurrence = Some(rule);
+            d.until = until.map(String::from);
+        }
+        t
+    }
+
+    #[test]
+    fn dates_match_occurrences() {
+        let daily = rep(due(task("a"), "2026-10-19"), Recurrence::Daily, None);
+        for q in ["today", "tomorrow", "in 3 days", "next 7 days", "due: +5 days", "due after: +10 days"] {
+            assert!(m(q, &daily), "{q}");
+        }
+        let ends = rep(due(task("a"), "2026-10-19"), Recurrence::Daily, Some("2026-10-20"));
+        assert!(m("tomorrow", &ends));
+        assert!(!m("in 3 days", &ends));
+    }
+
+    #[test]
+    fn weekly_task_in_three_days() {
+        let t = rep(due(task("a"), "2026-10-22"), Recurrence::Weekly(vec![3]), None);
+        assert!(m("in 3 days", &t));
+        let mut c = ctx();
+        c.today = d(2026, 10, 20);
+        let e = parse("in 3 days", c.today, &names()).unwrap().remove(0);
+        assert!(!matches(&e, &t, &c));
+    }
+
+    #[test]
+    fn overdue_is_next_date_only() {
+        assert!(m("overdue", &rep(due(task("a"), "2026-10-17"), Recurrence::Daily, None)));
+        assert!(!m("overdue", &rep(due(task("a"), "2026-10-19"), Recurrence::Daily, None)));
+    }
+
+    #[test]
+    fn repeat_terms_match_shape() {
+        let t = rep(
+            due(task("a"), "2026-10-22"),
+            Recurrence::EveryNWeeks { n: 2, days: vec![3], anchor: d(2026, 10, 1) },
+            Some("2026-12-31"),
+        );
+        assert!(m("every 2 weeks", &t));
+        let w = rep(due(task("a"), "2026-10-19"), Recurrence::Weekly(vec![0, 2]), None);
+        assert!(m("every monday", &w));
+    }
+
+    #[test]
+    fn streak_term() {
+        let mut t = due(task("a"), "2026-10-19");
+        assert!(!m("streak", &t));
+        t.streak_enabled = true;
+        assert!(m("streak", &t));
+    }
+
+    #[test]
+    fn time_term() {
+        let t = due(task("a"), "2026-10-20T17:00:00");
+        assert!(m("tomorrow at 5pm", &t));
+        assert!(!m("tomorrow at 6pm", &t));
     }
 
     fn d_anchor() -> NaiveDate {
