@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it } from "vitest";
 import { mockPageScrollHeld } from "../ipc/mock";
+import { rejectFilterCheck } from "../test/rejectCheck";
 import { setWidth, touch } from "../test/touch";
 import { loadCoreForTests } from "../test/wasm";
 import { App } from "./App";
@@ -254,6 +255,31 @@ describe("the ••• on a project, label or filter page", () => {
     await act(async () => {});
     fireEvent.submit(titleField(container));
     await waitFor(() => expect(container.querySelector(".view-sub.mono")?.textContent).toBe("p2"));
+  });
+
+  it("a filter the backend rejects on save shows its message and stays in edit, unsaved", async () => {
+    const sent = await rejectFilterCheck("Invalid filter: boom");
+    try {
+      const { container } = await open("Important");
+      pick(container, "Edit");
+      const query = container.querySelector(".view-edit-query textarea") as HTMLTextAreaElement;
+      fireEvent.change(query, { target: { value: "p2" } });
+      const save = within(container.querySelector(".view-edit-query") as HTMLElement).getByText(
+        "Save",
+      ) as HTMLButtonElement;
+      await waitFor(() => expect(save.disabled).toBe(false));
+      fireEvent.click(save);
+      await waitFor(() =>
+        expect(container.querySelector(".view-edit-query .filter-problem")?.textContent).toBe(
+          "Invalid filter: boom",
+        ),
+      );
+      expect(titleField(container)).not.toBeNull();
+      expect(query.value).toBe("p2");
+      expect(sent).not.toContain("filter_update");
+    } finally {
+      delete window.__TAURI__;
+    }
   });
 
   it("a name can go back to what it was", async () => {

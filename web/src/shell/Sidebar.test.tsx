@@ -7,6 +7,7 @@ import { sidebarCounts } from "../core";
 import { ROW_PRESS } from "../gestures/long-press";
 import { addLabel } from "../ipc/actions";
 import { invoke } from "../ipc/invoke";
+import { rejectFilterCheck } from "../test/rejectCheck";
 import { loadCoreForTests } from "../test/wasm";
 
 vi.mock("../core", async (original) => {
@@ -508,4 +509,24 @@ it("a date in a filter is highlighted as on the card", async () => {
   const mark = sidebar().querySelector("mark.hl") as HTMLElement;
   expect(mark.textContent).toBe("today");
   expect(mark.className).toContain("hl-due-today");
+});
+
+it("a filter the backend rejects on save shows its message and stays open, unsaved", async () => {
+  const sent = await rejectFilterCheck("Invalid filter: boom");
+  try {
+    const query = await openFilterForm();
+    fireEvent.change(screen.getByPlaceholderText("Filter name"), { target: { value: "Urgent" } });
+    fireEvent.change(query, { target: { value: "p1" } });
+    const save = screen.getByText("Add filter") as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(sidebar().querySelector(".filter-problem")?.textContent).toBe("Invalid filter: boom"),
+    );
+    expect(sidebar().querySelector(".filter-form")).not.toBeNull();
+    expect(query.value).toBe("p1");
+    expect(sent).not.toContain("filter_add");
+  } finally {
+    delete window.__TAURI__;
+  }
 });
