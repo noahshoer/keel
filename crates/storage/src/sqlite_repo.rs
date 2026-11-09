@@ -307,7 +307,7 @@ impl Repository for SqliteRepo {
         );
         let mut stmt = conn.prepare(&sql).map_err(backend)?;
         let rows = stmt
-            .query_map(params![project.as_str()], |row| row_to_task(row))
+            .query_map(params![project.as_str()], row_to_task)
             .map_err(backend)?;
         let mut out = Vec::new();
         for r in rows {
@@ -322,7 +322,7 @@ impl Repository for SqliteRepo {
             "SELECT {TASK_COLS} FROM task WHERE is_deleted = 0 ORDER BY child_order ASC, added_at ASC"
         );
         let mut stmt = conn.prepare(&sql).map_err(backend)?;
-        let rows = stmt.query_map([], |row| row_to_task(row)).map_err(backend)?;
+        let rows = stmt.query_map([], row_to_task).map_err(backend)?;
         let mut out = Vec::new();
         for r in rows {
             out.push(r.map_err(backend)?);
@@ -400,7 +400,7 @@ impl Repository for SqliteRepo {
         );
         let mut stmt = conn.prepare(&sql).map_err(backend)?;
         let rows = stmt
-            .query_map([], |row| row_to_project(row))
+            .query_map([], row_to_project)
             .map_err(backend)?;
         let mut out = Vec::new();
         for r in rows {

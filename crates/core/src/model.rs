@@ -5,9 +5,10 @@ use crate::ids::Id;
 use crate::recurrence::Recurrence;
 
 /// Task priority. Stored API-style (4 = highest / UI "P1" … 1 = none).
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub enum Priority {
+    #[default]
     None,
     P3,
     P2,
@@ -33,12 +34,6 @@ impl Priority {
             2 => Priority::P3,
             _ => Priority::None,
         }
-    }
-}
-
-impl Default for Priority {
-    fn default() -> Self {
-        Priority::None
     }
 }
 

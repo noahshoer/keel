@@ -374,7 +374,7 @@ mod tests {
                 if day > d(2026, 6, 1) {
                     let prev = r.prev_before(day);
                     assert!(prev < day && r.contains(prev), "{r:?} prev_before({day}) = {prev}");
-                    assert_eq!(r.next_after(prev) >= day, true, "{r:?} prev_before({day}) not the latest");
+                    assert!(r.next_after(prev) >= day, "{r:?} prev_before({day}) not the latest");
                 }
             }
         }

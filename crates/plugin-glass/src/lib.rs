@@ -43,11 +43,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .build()
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "ios")))]
 mod tests {
     use super::*;
 
-    #[cfg(not(target_os = "ios"))]
     #[test]
     fn available_is_false_on_desktop() {
         assert!(!available());
