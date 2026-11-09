@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use chrono::NaiveDate;
 
+use crate::filter::{self, FilterContext};
 use crate::ids::Id;
 use crate::model::{Label, Priority, Project, Section, Task};
 use crate::views::{due_date_of, due_time, short_date, weekday_long};
@@ -113,6 +114,84 @@ fn cmp_missing_last<T: Ord>(a: Option<T>, b: Option<T>, reversed: bool) -> std::
         (Some(_), None) => Ordering::Less,
         (None, Some(_)) => Ordering::Greater,
         (None, None) => Ordering::Equal,
+    }
+}
+
+fn field_name(f: SortField) -> &'static str {
+    match f {
+        SortField::Project => "Project",
+        SortField::Section => "Section",
+        SortField::Label => "Label",
+        SortField::Priority => "Priority",
+        SortField::DueDate => "Due date",
+        SortField::Deadline => "Deadline",
+    }
+}
+
+/// One field's row in the sort menu.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct SortChoice {
+    pub field: SortField,
+    pub name: String,
+    /// What the normal direction is called.
+    pub order_label: String,
+    /// What the reversed direction is called.
+    pub reversed_label: String,
+}
+
+/// The six fields in menu order, with their direction labels.
+pub fn sort_choices() -> Vec<SortChoice> {
+    let rows = [
+        (SortField::Project, "Sidebar order", "Reversed"),
+        (SortField::Section, "Section order", "Reversed"),
+        (SortField::Label, "Label order", "Reversed"),
+        (SortField::Priority, "Highest first", "Lowest first"),
+        (SortField::DueDate, "Soonest first", "Latest first"),
+        (SortField::Deadline, "Soonest first", "Latest first"),
+    ];
+    rows.into_iter()
+        .map(|(field, order, reversed)| SortChoice {
+            field,
+            name: field_name(field).into(),
+            order_label: order.into(),
+            reversed_label: reversed.into(),
+        })
+        .collect()
+}
+
+/// "Project, Section, Label · Due date, Priority"; one half alone has no dot;
+/// empty with no sort. A reversed level reads with its flipped label in
+/// brackets: "Due date (latest first)".
+pub fn summary(arrangement: &Arrangement) -> String {
+    let groups = arrangement
+        .groups
+        .iter()
+        .map(|f| field_name(*f).to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let choices = sort_choices();
+    let order = arrangement
+        .order
+        .iter()
+        .map(|l| {
+            if l.reversed {
+                let label = choices
+                    .iter()
+                    .find(|c| c.field == l.field)
+                    .map_or("", |c| c.reversed_label.as_str());
+                format!("{} ({})", field_name(l.field), label.to_lowercase())
+            } else {
+                field_name(l.field).to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    match (groups.is_empty(), order.is_empty()) {
+        (true, true) => String::new(),
+        (false, true) => groups,
+        (true, false) => order,
+        (false, false) => format!("{groups} \u{b7} {order}"),
     }
 }
 
@@ -389,8 +468,49 @@ fn order_rank(field: SortField, task: &Task, names: &ArrangeNames) -> Option<Ran
     }
 }
 
-/// Groups a page's tasks under the arrangement's headings and orders them.
-/// The filter is applied elsewhere (`filter_problem` is always `None` here).
+/// Keeps the tasks the arrangement's filter matches. A blank filter keeps
+/// everything; a filter that doesn't read (a syntax error or an unknown name)
+/// keeps everything too and returns what is wrong with it.
+fn apply_filter(
+    tasks: Vec<Task>,
+    query: &str,
+    names: &ArrangeNames,
+    today: NaiveDate,
+) -> (Vec<Task>, Option<String>) {
+    if query.trim().is_empty() {
+        return (tasks, None);
+    }
+    let filter_names = filter::names_of(names.projects, names.sections, names.labels);
+    let groups = match filter::parse(query, today, &filter_names) {
+        Ok(groups) => groups,
+        Err(e) => return (tasks, Some(e.message)),
+    };
+    let reading = filter::read(query, today, names.projects, names.sections, names.labels);
+    if let Some(problem) = reading.problem {
+        return (tasks, Some(problem));
+    }
+    let ctx = FilterContext {
+        today,
+        projects: names
+            .projects
+            .iter()
+            .map(|p| (p.id.clone(), p.name.clone()))
+            .collect(),
+        sections: names
+            .sections
+            .iter()
+            .map(|s| (s.id.clone(), s.name.clone()))
+            .collect(),
+    };
+    let kept = tasks
+        .into_iter()
+        .filter(|t| groups.iter().any(|g| filter::matches(g, t, &ctx)))
+        .collect();
+    (kept, None)
+}
+
+/// Filters a page's tasks, then groups them under the arrangement's headings
+/// and orders them.
 pub fn arrange(
     tasks: Vec<Task>,
     arrangement: &Arrangement,
@@ -403,6 +523,7 @@ pub fn arrange(
         .filter(|t| seen.insert(t.id.clone()))
         .collect();
     let total = tasks.len();
+    let (tasks, filter_problem) = apply_filter(tasks, &arrangement.filter, names, today);
     let fields = &arrangement.groups;
 
     let project_heading_at = fields.iter().position(|f| *f == SortField::Project);
@@ -564,7 +685,7 @@ pub fn arrange(
         .len();
     Arranged {
         groups,
-        filter_problem: None,
+        filter_problem,
         shown,
         total,
     }
@@ -893,5 +1014,140 @@ mod tests {
         let k2: Vec<_> = r2.groups.iter().map(|g| g.key.clone()).collect();
         assert_eq!(k1, k2);
         assert_ne!(k1[0], k1[1]);
+    }
+
+    fn with_filter(f: &str) -> Arrangement {
+        Arrangement {
+            filter: f.into(),
+            ..Arrangement::default()
+        }
+    }
+
+    fn filter_tasks() -> Vec<Task> {
+        let mut v = vec![
+            prio(labelled(task("e1"), &["errand"]), Priority::P1),
+            prio(labelled(task("e2"), &["errand"]), Priority::P1),
+            prio(labelled(task("e3"), &["errand"]), Priority::P2),
+            labelled(task("ph"), &["phone"]),
+            prio(task("p1only"), Priority::P1),
+        ];
+        for i in 0..9 {
+            v.push(task(&format!("x{i}")));
+        }
+        v
+    }
+
+    #[test]
+    fn filter_narrows() {
+        let w = world();
+        let r = run(&w, filter_tasks(), &with_filter("@errand & p1"));
+        assert_eq!(ids(&r.groups[0]), ["e1", "e2"]);
+        assert_eq!((r.shown, r.total), (2, 14));
+        assert!(r.filter_problem.is_none());
+    }
+
+    #[test]
+    fn comma_groups_match_any() {
+        let w = world();
+        let r = run(&w, filter_tasks(), &with_filter("p1, @phone"));
+        assert_eq!(ids(&r.groups[0]), ["e1", "e2", "ph", "p1only"]);
+        assert_eq!(r.shown, 4);
+    }
+
+    #[test]
+    fn blank_filter_keeps_everything() {
+        let w = world();
+        let r = run(&w, filter_tasks(), &with_filter("   "));
+        assert_eq!((r.shown, r.total), (14, 14));
+        assert!(r.filter_problem.is_none());
+    }
+
+    #[test]
+    fn broken_filter_shows_everything() {
+        let w = world();
+        for q in ["#Gone & p1", "p1 &"] {
+            let r = run(&w, filter_tasks(), &with_filter(q));
+            assert!(r.filter_problem.is_some(), "{q}");
+            assert_eq!(r.shown, r.total, "{q}");
+        }
+    }
+
+    #[test]
+    fn relative_dates_follow_today() {
+        let w = world();
+        let tasks = vec![due(task("a"), "2026-11-09"), due(task("b"), "2026-11-10")];
+        let a = with_filter("today");
+        let r1 = arrange(tasks.clone(), &a, &w.names(), today());
+        let r2 = arrange(
+            tasks,
+            &a,
+            &w.names(),
+            NaiveDate::from_ymd_opt(2026, 11, 10).unwrap(),
+        );
+        assert_eq!(ids(&r1.groups[0]), ["a"]);
+        assert_eq!(ids(&r2.groups[0]), ["b"]);
+    }
+
+    #[test]
+    fn filter_then_headings() {
+        let w = world();
+        let mut a = with_filter("p1");
+        a.groups = vec![SortField::Label];
+        let r = run(&w, filter_tasks(), &a);
+        let titles: Vec<_> = r.groups.iter().map(|g| g.title.clone().unwrap()).collect();
+        assert_eq!(titles, ["errand", "No label"]);
+    }
+
+    #[test]
+    fn summary_texts() {
+        let a = arr(
+            &[SortField::Project, SortField::Section, SortField::Label],
+            &[(SortField::DueDate, false), (SortField::Priority, false)],
+        );
+        assert_eq!(
+            summary(&a),
+            "Project, Section, Label \u{b7} Due date, Priority"
+        );
+        assert_eq!(summary(&arr(&[SortField::Project], &[])), "Project");
+        assert_eq!(
+            summary(&arr(&[], &[(SortField::Priority, false)])),
+            "Priority"
+        );
+        assert_eq!(summary(&arr(&[], &[])), "");
+        assert_eq!(
+            summary(&arr(
+                &[SortField::Label],
+                &[(SortField::DueDate, true), (SortField::Priority, false)]
+            )),
+            "Label \u{b7} Due date (latest first), Priority"
+        );
+    }
+
+    #[test]
+    fn sort_choices_cover_every_field() {
+        let c = sort_choices();
+        let fields: Vec<_> = c.iter().map(|x| x.field).collect();
+        assert_eq!(
+            fields,
+            [
+                SortField::Project,
+                SortField::Section,
+                SortField::Label,
+                SortField::Priority,
+                SortField::DueDate,
+                SortField::Deadline
+            ]
+        );
+        let due = &c[4];
+        assert_eq!(
+            (
+                due.name.as_str(),
+                due.order_label.as_str(),
+                due.reversed_label.as_str()
+            ),
+            ("Due date", "Soonest first", "Latest first")
+        );
+        assert_eq!(c[0].order_label, "Sidebar order");
+        assert_eq!(c[3].reversed_label, "Lowest first");
     }
 }
