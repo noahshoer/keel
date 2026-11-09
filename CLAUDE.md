@@ -40,11 +40,12 @@ Design spec: `docs/superpowers/specs/2026-10-19-todoist-tauri-port-design.md`. E
 
 ## Build, test, run
 
-CI (`.github/workflows/ci.yml`, runs on every push): **Windows** runs the web UI build, clippy, the tests, and `cargo tauri build --no-bundle`. **iOS** (`macos-26`) runs clippy for `aarch64-apple-ios`, `cargo tauri ios build --target aarch64 --debug --no-sign --ci` (iPhone target; the simulator target fails on the runner's Xcode) plus a simulator Rust build. An Ubuntu **`web`** job runs `pnpm check`, the web build, `scripts/check-bindings.sh`, `pnpm audit` and an OSV scan; the weekly `web-supply-chain.yml` repeats the audit on `main`. Node, pnpm, the wasm-bindgen CLI and `pnpm install` come from the local composite action `.github/actions/web-setup`; every job builds `web/` before compiling the Tauri crate (it won't compile without `web/dist`). Verification only: nothing is signed or deployed. Keep `TAURI_CLI_VERSION` in the workflow in step with the local tool.
+CI (`.github/workflows/ci.yml`, runs on every push): **Windows** runs the web UI build, clippy, the tests, and `cargo tauri build --no-bundle`. **iOS** (`macos-26`) runs clippy for `aarch64-apple-ios`, `cargo tauri ios build --target aarch64 --debug --no-sign --ci` (iPhone target; the simulator target fails on the runner's Xcode) plus a simulator Rust build. An Ubuntu **`web`** job runs `cargo fmt --all --check`, `pnpm check`, the web build, `scripts/check-bindings.sh`, `pnpm audit` and an OSV scan; the weekly `web-supply-chain.yml` repeats the audit on `main`. Node, pnpm, the wasm-bindgen CLI and `pnpm install` come from the local composite action `.github/actions/web-setup`; every job builds `web/` before compiling the Tauri crate (it won't compile without `web/dist`). Verification only: nothing is signed or deployed. Keep `TAURI_CLI_VERSION` in the workflow in step with the local tool.
 
 ```bash
 cargo test                               # core, storage, service, app (needs web/dist: cd web && pnpm build)
 cargo clippy --all-targets -- -D warnings   # CI fails on any warning; on the Mac also add --target aarch64-apple-ios
+cargo fmt --all                          # CI checks it (cargo fmt --all --check)
 cd web && pnpm check                     # wasm build, tsc, Biome, Vitest, dependency vetting
 cd web && pnpm dev                       # browser at http://localhost:5173 with the mock backend
 cd crates/src-tauri && cargo tauri dev   # desktop, HMR (beforeDevCommand runs pnpm dev)
