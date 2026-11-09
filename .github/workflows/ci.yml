@@ -49,6 +49,12 @@ jobs:
           # Branches restore main's cache; only main saves, so branch copies
           # don't crowd main's out of the 10 GB limit.
           save-if: ${{ github.ref == 'refs/heads/main' }}
+          # rust-cache doesn't re-save on an exact key hit, and its key follows
+          # only the crates' Cargo.toml files, Cargo.lock and the toolchain, so
+          # clippy, added later, was never cached and checked ~225 crates per
+          # run. Bump this when a step starts building something new; the next
+          # run on main then starts cold once and saves everything.
+          key: build-steps-2
       - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2
         with:
           tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
@@ -89,6 +95,12 @@ jobs:
           # Branches restore main's cache; only main saves, so branch copies
           # don't crowd main's out of the 10 GB limit.
           save-if: ${{ github.ref == 'refs/heads/main' }}
+          # rust-cache doesn't re-save on an exact key hit, and its key follows
+          # only the crates' Cargo.toml files, Cargo.lock and the toolchain, so
+          # clippy, added later, was never cached and checked ~225 crates per
+          # run. Bump this when a step starts building something new; the next
+          # run on main then starts cold once and saves everything.
+          key: build-steps-2
       # tauri-cli publishes no Apple silicon binary, so install-action's
       # cargo-binstall fallback installs the x86_64 one. It runs under
       # Rosetta, and so does every Xcode tool it starts (xcodebuild, clang,
@@ -161,6 +173,12 @@ jobs:
           # Branches restore main's cache; only main saves, so branch copies
           # don't crowd main's out of the 10 GB limit.
           save-if: ${{ github.ref == 'refs/heads/main' }}
+          # rust-cache doesn't re-save on an exact key hit, and its key follows
+          # only the crates' Cargo.toml files, Cargo.lock and the toolchain, so
+          # clippy, added later, was never cached and checked ~225 crates per
+          # run. Bump this when a step starts building something new; the next
+          # run on main then starts cold once and saves everything.
+          key: build-steps-2
       - uses: ./.github/actions/web-setup
 
       # build:wasm, tsc -b, biome ci, vitest, check:deps
