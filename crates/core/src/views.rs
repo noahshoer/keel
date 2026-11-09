@@ -853,7 +853,7 @@ mod progress_tests {
     #[test]
     fn progress_none_without_children() {
         let p = t("p", None, false, false);
-        assert_eq!(progress(&p.id, &[p.clone()], some_day()), None);
+        assert_eq!(progress(&p.id, std::slice::from_ref(&p), some_day()), None);
     }
 
     #[test]

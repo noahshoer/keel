@@ -422,7 +422,7 @@ mod tests {
         let t = task("Call mom", Some("2026-10-20T17:00:00"));
         let rs = [Reminder::relative(t.id.clone(), 60), Reminder::relative(t.id.clone(), 24 * 60)];
         let s = ReminderSettings { all_day_time: None, ..on() };
-        let r = plan(&[t.clone()], &rs, &s, now());
+        let r = plan(std::slice::from_ref(&t), &rs, &s, now());
         assert_eq!(
             r.iter().map(|r| (r.at, r.body.as_str())).collect::<Vec<_>>(),
             vec![
@@ -438,7 +438,7 @@ mod tests {
     fn relative_on_date_only_uses_all_day_time() {
         let t = task("Bins", Some("2026-10-21"));
         let rs = [Reminder::relative(t.id.clone(), 24 * 60)];
-        let r = plan(&[t.clone()], &rs, &on(), now());
+        let r = plan(std::slice::from_ref(&t), &rs, &on(), now());
         assert_eq!(times(&r), vec![at(2026, 10, 20, 9, 0), at(2026, 10, 21, 9, 0)]);
         assert_eq!(r[0].body, "Due tomorrow");
         let off = ReminderSettings { all_day_time: None, ..on() };

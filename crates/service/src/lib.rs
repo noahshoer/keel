@@ -158,7 +158,7 @@ impl AppService {
             .into_iter()
             .filter(|t| t.checked && keep(t))
             .collect();
-        tasks.sort_by(|a, b| b.completed_at.cmp(&a.completed_at));
+        tasks.sort_by_key(|t| std::cmp::Reverse(t.completed_at));
         Ok(tasks)
     }
 
