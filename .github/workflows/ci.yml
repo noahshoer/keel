@@ -49,6 +49,12 @@ jobs:
           # Branches restore main's cache; only main saves, so branch copies
           # don't crowd main's out of the 10 GB limit.
           save-if: ${{ github.ref == 'refs/heads/main' }}
+          # rust-cache doesn't re-save on an exact key hit, and its key follows
+          # only the crates' Cargo.toml files, Cargo.lock and the toolchain, so
+          # clippy, added later, was never cached and checked ~225 crates per
+          # run. Bump this when a step starts building something new; the next
+          # run on main then starts cold once and saves everything.
+          key: build-steps-2
       - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2
         with:
           tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
@@ -89,9 +95,29 @@ jobs:
           # Branches restore main's cache; only main saves, so branch copies
           # don't crowd main's out of the 10 GB limit.
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2
+          # rust-cache doesn't re-save on an exact key hit, and its key follows
+          # only the crates' Cargo.toml files, Cargo.lock and the toolchain, so
+          # clippy, added later, was never cached and checked ~225 crates per
+          # run. Bump this when a step starts building something new; the next
+          # run on main then starts cold once and saves everything.
+          key: build-steps-2
+      # tauri-cli publishes no Apple silicon binary, so install-action's
+      # cargo-binstall fallback installs the x86_64 one. It runs under
+      # Rosetta, and so does every Xcode tool it starts (xcodebuild, clang,
+      # swift, ibtool), each translated on first launch: minutes per run.
+      # Build an arm64 tauri-cli instead, cached per version. It goes in
+      # ~/.cargo/bin, which cargo searches before PATH for `cargo tauri`.
+      - name: Cache tauri-cli (arm64)
+        id: tauri-cli-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
+          path: ~/.cargo/bin/cargo-tauri
+          key: tauri-cli-${{ runner.os }}-${{ runner.arch }}-${{ env.TAURI_CLI_VERSION }}
+      - name: Build tauri-cli (arm64)
+        if: steps.tauri-cli-cache.outputs.cache-hit != 'true'
+        run: cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked --force
+      - name: tauri-cli is arm64
+        run: file ~/.cargo/bin/cargo-tauri | tee /dev/stderr | grep -q arm64
 
       - uses: ./.github/actions/web-setup
       - name: Build the web UI
@@ -99,14 +125,21 @@ jobs:
         run: pnpm build
 
       # The iOS-only code (#[cfg(target_os = "ios")]) that the host pass skips.
+      # Its own profile (Cargo.toml): Xcode runs cargo with DEVELOPER_DIR,
+      # SDKROOT, … set, and build scripts that watch those (cc, so sqlite and
+      # objc2) would otherwise re-run on each switch, rebuilding objc2, tao,
+      # wry and tauri inside the Xcode build.
       - name: Clippy (iOS)
-        run: cargo clippy --all-targets --target aarch64-apple-ios -- -D warnings
+        run: cargo clippy --profile clippy-ios --all-targets --target aarch64-apple-ios -- -D warnings
 
       # The device target: with the simulator target, the runner's Xcode
       # archives for a device anyway and the Rust build step gets no ARCHS.
+      # web/dist is built above, so skip beforeBuildCommand.
       - name: Build the iOS app (iPhone, unsigned)
         working-directory: crates/src-tauri
-        run: cargo tauri ios build --target aarch64 --debug --no-sign --ci
+        run: >-
+          cargo tauri ios build --target aarch64 --debug --no-sign --ci
+          --config '{"build":{"beforeBuildCommand":null}}'
 
       - name: Build for the simulator (Rust only)
         run: cargo build --lib -p keel --target aarch64-apple-ios-sim
@@ -140,6 +173,12 @@ jobs:
           # Branches restore main's cache; only main saves, so branch copies
           # don't crowd main's out of the 10 GB limit.
           save-if: ${{ github.ref == 'refs/heads/main' }}
+          # rust-cache doesn't re-save on an exact key hit, and its key follows
+          # only the crates' Cargo.toml files, Cargo.lock and the toolchain, so
+          # clippy, added later, was never cached and checked ~225 crates per
+          # run. Bump this when a step starts building something new; the next
+          # run on main then starts cold once and saves everything.
+          key: build-steps-2
       - uses: ./.github/actions/web-setup
 
       # build:wasm, tsc -b, biome ci, vitest, check:deps

@@ -6,3 +6,9 @@ members = ["crates/core", "crates/storage", "crates/service", "crates/src-tauri"
 # earlier run is tapped); see crates/vendor/tauri-plugin-notification/KEEL_PATCH.md.
 [patch.crates-io]
 tauri-plugin-notification = { path = "crates/vendor/tauri-plugin-notification" }
+
+# CI's iOS clippy pass. A profile of its own keeps its build-script runs apart
+# from the ones the Xcode build makes with Xcode's environment (DEVELOPER_DIR,
+# SDKROOT, …); sharing them made each rebuild the other's dependencies.
+[profile.clippy-ios]
+inherits = "dev"
