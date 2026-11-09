@@ -161,7 +161,10 @@ pub struct LastCompletion {
 impl Task {
     /// Reopens the task if its `reopens_on` has come. True when it changed.
     pub fn reopen_if_due(&mut self, today: NaiveDate) -> bool {
-        let date = self.reopens_on.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+        let date = self
+            .reopens_on
+            .as_deref()
+            .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
         if !date.is_some_and(|d| d <= today) {
             return false;
         }

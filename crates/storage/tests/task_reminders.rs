@@ -16,12 +16,24 @@ struct H {
 
 impl H {
     fn new() -> Self {
-        H { repo: SqliteRepo::open_in_memory().unwrap(), n: 0 }
+        H {
+            repo: SqliteRepo::open_in_memory().unwrap(),
+            n: 0,
+        }
     }
 
     fn run(&mut self, action: Action) -> keel_core::commands::ApplyResult {
         self.n += 1;
-        apply_at(&self.repo, Command { uuid: format!("u{}", self.n), temp_id: Some("t".into()), action }, today()).unwrap()
+        apply_at(
+            &self.repo,
+            Command {
+                uuid: format!("u{}", self.n),
+                temp_id: Some("t".into()),
+                action,
+            },
+            today(),
+        )
+        .unwrap()
     }
 
     fn task(&mut self, parent: Option<&Id>) -> Id {
@@ -42,10 +54,14 @@ impl H {
     }
 
     fn remind(&mut self, task: &Id, minute_offset: Option<i64>, at: Option<&str>) -> Option<Id> {
-        self.run(Action::ReminderAdd { task_id: task.clone(), minute_offset, at: at.map(String::from) })
-            .id_mapping
-            .get("t")
-            .cloned()
+        self.run(Action::ReminderAdd {
+            task_id: task.clone(),
+            minute_offset,
+            at: at.map(String::from),
+        })
+        .id_mapping
+        .get("t")
+        .cloned()
     }
 }
 
@@ -58,13 +74,22 @@ fn add_relative_and_absolute_then_delete() {
     let all = h.repo.list_reminders().unwrap();
     assert_eq!(all.len(), 2);
     let r = all.iter().find(|r| r.id == rel).unwrap();
-    assert_eq!((r.kind, r.minute_offset), (ReminderType::Relative, Some(30)));
+    assert_eq!(
+        (r.kind, r.minute_offset),
+        (ReminderType::Relative, Some(30))
+    );
     let a = all.iter().find(|r| r.id == abs).unwrap();
     assert_eq!(a.kind, ReminderType::Absolute);
     assert_eq!(a.at().unwrap().to_string(), "2026-10-21 09:00:00");
 
     h.run(Action::ReminderDelete { id: rel });
-    let left: Vec<Id> = h.repo.list_reminders().unwrap().into_iter().map(|r| r.id).collect();
+    let left: Vec<Id> = h
+        .repo
+        .list_reminders()
+        .unwrap()
+        .into_iter()
+        .map(|r| r.id)
+        .collect();
     assert_eq!(left, vec![abs]);
 }
 
@@ -74,7 +99,11 @@ fn invalid_reminders_are_not_added() {
     let t = h.task(None);
     assert_eq!(h.remind(&t, None, None), None, "neither offset nor time");
     assert_eq!(h.remind(&t, None, Some("tomorrow-ish")), None);
-    assert_eq!(h.remind(&Id::from("missing"), Some(10), None), None, "unknown task");
+    assert_eq!(
+        h.remind(&Id::from("missing"), Some(10), None),
+        None,
+        "unknown task"
+    );
     assert!(h.repo.list_reminders().unwrap().is_empty());
 }
 
@@ -88,6 +117,12 @@ fn deleting_a_task_deletes_its_and_subtask_reminders() {
     h.remind(&child, Some(10), None);
     let keep = h.remind(&other, Some(5), None).unwrap();
     h.run(Action::TaskDelete { id: parent });
-    let left: Vec<Id> = h.repo.list_reminders().unwrap().into_iter().map(|r| r.id).collect();
+    let left: Vec<Id> = h
+        .repo
+        .list_reminders()
+        .unwrap()
+        .into_iter()
+        .map(|r| r.id)
+        .collect();
     assert_eq!(left, vec![keep]);
 }

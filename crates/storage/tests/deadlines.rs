@@ -15,12 +15,24 @@ struct H {
 
 impl H {
     fn new() -> Self {
-        H { repo: SqliteRepo::open_in_memory().unwrap(), n: 0 }
+        H {
+            repo: SqliteRepo::open_in_memory().unwrap(),
+            n: 0,
+        }
     }
 
     fn run(&mut self, action: Action) -> keel_core::commands::ApplyResult {
         self.n += 1;
-        apply_at(&self.repo, Command { uuid: format!("u{}", self.n), temp_id: Some("t".into()), action }, today()).unwrap()
+        apply_at(
+            &self.repo,
+            Command {
+                uuid: format!("u{}", self.n),
+                temp_id: Some("t".into()),
+                action,
+            },
+            today(),
+        )
+        .unwrap()
     }
 
     fn add(&mut self, deadline: Option<&str>) -> Id {
@@ -75,7 +87,11 @@ fn update_sets_keeps_and_clears() {
     h.set_deadline(&id, Some("2026-11-02"));
     assert_eq!(h.deadline(&id).as_deref(), Some("2026-11-02"));
     h.set_deadline(&id, None);
-    assert_eq!(h.deadline(&id).as_deref(), Some("2026-11-02"), "None leaves it alone");
+    assert_eq!(
+        h.deadline(&id).as_deref(),
+        Some("2026-11-02"),
+        "None leaves it alone"
+    );
     h.set_deadline(&id, Some(""));
     assert_eq!(h.deadline(&id), None, "empty string clears it");
 }

@@ -67,16 +67,28 @@ pub fn undoable_completion(task: &Task, today: NaiveDate) -> Option<LastCompleti
     }
     let rule = due.recurrence.as_ref()?;
     let moved_to = NaiveDate::parse_from_str(due.date.get(..10)?, "%Y-%m-%d").ok()?;
-    if !task.streak_enabled || last_period(task) != Some(today) || rule.next_after(today) != moved_to {
+    if !task.streak_enabled
+        || last_period(task) != Some(today)
+        || rule.next_after(today) != moved_to
+    {
         return None;
     }
     let streak_current = (task.streak_current - 1).max(0);
     Some(LastCompletion {
         moved_to: due.date.clone(),
-        date: format!("{}{}", today.format("%Y-%m-%d"), due.date.get(10..).unwrap_or("")),
+        date: format!(
+            "{}{}",
+            today.format("%Y-%m-%d"),
+            due.date.get(10..).unwrap_or("")
+        ),
         streak_current,
-        streak_best: if task.streak_best == task.streak_current { streak_current } else { task.streak_best },
-        streak_last_period: (streak_current > 0).then(|| rule.prev_before(today).format("%Y-%m-%d").to_string()),
+        streak_best: if task.streak_best == task.streak_current {
+            streak_current
+        } else {
+            task.streak_best
+        },
+        streak_last_period: (streak_current > 0)
+            .then(|| rule.prev_before(today).format("%Y-%m-%d").to_string()),
         moved_from: None,
         completed_on: Some(today.format("%Y-%m-%d").to_string()),
     })
@@ -88,7 +100,9 @@ pub fn recompute_miss(task: &mut Task, today: NaiveDate) {
     if !task.streak_enabled {
         return;
     }
-    let (Some(rule), Some(last)) = (rule(task), last_period(task)) else { return };
+    let (Some(rule), Some(last)) = (rule(task), last_period(task)) else {
+        return;
+    };
     if rule.next_after(last) < today {
         task.streak_current = 0;
     }
@@ -219,23 +233,82 @@ mod streak_text_tests {
 
     #[test]
     fn names_the_unit_a_repeat_counts_in() {
-        assert_eq!(streak_text(&task(Some(Recurrence::Daily), 4)), "4 day streak");
-        assert_eq!(streak_text(&task(Some(Recurrence::Weekly(vec![0, 1, 2, 3, 4])), 4)), "4 day streak");
-        assert_eq!(streak_text(&task(Some(Recurrence::Weekly(vec![2])), 3)), "3 week streak");
-        assert_eq!(streak_text(&task(Some(Recurrence::MonthlyDay(1)), 2)), "2 month streak");
-        assert_eq!(streak_text(&task(Some(Recurrence::MonthlyLastDay), 2)), "2 month streak");
-        assert_eq!(streak_text(&task(Some(Recurrence::MonthlyWorkday { nth: 1 }), 2)), "2 month streak");
-        assert_eq!(streak_text(&task(Some(Recurrence::MonthlyNthWeekday { nth: 1, weekday: 0 }), 2)), "2 month streak");
-        assert_eq!(streak_text(&task(Some(Recurrence::Yearly { month: 1, day: 1 }), 5)), "5 year streak");
+        assert_eq!(
+            streak_text(&task(Some(Recurrence::Daily), 4)),
+            "4 day streak"
+        );
+        assert_eq!(
+            streak_text(&task(Some(Recurrence::Weekly(vec![0, 1, 2, 3, 4])), 4)),
+            "4 day streak"
+        );
+        assert_eq!(
+            streak_text(&task(Some(Recurrence::Weekly(vec![2])), 3)),
+            "3 week streak"
+        );
+        assert_eq!(
+            streak_text(&task(Some(Recurrence::MonthlyDay(1)), 2)),
+            "2 month streak"
+        );
+        assert_eq!(
+            streak_text(&task(Some(Recurrence::MonthlyLastDay), 2)),
+            "2 month streak"
+        );
+        assert_eq!(
+            streak_text(&task(Some(Recurrence::MonthlyWorkday { nth: 1 }), 2)),
+            "2 month streak"
+        );
+        assert_eq!(
+            streak_text(&task(
+                Some(Recurrence::MonthlyNthWeekday { nth: 1, weekday: 0 }),
+                2
+            )),
+            "2 month streak"
+        );
+        assert_eq!(
+            streak_text(&task(Some(Recurrence::Yearly { month: 1, day: 1 }), 5)),
+            "5 year streak"
+        );
     }
 
     #[test]
     fn is_generic_when_a_repeat_has_no_single_unit() {
         let generic = "Streak of 3";
-        assert_eq!(streak_text(&task(Some(Recurrence::Weekly(vec![0, 2])), 3)), generic);
-        assert_eq!(streak_text(&task(Some(Recurrence::EveryNDays { n: 3, anchor: anchor() }), 3)), generic);
-        assert_eq!(streak_text(&task(Some(Recurrence::EveryNWeeks { n: 2, days: vec![1], anchor: anchor() }), 3)), generic);
-        assert_eq!(streak_text(&task(Some(Recurrence::EveryNMonths { n: 2, day: 1, anchor: anchor() }), 3)), generic);
+        assert_eq!(
+            streak_text(&task(Some(Recurrence::Weekly(vec![0, 2])), 3)),
+            generic
+        );
+        assert_eq!(
+            streak_text(&task(
+                Some(Recurrence::EveryNDays {
+                    n: 3,
+                    anchor: anchor()
+                }),
+                3
+            )),
+            generic
+        );
+        assert_eq!(
+            streak_text(&task(
+                Some(Recurrence::EveryNWeeks {
+                    n: 2,
+                    days: vec![1],
+                    anchor: anchor()
+                }),
+                3
+            )),
+            generic
+        );
+        assert_eq!(
+            streak_text(&task(
+                Some(Recurrence::EveryNMonths {
+                    n: 2,
+                    day: 1,
+                    anchor: anchor()
+                }),
+                3
+            )),
+            generic
+        );
         assert_eq!(streak_text(&task(None, 3)), generic);
     }
 }

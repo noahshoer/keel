@@ -60,5 +60,9 @@ fn seed_inbox_is_idempotent_across_reopen() {
     }
     // Reopening must not seed a second Inbox.
     let svc2 = AppService::open(p).unwrap();
-    assert_eq!(svc2.list_projects().unwrap().len(), 1, "no duplicate Inbox on reopen");
+    assert_eq!(
+        svc2.list_projects().unwrap().len(),
+        1,
+        "no duplicate Inbox on reopen"
+    );
 }

@@ -23,20 +23,32 @@ struct Harness {
 
 impl Harness {
     fn new() -> Self {
-        Harness { repo: SqliteRepo::open_in_memory().unwrap(), n: 0 }
+        Harness {
+            repo: SqliteRepo::open_in_memory().unwrap(),
+            n: 0,
+        }
     }
 
     fn run(&mut self, action: Action, today: NaiveDate) -> keel_core::commands::ApplyResult {
         self.n += 1;
         apply_at(
             &self.repo,
-            Command { uuid: format!("u{}", self.n), temp_id: Some("t".into()), action },
+            Command {
+                uuid: format!("u{}", self.n),
+                temp_id: Some("t".into()),
+                action,
+            },
             today,
         )
         .unwrap()
     }
 
-    fn add(&mut self, labels: Option<Vec<String>>, priority: Option<Priority>, recurrence: Option<Recurrence>) -> Id {
+    fn add(
+        &mut self,
+        labels: Option<Vec<String>>,
+        priority: Option<Priority>,
+        recurrence: Option<Recurrence>,
+    ) -> Id {
         let res = self.run(
             Action::TaskAdd {
                 content: "original".into(),
@@ -78,8 +90,19 @@ fn noop(id: &Id) -> Action {
 #[test]
 fn update_content_only_keeps_everything_else() {
     let mut h = Harness::new();
-    let id = h.add(Some(vec!["home".into()]), Some(Priority::P1), Some(Recurrence::Daily));
-    h.run(Action::TaskSetStreak { id: id.clone(), enabled: true, goal: Some(10) }, mon());
+    let id = h.add(
+        Some(vec!["home".into()]),
+        Some(Priority::P1),
+        Some(Recurrence::Daily),
+    );
+    h.run(
+        Action::TaskSetStreak {
+            id: id.clone(),
+            enabled: true,
+            goal: Some(10),
+        },
+        mon(),
+    );
     h.run(Action::TaskComplete { id: id.clone() }, mon());
     let before = h.get(&id);
 
@@ -121,7 +144,11 @@ fn update_sets_date_priority_project_labels() {
             priority: Some(Priority::P2),
             project_id: Some(other.clone()),
             labels: Some(vec!["work".into(), "deep".into()]),
-            due: Some(DueEdit { date: Some("2026-02-01".into()), recurrence: None, until: None }),
+            due: Some(DueEdit {
+                date: Some("2026-02-01".into()),
+                recurrence: None,
+                until: None,
+            }),
             is_collapsed: None,
             deadline: None,
         },
@@ -144,7 +171,11 @@ fn clear_due_removes_recurrence() {
     assert!(h.get(&id).due.is_some());
     let mut action = noop(&id);
     if let Action::TaskUpdate { due, .. } = &mut action {
-        *due = Some(DueEdit { date: None, recurrence: None, until: None });
+        *due = Some(DueEdit {
+            date: None,
+            recurrence: None,
+            until: None,
+        });
     }
     h.run(action, mon());
     assert_eq!(h.get(&id).due, None);
@@ -156,7 +187,11 @@ fn set_recurrence_without_date_uses_first_occurrence() {
     let id = h.add(None, None, None);
     let mut action = noop(&id);
     if let Action::TaskUpdate { due, .. } = &mut action {
-        *due = Some(DueEdit { date: None, recurrence: Some(Recurrence::Weekly(vec![2])), until: None });
+        *due = Some(DueEdit {
+            date: None,
+            recurrence: Some(Recurrence::Weekly(vec![2])),
+            until: None,
+        });
     }
     h.run(action, mon());
     let due = h.get(&id).due.unwrap();
@@ -169,14 +204,25 @@ fn set_recurrence_without_date_uses_first_occurrence() {
 fn changing_recurrence_resets_streak_keeps_best() {
     let mut h = Harness::new();
     let id = h.add(None, None, Some(Recurrence::Daily));
-    h.run(Action::TaskSetStreak { id: id.clone(), enabled: true, goal: None }, mon());
+    h.run(
+        Action::TaskSetStreak {
+            id: id.clone(),
+            enabled: true,
+            goal: None,
+        },
+        mon(),
+    );
     h.run(Action::TaskComplete { id: id.clone() }, mon());
     h.run(Action::TaskComplete { id: id.clone() }, d(2026, 1, 6));
     assert_eq!(h.get(&id).streak_current, 2);
 
     let mut action = noop(&id);
     if let Action::TaskUpdate { due, .. } = &mut action {
-        *due = Some(DueEdit { date: Some("2026-01-12".into()), recurrence: Some(Recurrence::Weekly(vec![0])), until: None });
+        *due = Some(DueEdit {
+            date: Some("2026-01-12".into()),
+            recurrence: Some(Recurrence::Weekly(vec![0])),
+            until: None,
+        });
     }
     h.run(action, d(2026, 1, 6));
     let t = h.get(&id);

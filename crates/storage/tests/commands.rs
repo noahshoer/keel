@@ -27,7 +27,10 @@ fn task_add_creates_and_maps_temp_id() {
     let repo = SqliteRepo::open_in_memory().unwrap();
     let project = Id::new();
     let res = apply(&repo, add_task_cmd("u1", "tmp-1", "hello", &project)).unwrap();
-    let new_id = res.id_mapping.get("tmp-1").expect("temp id mapped to real id");
+    let new_id = res
+        .id_mapping
+        .get("tmp-1")
+        .expect("temp id mapped to real id");
     let task = repo.get_task(new_id).unwrap().expect("task persisted");
     assert_eq!(task.content, "hello");
     assert_eq!(task.project_id, project);
@@ -41,7 +44,11 @@ fn duplicate_uuid_is_noop() {
     apply(&repo, cmd.clone()).unwrap();
     apply(&repo, cmd).unwrap(); // same uuid again
     let tasks = repo.list_tasks(&project).unwrap();
-    assert_eq!(tasks.len(), 1, "same command uuid must not add a second task");
+    assert_eq!(
+        tasks.len(),
+        1,
+        "same command uuid must not add a second task"
+    );
 }
 
 #[test]
@@ -104,7 +111,11 @@ fn delete_project_soft_deletes_its_tasks() {
         "project's tasks are soft-deleted"
     );
     assert!(
-        !repo.list_projects().unwrap().iter().any(|p| p.id == project),
+        !repo
+            .list_projects()
+            .unwrap()
+            .iter()
+            .any(|p| p.id == project),
         "deleted project is excluded"
     );
 }

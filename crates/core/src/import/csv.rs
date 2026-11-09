@@ -59,13 +59,20 @@ mod tests {
     fn rows(text: &str) -> Vec<Vec<&'static str>> {
         parse(text)
             .into_iter()
-            .map(|r| r.into_iter().map(|f| &*Box::leak(f.into_boxed_str())).collect())
+            .map(|r| {
+                r.into_iter()
+                    .map(|f| &*Box::leak(f.into_boxed_str()))
+                    .collect()
+            })
             .collect()
     }
 
     #[test]
     fn plain_rows_with_crlf_and_lf() {
-        assert_eq!(rows("a,b,c\r\n1,2,3\n"), vec![vec!["a", "b", "c"], vec!["1", "2", "3"]]);
+        assert_eq!(
+            rows("a,b,c\r\n1,2,3\n"),
+            vec![vec!["a", "b", "c"], vec!["1", "2", "3"]]
+        );
     }
 
     #[test]
@@ -85,7 +92,10 @@ mod tests {
     #[test]
     fn bom_blank_lines_and_empty_fields() {
         let text = "\u{feff}a,b\r\n\r\n,x\r\nlast,";
-        assert_eq!(rows(text), vec![vec!["a", "b"], vec![""], vec!["", "x"], vec!["last", ""]]);
+        assert_eq!(
+            rows(text),
+            vec![vec!["a", "b"], vec![""], vec!["", "x"], vec!["last", ""]]
+        );
     }
 
     #[test]

@@ -1,10 +1,13 @@
 use std::sync::Mutex;
 
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection, Row};
 use keel_core::ids::Id;
-use keel_core::model::{Due, Duration, Filter, Label, Priority, Project, Reminder, ReminderType, Section, Task, ViewStyle};
+use keel_core::model::{
+    Due, Duration, Filter, Label, Priority, Project, Reminder, ReminderType, Section, Task,
+    ViewStyle,
+};
 use keel_core::repository::{RepoError, Repository};
+use rusqlite::{params, Connection, Row};
 
 use crate::migrations;
 
@@ -84,7 +87,9 @@ impl SqliteRepo {
     /// A device-local setting (`local_setting`; never synced).
     pub fn get_setting(&self, key: &str) -> Result<Option<String>, RepoError> {
         let conn = self.conn.lock().map_err(backend)?;
-        let mut stmt = conn.prepare("SELECT value FROM local_setting WHERE key = ?1").map_err(backend)?;
+        let mut stmt = conn
+            .prepare("SELECT value FROM local_setting WHERE key = ?1")
+            .map_err(backend)?;
         let mut rows = stmt.query(params![key]).map_err(backend)?;
         match rows.next().map_err(backend)? {
             Some(row) => Ok(Some(row.get(0).map_err(backend)?)),
@@ -145,7 +150,10 @@ fn row_to_task(row: &Row<'_>) -> rusqlite::Result<Task> {
             rusqlite::Error::FromSqlConversionFailure(
                 0,
                 rusqlite::types::Type::Text,
-                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())),
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    e.to_string(),
+                )),
             )
         })
     };
@@ -196,7 +204,10 @@ fn row_to_project(row: &Row<'_>) -> rusqlite::Result<Project> {
             rusqlite::Error::FromSqlConversionFailure(
                 0,
                 rusqlite::types::Type::Text,
-                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())),
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    e.to_string(),
+                )),
             )
         })
     };
@@ -234,7 +245,12 @@ impl Repository for SqliteRepo {
         let due_json = serde_json::to_string(&t.due).map_err(backend)?;
         let duration_json = serde_json::to_string(&t.duration).map_err(backend)?;
         let labels_json = serde_json::to_string(&t.labels).map_err(backend)?;
-        let last_completion_json = t.last_completion.as_ref().map(serde_json::to_string).transpose().map_err(backend)?;
+        let last_completion_json = t
+            .last_completion
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(backend)?;
         conn.execute(
             "INSERT INTO task (id, project_id, section_id, parent_id, content, description, priority, \
                 due_json, deadline, duration_json, labels_json, child_order, order_key, day_order, \
@@ -399,9 +415,7 @@ impl Repository for SqliteRepo {
             "SELECT {PROJECT_COLS} FROM project WHERE is_deleted = 0 ORDER BY child_order ASC, added_at ASC"
         );
         let mut stmt = conn.prepare(&sql).map_err(backend)?;
-        let rows = stmt
-            .query_map([], row_to_project)
-            .map_err(backend)?;
+        let rows = stmt.query_map([], row_to_project).map_err(backend)?;
         let mut out = Vec::new();
         for r in rows {
             out.push(r.map_err(backend)?);
@@ -439,7 +453,10 @@ impl Repository for SqliteRepo {
     }
 
     fn get_section(&self, id: &Id) -> Result<Option<Section>, RepoError> {
-        Ok(self.query_sections("WHERE id = ?1", id.as_str())?.into_iter().next())
+        Ok(self
+            .query_sections("WHERE id = ?1", id.as_str())?
+            .into_iter()
+            .next())
     }
 
     fn list_sections(&self, project: &Id) -> Result<Vec<Section>, RepoError> {
@@ -530,7 +547,14 @@ impl Repository for SqliteRepo {
              ON CONFLICT(id) DO UPDATE SET task_id=excluded.task_id, kind=excluded.kind, \
                 due_json=excluded.due_json, minute_offset=excluded.minute_offset, \
                 is_deleted=excluded.is_deleted",
-            params![r.id.as_str(), r.task_id.as_str(), kind, due_json, r.minute_offset, r.is_deleted as i64],
+            params![
+                r.id.as_str(),
+                r.task_id.as_str(),
+                kind,
+                due_json,
+                r.minute_offset,
+                r.is_deleted as i64
+            ],
         )
         .map_err(backend)?;
         Ok(())
@@ -551,7 +575,11 @@ impl Repository for SqliteRepo {
                 Ok(Reminder {
                     id: Id::from(row.get::<_, String>(0)?),
                     task_id: Id::from(row.get::<_, String>(1)?),
-                    kind: if kind == "absolute" { ReminderType::Absolute } else { ReminderType::Relative },
+                    kind: if kind == "absolute" {
+                        ReminderType::Absolute
+                    } else {
+                        ReminderType::Relative
+                    },
                     due: serde_json::from_str(&due_json).unwrap_or(None),
                     minute_offset: row.get(4)?,
                     is_deleted: row.get::<_, i64>(5)? != 0,

@@ -30,14 +30,35 @@ impl Fx {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("keel.db").to_str().unwrap().to_string();
         let svc = AppService::open(&path).unwrap();
-        let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap().id;
-        Fx { _dir: dir, path, svc, inbox, n: 0 }
+        let inbox = svc
+            .list_projects()
+            .unwrap()
+            .into_iter()
+            .find(|p| p.is_inbox)
+            .unwrap()
+            .id;
+        Fx {
+            _dir: dir,
+            path,
+            svc,
+            inbox,
+            n: 0,
+        }
     }
 
     fn run_on(&mut self, action: Action, day: NaiveDate) -> Option<Id> {
         self.n += 1;
-        let cmd = Command { uuid: format!("u{}", self.n), temp_id: Some("t".into()), action };
-        self.svc.dispatch_at(cmd, day).unwrap().id_mapping.get("t").cloned()
+        let cmd = Command {
+            uuid: format!("u{}", self.n),
+            temp_id: Some("t".into()),
+            action,
+        };
+        self.svc
+            .dispatch_at(cmd, day)
+            .unwrap()
+            .id_mapping
+            .get("t")
+            .cloned()
     }
 
     fn add(&mut self, parent: Option<&Id>, recurrence: Option<Recurrence>) -> Id {
@@ -57,7 +78,14 @@ impl Fx {
     }
 
     fn streak(&mut self, id: &Id) {
-        self.run_on(Action::TaskSetStreak { id: id.clone(), enabled: true, goal: None }, today());
+        self.run_on(
+            Action::TaskSetStreak {
+                id: id.clone(),
+                enabled: true,
+                goal: None,
+            },
+            today(),
+        );
     }
 
     fn complete(&mut self, id: &Id) {
@@ -65,7 +93,12 @@ impl Fx {
     }
 
     fn get(&self, id: &Id) -> Task {
-        self.svc.all_tasks_at(today()).unwrap().into_iter().find(|t| &t.id == id).unwrap()
+        self.svc
+            .all_tasks_at(today())
+            .unwrap()
+            .into_iter()
+            .find(|t| &t.id == id)
+            .unwrap()
     }
 
     fn date(&self, id: &Id) -> String {
@@ -102,7 +135,10 @@ fn completing_a_repeating_parent_completes_its_repeating_sub_tasks() {
     assert_eq!(f.date(&parent), "2026-01-06");
     assert_eq!(f.date(&child), "2026-01-06");
     let t = f.get(&child);
-    assert!(!t.checked, "a repeating sub-task of a repeating parent stays active");
+    assert!(
+        !t.checked,
+        "a repeating sub-task of a repeating parent stays active"
+    );
     assert_eq!(t.streak_current, 1);
 }
 
@@ -151,7 +187,10 @@ fn completing_a_repeating_parent_keeps_plain_sub_tasks_completed_until_its_next_
         assert!(f.get(id).checked, "{id:?} completes with its parent");
     }
     let today_all = f.svc.all_tasks_at(today()).unwrap();
-    assert_eq!(progress(&parent, &today_all, today()), Some(Progress { done: 2, total: 2 }));
+    assert_eq!(
+        progress(&parent, &today_all, today()),
+        Some(Progress { done: 2, total: 2 })
+    );
 
     let next_all = f.svc.all_tasks_at(tomorrow()).unwrap();
     for id in [&done_first, &still_open, &grandchild] {
@@ -159,9 +198,17 @@ fn completing_a_repeating_parent_keeps_plain_sub_tasks_completed_until_its_next_
         assert!(!t.checked, "{id:?} reopens for the next round");
         assert_eq!(t.completed_at, None);
     }
-    assert_eq!(progress(&parent, &next_all, tomorrow()), Some(Progress { done: 0, total: 2 }));
+    assert_eq!(
+        progress(&parent, &next_all, tomorrow()),
+        Some(Progress { done: 0, total: 2 })
+    );
     // And it's saved, not just how that read looked.
-    assert!(!f.svc.project_view_at(f.inbox.as_str(), tomorrow()).unwrap().iter().any(|t| t.checked));
+    assert!(!f
+        .svc
+        .project_view_at(f.inbox.as_str(), tomorrow())
+        .unwrap()
+        .iter()
+        .any(|t| t.checked));
 }
 
 #[test]
@@ -240,7 +287,11 @@ fn undo_leaves_a_task_whose_date_was_changed_since() {
     let mut f = Fx::new();
     let task = f.add(None, Some(Recurrence::Daily));
     f.complete(&task);
-    let due = keel_core::commands::DueEdit { date: Some("2026-02-01".into()), recurrence: Some(Recurrence::Daily), until: None };
+    let due = keel_core::commands::DueEdit {
+        date: Some("2026-02-01".into()),
+        recurrence: Some(Recurrence::Daily),
+        until: None,
+    };
     f.run_on(
         Action::TaskUpdate {
             id: task.clone(),
@@ -291,8 +342,14 @@ fn completing_a_repeating_parent_leaves_its_sub_tasks_completed_for_today() {
     f.complete(&parent);
 
     let all = f.svc.all_tasks_at(today()).unwrap();
-    assert_eq!(progress(&parent, &all, today()), Some(Progress { done: 2, total: 2 }));
-    assert_eq!(progress(&parent, &all, tomorrow()), Some(Progress { done: 0, total: 2 }));
+    assert_eq!(
+        progress(&parent, &all, today()),
+        Some(Progress { done: 2, total: 2 })
+    );
+    assert_eq!(
+        progress(&parent, &all, tomorrow()),
+        Some(Progress { done: 0, total: 2 })
+    );
 
     // And tapping one reopens just it, for today.
     f.run_on(Action::TaskUncomplete { id: a.clone() }, today());
@@ -319,7 +376,8 @@ fn a_sub_task_completed_before_completions_were_saved_shows_done_and_undoes() {
     // As the older build left it: moved and credited, nothing saved.
     let mut old = f.get(&child);
     old.last_completion = None;
-    keel_core::repository::Repository::upsert_task(&SqliteRepo::open(&f.path).unwrap(), &old).unwrap();
+    keel_core::repository::Repository::upsert_task(&SqliteRepo::open(&f.path).unwrap(), &old)
+        .unwrap();
 
     assert!(is_done(&f.get(&child), today()));
     f.run_on(Action::TaskUncomplete { id: child.clone() }, today());
@@ -327,5 +385,8 @@ fn a_sub_task_completed_before_completions_were_saved_shows_done_and_undoes() {
     let t = f.get(&child);
     assert_eq!(f.date(&child), "2026-01-05");
     assert!(!is_done(&t, today()));
-    assert_eq!((t.streak_current, t.streak_best, t.streak_last_period), (0, 0, None));
+    assert_eq!(
+        (t.streak_current, t.streak_best, t.streak_last_period),
+        (0, 0, None)
+    );
 }

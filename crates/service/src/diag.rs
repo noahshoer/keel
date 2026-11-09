@@ -12,7 +12,11 @@ pub const DEFAULT_CAP: u64 = 2 * 1024 * 1024;
 /// message are escaped so every entry stays on one line.
 pub fn format_line(ts_ms: i64, source: &str, msg: &str) -> String {
     let msg = msg.replace('\r', "").replace('\n', "\\n");
-    format!("{}.{:03} [{source}] {msg}\n", ts_ms.div_euclid(1000), ts_ms.rem_euclid(1000))
+    format!(
+        "{}.{:03} [{source}] {msg}\n",
+        ts_ms.div_euclid(1000),
+        ts_ms.rem_euclid(1000)
+    )
 }
 
 pub struct DiagLog {
@@ -27,7 +31,11 @@ impl DiagLog {
     }
 
     pub fn with_cap(dir: &Path, cap: u64) -> Self {
-        DiagLog { path: dir.join("diag.log"), previous: dir.join("diag.1.log"), cap }
+        DiagLog {
+            path: dir.join("diag.log"),
+            previous: dir.join("diag.1.log"),
+            cap,
+        }
     }
 
     /// A new log for a new session: the current file becomes the previous
@@ -46,7 +54,10 @@ impl DiagLog {
             let _ = fs::remove_file(&self.previous);
             fs::rename(&self.path, &self.previous)?;
         }
-        let mut f = OpenOptions::new().create(true).append(true).open(&self.path)?;
+        let mut f = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)?;
         f.write_all(line.as_bytes())
     }
 }

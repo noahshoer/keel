@@ -19,7 +19,10 @@ fn diag_setting_defaults_off_and_persists() {
 
 #[test]
 fn format_line_has_time_source_and_one_line() {
-    assert_eq!(format_line(1_700_000_000_123, "js", "hello"), "1700000000.123 [js] hello\n");
+    assert_eq!(
+        format_line(1_700_000_000_123, "js", "hello"),
+        "1700000000.123 [js] hello\n"
+    );
     assert_eq!(format_line(5_007, "rust", "a\nb"), "5.007 [rust] a\\nb\n");
 }
 
@@ -49,7 +52,9 @@ fn rolls_over_at_the_cap_keeping_one_previous_file() {
     assert!(!dir.path().join("diag.2.log").exists());
     assert!(std::fs::metadata(&cur).unwrap().len() <= 200 + 60);
     // The newest line survives in the current file.
-    assert!(std::fs::read_to_string(&cur).unwrap().contains("line number 39"));
+    assert!(std::fs::read_to_string(&cur)
+        .unwrap()
+        .contains("line number 39"));
 }
 
 #[test]
@@ -76,7 +81,12 @@ fn logging_never_touches_the_database_or_other_files() {
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("keel.db");
     let svc = AppService::open(db.to_str().unwrap()).unwrap();
-    let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap();
+    let inbox = svc
+        .list_projects()
+        .unwrap()
+        .into_iter()
+        .find(|p| p.is_inbox)
+        .unwrap();
     svc.dispatch(Command {
         uuid: "u1".to_string(),
         temp_id: Some("tmp-1".to_string()),
@@ -117,9 +127,20 @@ fn logging_never_touches_the_database_or_other_files() {
     let svc = AppService::open(db.to_str().unwrap()).unwrap();
     assert!(!svc.diag_enabled().unwrap());
     let tasks = svc.list_tasks(inbox.id.as_str()).unwrap();
-    assert_eq!(tasks.iter().map(|t| t.content.as_str()).collect::<Vec<_>>(), ["keep me"]);
-    let mut names: Vec<_> = std::fs::read_dir(dir.path()).unwrap()
-        .map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+    assert_eq!(
+        tasks.iter().map(|t| t.content.as_str()).collect::<Vec<_>>(),
+        ["keep me"]
+    );
+    let mut names: Vec<_> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .collect();
     names.sort();
-    assert!(names.iter().all(|n| n.starts_with("keel.db") || others.contains(&n.as_str()) || n == "diag.log" || n == "diag.1.log"), "{names:?}");
+    assert!(
+        names.iter().all(|n| n.starts_with("keel.db")
+            || others.contains(&n.as_str())
+            || n == "diag.log"
+            || n == "diag.1.log"),
+        "{names:?}"
+    );
 }

@@ -41,7 +41,12 @@ pub fn diag<R: Runtime>(
     {
         use tauri::Manager;
         if let Some(h) = _app.try_state::<IosHandle<R>>() {
-            let args = DiagArgs { enabled: _enabled, source: Some(_source), line: _line, fresh: None };
+            let args = DiagArgs {
+                enabled: _enabled,
+                source: Some(_source),
+                line: _line,
+                fresh: None,
+            };
             let _ = h.0.run_mobile_plugin::<()>("diag", args);
         }
     }
@@ -54,7 +59,12 @@ pub fn diag_fresh<R: Runtime>(_app: &tauri::AppHandle<R>) {
     {
         use tauri::Manager;
         if let Some(h) = _app.try_state::<IosHandle<R>>() {
-            let args = DiagArgs { enabled: None, source: None, line: None, fresh: Some(true) };
+            let args = DiagArgs {
+                enabled: None,
+                source: None,
+                line: None,
+                fresh: Some(true),
+            };
             let _ = h.0.run_mobile_plugin::<()>("diag", args);
         }
     }
@@ -74,7 +84,8 @@ pub fn hold_page_scroll<R: Runtime>(_app: &tauri::AppHandle<R>, _on: bool) -> Re
     {
         use tauri::Manager;
         if let Some(h) = _app.try_state::<IosHandle<R>>() {
-            h.0.run_mobile_plugin::<()>("pageScroll", PageScrollArgs { on: _on }).map_err(|e| e.to_string())?;
+            h.0.run_mobile_plugin::<()>("pageScroll", PageScrollArgs { on: _on })
+                .map_err(|e| e.to_string())?;
         }
     }
     Ok(())
@@ -94,7 +105,8 @@ pub fn haptic<R: Runtime>(_app: &tauri::AppHandle<R>, _kind: &str) -> Result<(),
     {
         use tauri::Manager;
         if let Some(h) = _app.try_state::<IosHandle<R>>() {
-            h.0.run_mobile_plugin::<()>("haptic", HapticArgs { kind: _kind }).map_err(|e| e.to_string())?;
+            h.0.run_mobile_plugin::<()>("haptic", HapticArgs { kind: _kind })
+                .map_err(|e| e.to_string())?;
         }
     }
     Ok(())

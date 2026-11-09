@@ -25,8 +25,19 @@ impl Fixture {
     fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
         let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
-        let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap().id;
-        Fixture { _dir: dir, svc, inbox, n: 0 }
+        let inbox = svc
+            .list_projects()
+            .unwrap()
+            .into_iter()
+            .find(|p| p.is_inbox)
+            .unwrap()
+            .id;
+        Fixture {
+            _dir: dir,
+            svc,
+            inbox,
+            n: 0,
+        }
     }
 
     fn uuid(&mut self) -> String {
@@ -39,7 +50,11 @@ impl Fixture {
         let res = self
             .svc
             .dispatch_at(
-                Command { uuid: u, temp_id: Some("p".into()), action: Action::ProjectAdd { name: name.into() } },
+                Command {
+                    uuid: u,
+                    temp_id: Some("p".into()),
+                    action: Action::ProjectAdd { name: name.into() },
+                },
                 today(),
             )
             .unwrap();
@@ -124,14 +139,28 @@ impl Fixture {
     fn delete(&mut self, id: &Id) {
         let u = self.uuid();
         self.svc
-            .dispatch_at(Command { uuid: u, temp_id: None, action: Action::TaskDelete { id: id.clone() } }, today())
+            .dispatch_at(
+                Command {
+                    uuid: u,
+                    temp_id: None,
+                    action: Action::TaskDelete { id: id.clone() },
+                },
+                today(),
+            )
             .unwrap();
     }
 
     fn complete(&mut self, id: &Id) {
         let u = self.uuid();
         self.svc
-            .dispatch_at(Command { uuid: u, temp_id: None, action: Action::TaskComplete { id: id.clone() } }, today())
+            .dispatch_at(
+                Command {
+                    uuid: u,
+                    temp_id: None,
+                    action: Action::TaskComplete { id: id.clone() },
+                },
+                today(),
+            )
             .unwrap();
     }
 }
@@ -158,12 +187,19 @@ fn sidebar_counts_match_what_each_view_lists() {
     let today_view = f.svc.today_view_at(today()).unwrap();
     assert_eq!(counts.today, today_view.len());
     let window = f.svc.upcoming_view_at(today(), days).unwrap();
-    assert_eq!(counts.upcoming, keel_core::views::upcoming_tasks(today_view, window, today()).len());
+    assert_eq!(
+        counts.upcoming,
+        keel_core::views::upcoming_tasks(today_view, window, today()).len()
+    );
     let counts = keel_core::views::sidebar_counts(&all, today(), days, false);
     for project in [&work, &inbox] {
         let listed = f.svc.project_view_at(project.as_str(), today()).unwrap();
         let top_level = listed.iter().filter(|t| t.parent_id.is_none()).count();
-        let counted = counts.projects.iter().find(|c| &c.project_id == project).map_or(0, |c| c.count);
+        let counted = counts
+            .projects
+            .iter()
+            .find(|c| &c.project_id == project)
+            .map_or(0, |c| c.count);
         assert_eq!(counted, top_level, "{project:?}");
     }
 }
@@ -192,7 +228,10 @@ fn undated_only_in_project_view() {
     f.task("someday", &inbox, None, Priority::None);
     assert!(f.svc.today_view_at(today()).unwrap().is_empty());
     assert!(f.svc.upcoming_view_at(today(), 7).unwrap().is_empty());
-    assert_eq!(names(f.svc.project_view_at(inbox.as_str(), today()).unwrap()), vec!["someday"]);
+    assert_eq!(
+        names(f.svc.project_view_at(inbox.as_str(), today()).unwrap()),
+        vec!["someday"]
+    );
 }
 
 #[test]
@@ -203,7 +242,11 @@ fn completed_hidden_everywhere() {
     f.complete(&id);
     assert!(f.svc.today_view_at(today()).unwrap().is_empty());
     assert!(f.svc.upcoming_view_at(today(), 7).unwrap().is_empty());
-    assert!(f.svc.project_view_at(inbox.as_str(), today()).unwrap().is_empty());
+    assert!(f
+        .svc
+        .project_view_at(inbox.as_str(), today())
+        .unwrap()
+        .is_empty());
 }
 
 #[test]
@@ -214,7 +257,10 @@ fn upcoming_window_bounds() {
     f.task("today", &inbox, Some("2026-10-19"), Priority::None);
     f.task("day7", &inbox, Some("2026-10-25"), Priority::None);
     f.task("day8", &inbox, Some("2026-10-26"), Priority::None);
-    assert_eq!(names(f.svc.upcoming_view_at(today(), 7).unwrap()), vec!["today", "day7"]);
+    assert_eq!(
+        names(f.svc.upcoming_view_at(today(), 7).unwrap()),
+        vec!["today", "day7"]
+    );
 }
 
 #[test]
@@ -237,7 +283,10 @@ fn today_view_still_lists_subtasks() {
     let inbox = f.inbox.clone();
     let parent = f.task("Pack", &inbox, None, Priority::None);
     f.subtask("Chargers", &parent, Some("2026-10-19"));
-    assert_eq!(names(f.svc.today_view_at(today()).unwrap()), vec!["Chargers"]);
+    assert_eq!(
+        names(f.svc.today_view_at(today()).unwrap()),
+        vec!["Chargers"]
+    );
 }
 
 #[test]
@@ -246,7 +295,10 @@ fn search_still_finds_subtasks() {
     let inbox = f.inbox.clone();
     let parent = f.task("Pack", &inbox, None, Priority::None);
     f.subtask("Chargers", &parent, None);
-    assert_eq!(names(f.svc.search_at("Chargers", None, today()).unwrap().open), vec!["Chargers"]);
+    assert_eq!(
+        names(f.svc.search_at("Chargers", None, today()).unwrap().open),
+        vec!["Chargers"]
+    );
 }
 
 #[test]
@@ -258,5 +310,8 @@ fn completed_today_lists_completed_subtasks() {
     f.complete(&sub);
     // Completion is stamped with the real clock, so ask for the real local day.
     let day = chrono::Local::now().date_naive();
-    assert_eq!(names(f.svc.completed_today_at(day).unwrap()), vec!["Chargers"]);
+    assert_eq!(
+        names(f.svc.completed_today_at(day).unwrap()),
+        vec!["Chargers"]
+    );
 }

@@ -37,7 +37,11 @@ fn daily_streak_task(repo: &SqliteRepo, today: NaiveDate) -> Id {
     let project = Id::new();
     let res = apply_at(
         repo,
-        cmd("add", Some("tmp"), add("read", &project, Some(Recurrence::Daily))),
+        cmd(
+            "add",
+            Some("tmp"),
+            add("read", &project, Some(Recurrence::Daily)),
+        ),
         today,
     )
     .unwrap();
@@ -70,10 +74,19 @@ fn complete_recurring_advances_due_and_increments_streak() {
     assert!(due.is_recurring);
     assert_eq!(due.string, "every day");
 
-    apply_at(&repo, cmd("c1", None, Action::TaskComplete { id: id.clone() }), d(2026, 1, 5)).unwrap();
+    apply_at(
+        &repo,
+        cmd("c1", None, Action::TaskComplete { id: id.clone() }),
+        d(2026, 1, 5),
+    )
+    .unwrap();
 
     let after = repo.get_task(&id).unwrap().unwrap();
-    assert_eq!(after.due.unwrap().date, "2026-01-06", "rescheduled to next occurrence");
+    assert_eq!(
+        after.due.unwrap().date,
+        "2026-01-06",
+        "rescheduled to next occurrence"
+    );
     assert_eq!(after.streak_current, 1);
     assert!(!after.checked, "recurring tasks stay active");
 }
@@ -82,11 +95,25 @@ fn complete_recurring_advances_due_and_increments_streak() {
 fn complete_recurring_twice_same_day_no_double() {
     let repo = SqliteRepo::open_in_memory().unwrap();
     let id = daily_streak_task(&repo, d(2026, 1, 5));
-    apply_at(&repo, cmd("c1", None, Action::TaskComplete { id: id.clone() }), d(2026, 1, 5)).unwrap();
-    apply_at(&repo, cmd("c2", None, Action::TaskComplete { id: id.clone() }), d(2026, 1, 5)).unwrap();
+    apply_at(
+        &repo,
+        cmd("c1", None, Action::TaskComplete { id: id.clone() }),
+        d(2026, 1, 5),
+    )
+    .unwrap();
+    apply_at(
+        &repo,
+        cmd("c2", None, Action::TaskComplete { id: id.clone() }),
+        d(2026, 1, 5),
+    )
+    .unwrap();
     let t = repo.get_task(&id).unwrap().unwrap();
     assert_eq!(t.streak_current, 1);
-    assert_eq!(t.due.unwrap().date, "2026-01-06", "a repeat click must not skip tomorrow's occurrence");
+    assert_eq!(
+        t.due.unwrap().date,
+        "2026-01-06",
+        "a repeat click must not skip tomorrow's occurrence"
+    );
 }
 
 #[test]
@@ -95,7 +122,11 @@ fn complete_nonrecurring_checks_it() {
     let project = Id::new();
     let res = apply(&repo, cmd("a", Some("t"), add("once", &project, None))).unwrap();
     let id = res.id_mapping["t"].clone();
-    apply(&repo, cmd("c", None, Action::TaskComplete { id: id.clone() })).unwrap();
+    apply(
+        &repo,
+        cmd("c", None, Action::TaskComplete { id: id.clone() }),
+    )
+    .unwrap();
     let t = repo.get_task(&id).unwrap().unwrap();
     assert!(t.checked);
     assert_eq!(t.streak_current, 0);
@@ -105,7 +136,15 @@ fn complete_nonrecurring_checks_it() {
 fn set_streak_enables_and_sets_goal() {
     let repo = SqliteRepo::open_in_memory().unwrap();
     let project = Id::new();
-    let res = apply(&repo, cmd("a", Some("t"), add("gym", &project, Some(Recurrence::Weekly(vec![0, 3]))))).unwrap();
+    let res = apply(
+        &repo,
+        cmd(
+            "a",
+            Some("t"),
+            add("gym", &project, Some(Recurrence::Weekly(vec![0, 3]))),
+        ),
+    )
+    .unwrap();
     let id = res.id_mapping["t"].clone();
     apply(
         &repo,
@@ -131,18 +170,63 @@ fn early_completion_credits_the_upcoming_occurrence() {
     let repo = SqliteRepo::open_in_memory().unwrap();
     let project = Id::new();
     let mon = d(2026, 1, 5);
-    let res = apply_at(&repo, cmd("add", Some("t"), add("gym", &project, Some(Recurrence::Weekly(vec![0, 2])))), mon).unwrap();
+    let res = apply_at(
+        &repo,
+        cmd(
+            "add",
+            Some("t"),
+            add("gym", &project, Some(Recurrence::Weekly(vec![0, 2]))),
+        ),
+        mon,
+    )
+    .unwrap();
     let id = res.id_mapping["t"].clone();
-    apply_at(&repo, cmd("on", None, Action::TaskSetStreak { id: id.clone(), enabled: true, goal: None }), mon).unwrap();
+    apply_at(
+        &repo,
+        cmd(
+            "on",
+            None,
+            Action::TaskSetStreak {
+                id: id.clone(),
+                enabled: true,
+                goal: None,
+            },
+        ),
+        mon,
+    )
+    .unwrap();
 
-    apply_at(&repo, cmd("c1", None, Action::TaskComplete { id: id.clone() }), mon).unwrap(); // Mon on time
-    apply_at(&repo, cmd("c2", None, Action::TaskComplete { id: id.clone() }), d(2026, 1, 6)).unwrap(); // Wed's, done Tue
+    apply_at(
+        &repo,
+        cmd("c1", None, Action::TaskComplete { id: id.clone() }),
+        mon,
+    )
+    .unwrap(); // Mon on time
+    apply_at(
+        &repo,
+        cmd("c2", None, Action::TaskComplete { id: id.clone() }),
+        d(2026, 1, 6),
+    )
+    .unwrap(); // Wed's, done Tue
     let t = repo.get_task(&id).unwrap().unwrap();
     assert_eq!(t.streak_current, 2);
-    assert_eq!(t.due.as_ref().unwrap().date, "2026-01-12", "next occurrence after Wed is Mon");
+    assert_eq!(
+        t.due.as_ref().unwrap().date,
+        "2026-01-12",
+        "next occurrence after Wed is Mon"
+    );
 
-    apply_at(&repo, cmd("c3", None, Action::TaskComplete { id: id.clone() }), d(2026, 1, 12)).unwrap(); // next Mon
-    assert_eq!(repo.get_task(&id).unwrap().unwrap().streak_current, 3, "early completion must not break the streak");
+    apply_at(
+        &repo,
+        cmd("c3", None, Action::TaskComplete { id: id.clone() }),
+        d(2026, 1, 12),
+    )
+    .unwrap(); // next Mon
+    assert_eq!(
+        repo.get_task(&id).unwrap().unwrap().streak_current,
+        3,
+        "early completion must not break the streak"
+    );
 }
 
 #[test]
@@ -152,8 +236,30 @@ fn set_done_with_subtasks_round_trips() {
     let res = apply(&repo, cmd("a", Some("t"), add("saw", &project, None))).unwrap();
     let id = res.id_mapping["t"].clone();
     assert!(!repo.get_task(&id).unwrap().unwrap().done_with_subtasks);
-    apply(&repo, cmd("on", None, Action::TaskSetDoneWithSubtasks { id: id.clone(), enabled: true })).unwrap();
+    apply(
+        &repo,
+        cmd(
+            "on",
+            None,
+            Action::TaskSetDoneWithSubtasks {
+                id: id.clone(),
+                enabled: true,
+            },
+        ),
+    )
+    .unwrap();
     assert!(repo.get_task(&id).unwrap().unwrap().done_with_subtasks);
-    apply(&repo, cmd("off", None, Action::TaskSetDoneWithSubtasks { id: id.clone(), enabled: false })).unwrap();
+    apply(
+        &repo,
+        cmd(
+            "off",
+            None,
+            Action::TaskSetDoneWithSubtasks {
+                id: id.clone(),
+                enabled: false,
+            },
+        ),
+    )
+    .unwrap();
     assert!(!repo.get_task(&id).unwrap().unwrap().done_with_subtasks);
 }

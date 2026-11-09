@@ -37,14 +37,24 @@ const MONTHS: [&str; 12] = [
 ];
 
 const WEEKDAYS_LONG: [&str; 7] = [
-    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
 ];
 
 /// Todoist-style chip text: Today / Tomorrow / Yesterday / weekday / "3 Nov"
 /// (with the year when it differs from today's).
 /// "Moved from Wed 21 Oct" while `day` stands in for the occurrence `from`
 /// (off the repeat's own days).
-pub fn moved_text(from: NaiveDate, day: NaiveDate, rule: &crate::recurrence::Recurrence) -> Option<String> {
+pub fn moved_text(
+    from: NaiveDate,
+    day: NaiveDate,
+    rule: &crate::recurrence::Recurrence,
+) -> Option<String> {
     (day != from && !rule.contains(day)).then(|| format!("Moved from {}", from.format("%a %-d %b")))
 }
 
@@ -52,7 +62,11 @@ pub fn moved_text(from: NaiveDate, day: NaiveDate, rule: &crate::recurrence::Rec
 pub fn moved_note(task: &Task) -> Option<String> {
     let due = task.due.as_ref()?;
     let parse = |s: &str| NaiveDate::parse_from_str(s.get(..10)?, "%Y-%m-%d").ok();
-    moved_text(parse(due.moved_from.as_deref()?)?, parse(&due.date)?, due.recurrence.as_ref()?)
+    moved_text(
+        parse(due.moved_from.as_deref()?)?,
+        parse(&due.date)?,
+        due.recurrence.as_ref()?,
+    )
 }
 
 pub fn due_label(due: NaiveDate, today: NaiveDate) -> String {
@@ -110,7 +124,11 @@ pub fn nest(tasks: Vec<Task>) -> Vec<Nested> {
         }
         let task = &tasks[i];
         let kids = children.get(&task.id).map(Vec::as_slice).unwrap_or(&[]);
-        out.push(Nested { task: task.clone(), depth, has_children: !kids.is_empty() });
+        out.push(Nested {
+            task: task.clone(),
+            depth,
+            has_children: !kids.is_empty(),
+        });
         if !task.is_collapsed {
             for &k in kids {
                 visit(k, depth + 1, tasks, children, seen, out);
@@ -205,8 +223,9 @@ pub fn done_for_now(t: &Task, today: NaiveDate) -> bool {
 pub fn done_today(t: &Task, today: NaiveDate) -> bool {
     t.checked
         || (done_for_now(t, today)
-            && streak::undoable_completion(t, today)
-                .is_some_and(|u| u.completed_on.as_deref() == Some(today.format("%Y-%m-%d").to_string().as_str())))
+            && streak::undoable_completion(t, today).is_some_and(|u| {
+                u.completed_on.as_deref() == Some(today.format("%Y-%m-%d").to_string().as_str())
+            }))
 }
 
 /// Whether every sub-task its "x of y" counts is done (false with none).
@@ -219,7 +238,10 @@ pub fn all_done(parent: &Id, all: &[Task], today: NaiveDate) -> bool {
 pub fn progress(parent: &Id, all: &[Task], today: NaiveDate) -> Option<Progress> {
     let parent_repeats = all.iter().any(|t| &t.id == parent && repeats(t));
     let mut p = Progress { done: 0, total: 0 };
-    for t in all.iter().filter(|t| !t.is_deleted && t.parent_id.as_ref() == Some(parent)) {
+    for t in all
+        .iter()
+        .filter(|t| !t.is_deleted && t.parent_id.as_ref() == Some(parent))
+    {
         if repeats(t) && !parent_repeats {
             continue;
         }
@@ -233,9 +255,15 @@ pub fn progress(parent: &Id, all: &[Task], today: NaiveDate) -> Option<Progress>
 
 /// A task's direct, non-deleted sub-tasks ordered by `child_order`, then `added_at`.
 pub fn children<'a>(parent: &Id, all: &'a [Task]) -> Vec<&'a Task> {
-    let mut kids: Vec<&Task> =
-        all.iter().filter(|t| !t.is_deleted && t.parent_id.as_ref() == Some(parent)).collect();
-    kids.sort_by(|a, b| a.child_order.cmp(&b.child_order).then(a.added_at.cmp(&b.added_at)));
+    let mut kids: Vec<&Task> = all
+        .iter()
+        .filter(|t| !t.is_deleted && t.parent_id.as_ref() == Some(parent))
+        .collect();
+    kids.sort_by(|a, b| {
+        a.child_order
+            .cmp(&b.child_order)
+            .then(a.added_at.cmp(&b.added_at))
+    });
     kids
 }
 
@@ -272,14 +300,23 @@ pub struct SidebarCounts {
 /// has the next `upcoming_days` days, and a project has its open tasks. With
 /// `show_subtasks` off, a sub-task counts as its top-level parent's one row and
 /// a project counts only its top-level tasks.
-pub fn sidebar_counts(all: &[Task], today: NaiveDate, upcoming_days: i64, show_subtasks: bool) -> SidebarCounts {
+pub fn sidebar_counts(
+    all: &[Task],
+    today: NaiveDate,
+    upcoming_days: i64,
+    show_subtasks: bool,
+) -> SidebarCounts {
     let end = today + chrono::Duration::days(upcoming_days);
     let mut due_today = HashSet::new();
     let mut upcoming = HashSet::new();
     let mut projects: Vec<ProjectCount> = Vec::new();
     for t in all.iter().filter(|t| !t.is_deleted && !is_done(t, today)) {
         if let Some(d) = due_date_of(t) {
-            let row = if show_subtasks { &t.id } else { &root(t, all).id };
+            let row = if show_subtasks {
+                &t.id
+            } else {
+                &root(t, all).id
+            };
             if d <= today {
                 due_today.insert(row);
             }
@@ -292,10 +329,17 @@ pub fn sidebar_counts(all: &[Task], today: NaiveDate, upcoming_days: i64, show_s
         }
         match projects.iter_mut().find(|c| c.project_id == t.project_id) {
             Some(c) => c.count += 1,
-            None => projects.push(ProjectCount { project_id: t.project_id.clone(), count: 1 }),
+            None => projects.push(ProjectCount {
+                project_id: t.project_id.clone(),
+                count: 1,
+            }),
         }
     }
-    SidebarCounts { today: due_today.len(), upcoming: upcoming.len(), projects }
+    SidebarCounts {
+        today: due_today.len(),
+        upcoming: upcoming.len(),
+        projects,
+    }
 }
 
 /// A row of the labels picker.
@@ -318,7 +362,10 @@ pub fn label_choices(labels: &[Label], selected: &[String], query: &str) -> Vec<
     labels
         .iter()
         .filter(|l| l.name.to_lowercase().contains(&query))
-        .map(|l| LabelChoice { label: l.clone(), on: label_chosen(selected, &l.name) })
+        .map(|l| LabelChoice {
+            label: l.clone(),
+            on: label_chosen(selected, &l.name),
+        })
         .collect()
 }
 
@@ -344,7 +391,10 @@ pub fn label_groups(task_labels: &[String], labels: &[Label]) -> Vec<LabelGroup>
             .map_or(DEFAULT_LABEL_COLOR, |l| l.color.as_str());
         match groups.iter_mut().find(|g| g.color == color) {
             Some(group) => group.names.push(name.clone()),
-            None => groups.push(LabelGroup { color: color.to_string(), names: vec![name.clone()] }),
+            None => groups.push(LabelGroup {
+                color: color.to_string(),
+                names: vec![name.clone()],
+            }),
         }
     }
     groups
@@ -385,7 +435,10 @@ fn root_where<'a>(task: &'a Task, all: &'a [Task], keep: impl Fn(&Task) -> bool)
     let mut cur = task;
     let mut seen = vec![&task.id];
     while let Some(pid) = cur.parent_id.as_ref() {
-        let Some(parent) = all.iter().find(|t| !t.is_deleted && &t.id == pid && keep(t)) else {
+        let Some(parent) = all
+            .iter()
+            .find(|t| !t.is_deleted && &t.id == pid && keep(t))
+        else {
             break;
         };
         if seen.contains(&&parent.id) {
@@ -414,7 +467,11 @@ pub fn cards(mut matched: Vec<Task>, all: &[Task], mode: CardMode, today: NaiveD
             .collect();
         return tops
             .into_iter()
-            .map(|t| Card { head: row(t), head_matches: true, rows: Vec::new() })
+            .map(|t| Card {
+                head: row(t),
+                head_matches: true,
+                rows: Vec::new(),
+            })
             .collect();
     }
     let mut out: Vec<(Id, Card)> = Vec::new();
@@ -427,7 +484,14 @@ pub fn cards(mut matched: Vec<Task>, all: &[Task], mode: CardMode, today: NaiveD
             Some(i) => i,
             None => {
                 let head = unmatched_head.unwrap_or_else(|| task.clone());
-                out.push((root_id, Card { head: row(head), head_matches: is_root, rows: Vec::new() }));
+                out.push((
+                    root_id,
+                    Card {
+                        head: row(head),
+                        head_matches: is_root,
+                        rows: Vec::new(),
+                    },
+                ));
                 out.len() - 1
             }
         };
@@ -482,12 +546,16 @@ pub fn due_date_of(task: &Task) -> Option<NaiveDate> {
 /// occurs on every later date the rule contains, up to its end (inclusive).
 /// An undated task has none.
 pub fn occurs_in(task: &Task, from: NaiveDate, to: NaiveDate) -> bool {
-    let Some(first) = due_date_of(task) else { return false };
+    let Some(first) = due_date_of(task) else {
+        return false;
+    };
     if first >= from {
         return first < to;
     }
     let due = task.due.as_ref();
-    let Some(rule) = due.and_then(|d| d.recurrence.as_ref()) else { return false };
+    let Some(rule) = due.and_then(|d| d.recurrence.as_ref()) else {
+        return false;
+    };
     let until = due
         .and_then(|d| d.until.as_deref())
         .and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok());
@@ -504,14 +572,24 @@ pub fn occurs_on(task: &Task, day: NaiveDate) -> bool {
 
 /// Whether the task has any occurrence after `day`.
 pub fn occurs_after(task: &Task, day: NaiveDate) -> bool {
-    let Some(first) = due_date_of(task) else { return false };
+    let Some(first) = due_date_of(task) else {
+        return false;
+    };
     if first > day {
         return true;
     }
-    let Some(due) = task.due.as_ref() else { return false };
-    let Some(rule) = due.recurrence.as_ref() else { return false };
+    let Some(due) = task.due.as_ref() else {
+        return false;
+    };
+    let Some(rule) = due.recurrence.as_ref() else {
+        return false;
+    };
     let next = rule.next_after(day.max(first));
-    match due.until.as_deref().and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok()) {
+    match due
+        .until
+        .as_deref()
+        .and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok())
+    {
         Some(u) => next <= u,
         None => true,
     }
@@ -556,19 +634,29 @@ pub fn day_subtitle(today: NaiveDate) -> String {
 /// tasks' order within each. Tasks without a date are left out of
 /// Upcoming's day groups.
 pub fn date_groups(mode: DateGroupMode, tasks: Vec<Task>, today: NaiveDate) -> Vec<DateGroup> {
-    let (overdue, rest): (Vec<Task>, Vec<Task>) =
-        tasks.into_iter().filter(|t| !repeating_done(t, today)).partition(|t| due_date_of(t).is_some_and(|d| d < today));
+    let (overdue, rest): (Vec<Task>, Vec<Task>) = tasks
+        .into_iter()
+        .filter(|t| !repeating_done(t, today))
+        .partition(|t| due_date_of(t).is_some_and(|d| d < today));
     let mut out = Vec::new();
     let split = !overdue.is_empty();
     if split {
-        out.push(DateGroup { title: Some("Overdue".into()), muted: String::new(), tasks: overdue });
+        out.push(DateGroup {
+            title: Some("Overdue".into()),
+            muted: String::new(),
+            tasks: overdue,
+        });
     }
     match mode {
         DateGroupMode::Today => {
             if !rest.is_empty() {
                 out.push(DateGroup {
                     title: split.then(|| "Today".to_string()),
-                    muted: if split { format!("{} · {}", short_date(today), weekday_long(today)) } else { String::new() },
+                    muted: if split {
+                        format!("{} · {}", short_date(today), weekday_long(today))
+                    } else {
+                        String::new()
+                    },
                     tasks: rest,
                 });
             }
@@ -588,7 +676,11 @@ pub fn date_groups(mode: DateGroupMode, tasks: Vec<Task>, today: NaiveDate) -> V
                     1 => "Tomorrow · ",
                     _ => "",
                 };
-                DateGroup { title: Some(short_date(d)), muted: format!("{rel}{}", weekday_long(d)), tasks }
+                DateGroup {
+                    title: Some(short_date(d)),
+                    muted: format!("{rel}{}", weekday_long(d)),
+                    tasks,
+                }
             }));
         }
     }
@@ -598,8 +690,10 @@ pub fn date_groups(mode: DateGroupMode, tasks: Vec<Task>, today: NaiveDate) -> V
 /// The Upcoming view's tasks: what's overdue (from the Today query, which
 /// has it) on top, then the upcoming window.
 pub fn upcoming_tasks(today_tasks: Vec<Task>, window: Vec<Task>, today: NaiveDate) -> Vec<Task> {
-    let mut out: Vec<Task> =
-        today_tasks.into_iter().filter(|t| due_date_of(t).is_some_and(|d| d < today)).collect();
+    let mut out: Vec<Task> = today_tasks
+        .into_iter()
+        .filter(|t| due_date_of(t).is_some_and(|d| d < today))
+        .collect();
     out.extend(window);
     out
 }
@@ -633,8 +727,14 @@ mod tests {
 
     #[test]
     fn buckets_cross_year_boundary() {
-        assert_eq!(due_bucket(d(2027, 1, 1), d(2026, 12, 31)), DueBucket::Tomorrow);
-        assert_eq!(due_bucket(d(2026, 12, 31), d(2027, 1, 1)), DueBucket::Overdue);
+        assert_eq!(
+            due_bucket(d(2027, 1, 1), d(2026, 12, 31)),
+            DueBucket::Tomorrow
+        );
+        assert_eq!(
+            due_bucket(d(2026, 12, 31), d(2027, 1, 1)),
+            DueBucket::Overdue
+        );
     }
 
     #[test]
@@ -680,7 +780,10 @@ mod nest_tests {
     }
 
     fn shape(tasks: Vec<Task>) -> Vec<(String, usize, bool)> {
-        nest(tasks).into_iter().map(|n| (n.task.content, n.depth, n.has_children)).collect()
+        nest(tasks)
+            .into_iter()
+            .map(|n| (n.task.content, n.depth, n.has_children))
+            .collect()
     }
 
     #[test]
@@ -865,8 +968,14 @@ mod progress_tests {
         let a1 = t("a1", Some(&a), false, false);
         let a2 = t("a2", Some(&a), false, false);
         let all = vec![p.clone(), a.clone(), b, c, a1, a2];
-        assert_eq!(progress(&p.id, &all, some_day()), Some(Progress { done: 1, total: 3 }));
-        assert_eq!(progress(&a.id, &all, some_day()), Some(Progress { done: 0, total: 2 }));
+        assert_eq!(
+            progress(&p.id, &all, some_day()),
+            Some(Progress { done: 1, total: 3 })
+        );
+        assert_eq!(
+            progress(&a.id, &all, some_day()),
+            Some(Progress { done: 0, total: 2 })
+        );
     }
 
     #[test]
@@ -925,9 +1034,15 @@ mod progress_tests {
         let not_due_yet = dated(t("later", Some(&p), false, false), "2026-11-09");
         let plain = t("plain", Some(&p), false, false);
         let all = [p.clone(), open, done, not_due_yet, plain];
-        assert_eq!(progress(&p.id, &all, some_day()), Some(Progress { done: 1, total: 4 }));
+        assert_eq!(
+            progress(&p.id, &all, some_day()),
+            Some(Progress { done: 1, total: 4 })
+        );
         let next_day = some_day().succ_opt().unwrap();
-        assert_eq!(progress(&p.id, &all, next_day), Some(Progress { done: 0, total: 4 }));
+        assert_eq!(
+            progress(&p.id, &all, next_day),
+            Some(Progress { done: 0, total: 4 })
+        );
     }
 
     #[test]
@@ -942,7 +1057,10 @@ mod progress_tests {
         let a = t("a", Some(&p), false, false);
         let mut d = t("d", Some(&p), true, false);
         d.is_deleted = true;
-        assert_eq!(progress(&p.id, &[p.clone(), a, d], some_day()), Some(Progress { done: 0, total: 1 }));
+        assert_eq!(
+            progress(&p.id, &[p.clone(), a, d], some_day()),
+            Some(Progress { done: 0, total: 1 })
+        );
     }
 
     #[test]
@@ -971,7 +1089,10 @@ mod progress_tests {
         d.child_order = 3;
         d.is_deleted = true;
         let all = vec![p.clone(), a, b, c, d];
-        let names: Vec<&str> = children(&p.id, &all).iter().map(|t| t.content.as_str()).collect();
+        let names: Vec<&str> = children(&p.id, &all)
+            .iter()
+            .map(|t| t.content.as_str())
+            .collect();
         assert_eq!(names, vec!["b", "c", "a"]);
     }
 }
@@ -1012,7 +1133,13 @@ mod card_tests {
     }
 
     fn all(f: &Fx) -> Vec<Task> {
-        vec![f.pack.clone(), f.chargers.clone(), f.passport.clone(), f.clothes.clone(), f.call.clone()]
+        vec![
+            f.pack.clone(),
+            f.chargers.clone(),
+            f.passport.clone(),
+            f.clothes.clone(),
+            f.call.clone(),
+        ]
     }
 
     fn heads(cs: &[Card]) -> Vec<String> {
@@ -1036,7 +1163,12 @@ mod card_tests {
     #[test]
     fn heads_show_the_parent_of_a_lone_matching_subtask_as_context() {
         let f = fx();
-        let cs = cards(vec![f.chargers.clone()], &all(&f), CardMode::Heads, some_day());
+        let cs = cards(
+            vec![f.chargers.clone()],
+            &all(&f),
+            CardMode::Heads,
+            some_day(),
+        );
         assert_eq!(heads(&cs), ["Pack"]);
         assert!(!cs[0].head_matches);
         assert!(cs[0].rows.is_empty());
@@ -1065,18 +1197,34 @@ mod card_tests {
             moved_from: None,
             completed_on: None,
         });
-        let cs = cards(vec![f.pack.clone(), done.clone()], &all(&f), CardMode::Grouped, some_day());
+        let cs = cards(
+            vec![f.pack.clone(), done.clone()],
+            &all(&f),
+            CardMode::Grouped,
+            some_day(),
+        );
         assert_eq!(heads(&cs), ["Pack"]);
         assert!(cs[0].rows.is_empty());
         let next_day = some_day().succ_opt().unwrap();
-        let cs = cards(vec![f.pack.clone(), done], &all(&f), CardMode::Grouped, next_day);
+        let cs = cards(
+            vec![f.pack.clone(), done],
+            &all(&f),
+            CardMode::Grouped,
+            next_day,
+        );
         assert_eq!(rows(&cs[0]), ["Chargers"]);
     }
 
     #[test]
     fn toplevel_hides_subtasks() {
         let f = fx();
-        let m = vec![f.call.clone(), f.pack.clone(), f.chargers.clone(), f.passport.clone(), f.clothes.clone()];
+        let m = vec![
+            f.call.clone(),
+            f.pack.clone(),
+            f.chargers.clone(),
+            f.passport.clone(),
+            f.clothes.clone(),
+        ];
         let cs = cards(m, &all(&f), CardMode::TopLevel, some_day());
         assert_eq!(heads(&cs), ["Call", "Pack"]);
         assert!(cs.iter().all(|c| c.head_matches && c.rows.is_empty()));
@@ -1096,7 +1244,12 @@ mod card_tests {
     #[test]
     fn grouped_subtask_under_unmatched_parent() {
         let f = fx();
-        let cs = cards(vec![f.call.clone(), f.chargers.clone()], &all(&f), CardMode::Grouped, some_day());
+        let cs = cards(
+            vec![f.call.clone(), f.chargers.clone()],
+            &all(&f),
+            CardMode::Grouped,
+            some_day(),
+        );
         assert_eq!(heads(&cs), ["Call", "Pack"]);
         assert!(cs[0].head_matches);
         assert!(!cs[1].head_matches);
@@ -1162,7 +1315,12 @@ mod card_tests {
     fn cards_group_across_projects() {
         let mut f = fx();
         f.chargers.project_id = Id::from("other");
-        let cs = cards(vec![f.chargers.clone()], &all(&f), CardMode::Grouped, some_day());
+        let cs = cards(
+            vec![f.chargers.clone()],
+            &all(&f),
+            CardMode::Grouped,
+            some_day(),
+        );
         assert_eq!(heads(&cs), ["Pack"]);
         assert_eq!(rows(&cs[0]), ["Chargers"]);
     }
@@ -1176,10 +1334,20 @@ mod card_tests {
         let mut a = all(&f);
         a.push(tooth.clone());
         // The other project's list: Chargers heads it, its child stays under it.
-        let cs = cards(vec![f.chargers.clone(), tooth], &a, CardMode::TopLevel, some_day());
+        let cs = cards(
+            vec![f.chargers.clone(), tooth],
+            &a,
+            CardMode::TopLevel,
+            some_day(),
+        );
         assert_eq!(heads(&cs), ["Chargers"]);
         // Pack's own project still hides its same-project sub-tasks.
-        let cs = cards(vec![f.pack.clone(), f.passport.clone()], &a, CardMode::TopLevel, some_day());
+        let cs = cards(
+            vec![f.pack.clone(), f.passport.clone()],
+            &a,
+            CardMode::TopLevel,
+            some_day(),
+        );
         assert_eq!(heads(&cs), ["Pack"]);
     }
 
@@ -1206,14 +1374,27 @@ mod card_tests {
     #[test]
     fn card_rows_carry_progress() {
         let mut f = fx();
-        let cs = cards(vec![f.pack.clone()], &all(&f), CardMode::Grouped, some_day());
+        let cs = cards(
+            vec![f.pack.clone()],
+            &all(&f),
+            CardMode::Grouped,
+            some_day(),
+        );
         assert_eq!(cs[0].head.progress, Some(Progress { done: 0, total: 3 }));
         f.chargers.checked = true;
         f.passport.checked = true;
         let a = all(&f);
-        let cs = cards(vec![f.pack.clone(), f.clothes.clone()], &a, CardMode::Grouped, some_day());
+        let cs = cards(
+            vec![f.pack.clone(), f.clothes.clone()],
+            &a,
+            CardMode::Grouped,
+            some_day(),
+        );
         assert_eq!(cs[0].head.progress, Some(Progress { done: 2, total: 3 }));
-        assert_eq!(cs[0].rows[0].progress, progress(&f.clothes.id, &a, some_day()));
+        assert_eq!(
+            cs[0].rows[0].progress,
+            progress(&f.clothes.id, &a, some_day())
+        );
     }
 
     #[test]
@@ -1222,7 +1403,12 @@ mod card_tests {
         f.chargers.checked = true;
         f.passport.checked = true;
         f.clothes.checked = true;
-        let cs = cards(vec![f.pack.clone()], &all(&f), CardMode::Grouped, some_day());
+        let cs = cards(
+            vec![f.pack.clone()],
+            &all(&f),
+            CardMode::Grouped,
+            some_day(),
+        );
         assert!(cs[0].head.progress.unwrap().all_done());
         assert!(cs[0].rows.is_empty());
     }
@@ -1234,7 +1420,9 @@ mod date_group_tests {
         chrono::NaiveDate::from_ymd_opt(2026, 11, 3).unwrap()
     }
 
-    use super::{cards, date_groups, deadline_urgent, upcoming_tasks, CardMode, DateGroupMode, Progress};
+    use super::{
+        cards, date_groups, deadline_urgent, upcoming_tasks, CardMode, DateGroupMode, Progress,
+    };
     use crate::ids::Id;
     use crate::model::{Due, Task};
     use chrono::{Datelike, NaiveDate};
@@ -1261,7 +1449,10 @@ mod date_group_tests {
     }
 
     fn titles(groups: &[super::DateGroup]) -> Vec<(Option<String>, String)> {
-        groups.iter().map(|g| (g.title.clone(), g.muted.clone())).collect()
+        groups
+            .iter()
+            .map(|g| (g.title.clone(), g.muted.clone()))
+            .collect()
     }
 
     #[test]
@@ -1275,7 +1466,10 @@ mod date_group_tests {
         let groups = date_groups(DateGroupMode::Today, vec![due_today, late], today);
         assert_eq!(
             titles(&groups),
-            [(Some("Overdue".to_string()), String::new()), (Some("Today".to_string()), "30 Oct · Friday".to_string())]
+            [
+                (Some("Overdue".to_string()), String::new()),
+                (Some("Today".to_string()), "30 Oct · Friday".to_string())
+            ]
         );
         assert_eq!(groups[0].tasks[0].content, "Taxes");
         assert_eq!(groups[1].tasks[0].content, "Laundry");
@@ -1284,13 +1478,20 @@ mod date_group_tests {
     #[test]
     fn upcoming_labels_today_and_tomorrow() {
         let today = d(2026, 10, 30);
-        let tasks = vec![task("A", None, today), task("B", None, d(2026, 10, 31)), task("C", None, d(2026, 11, 1))];
+        let tasks = vec![
+            task("A", None, today),
+            task("B", None, d(2026, 10, 31)),
+            task("C", None, d(2026, 11, 1)),
+        ];
         let groups = date_groups(DateGroupMode::Upcoming, tasks, today);
         assert_eq!(
             titles(&groups),
             [
                 (Some("30 Oct".to_string()), "Today · Friday".to_string()),
-                (Some("31 Oct".to_string()), "Tomorrow · Saturday".to_string()),
+                (
+                    Some("31 Oct".to_string()),
+                    "Tomorrow · Saturday".to_string()
+                ),
                 (Some("1 Nov".to_string()), "Sunday".to_string()),
             ]
         );
@@ -1303,23 +1504,36 @@ mod date_group_tests {
         let parent = task("Pack for Boston", None, fri);
         let sub = task("Chargers", Some(&parent), thu);
         let all = vec![parent.clone(), sub.clone()];
-        let groups = date_groups(DateGroupMode::Upcoming, vec![sub.clone(), parent.clone()], today);
+        let groups = date_groups(
+            DateGroupMode::Upcoming,
+            vec![sub.clone(), parent.clone()],
+            today,
+        );
         assert_eq!(groups.len(), 2);
 
         let thursday = cards(groups[0].tasks.clone(), &all, CardMode::Grouped, some_day());
         assert_eq!(groups[0].title.as_deref(), Some("22 Oct"));
         assert_eq!(thursday.len(), 1);
         assert_eq!(thursday[0].head.task.id, parent.id);
-        assert!(!thursday[0].head_matches, "the parent is a context-only head on Thursday");
+        assert!(
+            !thursday[0].head_matches,
+            "the parent is a context-only head on Thursday"
+        );
         let rows: Vec<_> = thursday[0].rows.iter().map(|r| r.task.id.clone()).collect();
         assert_eq!(rows, vec![sub.id.clone()]);
-        assert_eq!(thursday[0].head.progress, Some(Progress { done: 0, total: 1 }));
+        assert_eq!(
+            thursday[0].head.progress,
+            Some(Progress { done: 0, total: 1 })
+        );
 
         let friday = cards(groups[1].tasks.clone(), &all, CardMode::Grouped, some_day());
         assert_eq!(groups[1].title.as_deref(), Some("23 Oct"));
         assert_eq!(friday.len(), 1);
         assert_eq!(friday[0].head.task.id, parent.id);
-        assert!(friday[0].head_matches, "on Friday the parent is its own completable card");
+        assert!(
+            friday[0].head_matches,
+            "on Friday the parent is its own completable card"
+        );
         assert!(friday[0].rows.is_empty());
     }
 
@@ -1351,8 +1565,14 @@ mod subtitle_tests {
 
     #[test]
     fn the_today_subtitle_names_the_weekday_and_date() {
-        assert_eq!(day_subtitle(NaiveDate::from_ymd_opt(2026, 10, 30).unwrap()), "Friday 30 Oct");
-        assert_eq!(day_subtitle(NaiveDate::from_ymd_opt(2026, 11, 1).unwrap()), "Sunday 1 Nov");
+        assert_eq!(
+            day_subtitle(NaiveDate::from_ymd_opt(2026, 10, 30).unwrap()),
+            "Friday 30 Oct"
+        );
+        assert_eq!(
+            day_subtitle(NaiveDate::from_ymd_opt(2026, 11, 1).unwrap()),
+            "Sunday 1 Nov"
+        );
     }
 }
 
@@ -1390,7 +1610,12 @@ mod chain_tests {
         // B is gone (or deleted); C's chain starts at C.
         let mut b = task("B", Some("A"));
         b.is_deleted = true;
-        let all = vec![task("A", None), b, task("C", Some("B")), task("D", Some("Z"))];
+        let all = vec![
+            task("A", None),
+            b,
+            task("C", Some("B")),
+            task("D", Some("Z")),
+        ];
         assert_eq!(chain(&id("C"), &all), vec![id("C")]);
         assert_eq!(chain(&id("D"), &all), vec![id("D")]);
     }
@@ -1422,36 +1647,60 @@ mod label_group_tests {
     }
 
     fn all() -> Vec<Label> {
-        vec![label("a", "red"), label("b", "red"), label("c", "blue"), label("d", "charcoal")]
+        vec![
+            label("a", "red"),
+            label("b", "red"),
+            label("c", "blue"),
+            label("d", "charcoal"),
+        ]
     }
 
     fn groups(names: &[&str], labels: &[Label]) -> Vec<(String, Vec<String>)> {
         let names: Vec<String> = names.iter().map(|n| n.to_string()).collect();
-        label_groups(&names, labels).into_iter().map(|LabelGroup { color, names }| (color, names)).collect()
+        label_groups(&names, labels)
+            .into_iter()
+            .map(|LabelGroup { color, names }| (color, names))
+            .collect()
     }
 
     fn g(color: &str, names: &[&str]) -> (String, Vec<String>) {
-        (color.to_string(), names.iter().map(|n| n.to_string()).collect())
+        (
+            color.to_string(),
+            names.iter().map(|n| n.to_string()).collect(),
+        )
     }
 
     #[test]
     fn groups_in_the_order_their_first_label_was_added() {
         assert_eq!(
             groups(&["c", "a", "d", "b"], &all()),
-            vec![g("blue", &["c"]), g("red", &["a", "b"]), g("charcoal", &["d"])]
+            vec![
+                g("blue", &["c"]),
+                g("red", &["a", "b"]),
+                g("charcoal", &["d"])
+            ]
         );
     }
 
     #[test]
     fn removing_a_groups_first_label_keeps_added_order() {
-        assert_eq!(groups(&["a", "d", "b"], &all()), vec![g("red", &["a", "b"]), g("charcoal", &["d"])]);
-        assert_eq!(groups(&["d", "b", "a"], &all()), vec![g("charcoal", &["d"]), g("red", &["b", "a"])]);
+        assert_eq!(
+            groups(&["a", "d", "b"], &all()),
+            vec![g("red", &["a", "b"]), g("charcoal", &["d"])]
+        );
+        assert_eq!(
+            groups(&["d", "b", "a"], &all()),
+            vec![g("charcoal", &["d"]), g("red", &["b", "a"])]
+        );
     }
 
     #[test]
     fn an_unknown_name_groups_as_the_default_keeping_its_spelling() {
         assert_eq!(groups(&["zzz"], &all()), vec![g("charcoal", &["zzz"])]);
-        assert_eq!(groups(&["zzz", "d"], &all()), vec![g("charcoal", &["zzz", "d"])]);
+        assert_eq!(
+            groups(&["zzz", "d"], &all()),
+            vec![g("charcoal", &["zzz", "d"])]
+        );
     }
 
     #[test]
@@ -1502,7 +1751,10 @@ mod sidebar_count_tests {
     }
 
     fn of(counts: &[ProjectCount], project: &str) -> usize {
-        counts.iter().find(|c| c.project_id == Id::from(project)).map_or(0, |c| c.count)
+        counts
+            .iter()
+            .find(|c| c.project_id == Id::from(project))
+            .map_or(0, |c| c.count)
     }
 
     #[test]
@@ -1582,8 +1834,10 @@ mod label_choice_tests {
     #[test]
     fn finds_by_any_part_of_the_name_ignoring_case() {
         let all = [label("Errand"), label("Home"), label("Paper")];
-        let found: Vec<String> =
-            label_choices(&all, &[], " ER ").into_iter().map(|c| c.label.name).collect();
+        let found: Vec<String> = label_choices(&all, &[], " ER ")
+            .into_iter()
+            .map(|c| c.label.name)
+            .collect();
         assert_eq!(found, vec!["Errand", "Paper"]);
         assert_eq!(label_choices(&all, &[], "").len(), 3);
     }
@@ -1591,8 +1845,10 @@ mod label_choice_tests {
     #[test]
     fn marks_the_chosen_ones_as_labels_match_everywhere() {
         let all = [label("Home"), label("Work"), label("\u{c9}t\u{e9}")];
-        let on: Vec<bool> =
-            label_choices(&all, &names(&["home", "\u{e9}t\u{e9}"]), "").into_iter().map(|c| c.on).collect();
+        let on: Vec<bool> = label_choices(&all, &names(&["home", "\u{e9}t\u{e9}"]), "")
+            .into_iter()
+            .map(|c| c.on)
+            .collect();
         // Case-insensitive for ASCII only, as `label_groups` and renames are.
         assert_eq!(on, vec![true, false, false]);
     }
@@ -1628,10 +1884,16 @@ mod moved_tests {
 
     #[test]
     fn a_moved_occurrence_says_where_it_came_from() {
-        assert_eq!(moved_note(&every_wed("2026-10-22T09:00:00", Some("2026-10-21"))).as_deref(), Some("Moved from Wed 21 Oct"));
+        assert_eq!(
+            moved_note(&every_wed("2026-10-22T09:00:00", Some("2026-10-21"))).as_deref(),
+            Some("Moved from Wed 21 Oct")
+        );
         assert_eq!(moved_note(&every_wed("2026-10-21", None)), None);
         // On one of the repeat's own days it isn't a move, whatever is stored.
-        assert_eq!(moved_note(&every_wed("2026-10-28", Some("2026-10-21"))), None);
+        assert_eq!(
+            moved_note(&every_wed("2026-10-28", Some("2026-10-21"))),
+            None
+        );
         assert_eq!(moved_note(&Task::new("Plain", Id::from("P"))), None);
     }
 }
@@ -1648,7 +1910,12 @@ mod occurrence_tests {
         NaiveDate::from_ymd_opt(2026, m, day).unwrap()
     }
 
-    fn task(date: &str, rule: Option<Recurrence>, until: Option<&str>, moved: Option<&str>) -> Task {
+    fn task(
+        date: &str,
+        rule: Option<Recurrence>,
+        until: Option<&str>,
+        moved: Option<&str>,
+    ) -> Task {
         let mut t = Task::new("x", Id::new());
         t.due = Some(Due {
             date: date.to_string(),
@@ -1695,20 +1962,35 @@ mod occurrence_tests {
         let weekly = task("2020-01-06", Some(Recurrence::Weekly(vec![0])), None, None);
         assert!(occurs_on(&weekly, d(11, 9)));
         assert!(!occurs_on(&weekly, d(11, 10)));
-        let ended = task("2020-01-01", Some(Recurrence::Daily), Some("2025-12-31"), None);
+        let ended = task(
+            "2020-01-01",
+            Some(Recurrence::Daily),
+            Some("2025-12-31"),
+            None,
+        );
         assert!(!occurs_on(&ended, d(11, 8)));
     }
 
     #[test]
     fn stops_at_until() {
-        let t = task("2026-11-08", Some(Recurrence::Daily), Some("2026-11-10"), None);
+        let t = task(
+            "2026-11-08",
+            Some(Recurrence::Daily),
+            Some("2026-11-10"),
+            None,
+        );
         assert!(!occurs_on(&t, d(11, 11)));
         assert!(occurs_on(&t, d(11, 10)));
     }
 
     #[test]
     fn moved_date_counts() {
-        let t = task("2026-11-11", Some(Recurrence::Weekly(vec![0])), None, Some("2026-11-09"));
+        let t = task(
+            "2026-11-11",
+            Some(Recurrence::Weekly(vec![0])),
+            None,
+            Some("2026-11-09"),
+        );
         assert!(occurs_on(&t, d(11, 11)));
         assert!(!occurs_on(&t, d(11, 9)));
         assert!(occurs_on(&t, d(11, 16)));
@@ -1718,16 +2000,32 @@ mod occurrence_tests {
     fn after() {
         let open = task("2026-11-08", Some(Recurrence::Daily), None, None);
         assert!(occurs_after(&open, d(11, 30)));
-        let ended = task("2026-11-08", Some(Recurrence::Daily), Some("2026-11-10"), None);
+        let ended = task(
+            "2026-11-08",
+            Some(Recurrence::Daily),
+            Some("2026-11-10"),
+            None,
+        );
         assert!(!occurs_after(&ended, d(11, 10)));
         assert!(occurs_after(&ended, d(11, 9)));
-        assert!(occurs_after(&task("2026-11-11", None, None, None), d(11, 10)));
-        assert!(!occurs_after(&task("2026-11-11", None, None, None), d(11, 11)));
+        assert!(occurs_after(
+            &task("2026-11-11", None, None, None),
+            d(11, 10)
+        ));
+        assert!(!occurs_after(
+            &task("2026-11-11", None, None, None),
+            d(11, 11)
+        ));
     }
 
     #[test]
     fn next_date_past_until_still_counts() {
-        let t = task("2026-11-12", Some(Recurrence::Daily), Some("2026-11-10"), None);
+        let t = task(
+            "2026-11-12",
+            Some(Recurrence::Daily),
+            Some("2026-11-10"),
+            None,
+        );
         assert!(occurs_on(&t, d(11, 12)));
         assert!(!occurs_on(&t, d(11, 13)));
         assert!(occurs_in(&t, d(11, 1), d(11, 30)));
@@ -1747,7 +2045,12 @@ mod occurrence_tests {
 
     #[test]
     fn datetime_due_occurs_on_its_days() {
-        let t = task("2026-11-09T09:00:00", Some(Recurrence::Weekly(vec![0])), None, None);
+        let t = task(
+            "2026-11-09T09:00:00",
+            Some(Recurrence::Weekly(vec![0])),
+            None,
+            None,
+        );
         assert!(occurs_on(&t, d(11, 9)));
         assert!(occurs_on(&t, d(11, 16)));
         assert!(!occurs_on(&t, d(11, 10)));
@@ -1765,5 +2068,4 @@ mod occurrence_tests {
         assert!(!occurs_in(&t, d(11, 10), d(11, 30)));
         assert!(!occurs_after(&t, d(11, 9)));
     }
-
 }

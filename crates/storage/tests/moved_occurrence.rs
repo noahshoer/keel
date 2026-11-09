@@ -19,12 +19,19 @@ struct World {
 
 impl World {
     fn new() -> Self {
-        World { repo: SqliteRepo::open_in_memory().unwrap(), n: 0 }
+        World {
+            repo: SqliteRepo::open_in_memory().unwrap(),
+            n: 0,
+        }
     }
 
     fn run(&mut self, action: Action, today: NaiveDate) -> keel_core::commands::ApplyResult {
         self.n += 1;
-        let cmd = Command { uuid: format!("u{}", self.n), temp_id: Some("tmp".to_string()), action };
+        let cmd = Command {
+            uuid: format!("u{}", self.n),
+            temp_id: Some("tmp".to_string()),
+            action,
+        };
         apply_at(&self.repo, cmd, today).unwrap()
     }
 
@@ -64,7 +71,11 @@ impl World {
     }
 
     fn set_due(&mut self, id: &Id, date: &str, rule: Recurrence) {
-        let edit = DueEdit { date: Some(date.to_string()), recurrence: Some(rule), until: None };
+        let edit = DueEdit {
+            date: Some(date.to_string()),
+            recurrence: Some(rule),
+            until: None,
+        };
         let action = Action::TaskUpdate {
             id: id.clone(),
             content: None,
@@ -156,11 +167,21 @@ fn a_moved_last_occurrence_still_ends_the_repeat() {
 fn moving_resets_the_streak_and_keeps_the_best() {
     let mut w = World::new();
     let id = w.add("2026-10-19", Recurrence::Daily, None);
-    w.run(Action::TaskSetStreak { id: id.clone(), enabled: true, goal: None }, d(2026, 10, 19));
+    w.run(
+        Action::TaskSetStreak {
+            id: id.clone(),
+            enabled: true,
+            goal: None,
+        },
+        d(2026, 10, 19),
+    );
     w.complete(&id, d(2026, 10, 19));
     w.complete(&id, d(2026, 10, 20));
     assert_eq!(w.get(&id).streak_current, 2);
     w.set_due(&id, "2026-10-23", Recurrence::Daily);
     let t = w.get(&id);
-    assert_eq!((t.streak_current, t.streak_best, t.streak_last_period), (0, 2, None));
+    assert_eq!(
+        (t.streak_current, t.streak_best, t.streak_last_period),
+        (0, 2, None)
+    );
 }

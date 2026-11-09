@@ -8,8 +8,18 @@ use serde::Serialize;
 use crate::recurrence::Recurrence;
 
 pub const MONTHS: [&str; 12] = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
 ];
 
 /// One day in the grid.
@@ -108,13 +118,18 @@ pub fn year_choices(today: NaiveDate, shown: i32) -> Vec<i32> {
 
 /// The first day of the week holding `day`.
 fn week_of(day: NaiveDate, week_start: Weekday) -> NaiveDate {
-    let lead = (7 + day.weekday().num_days_from_monday() as i64 - week_start.num_days_from_monday() as i64) % 7;
+    let lead = (7 + day.weekday().num_days_from_monday() as i64
+        - week_start.num_days_from_monday() as i64)
+        % 7;
     day - Duration::days(lead)
 }
 
 /// The scrolling calendar's first week: the one holding January 1st of `first_year`.
 fn first_week(first_year: i32, week_start: Weekday) -> NaiveDate {
-    week_of(NaiveDate::from_ymd_opt(first_year, 1, 1).expect("day 1 exists"), week_start)
+    week_of(
+        NaiveDate::from_ymd_opt(first_year, 1, 1).expect("day 1 exists"),
+        week_start,
+    )
 }
 
 /// The week each month of `first_year` through `last_year` starts in, January
@@ -206,13 +221,31 @@ mod tests {
     fn a_month_view_flags_each_day() {
         let today = d(2026, 10, 23);
         let mon_fri = Recurrence::Weekly(vec![0, 4]);
-        let v = month_view(2026, 10, Weekday::Sun, today, Some(d(2026, 10, 24)), Some(&mon_fri));
+        let v = month_view(
+            2026,
+            10,
+            Weekday::Sun,
+            today,
+            Some(d(2026, 10, 24)),
+            Some(&mon_fri),
+        );
         assert_eq!(v.title, "October 2026");
         assert_eq!(v.weekdays, ["S", "M", "T", "W", "T", "F", "S"]);
         assert_eq!(v.weeks.len(), 6);
-        assert_eq!(v.weeks[0][0].date, d(2026, 9, 27), "Sunday-first: starts the Sunday before the 1st");
+        assert_eq!(
+            v.weeks[0][0].date,
+            d(2026, 9, 27),
+            "Sunday-first: starts the Sunday before the 1st"
+        );
         assert!(!v.weeks[0][0].in_month);
-        let cell = |day| v.weeks.iter().flatten().find(|c| c.date == d(2026, 10, day)).unwrap().clone();
+        let cell = |day| {
+            v.weeks
+                .iter()
+                .flatten()
+                .find(|c| c.date == d(2026, 10, day))
+                .unwrap()
+                .clone()
+        };
         assert!(cell(23).today && !cell(23).past);
         assert!(cell(22).past);
         assert!(cell(24).selected);
@@ -266,7 +299,10 @@ mod tests {
         assert_eq!(rows.len(), 2);
         let first = &rows[0];
         let second = &rows[1];
-        assert_eq!(first[0].date, NaiveDate::from_ymd_opt(2026, 10, 25).unwrap());
+        assert_eq!(
+            first[0].date,
+            NaiveDate::from_ymd_opt(2026, 10, 25).unwrap()
+        );
         assert_eq!(second[0].date, first[6].date + Duration::days(1));
         assert!(first[6].in_month);
         assert!(!second[0].in_month);

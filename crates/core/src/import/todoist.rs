@@ -43,7 +43,10 @@ impl std::fmt::Display for ImportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ImportError::NotTodoistCsv => {
-                write!(f, "This doesn't look like a Todoist CSV export (no TYPE and CONTENT columns).")
+                write!(
+                    f,
+                    "This doesn't look like a Todoist CSV export (no TYPE and CONTENT columns)."
+                )
             }
         }
     }
@@ -99,9 +102,15 @@ pub struct ImportSummary {
 /// Reads an export into items.
 pub fn parse(text: &str) -> Result<Vec<TodoistItem>, ImportError> {
     let rows = super::csv::parse(text);
-    let mut rows = rows.into_iter().skip_while(|r| r.iter().all(|f| f.trim().is_empty()));
-    let header: Vec<String> =
-        rows.next().ok_or(ImportError::NotTodoistCsv)?.iter().map(|h| h.trim().to_lowercase()).collect();
+    let mut rows = rows
+        .into_iter()
+        .skip_while(|r| r.iter().all(|f| f.trim().is_empty()));
+    let header: Vec<String> = rows
+        .next()
+        .ok_or(ImportError::NotTodoistCsv)?
+        .iter()
+        .map(|h| h.trim().to_lowercase())
+        .collect();
     let col = |name: &str| header.iter().position(|h| h == name);
     let (Some(type_col), Some(content_col)) = (col("type"), col("content")) else {
         return Err(ImportError::NotTodoistCsv);
@@ -118,7 +127,11 @@ pub fn parse(text: &str) -> Result<Vec<TodoistItem>, ImportError> {
     let mut items = Vec::new();
     let mut last_task: Option<usize> = None;
     for row in rows {
-        let get = |i: Option<usize>| i.and_then(|i| row.get(i)).map(|s| s.trim().to_string()).unwrap_or_default();
+        let get = |i: Option<usize>| {
+            i.and_then(|i| row.get(i))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default()
+        };
         let content = get(Some(content_col));
         match get(Some(type_col)).as_str() {
             "section" => {
@@ -126,7 +139,8 @@ pub fn parse(text: &str) -> Result<Vec<TodoistItem>, ImportError> {
                 last_task = None;
             }
             "task" => {
-                let [description, priority, indent, date, date_lang, deadline, deadline_lang] = cols.map(get);
+                let [description, priority, indent, date, date_lang, deadline, deadline_lang] =
+                    cols.map(get);
                 items.push(TodoistItem::Task(TodoistTask {
                     content,
                     description,
@@ -276,7 +290,9 @@ fn split_labels(content: &str) -> (String, Vec<String>) {
     let mut words = Vec::new();
     let mut labels: Vec<String> = Vec::new();
     for word in content.split_whitespace() {
-        let name = word.strip_prefix('@').map(|n| n.trim_end_matches([',', '.', ';', '!', '?']));
+        let name = word
+            .strip_prefix('@')
+            .map(|n| n.trim_end_matches([',', '.', ';', '!', '?']));
         match name {
             Some(n) if !n.is_empty() => {
                 if !labels.iter().any(|l| l.eq_ignore_ascii_case(n)) {
@@ -320,19 +336,32 @@ meta,view_style=list,,,,,,,,,,,,\r\n";
     fn parses_items_notes_and_skips_blank_and_meta_rows() {
         let items = parse(EXPORT).unwrap();
         assert_eq!(items.len(), 8);
-        let TodoistItem::Task(trip) = &items[1] else { panic!("task") };
+        let TodoistItem::Task(trip) = &items[1] else {
+            panic!("task")
+        };
         assert_eq!(trip.content, "Plan trip");
         assert_eq!(trip.description, "Flights, hotel");
         assert_eq!(trip.priority, Some(2));
         assert_eq!(trip.comments, vec!["Ask Sam about dates", "Budget: $800"]);
         assert_eq!(trip.deadline, "2026-11-15");
-        assert_eq!(items[5], TodoistItem::Section { name: "Someday".into() });
+        assert_eq!(
+            items[5],
+            TodoistItem::Section {
+                name: "Someday".into()
+            }
+        );
     }
 
     #[test]
     fn a_date_with_a_project_is_not_read() {
-        assert!(matches!(super::read_date("tomorrow #foo", "en", today()), super::DateRead::Unknown));
-        assert!(matches!(super::read_date("tomorrow", "en", today()), super::DateRead::Read(..)));
+        assert!(matches!(
+            super::read_date("tomorrow #foo", "en", today()),
+            super::DateRead::Unknown
+        ));
+        assert!(matches!(
+            super::read_date("tomorrow", "en", today()),
+            super::DateRead::Read(..)
+        ));
     }
 
     #[test]
@@ -344,13 +373,23 @@ meta,view_style=list,,,,,,,,,,,,\r\n";
     #[test]
     fn columns_in_any_order_and_case() {
         let items = parse("content,Priority,type\nHello,3,task\n").unwrap();
-        let TodoistItem::Task(t) = &items[0] else { panic!() };
-        assert_eq!((t.content.as_str(), t.priority, t.indent), ("Hello", Some(3), 1));
+        let TodoistItem::Task(t) = &items[0] else {
+            panic!()
+        };
+        assert_eq!(
+            (t.content.as_str(), t.priority, t.indent),
+            ("Hello", Some(3), 1)
+        );
     }
 
     fn task(op: &ImportOp) -> (&str, Option<usize>, Option<usize>) {
         match op {
-            ImportOp::Task { content, parent, section, .. } => (content.as_str(), *parent, *section),
+            ImportOp::Task {
+                content,
+                parent,
+                section,
+                ..
+            } => (content.as_str(), *parent, *section),
             ImportOp::Section { .. } => panic!("expected a task"),
         }
     }
@@ -363,7 +402,12 @@ meta,view_style=list,,,,,,,,,,,,\r\n";
             .iter()
             .map(|op| match op {
                 ImportOp::Section { name } => format!("§{name}"),
-                ImportOp::Task { content, parent, section, .. } => format!("{content} p={parent:?} s={section:?}"),
+                ImportOp::Task {
+                    content,
+                    parent,
+                    section,
+                    ..
+                } => format!("{content} p={parent:?} s={section:?}"),
             })
             .collect();
         assert_eq!(
@@ -386,20 +430,44 @@ meta,view_style=list,,,,,,,,,,,,\r\n";
         let p = plan(&parse(EXPORT).unwrap(), today());
         assert_eq!(p.labels, vec!["home", "bills"]);
         assert_eq!(p.comments, 2);
-        let ImportOp::Task { content, labels, priority, due, recurrence, .. } = &p.ops[0] else { panic!() };
+        let ImportOp::Task {
+            content,
+            labels,
+            priority,
+            due,
+            recurrence,
+            ..
+        } = &p.ops[0]
+        else {
+            panic!()
+        };
         assert_eq!(content, "Pay rent", "labels come out of the title");
         assert_eq!(labels, &vec!["home".to_string(), "bills".to_string()]);
         assert_eq!(*priority, Priority::P1);
         assert_eq!(due.as_deref(), Some("2026-11-01"));
         assert_eq!(*recurrence, Some(Recurrence::MonthlyDay(1)));
 
-        let ImportOp::Task { description, due, deadline, priority, .. } = &p.ops[1] else { panic!() };
+        let ImportOp::Task {
+            description,
+            due,
+            deadline,
+            priority,
+            ..
+        } = &p.ops[1]
+        else {
+            panic!()
+        };
         assert_eq!(*priority, Priority::P2);
         assert_eq!(due.as_deref(), Some("2026-10-30"));
         assert_eq!(deadline.as_deref(), Some("2026-11-15"));
-        assert_eq!(description, "Flights, hotel\n\nComments:\n- Ask Sam about dates\n- Budget: $800");
+        assert_eq!(
+            description,
+            "Flights, hotel\n\nComments:\n- Ask Sam about dates\n- Budget: $800"
+        );
 
-        let ImportOp::Task { due, .. } = &p.ops[2] else { panic!() };
+        let ImportOp::Task { due, .. } = &p.ops[2] else {
+            panic!()
+        };
         assert_eq!(due.as_deref(), Some("2026-10-21T17:00:00"));
     }
 
@@ -407,7 +475,16 @@ meta,view_style=list,,,,,,,,,,,,\r\n";
     fn unknown_dates_are_kept_as_text_not_guessed() {
         let p = plan(&parse(EXPORT).unwrap(), today());
         assert_eq!(p.kept_as_text, 1);
-        let ImportOp::Task { due, recurrence, description, priority, .. } = &p.ops[6] else { panic!() };
+        let ImportOp::Task {
+            due,
+            recurrence,
+            description,
+            priority,
+            ..
+        } = &p.ops[6]
+        else {
+            panic!()
+        };
         assert_eq!((due, recurrence), (&None, &None));
         assert_eq!(description, "Todoist date: every! 3 weeks");
         assert_eq!(*priority, Priority::None, "empty priority is p4");
@@ -416,19 +493,41 @@ meta,view_style=list,,,,,,,,,,,,\r\n";
     #[test]
     fn title_words_are_not_parsed() {
         let p = plan(&parse(EXPORT).unwrap(), today());
-        let ImportOp::Task { content, due, priority, .. } = &p.ops[7] else { panic!() };
+        let ImportOp::Task {
+            content,
+            due,
+            priority,
+            ..
+        } = &p.ops[7]
+        else {
+            panic!()
+        };
         assert_eq!(content, "Read tomorrow's paper p1");
         assert_eq!(due, &None);
-        assert_eq!(*priority, Priority::None, "PRIORITY 4 column, not the 'p1' word");
+        assert_eq!(
+            *priority,
+            Priority::None,
+            "PRIORITY 4 column, not the 'p1' word"
+        );
     }
 
     #[test]
     fn other_languages_and_iso_datetimes() {
         let items = parse("TYPE,CONTENT,DATE,DATE_LANG,DEADLINE\ntask,a,mañana,es,\ntask,b,2026-10-25T08:30,en,next friday\n").unwrap();
         let p = plan(&items, today());
-        let ImportOp::Task { due, description, .. } = &p.ops[0] else { panic!() };
-        assert_eq!((due.as_deref(), description.as_str()), (None, "Todoist date: mañana"));
-        let ImportOp::Task { due, deadline, .. } = &p.ops[1] else { panic!() };
+        let ImportOp::Task {
+            due, description, ..
+        } = &p.ops[0]
+        else {
+            panic!()
+        };
+        assert_eq!(
+            (due.as_deref(), description.as_str()),
+            (None, "Todoist date: mañana")
+        );
+        let ImportOp::Task { due, deadline, .. } = &p.ops[1] else {
+            panic!()
+        };
         assert_eq!(due.as_deref(), Some("2026-10-25T08:30:00"));
         assert_eq!(deadline.as_deref(), Some("2026-10-30"));
         assert_eq!(p.kept_as_text, 1);

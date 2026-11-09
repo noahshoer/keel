@@ -22,7 +22,9 @@ pub(crate) fn tokens(input: &str) -> Vec<Token> {
         let raw = &input[s..e];
         out.push(Token {
             raw: raw.to_string(),
-            norm: raw.trim_end_matches([',', '.', ';', '!', '?']).to_lowercase(),
+            norm: raw
+                .trim_end_matches([',', '.', ';', '!', '?'])
+                .to_lowercase(),
             start: s,
             end: e,
         });
@@ -97,7 +99,11 @@ fn today_or_next(today: NaiveDate, wd: u32) -> NaiveDate {
 }
 
 fn saturday_this_weekend(today: NaiveDate) -> NaiveDate {
-    if idx(today) >= 5 { today } else { today_or_next(today, 5) }
+    if idx(today) >= 5 {
+        today
+    } else {
+        today_or_next(today, 5)
+    }
 }
 
 /// A date phrase starting at `i`: (words consumed, date).
@@ -156,7 +162,10 @@ pub(crate) fn match_date(t: &[Token], i: usize, today: NaiveDate) -> Option<(usi
         (Some(m), None, _, _) if w(0) != "may" => (m, 1, 1),
         _ => return None,
     };
-    let year = w(used).parse::<i32>().ok().filter(|y| (1000..=9999).contains(y));
+    let year = w(used)
+        .parse::<i32>()
+        .ok()
+        .filter(|y| (1000..=9999).contains(y));
     let date = match year {
         Some(y) => NaiveDate::from_ymd_opt(y, m, day)?,
         None => {
@@ -249,7 +258,12 @@ pub enum RepeatSpec {
 
 /// A `{date}` group starting at token `i` (closed within a few words), whose
 /// inside is exactly one date phrase: (tokens consumed, date).
-pub(crate) fn match_deadline(input: &str, t: &[Token], i: usize, today: NaiveDate) -> Option<(usize, NaiveDate)> {
+pub(crate) fn match_deadline(
+    input: &str,
+    t: &[Token],
+    i: usize,
+    today: NaiveDate,
+) -> Option<(usize, NaiveDate)> {
     let close = (i..t.len().min(i + 5)).find(|&j| t[j].raw.ends_with('}'))?;
     let inner = input.get(t[i].start + 1..t[close].end - 1)?;
     let words = tokens(inner);
@@ -268,16 +282,41 @@ pub(crate) fn repeat_word(word: &str) -> bool {
         || nth(word).is_some()
         || matches!(
             word,
-            "other" | "and" | "&" | "of" | "the" | "on" | "every" | "each" | "day" | "days" | "week" | "weeks"
-                | "month" | "months" | "year" | "years" | "workday" | "workdays" | "weekday" | "weekdays"
-                | "weekend" | "weekends" | "wk" | "wks" | "fortnight"
+            "other"
+                | "and"
+                | "&"
+                | "of"
+                | "the"
+                | "on"
+                | "every"
+                | "each"
+                | "day"
+                | "days"
+                | "week"
+                | "weeks"
+                | "month"
+                | "months"
+                | "year"
+                | "years"
+                | "workday"
+                | "workdays"
+                | "weekday"
+                | "weekdays"
+                | "weekend"
+                | "weekends"
+                | "wk"
+                | "wks"
+                | "fortnight"
         )
         || number_word(word).is_some()
 }
 
 /// "one".."twelve" → 1..12.
 pub(crate) fn number_word(word: &str) -> Option<u32> {
-    let words = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+    let words = [
+        "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
+        "twelve",
+    ];
     words.iter().position(|w| *w == word).map(|i| i as u32 + 1)
 }
 
@@ -292,7 +331,10 @@ fn ordinal_count(word: &str) -> Option<u32> {
 }
 
 fn is_unit(word: &str) -> bool {
-    matches!(word, "day" | "days" | "week" | "weeks" | "wk" | "wks" | "month" | "months" | "year" | "years")
+    matches!(
+        word,
+        "day" | "days" | "week" | "weeks" | "wk" | "wks" | "month" | "months" | "year" | "years"
+    )
 }
 
 /// "first".."fourth", "1st".."4th", "last" → 1..4 / -1.
@@ -357,7 +399,9 @@ pub(crate) fn match_repeat(t: &[Token], i: usize) -> Option<(usize, RepeatSpec)>
         "weekday" | "weekdays" | "workday" | "workdays" => return Some((2, weekdays())),
         "week" => return Some((2, RepeatSpec::Weekly)),
         "year" => return Some((2, RepeatSpec::Yearly(None))),
-        "weekend" | "weekends" => return Some((2, RepeatSpec::Rule(Recurrence::Weekly(vec![5, 6])))),
+        "weekend" | "weekends" => {
+            return Some((2, RepeatSpec::Rule(Recurrence::Weekly(vec![5, 6]))))
+        }
         "fortnight" => return Some((2, RepeatSpec::EveryNWeeks(2, None))),
         "month" => {
             // "every month on [the] 15th" / "every month on the last day"
@@ -369,13 +413,22 @@ pub(crate) fn match_repeat(t: &[Token], i: usize) -> Option<(usize, RepeatSpec)>
             if skip > 2 {
                 // "every month on the 2nd monday"
                 if let (Some(k), Some(wd)) = (nth(w(rest)), weekday(w(rest + 1))) {
-                    return Some((rest + 2, RepeatSpec::Rule(Recurrence::MonthlyNthWeekday { nth: k, weekday: wd as u8 })));
+                    return Some((
+                        rest + 2,
+                        RepeatSpec::Rule(Recurrence::MonthlyNthWeekday {
+                            nth: k,
+                            weekday: wd as u8,
+                        }),
+                    ));
                 }
                 if w(rest) == "last" && w(rest + 1) == "day" {
                     return Some((rest + 2, RepeatSpec::Rule(Recurrence::MonthlyLastDay)));
                 }
                 if let Some(day) = day_number(w(rest)) {
-                    return Some((rest + 1, RepeatSpec::Rule(Recurrence::MonthlyDay(day as u8))));
+                    return Some((
+                        rest + 1,
+                        RepeatSpec::Rule(Recurrence::MonthlyDay(day as u8)),
+                    ));
                 }
             }
             return Some((2, RepeatSpec::Monthly));
@@ -408,7 +461,11 @@ pub(crate) fn match_repeat(t: &[Token], i: usize) -> Option<(usize, RepeatSpec)>
     // [on fri]" is that week's Monday (or the given weekday).
     let of = of_month(t, i + 3);
     if of > 0 && (w(2) == "week" || (w(2) == "day" && w(1) != "last")) {
-        let k = if w(1) == "last" { -1 } else { ordinal_count(w(1))? as i8 };
+        let k = if w(1) == "last" {
+            -1
+        } else {
+            ordinal_count(w(1))? as i8
+        };
         if w(2) == "day" {
             return (k > 0).then_some((3 + of, RepeatSpec::Rule(Recurrence::MonthlyDay(k as u8))));
         }
@@ -419,7 +476,10 @@ pub(crate) fn match_repeat(t: &[Token], i: usize) -> Option<(usize, RepeatSpec)>
             ("on", Some(wd)) if !matches!(w(5 + of), "and" | "&") => (wd as u8, 2),
             _ => (0, 0),
         };
-        return Some((3 + of + used, RepeatSpec::Rule(Recurrence::MonthlyNthWeekday { nth: k, weekday })));
+        return Some((
+            3 + of + used,
+            RepeatSpec::Rule(Recurrence::MonthlyNthWeekday { nth: k, weekday }),
+        ));
     }
 
     // Intervals: "every 3 days", "every two weeks", "every second week",
@@ -437,16 +497,35 @@ pub(crate) fn match_repeat(t: &[Token], i: usize) -> Option<(usize, RepeatSpec)>
             return None;
         }
         let spec = match w(2) {
-            "day" | "days" => (3, if n == 1 { RepeatSpec::Rule(Recurrence::Daily) } else { RepeatSpec::EveryNDays(n) }),
+            "day" | "days" => (
+                3,
+                if n == 1 {
+                    RepeatSpec::Rule(Recurrence::Daily)
+                } else {
+                    RepeatSpec::EveryNDays(n)
+                },
+            ),
             "week" | "weeks" | "wk" | "wks" => {
-                let (days, used) = if w(3) == "on" { weekday_list(t, i + 4) } else { (Vec::new(), 0) };
+                let (days, used) = if w(3) == "on" {
+                    weekday_list(t, i + 4)
+                } else {
+                    (Vec::new(), 0)
+                };
                 let consumed = if used > 0 { 4 + used } else { 3 };
                 let days = (!days.is_empty()).then_some(days);
                 (consumed, RepeatSpec::EveryNWeeks(n, days))
             }
             "month" | "months" => {
                 // "every 3 months on [the] 1st"
-                let at = if w(3) == "on" { if w(4) == "the" { 5 } else { 4 } } else { 0 };
+                let at = if w(3) == "on" {
+                    if w(4) == "the" {
+                        5
+                    } else {
+                        4
+                    }
+                } else {
+                    0
+                };
                 let day = (at > 0).then(|| day_number(w(at))).flatten();
                 match (n, day) {
                     (1, Some(day)) => (at + 1, RepeatSpec::Rule(Recurrence::MonthlyDay(day as u8))),
@@ -455,14 +534,25 @@ pub(crate) fn match_repeat(t: &[Token], i: usize) -> Option<(usize, RepeatSpec)>
                     (n, None) => (3, RepeatSpec::EveryNMonths(n, None)),
                 }
             }
-            "year" | "years" => (3, if n == 1 { RepeatSpec::Yearly(None) } else { RepeatSpec::EveryNMonths(12 * n, None) }),
+            "year" | "years" => (
+                3,
+                if n == 1 {
+                    RepeatSpec::Yearly(None)
+                } else {
+                    RepeatSpec::EveryNMonths(12 * n, None)
+                },
+            ),
             // "every other friday", "every 3 tuesdays": every n weeks on those days.
             _ => {
                 let (days, used) = weekday_list(t, i + 2);
                 if days.is_empty() {
                     return None;
                 }
-                let spec = if n == 1 { RepeatSpec::Rule(Recurrence::Weekly(days)) } else { RepeatSpec::EveryNWeeks(n, Some(days)) };
+                let spec = if n == 1 {
+                    RepeatSpec::Rule(Recurrence::Weekly(days))
+                } else {
+                    RepeatSpec::EveryNWeeks(n, Some(days))
+                };
                 (2 + used, spec)
             }
         };
@@ -471,17 +561,26 @@ pub(crate) fn match_repeat(t: &[Token], i: usize) -> Option<(usize, RepeatSpec)>
 
     // "every last day [of the month]", "every first/last workday".
     if w(1) == "last" && w(2) == "day" {
-        return Some((3 + of_month(t, i + 3), RepeatSpec::Rule(Recurrence::MonthlyLastDay)));
+        return Some((
+            3 + of_month(t, i + 3),
+            RepeatSpec::Rule(Recurrence::MonthlyLastDay),
+        ));
     }
     if let (Some(k), "workday") = (nth(w(1)), w(2)) {
         if k == 1 || k == -1 {
-            return Some((3 + of_month(t, i + 3), RepeatSpec::Rule(Recurrence::MonthlyWorkday { nth: k })));
+            return Some((
+                3 + of_month(t, i + 3),
+                RepeatSpec::Rule(Recurrence::MonthlyWorkday { nth: k }),
+            ));
         }
         return None;
     }
     // "every first monday", "every 3rd tue", "every last friday".
     if let (Some(k), Some(wd)) = (nth(w(1)), weekday(w(2))) {
-        let rule = Recurrence::MonthlyNthWeekday { nth: k, weekday: wd as u8 };
+        let rule = Recurrence::MonthlyNthWeekday {
+            nth: k,
+            weekday: wd as u8,
+        };
         return Some((3 + of_month(t, i + 3), RepeatSpec::Rule(rule)));
     }
     // "every 15th [of the month]" (an ordinal; "every 5th monday" is not a thing).
@@ -490,7 +589,10 @@ pub(crate) fn match_repeat(t: &[Token], i: usize) -> Option<(usize, RepeatSpec)>
             if weekday(w(2)).is_some() {
                 return None;
             }
-            return Some((2 + of_month(t, i + 2), RepeatSpec::Rule(Recurrence::MonthlyDay(day as u8))));
+            return Some((
+                2 + of_month(t, i + 2),
+                RepeatSpec::Rule(Recurrence::MonthlyDay(day as u8)),
+            ));
         }
     }
     // "every mon, wed and fri"
@@ -503,7 +605,12 @@ pub(crate) fn match_repeat(t: &[Token], i: usize) -> Option<(usize, RepeatSpec)>
 
 /// Longest run of words starting at `i` (first word prefixed by `sigil`)
 /// whose text equals one of `names` (case-insensitive). Returns (len, index).
-pub(crate) fn match_name(t: &[Token], i: usize, sigil: &str, names: &[&str]) -> Option<(usize, usize)> {
+pub(crate) fn match_name(
+    t: &[Token],
+    i: usize,
+    sigil: &str,
+    names: &[&str],
+) -> Option<(usize, usize)> {
     let first = t[i].raw.strip_prefix(sigil)?;
     let first = first.strip_prefix(sigil).unwrap_or(first); // "##Work"
     for len in (1..=(t.len() - i).min(MAX_NAME_WORDS)).rev() {
@@ -592,7 +699,9 @@ pub(crate) fn is_name(word: &str) -> bool {
 /// The one-word name after `sigil` in `raw` (trailing `,.;!?` trimmed),
 /// when it can be a name.
 pub(crate) fn sigil_name(raw: &str, sigil: &str) -> Option<String> {
-    let name = raw.strip_prefix(sigil)?.trim_end_matches([',', '.', ';', '!', '?']);
+    let name = raw
+        .strip_prefix(sigil)?
+        .trim_end_matches([',', '.', ';', '!', '?']);
     is_name(name).then(|| name.to_string())
 }
 
@@ -637,7 +746,10 @@ pub(crate) fn unread_every(t: &[Token], i: usize) -> usize {
     if t.get(i).is_none_or(|w| w.norm != "every") {
         return 0;
     }
-    1 + t[i + 1..].iter().take_while(|w| repeat_word(&w.norm)).count()
+    1 + t[i + 1..]
+        .iter()
+        .take_while(|w| repeat_word(&w.norm))
+        .count()
 }
 
 /// The rule a repeat phrase means when the task starts on `start`.
@@ -647,23 +759,43 @@ pub(crate) fn resolve_repeat(spec: RepeatSpec, start: NaiveDate) -> Recurrence {
         RepeatSpec::Weekly => Recurrence::Weekly(vec![idx(start) as u8]),
         RepeatSpec::Monthly => Recurrence::MonthlyDay(start.day() as u8),
         RepeatSpec::EveryNDays(n) => Recurrence::EveryNDays { n, anchor: start },
-        RepeatSpec::EveryNWeeks(1, days) => Recurrence::Weekly(days.unwrap_or_else(|| vec![idx(start) as u8])),
+        RepeatSpec::EveryNWeeks(1, days) => {
+            Recurrence::Weekly(days.unwrap_or_else(|| vec![idx(start) as u8]))
+        }
         RepeatSpec::EveryNWeeks(n, days) => {
             // The first chosen day on/after the start opens the cycle, so
             // a day already past this week doesn't push it n weeks out.
             let days = days.unwrap_or_else(|| vec![idx(start) as u8]);
             let weekly = Recurrence::Weekly(days.clone());
-            let anchor = if weekly.contains(start) { start } else { weekly.next_after(start) };
+            let anchor = if weekly.contains(start) {
+                start
+            } else {
+                weekly.next_after(start)
+            };
             Recurrence::EveryNWeeks { n, days, anchor }
         }
-        RepeatSpec::EveryNMonths(n, None) => Recurrence::EveryNMonths { n, day: start.day() as u8, anchor: start },
+        RepeatSpec::EveryNMonths(n, None) => Recurrence::EveryNMonths {
+            n,
+            day: start.day() as u8,
+            anchor: start,
+        },
         RepeatSpec::EveryNMonths(n, Some(day)) => {
             let monthly = Recurrence::MonthlyDay(day);
-            let anchor = if monthly.contains(start) { start } else { monthly.next_after(start) };
+            let anchor = if monthly.contains(start) {
+                start
+            } else {
+                monthly.next_after(start)
+            };
             Recurrence::EveryNMonths { n, day, anchor }
         }
-        RepeatSpec::Yearly(Some((m, d))) => Recurrence::Yearly { month: m as u8, day: d as u8 },
-        RepeatSpec::Yearly(None) => Recurrence::Yearly { month: start.month() as u8, day: start.day() as u8 },
+        RepeatSpec::Yearly(Some((m, d))) => Recurrence::Yearly {
+            month: m as u8,
+            day: d as u8,
+        },
+        RepeatSpec::Yearly(None) => Recurrence::Yearly {
+            month: start.month() as u8,
+            day: start.day() as u8,
+        },
     }
 }
 
@@ -685,7 +817,9 @@ pub(crate) fn repeat_matches(spec: &RepeatSpec, rule: &Recurrence) -> bool {
         RepeatSpec::Monthly => matches!(rule, Recurrence::MonthlyDay(_)),
         RepeatSpec::EveryNDays(n) => matches!(rule, Recurrence::EveryNDays { n: m, .. } if m == n),
         RepeatSpec::EveryNWeeks(n, want) => match rule {
-            Recurrence::EveryNWeeks { n: m, days, .. } if m == n => want.as_ref().is_none_or(|w| subset(w, days)),
+            Recurrence::EveryNWeeks { n: m, days, .. } if m == n => {
+                want.as_ref().is_none_or(|w| subset(w, days))
+            }
             _ => false,
         },
         RepeatSpec::EveryNMonths(n, want) => match rule {
@@ -716,7 +850,8 @@ mod tests {
     }
 
     fn check(phrase: &str, yes: &[Recurrence], no: &[Recurrence]) {
-        let (_, spec) = match_repeat(&tokens(phrase), 0).unwrap_or_else(|| panic!("{phrase} not read"));
+        let (_, spec) =
+            match_repeat(&tokens(phrase), 0).unwrap_or_else(|| panic!("{phrase} not read"));
         for r in yes {
             assert!(repeat_matches(&spec, r), "{phrase} should match {r:?}");
         }
@@ -726,7 +861,11 @@ mod tests {
     }
 
     fn weeks(n: u32, days: &[u8], anchor: NaiveDate) -> Recurrence {
-        Recurrence::EveryNWeeks { n, days: days.to_vec(), anchor }
+        Recurrence::EveryNWeeks {
+            n,
+            days: days.to_vec(),
+            anchor,
+        }
     }
 
     #[test]
@@ -745,7 +884,11 @@ mod tests {
     fn repeat_phrase_matches_by_kind_and_interval() {
         let a = d(2026, 10, 1);
         let b = d(2026, 11, 5);
-        check("every day", &[Recurrence::Daily], &[Recurrence::Weekly(vec![0])]);
+        check(
+            "every day",
+            &[Recurrence::Daily],
+            &[Recurrence::Weekly(vec![0])],
+        );
         check(
             "every week",
             &[Recurrence::Weekly(vec![0]), Recurrence::Weekly(vec![2, 4])],
@@ -768,18 +911,33 @@ mod tests {
         );
         check(
             "every 3 days",
-            &[Recurrence::EveryNDays { n: 3, anchor: a }, Recurrence::EveryNDays { n: 3, anchor: b }],
+            &[
+                Recurrence::EveryNDays { n: 3, anchor: a },
+                Recurrence::EveryNDays { n: 3, anchor: b },
+            ],
             &[Recurrence::EveryNDays { n: 4, anchor: a }],
         );
         check(
             "every month",
             &[Recurrence::MonthlyDay(5), Recurrence::MonthlyDay(20)],
-            &[Recurrence::EveryNMonths { n: 2, day: 5, anchor: a }],
+            &[Recurrence::EveryNMonths {
+                n: 2,
+                day: 5,
+                anchor: a,
+            }],
         );
         check(
             "every 3 months",
-            &[Recurrence::EveryNMonths { n: 3, day: 9, anchor: b }],
-            &[Recurrence::EveryNMonths { n: 2, day: 9, anchor: b }],
+            &[Recurrence::EveryNMonths {
+                n: 3,
+                day: 9,
+                anchor: b,
+            }],
+            &[Recurrence::EveryNMonths {
+                n: 2,
+                day: 9,
+                anchor: b,
+            }],
         );
         check(
             "every year",
@@ -800,40 +958,92 @@ mod tests {
         assert_eq!(r(RepeatSpec::Rule(Recurrence::Daily)), Recurrence::Daily);
         assert_eq!(r(RepeatSpec::Weekly), Recurrence::Weekly(vec![2]));
         assert_eq!(r(RepeatSpec::Monthly), Recurrence::MonthlyDay(4));
-        assert_eq!(r(RepeatSpec::EveryNDays(3)), Recurrence::EveryNDays { n: 3, anchor: start });
-        assert_eq!(r(RepeatSpec::EveryNWeeks(1, None)), Recurrence::Weekly(vec![2]));
-        assert_eq!(r(RepeatSpec::EveryNWeeks(1, Some(vec![0, 4]))), Recurrence::Weekly(vec![0, 4]));
+        assert_eq!(
+            r(RepeatSpec::EveryNDays(3)),
+            Recurrence::EveryNDays {
+                n: 3,
+                anchor: start
+            }
+        );
+        assert_eq!(
+            r(RepeatSpec::EveryNWeeks(1, None)),
+            Recurrence::Weekly(vec![2])
+        );
+        assert_eq!(
+            r(RepeatSpec::EveryNWeeks(1, Some(vec![0, 4]))),
+            Recurrence::Weekly(vec![0, 4])
+        );
         assert_eq!(r(RepeatSpec::EveryNWeeks(2, None)), weeks(2, &[2], start));
         // A chosen day already past this week: the cycle opens on its next one.
-        assert_eq!(r(RepeatSpec::EveryNWeeks(2, Some(vec![0]))), weeks(2, &[0], d(2026, 11, 9)));
-        assert_eq!(r(RepeatSpec::EveryNWeeks(2, Some(vec![2, 4]))), weeks(2, &[2, 4], start));
-        assert_eq!(r(RepeatSpec::EveryNMonths(3, None)), Recurrence::EveryNMonths { n: 3, day: 4, anchor: start });
-        assert_eq!(r(RepeatSpec::EveryNMonths(2, Some(4))), Recurrence::EveryNMonths { n: 2, day: 4, anchor: start });
+        assert_eq!(
+            r(RepeatSpec::EveryNWeeks(2, Some(vec![0]))),
+            weeks(2, &[0], d(2026, 11, 9))
+        );
+        assert_eq!(
+            r(RepeatSpec::EveryNWeeks(2, Some(vec![2, 4]))),
+            weeks(2, &[2, 4], start)
+        );
+        assert_eq!(
+            r(RepeatSpec::EveryNMonths(3, None)),
+            Recurrence::EveryNMonths {
+                n: 3,
+                day: 4,
+                anchor: start
+            }
+        );
+        assert_eq!(
+            r(RepeatSpec::EveryNMonths(2, Some(4))),
+            Recurrence::EveryNMonths {
+                n: 2,
+                day: 4,
+                anchor: start
+            }
+        );
         assert_eq!(
             r(RepeatSpec::EveryNMonths(2, Some(1))),
-            Recurrence::EveryNMonths { n: 2, day: 1, anchor: d(2026, 12, 1) }
+            Recurrence::EveryNMonths {
+                n: 2,
+                day: 1,
+                anchor: d(2026, 12, 1)
+            }
         );
-        assert_eq!(r(RepeatSpec::Yearly(Some((1, 5)))), Recurrence::Yearly { month: 1, day: 5 });
-        assert_eq!(r(RepeatSpec::Yearly(None)), Recurrence::Yearly { month: 11, day: 4 });
+        assert_eq!(
+            r(RepeatSpec::Yearly(Some((1, 5)))),
+            Recurrence::Yearly { month: 1, day: 5 }
+        );
+        assert_eq!(
+            r(RepeatSpec::Yearly(None)),
+            Recurrence::Yearly { month: 11, day: 4 }
+        );
     }
 
     #[test]
     fn repeat_matches_days_and_exact_rules() {
         let a = d(2026, 10, 1);
         let months = |n, day| Recurrence::EveryNMonths { n, day, anchor: a };
-        let yes = |spec: &RepeatSpec, r: &Recurrence| assert!(repeat_matches(spec, r), "{spec:?} should match {r:?}");
-        let no = |spec: &RepeatSpec, r: &Recurrence| assert!(!repeat_matches(spec, r), "{spec:?} should not match {r:?}");
+        let yes = |spec: &RepeatSpec, r: &Recurrence| {
+            assert!(repeat_matches(spec, r), "{spec:?} should match {r:?}")
+        };
+        let no = |spec: &RepeatSpec, r: &Recurrence| {
+            assert!(!repeat_matches(spec, r), "{spec:?} should not match {r:?}")
+        };
 
         let spec = RepeatSpec::EveryNMonths(2, Some(5));
         yes(&spec, &months(2, 5));
         no(&spec, &months(2, 6));
         no(&spec, &months(3, 5));
 
-        assert_eq!(match_repeat(&tokens("every jan 5"), 0).map(|(_, s)| s), Some(RepeatSpec::Yearly(Some((1, 5)))));
+        assert_eq!(
+            match_repeat(&tokens("every jan 5"), 0).map(|(_, s)| s),
+            Some(RepeatSpec::Yearly(Some((1, 5))))
+        );
         check(
             "every jan 5",
             &[Recurrence::Yearly { month: 1, day: 5 }],
-            &[Recurrence::Yearly { month: 1, day: 6 }, Recurrence::Yearly { month: 2, day: 5 }],
+            &[
+                Recurrence::Yearly { month: 1, day: 6 },
+                Recurrence::Yearly { month: 2, day: 5 },
+            ],
         );
 
         let spec = RepeatSpec::EveryNWeeks(1, Some(vec![0]));
@@ -844,9 +1054,24 @@ mod tests {
 
         // Every other rule must be the same rule.
         for (want, other) in [
-            (Recurrence::MonthlyNthWeekday { nth: 1, weekday: 0 }, Recurrence::MonthlyNthWeekday { nth: 2, weekday: 0 }),
-            (Recurrence::MonthlyNthWeekday { nth: -1, weekday: 4 }, Recurrence::MonthlyNthWeekday { nth: -1, weekday: 3 }),
-            (Recurrence::MonthlyWorkday { nth: 1 }, Recurrence::MonthlyWorkday { nth: -1 }),
+            (
+                Recurrence::MonthlyNthWeekday { nth: 1, weekday: 0 },
+                Recurrence::MonthlyNthWeekday { nth: 2, weekday: 0 },
+            ),
+            (
+                Recurrence::MonthlyNthWeekday {
+                    nth: -1,
+                    weekday: 4,
+                },
+                Recurrence::MonthlyNthWeekday {
+                    nth: -1,
+                    weekday: 3,
+                },
+            ),
+            (
+                Recurrence::MonthlyWorkday { nth: 1 },
+                Recurrence::MonthlyWorkday { nth: -1 },
+            ),
             (Recurrence::MonthlyDay(5), Recurrence::MonthlyDay(6)),
         ] {
             let spec = RepeatSpec::Rule(want.clone());
@@ -859,5 +1084,4 @@ mod tests {
             &[Recurrence::MonthlyNthWeekday { nth: 1, weekday: 1 }],
         );
     }
-
 }

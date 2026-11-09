@@ -21,19 +21,42 @@ fn imports_a_project_with_sections_nesting_and_labels() {
     svc.dispatch(keel_core::commands::Command {
         uuid: "pre".into(),
         temp_id: None,
-        action: keel_core::commands::Action::LabelAdd { name: "Home".into() },
+        action: keel_core::commands::Action::LabelAdd {
+            name: "Home".into(),
+        },
     })
     .unwrap();
 
     let summary = svc.import_todoist_csv("Travel", EXPORT).unwrap();
     assert_eq!(summary.project_name, "Travel");
-    assert_eq!((summary.tasks, summary.sections, summary.comments, summary.kept_as_text), (4, 1, 1, 1));
-    assert_eq!(summary.labels_created, 1, "@home already exists (case-insensitive); @travel is new");
+    assert_eq!(
+        (
+            summary.tasks,
+            summary.sections,
+            summary.comments,
+            summary.kept_as_text
+        ),
+        (4, 1, 1, 1)
+    );
+    assert_eq!(
+        summary.labels_created, 1,
+        "@home already exists (case-insensitive); @travel is new"
+    );
 
-    let project = svc.list_projects().unwrap().into_iter().find(|p| p.name == "Travel").unwrap();
+    let project = svc
+        .list_projects()
+        .unwrap()
+        .into_iter()
+        .find(|p| p.name == "Travel")
+        .unwrap();
     assert_eq!(summary.project_id, project.id);
     let tasks = svc.project_view(project.id.as_str()).unwrap();
-    let get = |name: &str| tasks.iter().find(|t| t.content == name).unwrap_or_else(|| panic!("{name}"));
+    let get = |name: &str| {
+        tasks
+            .iter()
+            .find(|t| t.content == name)
+            .unwrap_or_else(|| panic!("{name}"))
+    };
     let trip = get("Plan trip");
     assert_eq!(get("Book flights").parent_id.as_ref(), Some(&trip.id));
     assert_eq!(get("Book flights").labels, vec!["travel"]);
@@ -43,8 +66,14 @@ fn imports_a_project_with_sections_nesting_and_labels() {
 
     let sections = svc.list_sections(project.id.as_str()).unwrap();
     assert_eq!(sections.len(), 1);
-    assert_eq!(get("Learn piano").section_id.as_ref(), Some(&sections[0].id));
-    assert_eq!(get("Learn piano").description, "Todoist date: every! 3 weeks");
+    assert_eq!(
+        get("Learn piano").section_id.as_ref(),
+        Some(&sections[0].id)
+    );
+    assert_eq!(
+        get("Learn piano").description,
+        "Todoist date: every! 3 weeks"
+    );
 }
 
 #[test]

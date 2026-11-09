@@ -30,12 +30,27 @@ impl Fx {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("keel.db").to_str().unwrap().to_string();
         let svc = AppService::open(&path).unwrap();
-        let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap().id;
-        Fx { _dir: dir, svc, inbox, n: 0 }
+        let inbox = svc
+            .list_projects()
+            .unwrap()
+            .into_iter()
+            .find(|p| p.is_inbox)
+            .unwrap()
+            .id;
+        Fx {
+            _dir: dir,
+            svc,
+            inbox,
+            n: 0,
+        }
     }
 
     fn send(&mut self, uuid: &str, action: Action, on: NaiveDate) -> ApplyResult {
-        let cmd = Command { uuid: uuid.to_string(), temp_id: Some("t".into()), action };
+        let cmd = Command {
+            uuid: uuid.to_string(),
+            temp_id: Some("t".into()),
+            action,
+        };
         self.svc.dispatch_at(cmd, on).unwrap()
     }
 
@@ -62,11 +77,24 @@ impl Fx {
     }
 
     fn streak(&mut self, id: &Id) {
-        self.run_on(Action::TaskSetStreak { id: id.clone(), enabled: true, goal: None }, today());
+        self.run_on(
+            Action::TaskSetStreak {
+                id: id.clone(),
+                enabled: true,
+                goal: None,
+            },
+            today(),
+        );
     }
 
     fn done_with(&mut self, id: &Id) {
-        self.run_on(Action::TaskSetDoneWithSubtasks { id: id.clone(), enabled: true }, today());
+        self.run_on(
+            Action::TaskSetDoneWithSubtasks {
+                id: id.clone(),
+                enabled: true,
+            },
+            today(),
+        );
     }
 
     fn complete_on(&mut self, id: &Id, on: NaiveDate) -> ApplyResult {
@@ -82,7 +110,12 @@ impl Fx {
     }
 
     fn get_on(&self, id: &Id, on: NaiveDate) -> Task {
-        self.svc.all_tasks_at(on).unwrap().into_iter().find(|t| &t.id == id).unwrap()
+        self.svc
+            .all_tasks_at(on)
+            .unwrap()
+            .into_iter()
+            .find(|t| &t.id == id)
+            .unwrap()
     }
 
     fn get(&self, id: &Id) -> Task {
@@ -167,7 +200,10 @@ fn two_levels() {
 
     let res = f.complete(&sub);
 
-    assert_eq!(res.auto_completed, vec![parent.clone(), grandparent.clone()]);
+    assert_eq!(
+        res.auto_completed,
+        vec![parent.clone(), grandparent.clone()]
+    );
     assert!(f.get(&parent).checked);
     assert!(f.get(&grandparent).checked);
 }
@@ -233,7 +269,10 @@ fn stale_reopen_counts_as_open() {
 
     assert!(res.auto_completed.is_empty(), "B is open again today");
     assert_eq!(f.get_on(&parent, day(6)).due.unwrap().date, "2026-01-06");
-    assert!(f.get_on(&a, day(6)).checked, "A was completed today and stays so");
+    assert!(
+        f.get_on(&a, day(6)).checked,
+        "A was completed today and stays so"
+    );
 }
 
 #[test]
@@ -265,7 +304,10 @@ fn reopening_a_sub_task_reopens_the_parent() {
     assert_eq!(f.get(&parent).streak_current, 0);
     let all = f.svc.all_tasks_at(today()).unwrap();
     for s in [&b, &c] {
-        assert!(keel_core::views::is_done(all.iter().find(|t| &t.id == s).unwrap(), today()), "{s:?} stays done");
+        assert!(
+            keel_core::views::is_done(all.iter().find(|t| &t.id == s).unwrap(), today()),
+            "{s:?} stays done"
+        );
     }
 }
 
@@ -329,7 +371,11 @@ fn reopening_days_later_leaves_a_weekly_parent_alone() {
     f.reopen_on(&sub, day(10));
 
     let p = f.get_on(&parent, day(10));
-    assert_eq!(p.due.unwrap().date, "2026-01-16", "Friday's completion stands");
+    assert_eq!(
+        p.due.unwrap().date,
+        "2026-01-16",
+        "Friday's completion stands"
+    );
     assert_eq!(p.streak_current, 1);
 }
 

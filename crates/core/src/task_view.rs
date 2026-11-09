@@ -22,8 +22,15 @@ pub enum Field {
     Location,
 }
 
-const ORDER: [Field; 7] =
-    [Field::Description, Field::Date, Field::Reminders, Field::Deadline, Field::Priority, Field::Location, Field::Labels];
+const ORDER: [Field; 7] = [
+    Field::Description,
+    Field::Date,
+    Field::Reminders,
+    Field::Deadline,
+    Field::Priority,
+    Field::Location,
+    Field::Labels,
+];
 
 /// A dotted pill for something without a value.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
@@ -85,7 +92,12 @@ pub struct FieldLayout {
 pub fn field_layout(v: &EditorValues, inbox_id: &Id) -> FieldLayout {
     let mut fields = Vec::new();
     let mut missing = Vec::new();
-    let mut pill = |m: Missing| missing.push(MissingPill { missing: m, label: m.label().to_string() });
+    let mut pill = |m: Missing| {
+        missing.push(MissingPill {
+            missing: m,
+            label: m.label().to_string(),
+        })
+    };
     for f in ORDER {
         if is_set(f, v, inbox_id) {
             fields.push(f);
@@ -126,7 +138,11 @@ pub struct TaskDetail {
 
 pub fn detail(id: &Id, all: &[Task], show_completed: bool, today: NaiveDate) -> Option<TaskDetail> {
     let task = all.iter().find(|t| &t.id == id)?.clone();
-    let parent = task.parent_id.as_ref().and_then(|p| all.iter().find(|t| &t.id == p)).cloned();
+    let parent = task
+        .parent_id
+        .as_ref()
+        .and_then(|p| all.iter().find(|t| &t.id == p))
+        .cloned();
     let children = views::children(id, all);
     let has_subtasks = !children.is_empty();
     let visible = children
@@ -138,7 +154,14 @@ pub fn detail(id: &Id, all: &[Task], show_completed: bool, today: NaiveDate) -> 
         })
         .filter(|line| show_completed || !line.done)
         .collect();
-    Some(TaskDetail { progress: views::progress(id, all, today), done: views::is_done(&task, today), task, parent, visible, has_subtasks })
+    Some(TaskDetail {
+        progress: views::progress(id, all, today),
+        done: views::is_done(&task, today),
+        task,
+        parent,
+        visible,
+        has_subtasks,
+    })
 }
 
 #[cfg(test)]
@@ -177,7 +200,15 @@ mod tests {
     #[test]
     fn layout_fixed_order() {
         let FieldLayout { fields, missing } = field_layout(&fixture(), &inbox());
-        assert_eq!(fields, vec![Field::Description, Field::Date, Field::Priority, Field::Labels]);
+        assert_eq!(
+            fields,
+            vec![
+                Field::Description,
+                Field::Date,
+                Field::Priority,
+                Field::Labels
+            ]
+        );
         assert_eq!(
             kinds(&missing),
             vec![
@@ -194,10 +225,21 @@ mod tests {
         let mut v = EditorValues::blank(Id::from("P"), None, "2026-11-01".into(), vec!["a".into()]);
         v.deadline = "2026-11-02".into();
         v.priority = "1".into();
-        v.reminders = vec![crate::editor::ReminderDraft { id: None, minute_offset: Some(0), at: None }];
+        v.reminders = vec![crate::editor::ReminderDraft {
+            id: None,
+            minute_offset: Some(0),
+            at: None,
+        }];
         assert_eq!(
             field_layout(&v, &inbox()).fields,
-            vec![Field::Date, Field::Reminders, Field::Deadline, Field::Priority, Field::Location, Field::Labels]
+            vec![
+                Field::Date,
+                Field::Reminders,
+                Field::Deadline,
+                Field::Priority,
+                Field::Location,
+                Field::Labels
+            ]
         );
     }
 
@@ -205,7 +247,11 @@ mod tests {
     fn an_inbox_tasks_pill_says_project() {
         let v = EditorValues::blank(inbox(), None, String::new(), vec![]);
         let layout = field_layout(&v, &inbox());
-        let pill = layout.missing.iter().find(|p| p.missing == Missing::Field(Field::Location)).unwrap();
+        let pill = layout
+            .missing
+            .iter()
+            .find(|p| p.missing == Missing::Field(Field::Location))
+            .unwrap();
         assert_eq!(pill.label, "+ Project");
     }
 
@@ -247,7 +293,16 @@ mod tests {
         let mut v = fixture();
         v.deadline = "2026-10-30".into();
         let FieldLayout { fields, missing } = field_layout(&v, &inbox());
-        assert_eq!(fields, vec![Field::Description, Field::Date, Field::Deadline, Field::Priority, Field::Labels]);
+        assert_eq!(
+            fields,
+            vec![
+                Field::Description,
+                Field::Date,
+                Field::Deadline,
+                Field::Priority,
+                Field::Labels
+            ]
+        );
         assert!(!kinds(&missing).contains(&Missing::Field(Field::Deadline)));
     }
 
@@ -257,7 +312,10 @@ mod tests {
         v.description = "  ".into();
         let FieldLayout { fields, missing } = field_layout(&v, &inbox());
         assert!(!fields.contains(&Field::Description));
-        assert_eq!(kinds(&missing).first(), Some(&Missing::Field(Field::Description)));
+        assert_eq!(
+            kinds(&missing).first(),
+            Some(&Missing::Field(Field::Description))
+        );
     }
 
     #[test]
@@ -296,8 +354,16 @@ mod tests {
         let mut c = task("C", Some("P"), 0);
         c.checked = true;
         let all = vec![task("P", None, 0), c, task("L", None, 1)];
-        assert!(detail(&id("P"), &all, false, some_day()).unwrap().has_subtasks);
-        assert!(!detail(&id("L"), &all, false, some_day()).unwrap().has_subtasks);
+        assert!(
+            detail(&id("P"), &all, false, some_day())
+                .unwrap()
+                .has_subtasks
+        );
+        assert!(
+            !detail(&id("L"), &all, false, some_day())
+                .unwrap()
+                .has_subtasks
+        );
     }
 
     fn some_day() -> NaiveDate {
@@ -340,7 +406,11 @@ mod tests {
         assert_eq!(ids, vec![id("Due")]);
         assert!(!hidden.visible[0].done);
         let shown = detail(&id("P"), &all, true, some_day()).unwrap();
-        let done: Vec<_> = shown.visible.iter().map(|r| (r.task.id.clone(), r.done)).collect();
+        let done: Vec<_> = shown
+            .visible
+            .iter()
+            .map(|r| (r.task.id.clone(), r.done))
+            .collect();
         assert_eq!(done, vec![(id("Due"), false), (id("Done"), true)]);
         assert_eq!(hidden.progress, Some(Progress { done: 1, total: 2 }));
         assert!(detail(&id("Done"), &all, false, some_day()).unwrap().done);
@@ -357,11 +427,25 @@ mod tests {
 
     #[test]
     fn detail_reflects_reloaded_tasks() {
-        let before = vec![task("P", None, 0), task("C", Some("P"), 0), task("S", Some("P"), 1)];
-        assert_eq!(detail(&id("P"), &before, false, some_day()).unwrap().progress, Some(Progress { done: 0, total: 2 }));
+        let before = vec![
+            task("P", None, 0),
+            task("C", Some("P"), 0),
+            task("S", Some("P"), 1),
+        ];
+        assert_eq!(
+            detail(&id("P"), &before, false, some_day())
+                .unwrap()
+                .progress,
+            Some(Progress { done: 0, total: 2 })
+        );
         let mut after = before.clone();
         after[1].checked = true;
-        assert_eq!(detail(&id("P"), &after, false, some_day()).unwrap().progress, Some(Progress { done: 1, total: 2 }));
+        assert_eq!(
+            detail(&id("P"), &after, false, some_day())
+                .unwrap()
+                .progress,
+            Some(Progress { done: 1, total: 2 })
+        );
     }
 
     #[test]
@@ -374,19 +458,29 @@ mod tests {
         let all = vec![task("P", None, 0), task("C", Some("P"), 0)];
         let d = detail(&id("C"), &all, false, some_day()).unwrap();
         assert_eq!(d.parent.unwrap().id, id("P"));
-        assert!(detail(&id("P"), &all, false, some_day()).unwrap().parent.is_none());
+        assert!(detail(&id("P"), &all, false, some_day())
+            .unwrap()
+            .parent
+            .is_none());
     }
 
     #[test]
     fn visible_rows_carry_their_own_progress() {
-        let all = vec![task("P", None, 0), task("C", Some("P"), 0), task("G", Some("C"), 0)];
+        let all = vec![
+            task("P", None, 0),
+            task("C", Some("P"), 0),
+            task("G", Some("C"), 0),
+        ];
         let d = detail(&id("P"), &all, false, some_day()).unwrap();
         assert_eq!(d.visible[0].progress, Some(Progress { done: 0, total: 1 }));
     }
 
     #[test]
     fn missing_serializes_tagged() {
-        assert_eq!(serde_json::to_string(&Missing::Repeat).unwrap(), r#"{"kind":"Repeat"}"#);
+        assert_eq!(
+            serde_json::to_string(&Missing::Repeat).unwrap(),
+            r#"{"kind":"Repeat"}"#
+        );
         assert_eq!(
             serde_json::to_string(&Missing::Field(Field::Deadline)).unwrap(),
             r#"{"kind":"Field","field":"Deadline"}"#
@@ -397,6 +491,11 @@ mod tests {
     fn completed_elsewhere_still_has_detail() {
         let mut a = task("A", None, 0);
         a.checked = true;
-        assert!(detail(&id("A"), &[a], false, some_day()).unwrap().task.checked);
+        assert!(
+            detail(&id("A"), &[a], false, some_day())
+                .unwrap()
+                .task
+                .checked
+        );
     }
 }

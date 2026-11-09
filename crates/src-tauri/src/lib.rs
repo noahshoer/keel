@@ -6,27 +6,35 @@ pub mod args;
 mod diag;
 mod notifications;
 
-use tauri_plugin_notification::NotificationExt;
 use keel_core::commands::ApplyResult;
 use keel_core::filter::FilterGroup;
+use keel_core::import::todoist::ImportSummary;
 use keel_core::model::{Filter, Label, Project, Reminder, Section, Task};
 use keel_core::reminders::{PlannedReminder, ReminderSettings};
-use keel_core::import::todoist::ImportSummary;
 use keel_core::search::SearchResults;
 use keel_service::AppService;
+use tauri_plugin_notification::NotificationExt;
 
 use args::*;
 
 // `rename_all = "snake_case"` so top-level command arg names stay snake_case
 // end-to-end (Tauri v2 camelCases them by default). Frontend sends snake_case.
 #[tauri::command(rename_all = "snake_case")]
-fn list_projects(_args: NoArgs, state: tauri::State<'_, AppService>) -> Result<Vec<Project>, String> {
+fn list_projects(
+    _args: NoArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<Vec<Project>, String> {
     state.list_projects().map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn list_tasks(args: ListTasksArgs, state: tauri::State<'_, AppService>) -> Result<Vec<Task>, String> {
-    state.list_tasks(&args.project_id).map_err(|e| e.to_string())
+fn list_tasks(
+    args: ListTasksArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<Vec<Task>, String> {
+    state
+        .list_tasks(&args.project_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -40,13 +48,21 @@ fn all_tasks(_args: NoArgs, state: tauri::State<'_, AppService>) -> Result<Vec<T
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn upcoming_view(args: UpcomingViewArgs, state: tauri::State<'_, AppService>) -> Result<Vec<Task>, String> {
+fn upcoming_view(
+    args: UpcomingViewArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<Vec<Task>, String> {
     state.upcoming_view(args.days).map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn project_view(args: ProjectViewArgs, state: tauri::State<'_, AppService>) -> Result<Vec<Task>, String> {
-    state.project_view(&args.project_id).map_err(|e| e.to_string())
+fn project_view(
+    args: ProjectViewArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<Vec<Task>, String> {
+    state
+        .project_view(&args.project_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -55,28 +71,49 @@ fn list_labels(_args: NoArgs, state: tauri::State<'_, AppService>) -> Result<Vec
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn label_view(args: LabelViewArgs, state: tauri::State<'_, AppService>) -> Result<Vec<Task>, String> {
+fn label_view(
+    args: LabelViewArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<Vec<Task>, String> {
     state.label_view(&args.name).map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn completed_today(_args: NoArgs, state: tauri::State<'_, AppService>) -> Result<Vec<Task>, String> {
+fn completed_today(
+    _args: NoArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<Vec<Task>, String> {
     state.completed_today().map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn completed_in_project(args: CompletedInProjectArgs, state: tauri::State<'_, AppService>) -> Result<Vec<Task>, String> {
-    state.completed_in_project(&args.project_id).map_err(|e| e.to_string())
+fn completed_in_project(
+    args: CompletedInProjectArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<Vec<Task>, String> {
+    state
+        .completed_in_project(&args.project_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn completed_with_label(args: CompletedWithLabelArgs, state: tauri::State<'_, AppService>) -> Result<Vec<Task>, String> {
-    state.completed_with_label(&args.name).map_err(|e| e.to_string())
+fn completed_with_label(
+    args: CompletedWithLabelArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<Vec<Task>, String> {
+    state
+        .completed_with_label(&args.name)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn list_sections(args: ListSectionsArgs, state: tauri::State<'_, AppService>) -> Result<Vec<Section>, String> {
-    state.list_sections(&args.project_id).map_err(|e| e.to_string())
+fn list_sections(
+    args: ListSectionsArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<Vec<Section>, String> {
+    state
+        .list_sections(&args.project_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -91,7 +128,10 @@ fn check_filter(args: CheckFilterArgs, state: tauri::State<'_, AppService>) -> R
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn filter_view(args: FilterViewArgs, state: tauri::State<'_, AppService>) -> Result<Vec<FilterGroup>, String> {
+fn filter_view(
+    args: FilterViewArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<Vec<FilterGroup>, String> {
     state.filter_view(&args.query).map_err(|e| e.to_string())
 }
 
@@ -100,7 +140,11 @@ fn filter_view(args: FilterViewArgs, state: tauri::State<'_, AppService>) -> Res
 // answers, which deadlocked with any plugin call (e.g. the glass buttons)
 // that needed the main thread to deliver its own result.
 #[tauri::command(rename_all = "snake_case")]
-async fn dispatch(args: DispatchArgs, app: tauri::AppHandle, state: tauri::State<'_, AppService>) -> Result<ApplyResult, String> {
+async fn dispatch(
+    args: DispatchArgs,
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppService>,
+) -> Result<ApplyResult, String> {
     let result = state.dispatch(args.cmd).map_err(|e| e.to_string())?;
     // Any change can move a due date: re-plan notifications.
     notifications::resync(&app);
@@ -109,7 +153,9 @@ async fn dispatch(args: DispatchArgs, app: tauri::AppHandle, state: tauri::State
 
 #[tauri::command(rename_all = "snake_case")]
 fn search(args: SearchArgs, state: tauri::State<'_, AppService>) -> Result<SearchResults, String> {
-    state.search(&args.query, args.scope.as_ref()).map_err(|e| e.to_string())
+    state
+        .search(&args.query, args.scope.as_ref())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -124,12 +170,18 @@ async fn import_todoist_csv(
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn list_reminders(_args: NoArgs, state: tauri::State<'_, AppService>) -> Result<Vec<Reminder>, String> {
+fn list_reminders(
+    _args: NoArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<Vec<Reminder>, String> {
     state.list_reminders().map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn get_reminder_settings(_args: NoArgs, state: tauri::State<'_, AppService>) -> Result<ReminderSettings, String> {
+fn get_reminder_settings(
+    _args: NoArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<ReminderSettings, String> {
     state.reminder_settings().map_err(|e| e.to_string())
 }
 
@@ -139,14 +191,19 @@ async fn set_reminder_settings(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppService>,
 ) -> Result<(), String> {
-    state.set_reminder_settings(&args.settings).map_err(|e| e.to_string())?;
+    state
+        .set_reminder_settings(&args.settings)
+        .map_err(|e| e.to_string())?;
     notifications::resync(&app);
     Ok(())
 }
 
 /// The next few planned notifications (for the settings panel).
 #[tauri::command(rename_all = "snake_case")]
-fn upcoming_reminders(_args: NoArgs, state: tauri::State<'_, AppService>) -> Result<Vec<PlannedReminder>, String> {
+fn upcoming_reminders(
+    _args: NoArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<Vec<PlannedReminder>, String> {
     let mut plan = state.reminder_plan().map_err(|e| e.to_string())?;
     plan.truncate(5);
     Ok(plan)
@@ -155,7 +212,10 @@ fn upcoming_reminders(_args: NoArgs, state: tauri::State<'_, AppService>) -> Res
 /// "granted" | "denied" | "prompt".
 #[tauri::command(rename_all = "snake_case")]
 async fn notification_permission(_args: NoArgs, app: tauri::AppHandle) -> Result<String, String> {
-    let state = app.notification().permission_state().map_err(|e| e.to_string())?;
+    let state = app
+        .notification()
+        .permission_state()
+        .map_err(|e| e.to_string())?;
     Ok(notifications::permission_text(state).to_string())
 }
 
@@ -167,8 +227,14 @@ fn reminders_when_closed(_args: NoArgs) -> bool {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-async fn request_notification_permission(_args: NoArgs, app: tauri::AppHandle) -> Result<String, String> {
-    let state = app.notification().request_permission().map_err(|e| e.to_string())?;
+async fn request_notification_permission(
+    _args: NoArgs,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let state = app
+        .notification()
+        .request_permission()
+        .map_err(|e| e.to_string())?;
     notifications::resync(&app);
     Ok(notifications::permission_text(state).to_string())
 }
@@ -208,7 +274,10 @@ fn migrate_legacy_store(dir: &std::path::Path, db_path: &std::path::Path) {
     if db_path.exists() {
         return;
     }
-    let Some(legacy) = dir.parent().map(|p| p.join("com.nshoe.todoplanner").join("todo.db")) else {
+    let Some(legacy) = dir
+        .parent()
+        .map(|p| p.join("com.nshoe.todoplanner").join("todo.db"))
+    else {
         return;
     };
     if legacy.exists() {
@@ -230,10 +299,7 @@ pub fn run() {
     builder
         .setup(|app| {
             use tauri::Manager;
-            let dir = app
-                .path()
-                .app_data_dir()
-                .expect("resolve app data dir");
+            let dir = app.path().app_data_dir().expect("resolve app data dir");
             std::fs::create_dir_all(&dir).ok();
             let db_path = dir.join("keel.db");
             migrate_legacy_store(&dir, &db_path);

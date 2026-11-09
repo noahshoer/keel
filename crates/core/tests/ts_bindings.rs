@@ -9,15 +9,15 @@ use std::path::PathBuf;
 use keel_core::calendar::{DayCell, MonthView};
 use keel_core::commands::{Action, ApplyResult, Command, DueEdit};
 use keel_core::editor::{
-    AddPlan, EditPlan, EditorValues, EditorView, LocationChoice, LocationKind, NewNames, Pick, ReminderDraft, RepeatReading,
-    TaskPatch, TitleSegment,
+    AddPlan, EditPlan, EditorValues, EditorView, LocationChoice, LocationKind, NewNames, Pick,
+    ReminderDraft, RepeatReading, TaskPatch, TitleSegment,
 };
 use keel_core::filter::{FilterFix, FilterGroup, FilterReading};
 use keel_core::ids::Id;
 use keel_core::import::todoist::ImportSummary;
 use keel_core::model::{
-    Due, Duration, DurationUnit, Filter, Label, Priority, Project, Reminder, ReminderType, Section, Task,
-    ViewStyle,
+    Due, Duration, DurationUnit, Filter, Label, Priority, Project, Reminder, ReminderType, Section,
+    Task, ViewStyle,
 };
 use keel_core::quickadd::{QuickAdd, Span, SpanKind};
 use keel_core::recurrence::Recurrence;
@@ -25,7 +25,10 @@ use keel_core::reminders::{PlannedReminder, ReminderSettings};
 use keel_core::search::{SearchResults, SearchScope};
 use keel_core::settings::{MenuKind, ReminderMenus, SettingChoice, SettingMenu};
 use keel_core::task_view::{Field, FieldLayout, Missing, MissingPill, TaskDetail};
-use keel_core::views::{Card, CardMode, CardRow, DateGroup, DateGroupMode, DueBucket, LabelChoice, LabelGroup, Progress, ProjectCount, SidebarCounts};
+use keel_core::views::{
+    Card, CardMode, CardRow, DateGroup, DateGroupMode, DueBucket, LabelChoice, LabelGroup,
+    Progress, ProjectCount, SidebarCounts,
+};
 use ts_rs::TS;
 
 /// `TS_RS_EXPORT_DIR` from `.cargo/config.toml` (absolute: `relative = true`).
@@ -43,7 +46,12 @@ macro_rules! export_all {
 fn write_index(dir: &std::path::Path) {
     let mut names: Vec<String> = std::fs::read_dir(dir)
         .expect("read bindings dir")
-        .map(|e| e.expect("dir entry").file_name().to_string_lossy().into_owned())
+        .map(|e| {
+            e.expect("dir entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
         .filter_map(|n| n.strip_suffix(".ts").map(str::to_string))
         .filter(|n| n != "index")
         .collect();
@@ -60,21 +68,75 @@ fn write_index(dir: &std::path::Path) {
 fn bindings_cover_ipc_types() {
     export_all!(
         // model
-        Id, Task, Project, Section, Label, Filter, Reminder, ReminderType, Due, Duration, DurationUnit,
-        Priority, ViewStyle, Recurrence,
+        Id,
+        Task,
+        Project,
+        Section,
+        Label,
+        Filter,
+        Reminder,
+        ReminderType,
+        Due,
+        Duration,
+        DurationUnit,
+        Priority,
+        ViewStyle,
+        Recurrence,
         // commands
-        Action, Command, ApplyResult, DueEdit,
+        Action,
+        Command,
+        ApplyResult,
+        DueEdit,
         // views / quick add / calendar (the wasm boundary)
-        CardRow, Card, CardMode, LabelChoice, LabelGroup, ProjectCount, SidebarCounts, DateGroup, DateGroupMode, Progress, DueBucket, QuickAdd, Span, SpanKind, MonthView, DayCell,
+        CardRow,
+        Card,
+        CardMode,
+        LabelChoice,
+        LabelGroup,
+        ProjectCount,
+        SidebarCounts,
+        DateGroup,
+        DateGroupMode,
+        Progress,
+        DueBucket,
+        QuickAdd,
+        Span,
+        SpanKind,
+        MonthView,
+        DayCell,
         // the editor (the wasm boundary)
-        EditorValues, EditorView, ReminderDraft, Pick, TaskPatch, LocationChoice, LocationKind, TitleSegment,
-        AddPlan, EditPlan, RepeatReading, NewNames, FilterReading, FilterFix,
+        EditorValues,
+        EditorView,
+        ReminderDraft,
+        Pick,
+        TaskPatch,
+        LocationChoice,
+        LocationKind,
+        TitleSegment,
+        AddPlan,
+        EditPlan,
+        RepeatReading,
+        NewNames,
+        FilterReading,
+        FilterFix,
         // the task view (the wasm boundary)
-        Field, Missing, MissingPill, FieldLayout, TaskDetail,
+        Field,
+        Missing,
+        MissingPill,
+        FieldLayout,
+        TaskDetail,
         // settings (the wasm boundary)
-        SettingChoice, SettingMenu, ReminderMenus, MenuKind,
+        SettingChoice,
+        SettingMenu,
+        ReminderMenus,
+        MenuKind,
         // query results
-        PlannedReminder, ReminderSettings, SearchResults, SearchScope, FilterGroup, ImportSummary,
+        PlannedReminder,
+        ReminderSettings,
+        SearchResults,
+        SearchScope,
+        FilterGroup,
+        ImportSummary,
     );
     let dir = bindings_dir();
     write_index(&dir);

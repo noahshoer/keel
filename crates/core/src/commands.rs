@@ -4,7 +4,9 @@ use chrono::{Local, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
-use crate::model::{Due, Filter, Label, LastCompletion, Priority, Project, Reminder, Section, Task};
+use crate::model::{
+    Due, Filter, Label, LastCompletion, Priority, Project, Reminder, Section, Task,
+};
 use crate::recurrence::Recurrence;
 use crate::repository::{RepoError, Repository};
 use crate::streak;
@@ -242,7 +244,9 @@ fn parse_local_datetime(s: &str) -> Option<chrono::NaiveDateTime> {
 
 /// `YYYY-MM-DD` when `s` is a real date (anything else, e.g. "", gives `None`).
 fn valid_date(s: &str) -> Option<String> {
-    NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok().map(iso)
+    NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d")
+        .ok()
+        .map(iso)
 }
 
 /// Human text for a rule, stored in `Due.string` (Todoist-style).
@@ -253,18 +257,33 @@ fn describe(rule: &Recurrence) -> String {
 /// Builds a `Due` from an optional date and rule. With only a rule, the first
 /// occurrence on/after `today` is used; with neither, there is no due. An end
 /// (`until`) only goes with a rule.
-fn build_due(date: Option<String>, rule: Option<Recurrence>, until: Option<String>, today: NaiveDate) -> Option<Due> {
-    let until = until.filter(|_| rule.is_some()).as_deref().and_then(valid_date);
+fn build_due(
+    date: Option<String>,
+    rule: Option<Recurrence>,
+    until: Option<String>,
+    today: NaiveDate,
+) -> Option<Due> {
+    let until = until
+        .filter(|_| rule.is_some())
+        .as_deref()
+        .and_then(valid_date);
     let (date, string) = match (&date, &rule) {
         (None, None) => return None,
         (Some(d), None) => (d.clone(), d.clone()),
         (Some(d), Some(r)) => (d.clone(), describe(r)),
         (None, Some(r)) => {
-            let first = if r.contains(today) { today } else { r.next_after(today) };
+            let first = if r.contains(today) {
+                today
+            } else {
+                r.next_after(today)
+            };
             (iso(first), describe(r))
         }
     };
-    let string = match until.as_deref().and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok()) {
+    let string = match until
+        .as_deref()
+        .and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok())
+    {
         Some(end) => format!("{string} until {}", end.format("%b %-d")),
         None => string,
     };
@@ -283,7 +302,11 @@ fn build_due(date: Option<String>, rule: Option<Recurrence>, until: Option<Strin
 /// True when the occurrence a completion on `today` is for is the repeat's
 /// last: the next one would fall past its end.
 fn repeat_ends(due: &Due, rule: &Recurrence, current: NaiveDate, today: NaiveDate) -> bool {
-    let Some(end) = due.until.as_deref().and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok()) else {
+    let Some(end) = due
+        .until
+        .as_deref()
+        .and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok())
+    else {
         return false;
     };
     let occurrence = moved_from(due).unwrap_or_else(|| completed_occurrence(rule, current, today));
@@ -292,7 +315,9 @@ fn repeat_ends(due: &Due, rule: &Recurrence, current: NaiveDate, today: NaiveDat
 
 /// The occurrence a moved due date stands in for.
 fn moved_from(due: &Due) -> Option<NaiveDate> {
-    due.moved_from.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
+    due.moved_from
+        .as_deref()
+        .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
 }
 
 /// After an edit that kept the rule: the occurrence the new date stands in
@@ -381,7 +406,11 @@ pub fn apply_at<R: Repository>(
                 result.auto_completed = complete_parents(repo, &id, today)?;
             }
         }
-        Action::TaskMove { id, project_id, section_id } => {
+        Action::TaskMove {
+            id,
+            project_id,
+            section_id,
+        } => {
             move_subtree(repo, &id, &project_id, section_id.as_ref())?;
         }
         Action::SectionAdd { project_id, name } => {
@@ -454,13 +483,17 @@ pub fn apply_at<R: Repository>(
                     let old_rule = old_due.as_ref().and_then(|d| d.recurrence.clone());
                     let until = match edit.until {
                         Some(u) => Some(u),
-                        None if edit.recurrence == old_rule => task.due.as_ref().and_then(|d| d.until.clone()),
+                        None if edit.recurrence == old_rule => {
+                            task.due.as_ref().and_then(|d| d.until.clone())
+                        }
                         None => None,
                     };
                     task.due = build_due(edit.date, edit.recurrence, until, today);
                     // A new date under the same rule moves just this occurrence;
                     // a streak can't carry over a move.
-                    if let (Some(old), Some(new), Some(rule)) = (old_due.as_ref(), task.due.as_mut(), old_rule.as_ref()) {
+                    if let (Some(old), Some(new), Some(rule)) =
+                        (old_due.as_ref(), task.due.as_mut(), old_rule.as_ref())
+                    {
                         if new.recurrence.as_ref() == Some(rule) && due_date(old) != due_date(new) {
                             new.moved_from = moved_occurrence(old, new, rule);
                             task.streak_current = 0;
@@ -494,7 +527,11 @@ pub fn apply_at<R: Repository>(
             }
             repo.soft_delete_task(&id)?;
         }
-        Action::ReminderAdd { task_id, minute_offset, at } => {
+        Action::ReminderAdd {
+            task_id,
+            minute_offset,
+            at,
+        } => {
             let task_exists = repo.get_task(&task_id)?.is_some_and(|t| !t.is_deleted);
             let reminder = match (minute_offset, at.as_deref().and_then(parse_local_datetime)) {
                 _ if !task_exists => None,
@@ -583,7 +620,10 @@ pub fn apply_at<R: Repository>(
                 if let Some(n) = name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()) {
                     filter.name = n;
                 }
-                if let Some(q) = query.map(|q| q.trim().to_string()).filter(|q| !q.is_empty()) {
+                if let Some(q) = query
+                    .map(|q| q.trim().to_string())
+                    .filter(|q| !q.is_empty())
+                {
                     filter.query = q;
                 }
                 repo.upsert_filter(&filter)?;
@@ -619,7 +659,9 @@ pub fn apply_at<R: Repository>(
             }
         }
         Action::TaskUncomplete { id } => {
-            let was_done = repo.get_task(&id)?.is_some_and(|t| views::done_for_now(&t, today));
+            let was_done = repo
+                .get_task(&id)?
+                .is_some_and(|t| views::done_for_now(&t, today));
             uncomplete_task(repo, &id, today)?;
             if !was_done {
                 return finish(repo, &cmd.uuid, type_name, &args_json, result);
@@ -628,7 +670,9 @@ pub fn apply_at<R: Repository>(
             let mut child = id;
             while let Some(parent) = repo.get_task(&child)?.and_then(|t| t.parent_id) {
                 match repo.get_task(&parent)? {
-                    Some(p) if views::done_today(&p, today) => uncomplete_task(repo, &parent, today)?,
+                    Some(p) if views::done_today(&p, today) => {
+                        uncomplete_task(repo, &parent, today)?
+                    }
                     _ => break,
                 }
                 child = parent;
@@ -643,7 +687,9 @@ pub fn apply_at<R: Repository>(
         Action::LabelUpdate { id, name } => {
             let name = name.trim().to_string();
             let labels = repo.list_labels()?;
-            if let (Some(mut label), false) = (labels.iter().find(|l| l.id == id).cloned(), name.is_empty()) {
+            if let (Some(mut label), false) =
+                (labels.iter().find(|l| l.id == id).cloned(), name.is_empty())
+            {
                 let old = label.name.clone();
                 // Renaming onto another label's name merges into that label.
                 let target = labels
@@ -657,7 +703,11 @@ pub fn apply_at<R: Repository>(
                     }
                     let mut renamed: Vec<String> = Vec::new();
                     for n in task.labels.drain(..) {
-                        let n = if n.eq_ignore_ascii_case(&old) { new_name.clone() } else { n };
+                        let n = if n.eq_ignore_ascii_case(&old) {
+                            new_name.clone()
+                        } else {
+                            n
+                        };
                         if !renamed.iter().any(|r| r.eq_ignore_ascii_case(&n)) {
                             renamed.push(n);
                         }
@@ -682,11 +732,16 @@ pub fn apply_at<R: Repository>(
 /// Completes a task (see `Action::TaskComplete`). False when nothing changed:
 /// no such task, or its occurrence was already credited.
 fn complete_task<R: Repository>(repo: &R, id: &Id, today: NaiveDate) -> Result<bool, RepoError> {
-    let Some(mut task) = repo.get_task(id)? else { return Ok(false) };
+    let Some(mut task) = repo.get_task(id)? else {
+        return Ok(false);
+    };
     let now = Utc::now();
     // A repeat past its last occurrence completes like a plain task.
     let recurring = task.due.as_ref().and_then(|d| {
-        d.recurrence.clone().zip(due_date(d)).filter(|(rule, current)| !repeat_ends(d, rule, *current, today))
+        d.recurrence
+            .clone()
+            .zip(due_date(d))
+            .filter(|(rule, current)| !repeat_ends(d, rule, *current, today))
     });
     match recurring {
         // Recurring: the task stays active, past the occurrence
@@ -699,7 +754,11 @@ fn complete_task<R: Repository>(repo: &R, id: &Id, today: NaiveDate) -> Result<b
             // Sub-tasks complete with it. Plain ones stay checked until
             // its next date; repeating ones move on, unless they're
             // already past this occurrence.
-            let reopens_on = task.due.as_ref().and_then(|d| d.date.get(..10)).map(str::to_string);
+            let reopens_on = task
+                .due
+                .as_ref()
+                .and_then(|d| d.date.get(..10))
+                .map(str::to_string);
             for mut child in descendants(repo, &task.id)? {
                 let child_recurring = child.due.as_ref().is_some_and(|d| d.is_recurring);
                 if !child_recurring {
@@ -711,9 +770,16 @@ fn complete_task<R: Repository>(repo: &R, id: &Id, today: NaiveDate) -> Result<b
                     child.updated_at = now;
                     repo.upsert_task(&child)?;
                 }
-                let rule = child.due.as_ref().and_then(|d| d.recurrence.clone().zip(due_date(d)));
-                if let Some((rule, due)) = rule.filter(|(_, due)| !child.checked && *due <= passed) {
-                    let ends = child.due.as_ref().is_some_and(|d| repeat_ends(d, &rule, due, today));
+                let rule = child
+                    .due
+                    .as_ref()
+                    .and_then(|d| d.recurrence.clone().zip(due_date(d)));
+                if let Some((rule, due)) = rule.filter(|(_, due)| !child.checked && *due <= passed)
+                {
+                    let ends = child
+                        .due
+                        .as_ref()
+                        .is_some_and(|d| repeat_ends(d, &rule, due, today));
                     if ends {
                         child.checked = true;
                         child.completed_at = Some(now);
@@ -749,7 +815,11 @@ fn complete_task<R: Repository>(repo: &R, id: &Id, today: NaiveDate) -> Result<b
 
 /// After `id` completed: completes each parent above it that is done with
 /// its sub-tasks and now has them all done. Returns those parents, nearest first.
-fn complete_parents<R: Repository>(repo: &R, id: &Id, today: NaiveDate) -> Result<Vec<Id>, RepoError> {
+fn complete_parents<R: Repository>(
+    repo: &R,
+    id: &Id,
+    today: NaiveDate,
+) -> Result<Vec<Id>, RepoError> {
     let mut completed = Vec::new();
     let mut child = id.clone();
     loop {
@@ -758,16 +828,29 @@ fn complete_parents<R: Repository>(repo: &R, id: &Id, today: NaiveDate) -> Resul
         for t in all.iter_mut() {
             t.reopen_if_due(today);
         }
-        let Some(parent) = all.iter().find(|t| t.id == child).and_then(|c| c.parent_id.clone()) else { break };
-        let Some(p) = all.iter().find(|t| t.id == parent) else { break };
-        if !p.done_with_subtasks || views::done_for_now(p, today) || !views::all_done(&parent, &all, today) {
+        let Some(parent) = all
+            .iter()
+            .find(|t| t.id == child)
+            .and_then(|c| c.parent_id.clone())
+        else {
+            break;
+        };
+        let Some(p) = all.iter().find(|t| t.id == parent) else {
+            break;
+        };
+        if !p.done_with_subtasks
+            || views::done_for_now(p, today)
+            || !views::all_done(&parent, &all, today)
+        {
             break;
         }
         let ready = match p.due.as_ref().filter(|d| d.is_recurring) {
             // A repeating parent waits for its date.
             Some(d) => due_date(d).is_some_and(|date| date <= today),
             // Completing a one-off parent ends its sub-tasks' repeats: not while one still runs.
-            None => !views::children(&parent, &all).iter().any(|c| views::repeats(c) && !views::is_done(c, today)),
+            None => !views::children(&parent, &all)
+                .iter()
+                .any(|c| views::repeats(c) && !views::is_done(c, today)),
         };
         if !ready || !complete_task(repo, &parent, today)? {
             break;
@@ -780,7 +863,9 @@ fn complete_parents<R: Repository>(repo: &R, id: &Id, today: NaiveDate) -> Resul
 
 /// Reopens a task (see `Action::TaskUncomplete`).
 fn uncomplete_task<R: Repository>(repo: &R, id: &Id, today: NaiveDate) -> Result<(), RepoError> {
-    let Some(mut task) = repo.get_task(id)? else { return Ok(()) };
+    let Some(mut task) = repo.get_task(id)? else {
+        return Ok(());
+    };
     // A repeating task was never checked: put back what completing it changed.
     if let Some(undo) = streak::undoable_completion(&task, today) {
         if let Some(d) = task.due.as_mut() {
@@ -823,7 +908,9 @@ fn move_subtree<R: Repository>(
     project_id: &Id,
     section_id: Option<&Id>,
 ) -> Result<(), RepoError> {
-    let Some(root) = repo.get_task(id)? else { return Ok(()) };
+    let Some(root) = repo.get_task(id)? else {
+        return Ok(());
+    };
     let now = Utc::now();
     for mut t in std::iter::once(root).chain(descendants(repo, id)?) {
         t.project_id = project_id.clone();
@@ -866,7 +953,10 @@ fn complete_occurrence(
     let mut undo = None;
     if let Some(d) = task.due.as_mut() {
         let suffix = d.date.get(10..).unwrap_or("").to_string();
-        let before = std::mem::replace(&mut d.date, format!("{}{}", iso(rule.next_after(passed)), suffix));
+        let before = std::mem::replace(
+            &mut d.date,
+            format!("{}{}", iso(rule.next_after(passed)), suffix),
+        );
         let was_moved = d.moved_from.take();
         undo = Some(LastCompletion {
             moved_to: d.date.clone(),

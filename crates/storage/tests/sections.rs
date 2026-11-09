@@ -13,22 +13,48 @@ struct H {
 
 impl H {
     fn new() -> Self {
-        H { repo: SqliteRepo::open_in_memory().unwrap(), n: 0 }
+        H {
+            repo: SqliteRepo::open_in_memory().unwrap(),
+            n: 0,
+        }
     }
 
     fn run(&mut self, action: Action) -> ApplyResult {
         self.n += 1;
-        apply(&self.repo, Command { uuid: format!("u{}", self.n), temp_id: Some("t".into()), action }).unwrap()
+        apply(
+            &self.repo,
+            Command {
+                uuid: format!("u{}", self.n),
+                temp_id: Some("t".into()),
+                action,
+            },
+        )
+        .unwrap()
     }
 
     /// Like `run`, but on a fixed day (recurring tasks start due that day).
     fn run_on(&mut self, day: &str, action: Action) -> ApplyResult {
         self.n += 1;
         let today = NaiveDate::parse_from_str(day, "%Y-%m-%d").unwrap();
-        apply_at(&self.repo, Command { uuid: format!("u{}", self.n), temp_id: Some("t".into()), action }, today).unwrap()
+        apply_at(
+            &self.repo,
+            Command {
+                uuid: format!("u{}", self.n),
+                temp_id: Some("t".into()),
+                action,
+            },
+            today,
+        )
+        .unwrap()
     }
 
-    fn task_on(&mut self, day: &str, name: &str, parent: Option<&Id>, recurrence: Option<Recurrence>) -> Id {
+    fn task_on(
+        &mut self,
+        day: &str,
+        name: &str,
+        parent: Option<&Id>,
+        recurrence: Option<Recurrence>,
+    ) -> Id {
         self.run_on(
             day,
             Action::TaskAdd {
@@ -49,10 +75,22 @@ impl H {
     }
 
     fn section(&mut self, project: &Id, name: &str) -> Id {
-        self.run(Action::SectionAdd { project_id: project.clone(), name: name.into() }).id_mapping["t"].clone()
+        self.run(Action::SectionAdd {
+            project_id: project.clone(),
+            name: name.into(),
+        })
+        .id_mapping["t"]
+            .clone()
     }
 
-    fn task(&mut self, name: &str, project: &Id, section: Option<&Id>, parent: Option<&Id>, recurrence: Option<Recurrence>) -> Id {
+    fn task(
+        &mut self,
+        name: &str,
+        project: &Id,
+        section: Option<&Id>,
+        parent: Option<&Id>,
+        recurrence: Option<Recurrence>,
+    ) -> Id {
         self.run(Action::TaskAdd {
             content: name.into(),
             project_id: project.clone(),
@@ -74,7 +112,12 @@ impl H {
     }
 
     fn section_names(&self, project: &Id) -> Vec<String> {
-        self.repo.list_sections(project).unwrap().into_iter().map(|s| s.name).collect()
+        self.repo
+            .list_sections(project)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.name)
+            .collect()
     }
 }
 
@@ -88,8 +131,15 @@ fn add_rename_list_sections() {
     let planning = h.section(&p("P"), "Planning");
     h.section(&p("P"), "Doing");
     h.section(&p("Q"), "Elsewhere");
-    h.run(Action::SectionUpdate { id: planning, name: " Plan ".into() });
-    assert_eq!(h.section_names(&p("P")), vec!["Plan", "Doing"], "creation order, scoped to project");
+    h.run(Action::SectionUpdate {
+        id: planning,
+        name: " Plan ".into(),
+    });
+    assert_eq!(
+        h.section_names(&p("P")),
+        vec!["Plan", "Doing"],
+        "creation order, scoped to project"
+    );
 }
 
 #[test]
@@ -102,7 +152,13 @@ fn delete_section_removes_its_tasks_only() {
     h.task("loose", &p("P"), None, None, None);
     h.run(Action::SectionDelete { id: a });
     assert_eq!(h.section_names(&p("P")), vec!["B"]);
-    let mut left: Vec<String> = h.repo.list_tasks(&p("P")).unwrap().into_iter().map(|t| t.content).collect();
+    let mut left: Vec<String> = h
+        .repo
+        .list_tasks(&p("P"))
+        .unwrap()
+        .into_iter()
+        .map(|t| t.content)
+        .collect();
     left.sort();
     assert_eq!(left, vec!["in-b", "loose"]);
 }
@@ -114,11 +170,20 @@ fn move_task_moves_subtree() {
     let parent = h.task("parent", &p("P"), None, None, None);
     let child = h.task("child", &p("P"), None, Some(&parent), None);
     let grandchild = h.task("grandchild", &p("P"), None, Some(&child), None);
-    h.run(Action::TaskMove { id: parent.clone(), project_id: p("Q"), section_id: Some(dest_section.clone()) });
+    h.run(Action::TaskMove {
+        id: parent.clone(),
+        project_id: p("Q"),
+        section_id: Some(dest_section.clone()),
+    });
     for id in [&parent, &child, &grandchild] {
         let t = h.get(id);
         assert_eq!(t.project_id, p("Q"), "{} moved project", t.content);
-        assert_eq!(t.section_id, Some(dest_section.clone()), "{} moved section", t.content);
+        assert_eq!(
+            t.section_id,
+            Some(dest_section.clone()),
+            "{} moved section",
+            t.content
+        );
     }
     assert_eq!(h.get(&grandchild).parent_id, Some(child), "hierarchy kept");
 }
@@ -152,10 +217,19 @@ fn complete_cascades_to_every_child() {
     let mut h = H::new();
     let parent = h.task("parent", &p("P"), None, None, None);
     let child = h.task("child", &p("P"), None, Some(&parent), None);
-    let habit = h.task("habit", &p("P"), None, Some(&parent), Some(Recurrence::Daily));
+    let habit = h.task(
+        "habit",
+        &p("P"),
+        None,
+        Some(&parent),
+        Some(Recurrence::Daily),
+    );
     h.run(Action::TaskComplete { id: parent.clone() });
     assert!(h.get(&parent).checked);
-    assert!(h.get(&child).checked, "non-recurring child completes with its parent");
+    assert!(
+        h.get(&child).checked,
+        "non-recurring child completes with its parent"
+    );
     assert!(h.get(&habit).checked, "so does a recurring child");
 }
 
@@ -197,7 +271,14 @@ fn checked_tree(h: &mut H) -> (Id, Id, Id, Id) {
 fn repeating_parent_marks_nonrepeating_descendants_to_reopen_on_its_next_date() {
     let mut h = H::new();
     let (parent, a, b, a1) = checked_tree(&mut h);
-    h.run_on(DAY, Action::TaskSetStreak { id: parent.clone(), enabled: true, goal: None });
+    h.run_on(
+        DAY,
+        Action::TaskSetStreak {
+            id: parent.clone(),
+            enabled: true,
+            goal: None,
+        },
+    );
     h.run_on(DAY, Action::TaskComplete { id: parent.clone() });
     for id in [&a, &b, &a1] {
         let t = h.get(id);
@@ -215,7 +296,14 @@ fn reset_leaves_repeating_descendants() {
     let mut h = H::new();
     let parent = h.task_on(DAY, "P", None, Some(Recurrence::Daily));
     let habit = h.task_on(DAY, "H", Some(&parent), Some(Recurrence::Weekly(vec![4])));
-    h.run_on(DAY, Action::TaskSetStreak { id: habit.clone(), enabled: true, goal: None });
+    h.run_on(
+        DAY,
+        Action::TaskSetStreak {
+            id: habit.clone(),
+            enabled: true,
+            goal: None,
+        },
+    );
     h.run_on(DAY, Action::TaskComplete { id: habit.clone() });
     let before = h.get(&habit);
     h.run_on(DAY, Action::TaskComplete { id: parent });
@@ -240,7 +328,14 @@ fn reset_ignores_other_trees() {
 fn already_credited_changes_nothing() {
     let mut h = H::new();
     let (parent, a, ..) = checked_tree(&mut h);
-    h.run_on(DAY, Action::TaskSetStreak { id: parent.clone(), enabled: true, goal: None });
+    h.run_on(
+        DAY,
+        Action::TaskSetStreak {
+            id: parent.clone(),
+            enabled: true,
+            goal: None,
+        },
+    );
     h.run_on(DAY, Action::TaskComplete { id: parent.clone() });
     let moved = h.get(&parent).due.unwrap().date;
     // Same occurrence again (a double tap): a no-op.
@@ -281,8 +376,22 @@ fn delete_parent_deletes_whole_subtree_and_reminders() {
     let parent = h.task_on(DAY, "P", None, None);
     let a = h.task_on(DAY, "A", Some(&parent), None);
     let a1 = h.task_on(DAY, "A1", Some(&a), None);
-    h.run_on(DAY, Action::ReminderAdd { task_id: a.clone(), minute_offset: Some(10), at: None });
-    h.run_on(DAY, Action::ReminderAdd { task_id: a1.clone(), minute_offset: Some(10), at: None });
+    h.run_on(
+        DAY,
+        Action::ReminderAdd {
+            task_id: a.clone(),
+            minute_offset: Some(10),
+            at: None,
+        },
+    );
+    h.run_on(
+        DAY,
+        Action::ReminderAdd {
+            task_id: a1.clone(),
+            minute_offset: Some(10),
+            at: None,
+        },
+    );
     assert_eq!(h.repo.list_reminders().unwrap().len(), 2);
     h.run_on(DAY, Action::TaskDelete { id: parent.clone() });
     for id in [&parent, &a, &a1] {

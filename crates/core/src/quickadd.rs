@@ -10,8 +10,8 @@ use chrono::{Duration, Months, NaiveDate, NaiveTime};
 use crate::ids::Id;
 use crate::model::{Priority, Project, Section};
 use crate::phrases::{
-    match_date, match_deadline, match_name, match_priority, match_repeat, match_time, number_word, resolve_repeat, sigil_name,
-    tokens, unread_every, RepeatSpec, Token,
+    match_date, match_deadline, match_name, match_priority, match_repeat, match_time, number_word,
+    resolve_repeat, sigil_name, tokens, unread_every, RepeatSpec, Token,
 };
 use crate::recurrence::Recurrence;
 
@@ -97,7 +97,6 @@ impl QuickAdd {
     }
 }
 
-
 /// `input` without the recognized phrases of the given kinds, with the
 /// leftover whitespace collapsed. Used when a value is picked by hand: the
 /// pick replaces whatever was typed for it.
@@ -130,7 +129,11 @@ pub fn parse_keeping(
         .char_indices()
         .map(|(i, c)| {
             let kept = plain.iter().any(|&(a, b)| i >= a && i < b);
-            if kept && !c.is_whitespace() { "\u{1}".repeat(c.len_utf8()) } else { c.to_string() }
+            if kept && !c.is_whitespace() {
+                "\u{1}".repeat(c.len_utf8())
+            } else {
+                c.to_string()
+            }
         })
         .collect();
     let (mut q, used) = parse_tokens(&masked, today, today, projects, sections);
@@ -142,19 +145,35 @@ pub fn parse_keeping(
 
 /// The title left after parsing: the unused words, single-spaced.
 fn unused_words(tokens: &[Token], used: &[bool]) -> String {
-    tokens.iter().zip(used).filter(|(_, used)| !**used).map(|(tok, _)| tok.raw.as_str()).collect::<Vec<_>>().join(" ")
+    tokens
+        .iter()
+        .zip(used)
+        .filter(|(_, used)| !**used)
+        .map(|(tok, _)| tok.raw.as_str())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Moves `plain` ranges through an edit from `old` to `new`: ranges before
 /// or after the changed stretch stay with their text; a range the edit
 /// touches is dropped, so the phrase is read again.
 pub fn shift_plain(old: &str, new: &str, plain: &[(usize, usize)]) -> Vec<(usize, usize)> {
-    let mut prefix = old.bytes().zip(new.bytes()).take_while(|(a, b)| a == b).count();
+    let mut prefix = old
+        .bytes()
+        .zip(new.bytes())
+        .take_while(|(a, b)| a == b)
+        .count();
     while !old.is_char_boundary(prefix) || !new.is_char_boundary(prefix) {
         prefix -= 1;
     }
     let max_suffix = old.len().min(new.len()) - prefix;
-    let mut suffix = old.bytes().rev().zip(new.bytes().rev()).take(max_suffix).take_while(|(a, b)| a == b).count();
+    let mut suffix = old
+        .bytes()
+        .rev()
+        .zip(new.bytes().rev())
+        .take(max_suffix)
+        .take_while(|(a, b)| a == b)
+        .count();
     while !old.is_char_boundary(old.len() - suffix) || !new.is_char_boundary(new.len() - suffix) {
         suffix -= 1;
     }
@@ -187,7 +206,12 @@ pub fn parse_time(text: &str) -> Option<NaiveTime> {
 /// new project (`new_project`); unknown sections stay in the title. A
 /// phrase on its own is still recognized (`content` is then empty); the
 /// editors won't save until there's a name besides it, as in Todoist.
-pub fn parse(input: &str, today: NaiveDate, projects: &[Project], sections: &[Section]) -> QuickAdd {
+pub fn parse(
+    input: &str,
+    today: NaiveDate,
+    projects: &[Project],
+    sections: &[Section],
+) -> QuickAdd {
     parse_tokens(input, today, today, projects, sections).0
 }
 
@@ -233,7 +257,11 @@ fn parse_tokens(
     let mut spans: Vec<Span> = Vec::new();
     let take = |used: &mut [bool], spans: &mut Vec<Span>, i: usize, n: usize, kind: SpanKind| {
         used[i..i + n].iter_mut().for_each(|u| *u = true);
-        spans.push(Span { start: t[i].start, end: t[i + n - 1].end, kind });
+        spans.push(Span {
+            start: t[i].start,
+            end: t[i + n - 1].end,
+            kind,
+        });
     };
 
     let mut i = 0;
@@ -305,7 +333,11 @@ fn parse_tokens(
                 }
             }
             let w = |k: usize| t.get(k).map(|x| x.norm.as_str()).unwrap_or("");
-            let count = w(i + 1).parse::<u32>().ok().or_else(|| number_word(w(i + 1))).filter(|n| (1..=99).contains(n));
+            let count = w(i + 1)
+                .parse::<u32>()
+                .ok()
+                .or_else(|| number_word(w(i + 1)))
+                .filter(|n| (1..=99).contains(n));
             if let (true, Some(n)) = (norm == "for", count) {
                 let span = match w(i + 2) {
                     "day" | "days" => Some((Months::new(0), n as i64)),
@@ -360,7 +392,11 @@ fn parse_tokens(
 
     // Sections resolve within the chosen project (or the Inbox).
     let inbox = projects.iter().find(|p| p.is_inbox).map(|p| p.id.clone());
-    let scope = if q.new_project.is_some() { None } else { q.project_id.clone().or(inbox.clone()) };
+    let scope = if q.new_project.is_some() {
+        None
+    } else {
+        q.project_id.clone().or(inbox.clone())
+    };
     if let Some(scope) = scope {
         let scoped: Vec<&Section> = sections.iter().filter(|s| s.project_id == scope).collect();
         let names: Vec<&str> = scoped.iter().map(|s| s.name.as_str()).collect();
@@ -381,14 +417,20 @@ fn parse_tokens(
     // nothing without a repeat, so with none it stays text.
     if let Some((at, n)) = repeat_at {
         let goal_at = |j: usize| {
-            let digits = t.get(j).filter(|w| !used[j] && w.norm.bytes().all(|b| b.is_ascii_digit()))?;
+            let digits = t
+                .get(j)
+                .filter(|w| !used[j] && w.norm.bytes().all(|b| b.is_ascii_digit()))?;
             digits.norm.parse::<i64>().ok().filter(|g| *g > 0)
         };
         let is_streak = |j: &usize| t[*j].norm == "streak";
         let after = (at + n..t.len()).find(|&j| !used[j]).filter(is_streak);
         let before = (0..at).rev().find(|&j| !used[j]).and_then(|j| {
             // The word before the repeat may be the goal, with "streak" right before it.
-            if goal_at(j).is_some() { j.checked_sub(1).filter(|k| !used[*k]) } else { Some(j) }
+            if goal_at(j).is_some() {
+                j.checked_sub(1).filter(|k| !used[*k])
+            } else {
+                Some(j)
+            }
         });
         if let Some(j) = after.or(before.filter(is_streak)) {
             q.streak = true;
@@ -402,7 +444,11 @@ fn parse_tokens(
     if let Some(spec) = repeat {
         let start = q.date.unwrap_or(start);
         let rule = resolve_repeat(spec, start);
-        let first = if rule.contains(start) { start } else { rule.next_after(start) };
+        let first = if rule.contains(start) {
+            start
+        } else {
+            rule.next_after(start)
+        };
         q.date = Some(first);
         if let Some((months, days)) = repeat_for {
             let end = first.checked_add_months(months).unwrap_or(first) + Duration::days(days);
@@ -471,7 +517,11 @@ mod tests {
         assert_eq!(q.content, "Pay rent");
         assert_eq!(q.date, Some(today()));
         for word in ["tomorrow", "tmr", "tom", "tmrw", "Tomorrow"] {
-            assert_eq!(date_of(&format!("x {word}")), Some(d(2026, 10, 20)), "{word}");
+            assert_eq!(
+                date_of(&format!("x {word}")),
+                Some(d(2026, 10, 20)),
+                "{word}"
+            );
         }
     }
 
@@ -487,7 +537,11 @@ mod tests {
     #[test]
     fn next_forms() {
         assert_eq!(date_of("x next mon"), Some(d(2026, 10, 26)));
-        assert_eq!(date_of("x next friday"), Some(d(2026, 10, 30)), "Friday of next week");
+        assert_eq!(
+            date_of("x next friday"),
+            Some(d(2026, 10, 30)),
+            "Friday of next week"
+        );
         assert_eq!(date_of("x next week"), Some(d(2026, 10, 26)));
         assert_eq!(date_of("x next month"), Some(d(2026, 11, 1)));
         assert_eq!(date_of("x weekend"), Some(d(2026, 10, 24)));
@@ -508,7 +562,11 @@ mod tests {
         assert_eq!(date_of("x oct 25"), Some(d(2026, 10, 25)));
         assert_eq!(date_of("x October 25th"), Some(d(2026, 10, 25)));
         assert_eq!(date_of("x 25 oct"), Some(d(2026, 10, 25)));
-        assert_eq!(date_of("x oct 1"), Some(d(2027, 10, 1)), "past date rolls to next year");
+        assert_eq!(
+            date_of("x oct 1"),
+            Some(d(2027, 10, 1)),
+            "past date rolls to next year"
+        );
         assert_eq!(date_of("x oct 1 2028"), Some(d(2028, 10, 1)));
         assert_eq!(date_of("x 2026-12-31"), Some(d(2026, 12, 31)));
         assert_eq!(p("x oct 25").content, "x");
@@ -517,10 +575,18 @@ mod tests {
     #[test]
     fn bare_month_is_the_first() {
         assert_eq!(date_of("x dec"), Some(d(2026, 12, 1)));
-        assert_eq!(date_of("x Sep"), Some(d(2027, 9, 1)), "past date rolls to next year");
+        assert_eq!(
+            date_of("x Sep"),
+            Some(d(2027, 9, 1)),
+            "past date rolls to next year"
+        );
         assert_eq!(date_of("x oct"), Some(d(2027, 10, 1)));
         assert_eq!(date_of("x dec 2028"), Some(d(2028, 12, 1)));
-        assert_eq!(date_of("x dec 25"), Some(d(2026, 12, 25)), "a day still wins");
+        assert_eq!(
+            date_of("x dec 25"),
+            Some(d(2026, 12, 25)),
+            "a day still wins"
+        );
         assert_eq!(p("x dec").content, "x");
         assert_eq!(date_of("x may"), None, "a verb, not a month");
         assert_eq!(date_of("x may 5"), Some(d(2027, 5, 5)));
@@ -529,7 +595,11 @@ mod tests {
     #[test]
     fn times() {
         let q = p("x at 5pm");
-        assert_eq!((q.date, q.time), (Some(today()), Some(t(17, 0))), "time alone means today");
+        assert_eq!(
+            (q.date, q.time),
+            (Some(today()), Some(t(17, 0))),
+            "time alone means today"
+        );
         assert_eq!(q.content, "x");
         assert_eq!(p("x 5:30pm").time, Some(t(17, 30)));
         assert_eq!(p("x 17:00").time, Some(t(17, 0)));
@@ -574,7 +644,10 @@ mod tests {
         let q = p("Run streak every day");
         assert!(q.streak);
         assert_eq!(q.content, "Run");
-        assert_eq!(q.spans.iter().map(|s| s.kind).collect::<Vec<_>>(), [SpanKind::Streak, SpanKind::Repeat]);
+        assert_eq!(
+            q.spans.iter().map(|s| s.kind).collect::<Vec<_>>(),
+            [SpanKind::Streak, SpanKind::Repeat]
+        );
 
         // Other phrases between it and the repeat don't matter; words do.
         assert!(p("Run every day 5pm streak").streak);
@@ -589,12 +662,21 @@ mod tests {
         let q = p("Run streak 30 every day");
         assert_eq!((q.streak, q.streak_goal), (true, Some(30)));
         assert_eq!(q.content, "Run");
-        assert_eq!(q.spans.iter().map(|s| s.kind).collect::<Vec<_>>(), [SpanKind::Streak, SpanKind::Repeat]);
+        assert_eq!(
+            q.spans.iter().map(|s| s.kind).collect::<Vec<_>>(),
+            [SpanKind::Streak, SpanKind::Repeat]
+        );
         // Only a whole number above zero; anything else stays in the title.
         let q = p("Run every day streak 0");
-        assert_eq!((q.streak, q.streak_goal, q.content.as_str()), (true, None, "Run 0"));
+        assert_eq!(
+            (q.streak, q.streak_goal, q.content.as_str()),
+            (true, None, "Run 0")
+        );
         let q = p("Run every day streak 3x");
-        assert_eq!((q.streak, q.streak_goal, q.content.as_str()), (true, None, "Run 3x"));
+        assert_eq!(
+            (q.streak, q.streak_goal, q.content.as_str()),
+            (true, None, "Run 3x")
+        );
         // A number by the repeat without "streak" is just a number.
         let q = p("Run 30 every day");
         assert_eq!((q.streak, q.content.as_str()), (false, "Run 30"));
@@ -605,37 +687,65 @@ mod tests {
         assert_eq!(q.content, "Keep my streak");
         assert!(q.spans.is_empty());
         let q = p("Keep my streak 30");
-        assert_eq!((q.streak, q.streak_goal, q.content.as_str()), (false, None, "Keep my streak 30"));
+        assert_eq!(
+            (q.streak, q.streak_goal, q.content.as_str()),
+            (false, None, "Keep my streak 30")
+        );
     }
 
     #[test]
     fn repeats() {
         let q = p("x every day");
-        assert_eq!((q.recurrence, q.date), (Some(Recurrence::Daily), Some(today())));
+        assert_eq!(
+            (q.recurrence, q.date),
+            (Some(Recurrence::Daily), Some(today()))
+        );
         assert_eq!(q.content, "x");
         assert_eq!(p("x daily").recurrence, Some(Recurrence::Daily));
         assert_eq!(p("x everyday").recurrence, Some(Recurrence::Daily));
-        assert_eq!(p("x every weekday").recurrence, Some(Recurrence::Weekly(vec![0, 1, 2, 3, 4])));
-        assert_eq!(p("x every week").recurrence, Some(Recurrence::Weekly(vec![0])), "anchored on today (Mon)");
+        assert_eq!(
+            p("x every weekday").recurrence,
+            Some(Recurrence::Weekly(vec![0, 1, 2, 3, 4]))
+        );
+        assert_eq!(
+            p("x every week").recurrence,
+            Some(Recurrence::Weekly(vec![0])),
+            "anchored on today (Mon)"
+        );
         assert_eq!(p("x weekly").recurrence, Some(Recurrence::Weekly(vec![0])));
-        assert_eq!(p("x every month").recurrence, Some(Recurrence::MonthlyDay(19)));
+        assert_eq!(
+            p("x every month").recurrence,
+            Some(Recurrence::MonthlyDay(19))
+        );
         assert_eq!(p("x monthly").recurrence, Some(Recurrence::MonthlyDay(19)));
         let q = p("x every wed");
-        assert_eq!((q.recurrence, q.date), (Some(Recurrence::Weekly(vec![2])), Some(d(2026, 10, 21))));
+        assert_eq!(
+            (q.recurrence, q.date),
+            (Some(Recurrence::Weekly(vec![2])), Some(d(2026, 10, 21)))
+        );
         let q = p("x every mon, wed and fri");
         assert_eq!(q.recurrence, Some(Recurrence::Weekly(vec![0, 2, 4])));
         assert_eq!(q.date, Some(today()));
         assert_eq!(q.content, "x");
         let q = p("x every 15th");
-        assert_eq!((q.recurrence, q.date), (Some(Recurrence::MonthlyDay(15)), Some(d(2026, 11, 15))));
+        assert_eq!(
+            (q.recurrence, q.date),
+            (Some(Recurrence::MonthlyDay(15)), Some(d(2026, 11, 15)))
+        );
         let q = p("x every month on the 1st");
-        assert_eq!((q.recurrence, q.date), (Some(Recurrence::MonthlyDay(1)), Some(d(2026, 11, 1))));
+        assert_eq!(
+            (q.recurrence, q.date),
+            (Some(Recurrence::MonthlyDay(1)), Some(d(2026, 11, 1)))
+        );
     }
 
     #[test]
     fn repeat_anchors_on_parsed_date_and_takes_time() {
         let q = p("x friday every week");
-        assert_eq!((q.recurrence, q.date), (Some(Recurrence::Weekly(vec![4])), Some(d(2026, 10, 23))));
+        assert_eq!(
+            (q.recurrence, q.date),
+            (Some(Recurrence::Weekly(vec![4])), Some(d(2026, 10, 23)))
+        );
         let q = p("standup every weekday at 9am");
         assert_eq!(q.content, "standup");
         assert_eq!(q.recurrence, Some(Recurrence::Weekly(vec![0, 1, 2, 3, 4])));
@@ -654,46 +764,106 @@ mod tests {
     fn projects_greedy_and_unknown() {
         assert_eq!(p("x #work").project_id, Some(Id::from("P-WORK")));
         let q = p("x #Side Project");
-        assert_eq!((q.project_id, q.content.as_str()), (Some(Id::from("P-SIDE")), "x"));
+        assert_eq!(
+            (q.project_id, q.content.as_str()),
+            (Some(Id::from("P-SIDE")), "x")
+        );
         let q = p("x #unknown");
-        assert_eq!((q.project_id, q.content.as_str(), q.new_project.as_deref()), (None, "x", Some("unknown")));
+        assert_eq!(
+            (q.project_id, q.content.as_str(), q.new_project.as_deref()),
+            (None, "x", Some("unknown"))
+        );
     }
 
     #[test]
     fn unknown_project_is_taken_as_new() {
         let q = p("Buy ink #wrok");
-        assert_eq!((q.content.as_str(), q.project_id.clone(), q.new_project.as_deref()), ("Buy ink", None, Some("wrok")));
-        assert_eq!(q.spans, vec![crate::quickadd::Span { start: 8, end: 13, kind: SpanKind::Project }]);
+        assert_eq!(
+            (
+                q.content.as_str(),
+                q.project_id.clone(),
+                q.new_project.as_deref()
+            ),
+            ("Buy ink", None, Some("wrok"))
+        );
+        assert_eq!(
+            q.spans,
+            vec![crate::quickadd::Span {
+                start: 8,
+                end: 13,
+                kind: SpanKind::Project
+            }]
+        );
     }
 
     #[test]
     fn first_hash_phrase_wins() {
         let q = p("Buy #foo #work");
-        assert_eq!((q.new_project.as_deref(), q.project_id.clone(), q.content.as_str()), (Some("foo"), None, "Buy #work"));
+        assert_eq!(
+            (
+                q.new_project.as_deref(),
+                q.project_id.clone(),
+                q.content.as_str()
+            ),
+            (Some("foo"), None, "Buy #work")
+        );
         assert_eq!(q.spans.len(), 1);
-        assert_eq!((q.spans[0].start, q.spans[0].end, q.spans[0].kind), (4, 8, SpanKind::Project));
+        assert_eq!(
+            (q.spans[0].start, q.spans[0].end, q.spans[0].kind),
+            (4, 8, SpanKind::Project)
+        );
         let q = p("Buy #work #foo");
-        assert_eq!((q.project_id, q.new_project, q.content.as_str()), (Some(Id::from("P-WORK")), None, "Buy #foo"));
+        assert_eq!(
+            (q.project_id, q.new_project, q.content.as_str()),
+            (Some(Id::from("P-WORK")), None, "Buy #foo")
+        );
     }
 
     #[test]
     fn new_project_with_trailing_punctuation() {
         let q = p("Buy #wrok.");
-        assert_eq!((q.new_project.as_deref(), q.project_id.clone(), q.content.as_str()), (Some("wrok"), None, "Buy"));
-        assert_eq!(q.spans, vec![crate::quickadd::Span { start: 4, end: 10, kind: SpanKind::Project }]);
+        assert_eq!(
+            (
+                q.new_project.as_deref(),
+                q.project_id.clone(),
+                q.content.as_str()
+            ),
+            (Some("wrok"), None, "Buy")
+        );
+        assert_eq!(
+            q.spans,
+            vec![crate::quickadd::Span {
+                start: 4,
+                end: 10,
+                kind: SpanKind::Project
+            }]
+        );
     }
 
     #[test]
     fn hashtag_word_is_a_new_project() {
         let q = p("#hashtag culture");
-        assert_eq!((q.new_project.as_deref(), q.content.as_str()), (Some("hashtag"), "culture"));
-        assert_eq!(q.spans, vec![crate::quickadd::Span { start: 0, end: 8, kind: SpanKind::Project }]);
+        assert_eq!(
+            (q.new_project.as_deref(), q.content.as_str()),
+            (Some("hashtag"), "culture")
+        );
+        assert_eq!(
+            q.spans,
+            vec![crate::quickadd::Span {
+                start: 0,
+                end: 8,
+                kind: SpanKind::Project
+            }]
+        );
     }
 
     #[test]
     fn double_hash_new_project() {
         let q = p("Buy ##foo");
-        assert_eq!((q.new_project.as_deref(), q.content.as_str()), (Some("foo"), "Buy"));
+        assert_eq!(
+            (q.new_project.as_deref(), q.content.as_str()),
+            (Some("foo"), "Buy")
+        );
     }
 
     #[test]
@@ -704,13 +874,19 @@ mod tests {
     #[test]
     fn known_project_still_wins() {
         let q = p("Buy ink #work");
-        assert_eq!((q.project_id, q.new_project), (Some(Id::from("P-WORK")), None));
+        assert_eq!(
+            (q.project_id, q.new_project),
+            (Some(Id::from("P-WORK")), None)
+        );
     }
 
     #[test]
     fn numbers_are_not_names() {
         let q = p("fix bug #123");
-        assert_eq!((q.content.as_str(), q.new_project, q.spans.len()), ("fix bug #123", None, 0));
+        assert_eq!(
+            (q.content.as_str(), q.new_project, q.spans.len()),
+            ("fix bug #123", None, 0)
+        );
         let q = p("call @1 now");
         assert_eq!((q.content.as_str(), q.labels.len()), ("call @1 now", 0));
     }
@@ -718,9 +894,15 @@ mod tests {
     #[test]
     fn sections_within_project_or_inbox() {
         let q = p("x #work /next");
-        assert_eq!((q.project_id, q.section_id), (Some(Id::from("P-WORK")), Some(Id::from("S-NEXT"))));
+        assert_eq!(
+            (q.project_id, q.section_id),
+            (Some(Id::from("P-WORK")), Some(Id::from("S-NEXT")))
+        );
         let q = p("x /later");
-        assert_eq!((q.project_id, q.section_id), (Some(Id::from("P-IN")), Some(Id::from("S-LATER"))));
+        assert_eq!(
+            (q.project_id, q.section_id),
+            (Some(Id::from("P-IN")), Some(Id::from("S-LATER")))
+        );
         let q = p("x /nowhere");
         assert_eq!((q.section_id, q.content.as_str()), (None, "x /nowhere"));
         // /next exists only in Work, not the Inbox.
@@ -756,13 +938,21 @@ mod tests {
 
     #[test]
     fn whole_words_only() {
-        for input in ["Plan today's agenda", "Mondays are hard", "Buy todays paper", "email@example.com"] {
+        for input in [
+            "Plan today's agenda",
+            "Mondays are hard",
+            "Buy todays paper",
+            "email@example.com",
+        ] {
             let q = p(input);
             assert_eq!(q.date, None, "{input}");
             assert_eq!(q.content, input, "{input}");
         }
         let q = p("Email Bob tomorrow.");
-        assert_eq!((q.date, q.content.as_str()), (Some(d(2026, 10, 20)), "Email Bob"));
+        assert_eq!(
+            (q.date, q.content.as_str()),
+            (Some(d(2026, 10, 20)), "Email Bob")
+        );
     }
 
     #[test]
@@ -770,42 +960,102 @@ mod tests {
         // today = Mon 2026-10-19
         let q = p("water plants every 3 days");
         assert_eq!(q.content, "water plants");
-        assert_eq!(q.recurrence, Some(Recurrence::EveryNDays { n: 3, anchor: today() }));
+        assert_eq!(
+            q.recurrence,
+            Some(Recurrence::EveryNDays {
+                n: 3,
+                anchor: today()
+            })
+        );
         assert_eq!(q.date, Some(today()));
-        assert_eq!(p("x every other day").recurrence, Some(Recurrence::EveryNDays { n: 2, anchor: today() }));
-        assert_eq!(p("x every 1 day").recurrence, Some(Recurrence::Daily), "n = 1 is the plain rule");
+        assert_eq!(
+            p("x every other day").recurrence,
+            Some(Recurrence::EveryNDays {
+                n: 2,
+                anchor: today()
+            })
+        );
+        assert_eq!(
+            p("x every 1 day").recurrence,
+            Some(Recurrence::Daily),
+            "n = 1 is the plain rule"
+        );
         // Weeks anchor on the parsed date.
         let q = p("review every 2 weeks wed");
         assert_eq!(q.content, "review");
-        assert_eq!(q.recurrence, Some(Recurrence::EveryNWeeks { n: 2, days: vec![2], anchor: d(2026, 10, 21) }));
+        assert_eq!(
+            q.recurrence,
+            Some(Recurrence::EveryNWeeks {
+                n: 2,
+                days: vec![2],
+                anchor: d(2026, 10, 21)
+            })
+        );
         assert_eq!(q.date, Some(d(2026, 10, 21)));
         let q = p("gym every other week on mon and thu");
-        assert_eq!(q.recurrence, Some(Recurrence::EveryNWeeks { n: 2, days: vec![0, 3], anchor: today() }));
+        assert_eq!(
+            q.recurrence,
+            Some(Recurrence::EveryNWeeks {
+                n: 2,
+                days: vec![0, 3],
+                anchor: today()
+            })
+        );
         assert_eq!(q.date, Some(today()));
         let q = p("1:1 every other friday");
-        assert_eq!(q.recurrence, Some(Recurrence::EveryNWeeks { n: 2, days: vec![4], anchor: d(2026, 10, 23) }));
+        assert_eq!(
+            q.recurrence,
+            Some(Recurrence::EveryNWeeks {
+                n: 2,
+                days: vec![4],
+                anchor: d(2026, 10, 23)
+            })
+        );
         assert_eq!(q.date, Some(d(2026, 10, 23)));
         assert_eq!(
             p("x every 3 months").recurrence,
-            Some(Recurrence::EveryNMonths { n: 3, day: 19, anchor: today() })
+            Some(Recurrence::EveryNMonths {
+                n: 3,
+                day: 19,
+                anchor: today()
+            })
         );
         assert_eq!(
             p("x every 2 years").recurrence,
-            Some(Recurrence::EveryNMonths { n: 24, day: 19, anchor: today() })
+            Some(Recurrence::EveryNMonths {
+                n: 24,
+                day: 19,
+                anchor: today()
+            })
         );
     }
 
     #[test]
     fn yearly_repeats() {
-        assert_eq!(p("x every year").recurrence, Some(Recurrence::Yearly { month: 10, day: 19 }));
-        assert_eq!(p("x yearly").recurrence, Some(Recurrence::Yearly { month: 10, day: 19 }));
-        assert_eq!(p("x annually").recurrence, Some(Recurrence::Yearly { month: 10, day: 19 }));
+        assert_eq!(
+            p("x every year").recurrence,
+            Some(Recurrence::Yearly { month: 10, day: 19 })
+        );
+        assert_eq!(
+            p("x yearly").recurrence,
+            Some(Recurrence::Yearly { month: 10, day: 19 })
+        );
+        assert_eq!(
+            p("x annually").recurrence,
+            Some(Recurrence::Yearly { month: 10, day: 19 })
+        );
         let q = p("mom's birthday every jan 5");
         assert_eq!(q.content, "mom's birthday");
         assert_eq!(q.recurrence, Some(Recurrence::Yearly { month: 1, day: 5 }));
         assert_eq!(q.date, Some(d(2027, 1, 5)));
-        assert_eq!(p("x every 5 january").recurrence, Some(Recurrence::Yearly { month: 1, day: 5 }));
-        assert_eq!(p("x every january 5th").recurrence, Some(Recurrence::Yearly { month: 1, day: 5 }));
+        assert_eq!(
+            p("x every 5 january").recurrence,
+            Some(Recurrence::Yearly { month: 1, day: 5 })
+        );
+        assert_eq!(
+            p("x every january 5th").recurrence,
+            Some(Recurrence::Yearly { month: 1, day: 5 })
+        );
     }
 
     #[test]
@@ -814,19 +1064,43 @@ mod tests {
         assert_eq!(q.content, "rent");
         assert_eq!(q.recurrence, Some(Recurrence::MonthlyLastDay));
         assert_eq!(q.date, Some(d(2026, 10, 31)));
-        assert_eq!(p("x every last day").recurrence, Some(Recurrence::MonthlyLastDay));
-        assert_eq!(p("x every month on the last day").recurrence, Some(Recurrence::MonthlyLastDay));
+        assert_eq!(
+            p("x every last day").recurrence,
+            Some(Recurrence::MonthlyLastDay)
+        );
+        assert_eq!(
+            p("x every month on the last day").recurrence,
+            Some(Recurrence::MonthlyLastDay)
+        );
         let q = p("invoice every last workday");
         assert_eq!(q.recurrence, Some(Recurrence::MonthlyWorkday { nth: -1 }));
         assert_eq!(q.date, Some(d(2026, 10, 30)));
-        assert_eq!(p("x every first workday").recurrence, Some(Recurrence::MonthlyWorkday { nth: 1 }));
-        assert_eq!(p("x every workday").recurrence, Some(Recurrence::Weekly(vec![0, 1, 2, 3, 4])));
+        assert_eq!(
+            p("x every first workday").recurrence,
+            Some(Recurrence::MonthlyWorkday { nth: 1 })
+        );
+        assert_eq!(
+            p("x every workday").recurrence,
+            Some(Recurrence::Weekly(vec![0, 1, 2, 3, 4]))
+        );
         let q = p("book club every first monday");
         assert_eq!(q.content, "book club");
-        assert_eq!(q.recurrence, Some(Recurrence::MonthlyNthWeekday { nth: 1, weekday: 0 }));
+        assert_eq!(
+            q.recurrence,
+            Some(Recurrence::MonthlyNthWeekday { nth: 1, weekday: 0 })
+        );
         assert_eq!(q.date, Some(d(2026, 11, 2)));
-        assert_eq!(p("x every 3rd tuesday").recurrence, Some(Recurrence::MonthlyNthWeekday { nth: 3, weekday: 1 }));
-        assert_eq!(p("x every last fri").recurrence, Some(Recurrence::MonthlyNthWeekday { nth: -1, weekday: 4 }));
+        assert_eq!(
+            p("x every 3rd tuesday").recurrence,
+            Some(Recurrence::MonthlyNthWeekday { nth: 3, weekday: 1 })
+        );
+        assert_eq!(
+            p("x every last fri").recurrence,
+            Some(Recurrence::MonthlyNthWeekday {
+                nth: -1,
+                weekday: 4
+            })
+        );
         let q = p("pay card every 3rd of the month");
         assert_eq!(q.content, "pay card");
         assert_eq!(q.recurrence, Some(Recurrence::MonthlyDay(3)));
@@ -835,61 +1109,167 @@ mod tests {
 
     #[test]
     fn word_numbers_and_ordinal_intervals() {
-        assert_eq!(p("x every three days").recurrence, Some(Recurrence::EveryNDays { n: 3, anchor: today() }));
-        assert_eq!(p("x every two weeks").recurrence, Some(Recurrence::EveryNWeeks { n: 2, days: vec![0], anchor: today() }));
-        assert_eq!(p("x every twelve months").recurrence, Some(Recurrence::EveryNMonths { n: 12, day: 19, anchor: today() }));
+        assert_eq!(
+            p("x every three days").recurrence,
+            Some(Recurrence::EveryNDays {
+                n: 3,
+                anchor: today()
+            })
+        );
+        assert_eq!(
+            p("x every two weeks").recurrence,
+            Some(Recurrence::EveryNWeeks {
+                n: 2,
+                days: vec![0],
+                anchor: today()
+            })
+        );
+        assert_eq!(
+            p("x every twelve months").recurrence,
+            Some(Recurrence::EveryNMonths {
+                n: 12,
+                day: 19,
+                anchor: today()
+            })
+        );
         let q = p("x every second week");
-        assert_eq!((q.content.as_str(), q.recurrence), ("x", Some(Recurrence::EveryNWeeks { n: 2, days: vec![0], anchor: today() })));
+        assert_eq!(
+            (q.content.as_str(), q.recurrence),
+            (
+                "x",
+                Some(Recurrence::EveryNWeeks {
+                    n: 2,
+                    days: vec![0],
+                    anchor: today()
+                })
+            )
+        );
         let q = p("x every 3rd day");
-        assert_eq!((q.content.as_str(), q.recurrence), ("x", Some(Recurrence::EveryNDays { n: 3, anchor: today() })));
-        assert_eq!(p("x every third month").recurrence, Some(Recurrence::EveryNMonths { n: 3, day: 19, anchor: today() }));
+        assert_eq!(
+            (q.content.as_str(), q.recurrence),
+            (
+                "x",
+                Some(Recurrence::EveryNDays {
+                    n: 3,
+                    anchor: today()
+                })
+            )
+        );
+        assert_eq!(
+            p("x every third month").recurrence,
+            Some(Recurrence::EveryNMonths {
+                n: 3,
+                day: 19,
+                anchor: today()
+            })
+        );
     }
 
     #[test]
     fn nth_day_and_week_of_the_month() {
         let q = p("x every 2nd day of the month");
-        assert_eq!((q.content.as_str(), q.recurrence), ("x", Some(Recurrence::MonthlyDay(2))));
-        assert_eq!(p("x every 15th day of every month").recurrence, Some(Recurrence::MonthlyDay(15)));
+        assert_eq!(
+            (q.content.as_str(), q.recurrence),
+            ("x", Some(Recurrence::MonthlyDay(2)))
+        );
+        assert_eq!(
+            p("x every 15th day of every month").recurrence,
+            Some(Recurrence::MonthlyDay(15))
+        );
         let q = p("x every 2nd week of the month");
         assert_eq!(q.content, "x");
-        assert_eq!(q.recurrence, Some(Recurrence::MonthlyNthWeekday { nth: 2, weekday: 0 }), "its Monday");
+        assert_eq!(
+            q.recurrence,
+            Some(Recurrence::MonthlyNthWeekday { nth: 2, weekday: 0 }),
+            "its Monday"
+        );
         assert_eq!(q.date, Some(d(2026, 11, 9)));
         let q = p("x every second week of the month on fri");
-        assert_eq!((q.content.as_str(), q.recurrence), ("x", Some(Recurrence::MonthlyNthWeekday { nth: 2, weekday: 4 })));
-        assert_eq!(p("x every last week of the month").recurrence, Some(Recurrence::MonthlyNthWeekday { nth: -1, weekday: 0 }));
+        assert_eq!(
+            (q.content.as_str(), q.recurrence),
+            (
+                "x",
+                Some(Recurrence::MonthlyNthWeekday { nth: 2, weekday: 4 })
+            )
+        );
+        assert_eq!(
+            p("x every last week of the month").recurrence,
+            Some(Recurrence::MonthlyNthWeekday {
+                nth: -1,
+                weekday: 0
+            })
+        );
     }
 
     #[test]
     fn month_repeats_with_a_day() {
         let q = p("x every month on the 2nd monday");
-        assert_eq!((q.content.as_str(), q.recurrence), ("x", Some(Recurrence::MonthlyNthWeekday { nth: 2, weekday: 0 })));
+        assert_eq!(
+            (q.content.as_str(), q.recurrence),
+            (
+                "x",
+                Some(Recurrence::MonthlyNthWeekday { nth: 2, weekday: 0 })
+            )
+        );
         let q = p("x every 3 months on the 1st");
         assert_eq!(q.content, "x");
-        assert_eq!(q.recurrence, Some(Recurrence::EveryNMonths { n: 3, day: 1, anchor: d(2026, 11, 1) }));
+        assert_eq!(
+            q.recurrence,
+            Some(Recurrence::EveryNMonths {
+                n: 3,
+                day: 1,
+                anchor: d(2026, 11, 1)
+            })
+        );
         assert_eq!(q.date, Some(d(2026, 11, 1)));
         let q = p("x every other month on the 15th");
-        assert_eq!(q.recurrence, Some(Recurrence::EveryNMonths { n: 2, day: 15, anchor: d(2026, 11, 15) }));
-        assert_eq!(p("x every 1 month on the 5th").recurrence, Some(Recurrence::MonthlyDay(5)));
+        assert_eq!(
+            q.recurrence,
+            Some(Recurrence::EveryNMonths {
+                n: 2,
+                day: 15,
+                anchor: d(2026, 11, 15)
+            })
+        );
+        assert_eq!(
+            p("x every 1 month on the 5th").recurrence,
+            Some(Recurrence::MonthlyDay(5))
+        );
     }
 
     #[test]
     fn weekend_and_ampersand() {
         let q = p("x every weekend");
-        assert_eq!((q.content.as_str(), q.recurrence), ("x", Some(Recurrence::Weekly(vec![5, 6]))));
+        assert_eq!(
+            (q.content.as_str(), q.recurrence),
+            ("x", Some(Recurrence::Weekly(vec![5, 6])))
+        );
         assert_eq!(q.date, Some(d(2026, 10, 24)));
         let q = p("x every tue & thu");
-        assert_eq!((q.content.as_str(), q.recurrence), ("x", Some(Recurrence::Weekly(vec![1, 3]))));
+        assert_eq!(
+            (q.content.as_str(), q.recurrence),
+            ("x", Some(Recurrence::Weekly(vec![1, 3])))
+        );
     }
 
     #[test]
     fn a_start_date_after_the_repeat_belongs_to_it() {
         let q = p("x every 10 days starting nov 1");
         assert_eq!(q.content, "x");
-        assert_eq!(q.recurrence, Some(Recurrence::EveryNDays { n: 10, anchor: d(2026, 11, 1) }));
+        assert_eq!(
+            q.recurrence,
+            Some(Recurrence::EveryNDays {
+                n: 10,
+                anchor: d(2026, 11, 1)
+            })
+        );
         let q = p("x every day from tomorrow");
         assert_eq!((q.content.as_str(), q.date), ("x", Some(d(2026, 10, 20))));
         let q = p("x every week beginning friday");
-        assert_eq!((q.content.as_str(), q.recurrence), ("x", Some(Recurrence::Weekly(vec![4]))));
+        assert_eq!(
+            (q.content.as_str(), q.recurrence),
+            ("x", Some(Recurrence::Weekly(vec![4])))
+        );
         let input = "x every day starting tomorrow";
         let q = p(input);
         let got: Vec<&str> = q.spans.iter().map(|s| &input[s.start..s.end]).collect();
@@ -903,7 +1283,14 @@ mod tests {
         // Today is Mon Oct 19: Tuesday this week is still ahead; Monday is today.
         let q = p("x every 3 weeks on tue");
         assert_eq!(q.date, Some(d(2026, 10, 20)));
-        assert_eq!(q.recurrence, Some(Recurrence::EveryNWeeks { n: 3, days: vec![1], anchor: d(2026, 10, 20) }));
+        assert_eq!(
+            q.recurrence,
+            Some(Recurrence::EveryNWeeks {
+                n: 3,
+                days: vec![1],
+                anchor: d(2026, 10, 20)
+            })
+        );
         // From a Saturday, the coming Tuesday, not the one three weeks out.
         let sat = d(2026, 10, 24);
         let q = parse("x every 3 weeks on tue", sat, &[], &[]);
@@ -920,14 +1307,24 @@ mod tests {
     fn week_interval_spellings() {
         let every3 = |days: Vec<u8>, anchor| Some(Recurrence::EveryNWeeks { n: 3, days, anchor });
         let q = p("x every 3 weeks on tuesdays");
-        assert_eq!((q.content.as_str(), q.recurrence), ("x", every3(vec![1], d(2026, 10, 20))));
+        assert_eq!(
+            (q.content.as_str(), q.recurrence),
+            ("x", every3(vec![1], d(2026, 10, 20)))
+        );
         assert_eq!(p("x every 3 wks").recurrence, every3(vec![0], today()));
         assert_eq!(p("x every 3 wk").recurrence, every3(vec![0], today()));
-        let biweekly = Some(Recurrence::EveryNWeeks { n: 2, days: vec![0], anchor: today() });
+        let biweekly = Some(Recurrence::EveryNWeeks {
+            n: 2,
+            days: vec![0],
+            anchor: today(),
+        });
         assert_eq!(p("x every fortnight").recurrence, biweekly);
         assert_eq!(p("x biweekly").recurrence, biweekly);
         assert_eq!(p("x fortnightly").recurrence, biweekly);
-        assert_eq!(p("x every mondays and fridays").recurrence, Some(Recurrence::Weekly(vec![0, 4])));
+        assert_eq!(
+            p("x every mondays and fridays").recurrence,
+            Some(Recurrence::Weekly(vec![0, 4]))
+        );
     }
 
     #[test]
@@ -935,17 +1332,48 @@ mod tests {
         // Today is Mon Oct 19.
         let q = p("x every 3 tuesdays");
         assert_eq!(q.content, "x");
-        assert_eq!(q.recurrence, Some(Recurrence::EveryNWeeks { n: 3, days: vec![1], anchor: d(2026, 10, 20) }));
+        assert_eq!(
+            q.recurrence,
+            Some(Recurrence::EveryNWeeks {
+                n: 3,
+                days: vec![1],
+                anchor: d(2026, 10, 20)
+            })
+        );
         assert_eq!(q.date, Some(d(2026, 10, 20)));
-        assert_eq!(p("x every two fridays").recurrence, Some(Recurrence::EveryNWeeks { n: 2, days: vec![4], anchor: d(2026, 10, 23) }));
-        assert_eq!(p("x every 2 mon").recurrence, Some(Recurrence::EveryNWeeks { n: 2, days: vec![0], anchor: today() }));
+        assert_eq!(
+            p("x every two fridays").recurrence,
+            Some(Recurrence::EveryNWeeks {
+                n: 2,
+                days: vec![4],
+                anchor: d(2026, 10, 23)
+            })
+        );
+        assert_eq!(
+            p("x every 2 mon").recurrence,
+            Some(Recurrence::EveryNWeeks {
+                n: 2,
+                days: vec![0],
+                anchor: today()
+            })
+        );
         assert_eq!(
             p("x every 4 mondays and thursdays").recurrence,
-            Some(Recurrence::EveryNWeeks { n: 4, days: vec![0, 3], anchor: today() })
+            Some(Recurrence::EveryNWeeks {
+                n: 4,
+                days: vec![0, 3],
+                anchor: today()
+            })
         );
-        assert_eq!(p("x every 1 friday").recurrence, Some(Recurrence::Weekly(vec![4])));
+        assert_eq!(
+            p("x every 1 friday").recurrence,
+            Some(Recurrence::Weekly(vec![4]))
+        );
         // An ordinal is still the nth weekday of the month.
-        assert_eq!(p("x every 2nd tuesday").recurrence, Some(Recurrence::MonthlyNthWeekday { nth: 2, weekday: 1 }));
+        assert_eq!(
+            p("x every 2nd tuesday").recurrence,
+            Some(Recurrence::MonthlyNthWeekday { nth: 2, weekday: 1 })
+        );
     }
 
     #[test]
@@ -954,15 +1382,30 @@ mod tests {
         assert_eq!(q.content, "taxes");
         assert_eq!(q.recurrence, Some(Recurrence::Yearly { month: 1, day: 1 }));
         assert_eq!(q.date, Some(d(2027, 1, 1)));
-        assert_eq!(p("x every dec").recurrence, Some(Recurrence::Yearly { month: 12, day: 1 }));
+        assert_eq!(
+            p("x every dec").recurrence,
+            Some(Recurrence::Yearly { month: 12, day: 1 })
+        );
         // A given day wins, however it's written.
-        assert_eq!(p("x every jan 5").recurrence, Some(Recurrence::Yearly { month: 1, day: 5 }));
-        assert_eq!(p("x every march on the 3rd").recurrence, Some(Recurrence::Yearly { month: 3, day: 3 }));
+        assert_eq!(
+            p("x every jan 5").recurrence,
+            Some(Recurrence::Yearly { month: 1, day: 5 })
+        );
+        assert_eq!(
+            p("x every march on the 3rd").recurrence,
+            Some(Recurrence::Yearly { month: 3, day: 3 })
+        );
         assert_eq!(p("x every march on 3rd").content, "x");
-        assert_eq!(p("x every march 3").recurrence, Some(Recurrence::Yearly { month: 3, day: 3 }));
+        assert_eq!(
+            p("x every march 3").recurrence,
+            Some(Recurrence::Yearly { month: 3, day: 3 })
+        );
         // A time after it is still a time.
         let q = p("x every may at 9am");
-        assert_eq!((q.recurrence, q.time.is_some()), (Some(Recurrence::Yearly { month: 5, day: 1 }), true));
+        assert_eq!(
+            (q.recurrence, q.time.is_some()),
+            (Some(Recurrence::Yearly { month: 5, day: 1 }), true)
+        );
     }
 
     #[test]
@@ -971,20 +1414,51 @@ mod tests {
         let sat = d(2026, 10, 24);
         // Anchored on the given start, not today.
         let q = parse_repeat("every week", today(), sat).unwrap();
-        assert_eq!((q.recurrence, q.date), (Some(Recurrence::Weekly(vec![5])), Some(sat)));
+        assert_eq!(
+            (q.recurrence, q.date),
+            (Some(Recurrence::Weekly(vec![5])), Some(sat))
+        );
         let q = parse_repeat("every 3 tuesdays", today(), sat).unwrap();
         assert_eq!(q.date, Some(d(2026, 10, 27)));
         // "every" may be left off.
         let q = parse_repeat("3 tuesdays", today(), sat).unwrap();
-        assert_eq!(q.recurrence, Some(Recurrence::EveryNWeeks { n: 3, days: vec![1], anchor: d(2026, 10, 27) }));
-        assert_eq!(parse_repeat("other week", today(), sat).unwrap().recurrence.map(|r| r.describe()), Some("every other week on Sat".into()));
+        assert_eq!(
+            q.recurrence,
+            Some(Recurrence::EveryNWeeks {
+                n: 3,
+                days: vec![1],
+                anchor: d(2026, 10, 27)
+            })
+        );
+        assert_eq!(
+            parse_repeat("other week", today(), sat)
+                .unwrap()
+                .recurrence
+                .map(|r| r.describe()),
+            Some("every other week on Sat".into())
+        );
         assert!(parse_repeat("daily", today(), sat).is_some());
         // A start, an end and a time come along; relative dates count from today.
-        let q = parse_repeat("every day starting tomorrow until nov 30 at 9am", today(), sat).unwrap();
-        assert_eq!((q.date, q.until), (Some(d(2026, 10, 20)), Some(d(2026, 11, 30))));
+        let q = parse_repeat(
+            "every day starting tomorrow until nov 30 at 9am",
+            today(),
+            sat,
+        )
+        .unwrap();
+        assert_eq!(
+            (q.date, q.until),
+            (Some(d(2026, 10, 20)), Some(d(2026, 11, 30)))
+        );
         assert!(q.time.is_some());
         // Anything else, or no repeat, isn't one.
-        for text in ["", "tomorrow", "every day p1", "every day call mom", "every 5th monday", "buy milk"] {
+        for text in [
+            "",
+            "tomorrow",
+            "every day p1",
+            "every day call mom",
+            "every 5th monday",
+            "buy milk",
+        ] {
             assert!(parse_repeat(text, today(), sat).is_none(), "{text}");
         }
     }
@@ -993,27 +1467,46 @@ mod tests {
     fn a_repeat_can_end() {
         let input = "x every day for 10 days";
         let q = p(input);
-        assert_eq!((q.content.as_str(), q.recurrence), ("x", Some(Recurrence::Daily)));
+        assert_eq!(
+            (q.content.as_str(), q.recurrence),
+            ("x", Some(Recurrence::Daily))
+        );
         assert_eq!(q.until, Some(d(2026, 10, 28)), "ten days, today included");
         let got: Vec<&str> = q.spans.iter().map(|s| &input[s.start..s.end]).collect();
         assert_eq!(got, vec!["every day", "for 10 days"]);
         assert_eq!(p("x every mon for two weeks").until, Some(d(2026, 11, 1)));
-        assert_eq!(p("x every 15th for 3 months").until, Some(d(2027, 2, 14)), "from the first occurrence");
+        assert_eq!(
+            p("x every 15th for 3 months").until,
+            Some(d(2027, 2, 14)),
+            "from the first occurrence"
+        );
         let q = p("x every day until nov 30");
         assert_eq!((q.content.as_str(), q.until), ("x", Some(d(2026, 11, 30))));
         assert_eq!(q.date, Some(today()), "the end isn't the due date");
         let q = p("x every 10 days starting nov 1 until dec 31");
-        assert_eq!((q.date, q.until), (Some(d(2026, 11, 1)), Some(d(2026, 12, 31))));
+        assert_eq!(
+            (q.date, q.until),
+            (Some(d(2026, 11, 1)), Some(d(2026, 12, 31)))
+        );
         // Without a repeat they're words.
         let q = p("walk for 10 days");
         assert_eq!((q.content.as_str(), q.until), ("walk for 10 days", None));
         let q = p("wait until friday");
-        assert_eq!((q.content.as_str(), q.until, q.date), ("wait until", None, Some(d(2026, 10, 23))));
+        assert_eq!(
+            (q.content.as_str(), q.until, q.date),
+            ("wait until", None, Some(d(2026, 10, 23)))
+        );
     }
 
     #[test]
     fn unknown_repeats_stay_text() {
-        for input in ["x every 2", "x every 0 days", "x every 5th monday", "x every 100 days", "x every other"] {
+        for input in [
+            "x every 2",
+            "x every 0 days",
+            "x every 5th monday",
+            "x every 100 days",
+            "x every other",
+        ] {
             let q = p(input);
             assert_eq!(q.recurrence, None, "{input}");
             assert_eq!(q.content, input, "{input}");
@@ -1034,7 +1527,11 @@ mod tests {
         let q = p(input);
         assert_eq!(q.content, "Ship report");
         assert_eq!(q.deadline, Some(d(2026, 10, 30)));
-        assert_eq!(q.date, Some(d(2026, 10, 20)), "due and deadline are separate");
+        assert_eq!(
+            q.date,
+            Some(d(2026, 10, 20)),
+            "due and deadline are separate"
+        );
         let deadline_spans: Vec<&str> = q
             .spans
             .iter()
@@ -1056,8 +1553,11 @@ mod tests {
         use super::SpanKind::*;
         let input = "Call  mom tomorrow at 5pm p1 #Side Project @phone";
         let q = p(input);
-        let got: Vec<(&str, super::SpanKind)> =
-            q.spans.iter().map(|s| (&input[s.start..s.end], s.kind)).collect();
+        let got: Vec<(&str, super::SpanKind)> = q
+            .spans
+            .iter()
+            .map(|s| (&input[s.start..s.end], s.kind))
+            .collect();
         assert_eq!(
             got,
             vec![
@@ -1085,7 +1585,11 @@ mod tests {
         let q = p(input);
         assert_eq!(&input[q.spans[0].start..q.spans[0].end], "/Later");
         assert_eq!(q.spans[0].kind, super::SpanKind::Section);
-        assert_eq!(p("tomorrow").spans.len(), 1, "a phrase alone still highlights");
+        assert_eq!(
+            p("tomorrow").spans.len(),
+            1,
+            "a phrase alone still highlights"
+        );
         assert!(p("plain words").spans.is_empty());
     }
 
@@ -1118,28 +1622,43 @@ mod tests {
     #[test]
     fn strip_spans_removes_every_span_of_the_kinds() {
         let input = "@home call mom @phone";
-        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Label]), "call mom");
+        assert_eq!(
+            strip_spans(input, &p(input).spans, &[SpanKind::Label]),
+            "call mom"
+        );
         let input = "call mom tomorrow 5pm";
-        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Date, SpanKind::Time]), "call mom");
+        assert_eq!(
+            strip_spans(input, &p(input).spans, &[SpanKind::Date, SpanKind::Time]),
+            "call mom"
+        );
     }
 
     #[test]
     fn strip_spans_leaves_unrecognized_repeats_as_text() {
         // Only the first date is applied; the second "tomorrow" is title text.
         let input = "tomorrow call mom tomorrow";
-        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Date]), "call mom tomorrow");
+        assert_eq!(
+            strip_spans(input, &p(input).spans, &[SpanKind::Date]),
+            "call mom tomorrow"
+        );
     }
 
     #[test]
     fn strip_spans_keeps_other_kinds() {
         let input = "call mom tomorrow p1";
-        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Priority]), "call mom tomorrow");
+        assert_eq!(
+            strip_spans(input, &p(input).spans, &[SpanKind::Priority]),
+            "call mom tomorrow"
+        );
     }
 
     #[test]
     fn strip_spans_collapses_spaces() {
         let input = "a  p1  b";
-        assert_eq!(strip_spans(input, &p(input).spans, &[SpanKind::Priority]), "a b");
+        assert_eq!(
+            strip_spans(input, &p(input).spans, &[SpanKind::Priority]),
+            "a b"
+        );
     }
 
     fn pk(input: &str, plain: &[(usize, usize)]) -> QuickAdd {
@@ -1171,9 +1690,15 @@ mod tests {
     #[test]
     fn kept_ranges_follow_edits_around_them() {
         // Typing after the kept word: it stays put.
-        assert_eq!(shift_plain("x today", "x today 5pm", &[(2, 7)]), vec![(2, 7)]);
+        assert_eq!(
+            shift_plain("x today", "x today 5pm", &[(2, 7)]),
+            vec![(2, 7)]
+        );
         // Typing before it: it moves along.
-        assert_eq!(shift_plain("x today", "abc x today", &[(2, 7)]), vec![(6, 11)]);
+        assert_eq!(
+            shift_plain("x today", "abc x today", &[(2, 7)]),
+            vec![(6, 11)]
+        );
         // Editing inside it: it's forgotten (read again).
         assert_eq!(shift_plain("x today", "x toda", &[(2, 7)]), vec![]);
         assert_eq!(shift_plain("x today", "x tOday", &[(2, 7)]), vec![]);
@@ -1181,18 +1706,27 @@ mod tests {
 
     #[test]
     fn this_weekend_in_any_case() {
-        for input in ["x this weekend", "x This weekend", "x This Weekend", "x THIS WEEKEND", "x weekend", "x Weekend"] {
+        for input in [
+            "x this weekend",
+            "x This weekend",
+            "x This Weekend",
+            "x THIS WEEKEND",
+            "x weekend",
+            "x Weekend",
+        ] {
             let q = p(input);
             assert_eq!(q.date, Some(d(2026, 10, 24)), "{input}");
             assert_eq!(q.content, "x", "{input}");
         }
     }
 
-
     #[test]
     fn kept_text_is_spaced_like_parse() {
         // Kept as text with no other phrase: whitespace collapses, as in parse.
-        assert_eq!(pk("call  mom   today", &[(12, 17)]).content, "call mom today");
+        assert_eq!(
+            pk("call  mom   today", &[(12, 17)]).content,
+            "call mom today"
+        );
         // With another phrase recognized too.
         let q = pk("call  mom today   tomorrow", &[(10, 15)]);
         assert_eq!(q.content, "call mom today");

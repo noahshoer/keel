@@ -14,14 +14,29 @@ impl F {
     fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
         let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
-        let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap().id;
-        F { _dir: dir, svc, inbox, n: 0 }
+        let inbox = svc
+            .list_projects()
+            .unwrap()
+            .into_iter()
+            .find(|p| p.is_inbox)
+            .unwrap()
+            .id;
+        F {
+            _dir: dir,
+            svc,
+            inbox,
+            n: 0,
+        }
     }
 
     fn run(&mut self, action: Action) -> keel_core::commands::ApplyResult {
         self.n += 1;
         self.svc
-            .dispatch(Command { uuid: format!("u{}", self.n), temp_id: Some("t".into()), action })
+            .dispatch(Command {
+                uuid: format!("u{}", self.n),
+                temp_id: Some("t".into()),
+                action,
+            })
             .unwrap()
     }
 
@@ -62,7 +77,10 @@ fn project_completed_newest_first() {
     let c = f.task("c", &inbox, &[]);
     f.complete(&a);
     f.complete(&c);
-    assert_eq!(names(f.svc.completed_in_project(inbox.as_str()).unwrap()), vec!["c", "a"]);
+    assert_eq!(
+        names(f.svc.completed_in_project(inbox.as_str()).unwrap()),
+        vec!["c", "a"]
+    );
 }
 
 #[test]
@@ -87,6 +105,13 @@ fn completed_today_only_today() {
     let id = f.task("done", &inbox, &[]);
     f.complete(&id);
     let today = Local::now().date_naive();
-    assert_eq!(names(f.svc.completed_today_at(today).unwrap()), vec!["done"]);
-    assert!(f.svc.completed_today_at(today + Duration::days(1)).unwrap().is_empty());
+    assert_eq!(
+        names(f.svc.completed_today_at(today).unwrap()),
+        vec!["done"]
+    );
+    assert!(f
+        .svc
+        .completed_today_at(today + Duration::days(1))
+        .unwrap()
+        .is_empty());
 }

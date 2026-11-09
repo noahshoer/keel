@@ -11,12 +11,23 @@ struct H {
 
 impl H {
     fn new() -> Self {
-        H { repo: SqliteRepo::open_in_memory().unwrap(), n: 0 }
+        H {
+            repo: SqliteRepo::open_in_memory().unwrap(),
+            n: 0,
+        }
     }
 
     fn run(&mut self, action: Action) -> ApplyResult {
         self.n += 1;
-        apply(&self.repo, Command { uuid: format!("u{}", self.n), temp_id: Some("t".into()), action }).unwrap()
+        apply(
+            &self.repo,
+            Command {
+                uuid: format!("u{}", self.n),
+                temp_id: Some("t".into()),
+                action,
+            },
+        )
+        .unwrap()
     }
 
     fn task(&mut self, labels: &[&str]) -> Id {
@@ -41,7 +52,12 @@ impl H {
     }
 
     fn label_names(&self) -> Vec<String> {
-        self.repo.list_labels().unwrap().into_iter().map(|l| l.name).collect()
+        self.repo
+            .list_labels()
+            .unwrap()
+            .into_iter()
+            .map(|l| l.name)
+            .collect()
     }
 
     fn labels_of(&self, id: &Id) -> Vec<String> {
@@ -65,7 +81,10 @@ fn uncomplete_reopens_task() {
 fn rename_project() {
     let mut h = H::new();
     let id = h.run(Action::ProjectAdd { name: "Wrk".into() }).id_mapping["t"].clone();
-    h.run(Action::ProjectUpdate { id: id.clone(), name: "  Work ".into() });
+    h.run(Action::ProjectUpdate {
+        id: id.clone(),
+        name: "  Work ".into(),
+    });
     assert_eq!(h.repo.get_project(&id).unwrap().unwrap().name, "Work");
 }
 
@@ -74,8 +93,13 @@ fn inbox_cannot_be_renamed_or_deleted() {
     let mut h = H::new();
     let inbox = Project::inbox();
     h.repo.upsert_project(&inbox).unwrap();
-    h.run(Action::ProjectUpdate { id: inbox.id.clone(), name: "Junk".into() });
-    h.run(Action::ProjectDelete { id: inbox.id.clone() });
+    h.run(Action::ProjectUpdate {
+        id: inbox.id.clone(),
+        name: "Junk".into(),
+    });
+    h.run(Action::ProjectDelete {
+        id: inbox.id.clone(),
+    });
     let projects = h.repo.list_projects().unwrap();
     assert_eq!(projects.len(), 1);
     assert_eq!(projects[0].name, "Inbox");
@@ -86,7 +110,10 @@ fn rename_label_updates_tasks() {
     let mut h = H::new();
     let label = h.label("hme");
     let task = h.task(&["hme", "errands"]);
-    h.run(Action::LabelUpdate { id: label, name: "home".into() });
+    h.run(Action::LabelUpdate {
+        id: label,
+        name: "home".into(),
+    });
     assert_eq!(h.label_names(), vec!["home"]);
     assert_eq!(h.labels_of(&task), vec!["home", "errands"]);
 }
@@ -96,7 +123,10 @@ fn set_label_color_changes_only_that_labels_color() {
     let mut h = H::new();
     let a = h.label("a");
     let b = h.label("b");
-    h.run(Action::LabelSetColor { id: a.clone(), color: "red".into() });
+    h.run(Action::LabelSetColor {
+        id: a.clone(),
+        color: "red".into(),
+    });
     let labels = h.repo.list_labels().unwrap();
     let of = |id: &Id| labels.iter().find(|l| l.id == *id).unwrap().clone();
     assert_eq!(of(&a).color, "red");
@@ -111,7 +141,10 @@ fn set_label_color_is_idempotent_by_uuid() {
     let set = |color: &str| Command {
         uuid: "same".into(),
         temp_id: None,
-        action: Action::LabelSetColor { id: a.clone(), color: color.into() },
+        action: Action::LabelSetColor {
+            id: a.clone(),
+            color: color.into(),
+        },
     };
     apply(&h.repo, set("red")).unwrap();
     apply(&h.repo, set("blue")).unwrap();
@@ -122,7 +155,10 @@ fn set_label_color_is_idempotent_by_uuid() {
 fn set_label_color_ignores_an_unknown_id() {
     let mut h = H::new();
     h.label("a");
-    h.run(Action::LabelSetColor { id: Id::from("nope"), color: "red".into() });
+    h.run(Action::LabelSetColor {
+        id: Id::from("nope"),
+        color: "red".into(),
+    });
     assert_eq!(h.repo.list_labels().unwrap()[0].color, "charcoal");
 }
 
@@ -133,8 +169,15 @@ fn rename_label_onto_existing_merges() {
     let house = h.label("house");
     let both = h.task(&["home", "house"]);
     let only_house = h.task(&["house"]);
-    h.run(Action::LabelUpdate { id: house, name: "Home".into() });
-    assert_eq!(h.label_names(), vec!["home"], "merged into the existing label");
+    h.run(Action::LabelUpdate {
+        id: house,
+        name: "Home".into(),
+    });
+    assert_eq!(
+        h.label_names(),
+        vec!["home"],
+        "merged into the existing label"
+    );
     assert_eq!(h.labels_of(&both), vec!["home"], "no duplicate after merge");
     assert_eq!(h.labels_of(&only_house), vec!["home"]);
 }

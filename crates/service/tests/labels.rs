@@ -37,12 +37,24 @@ fn add(svc: &AppService, n: &mut u32, content: &str, project: &Id, labels: &[&st
 fn label_view_spans_projects_and_hides_completed() {
     let dir = tempfile::tempdir().unwrap();
     let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
-    let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap().id;
+    let inbox = svc
+        .list_projects()
+        .unwrap()
+        .into_iter()
+        .find(|p| p.is_inbox)
+        .unwrap()
+        .id;
     let other = Id::from("OTHER");
     let mut n = 0;
 
     svc.dispatch_at(
-        Command { uuid: "lbl".into(), temp_id: None, action: Action::LabelAdd { name: "home".into() } },
+        Command {
+            uuid: "lbl".into(),
+            temp_id: None,
+            action: Action::LabelAdd {
+                name: "home".into(),
+            },
+        },
         today(),
     )
     .unwrap();
@@ -54,13 +66,25 @@ fn label_view_spans_projects_and_hides_completed() {
     let done = add(&svc, &mut n, "vacuum", &inbox, &["home"]);
     n += 1;
     svc.dispatch_at(
-        Command { uuid: format!("u{n}"), temp_id: None, action: Action::TaskComplete { id: done } },
+        Command {
+            uuid: format!("u{n}"),
+            temp_id: None,
+            action: Action::TaskComplete { id: done },
+        },
         today(),
     )
     .unwrap();
 
-    let mut names: Vec<String> =
-        svc.label_view_at("home", today()).unwrap().into_iter().map(|t| t.content).collect();
+    let mut names: Vec<String> = svc
+        .label_view_at("home", today())
+        .unwrap()
+        .into_iter()
+        .map(|t| t.content)
+        .collect();
     names.sort();
-    assert_eq!(names, vec!["dishes", "laundry"], "case-insensitive, all projects, no completed");
+    assert_eq!(
+        names,
+        vec!["dishes", "laundry"],
+        "case-insensitive, all projects, no completed"
+    );
 }

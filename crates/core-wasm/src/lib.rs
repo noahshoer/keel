@@ -12,13 +12,13 @@
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Weekday};
 use keel_core::calendar;
-use keel_core::filter;
 use keel_core::editor::{self, EditorValues, Pick, ReminderDraft};
+use keel_core::filter;
 use keel_core::ids::Id;
+use keel_core::import::todoist::ImportSummary;
 use keel_core::model::{Label, Project, Reminder, Section, Task};
 use keel_core::quickadd;
 use keel_core::recurrence::Recurrence;
-use keel_core::import::todoist::ImportSummary;
 use keel_core::reminders::{self, ReminderSettings};
 use keel_core::settings::{self, MenuKind};
 use keel_core::task_view;
@@ -30,7 +30,8 @@ use wasm_bindgen::prelude::*;
 /// Parses a strict `YYYY-MM-DD` date (conversion only: which date a `Due`
 /// falls on is `views::due_date_of`, exported as `dueDateOf`).
 fn parse_date(s: &str) -> Result<NaiveDate, String> {
-    NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| format!("invalid date \"{s}\": expected YYYY-MM-DD"))
+    NaiveDate::parse_from_str(s, "%Y-%m-%d")
+        .map_err(|_| format!("invalid date \"{s}\": expected YYYY-MM-DD"))
 }
 
 /// Parses an `HH:MM` or `HH:MM:SS` time of day.
@@ -88,7 +89,9 @@ pub fn due_time(
 /// `views::time_label` for an `HH:MM[:SS]` string.
 #[wasm_bindgen(js_name = timeLabel)]
 pub fn time_label(time: &str) -> Result<String, JsError> {
-    Ok(views::time_label(parse_time(time).map_err(|e| JsError::new(&e))?))
+    Ok(views::time_label(
+        parse_time(time).map_err(|e| JsError::new(&e))?,
+    ))
 }
 
 /// `views::progress`: a parent's sub-task counts, `null` when it has none.
@@ -123,7 +126,12 @@ pub fn sidebar_counts(
 ) -> Result<JsValue, JsError> {
     let all: Vec<Task> = input("all", all)?;
     let today = parse_date(today).map_err(|e| JsError::new(&e))?;
-    output(&views::sidebar_counts(&all, today, i64::from(upcoming_days), show_subtasks))
+    output(&views::sidebar_counts(
+        &all,
+        today,
+        i64::from(upcoming_days),
+        show_subtasks,
+    ))
 }
 
 /// `views::label_choices`: the labels picker's rows.
@@ -239,7 +247,9 @@ pub fn reminder_label(
 /// `views::day_subtitle` for a `YYYY-MM-DD` date: "Friday 30 Oct".
 #[wasm_bindgen(js_name = daySubtitle)]
 pub fn day_subtitle(today: &str) -> Result<String, JsError> {
-    Ok(views::day_subtitle(parse_date(today).map_err(|e| JsError::new(&e))?))
+    Ok(views::day_subtitle(
+        parse_date(today).map_err(|e| JsError::new(&e))?,
+    ))
 }
 
 /// `Progress::short`: "2/5".
@@ -280,7 +290,12 @@ pub fn task_detail(
 ) -> Result<JsValue, JsError> {
     let all: Vec<Task> = input("all", all)?;
     let today = parse_date(today).map_err(|e| JsError::new(&e))?;
-    output(&task_view::detail(&Id::from(id), &all, show_completed, today))
+    output(&task_view::detail(
+        &Id::from(id),
+        &all,
+        show_completed,
+        today,
+    ))
 }
 
 /// `views::chain`: a task's ancestors from the top, then the task itself.
@@ -322,11 +337,17 @@ fn date(s: &str) -> Result<NaiveDate, JsError> {
 #[wasm_bindgen(js_name = blankValues, unchecked_return_type = "import('../../bindings').EditorValues")]
 pub fn blank_values(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id")] project_id: JsValue,
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id | null")] section_id: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id | null")]
+    section_id: JsValue,
     date: String,
     #[wasm_bindgen(unchecked_param_type = "string[]")] labels: JsValue,
 ) -> Result<JsValue, JsError> {
-    output(&EditorValues::blank(input("projectId", project_id)?, input("sectionId", section_id)?, date, input("labels", labels)?))
+    output(&EditorValues::blank(
+        input("projectId", project_id)?,
+        input("sectionId", section_id)?,
+        date,
+        input("labels", labels)?,
+    ))
 }
 
 /// `EditorValues::from_task`.
@@ -345,7 +366,8 @@ pub fn editor_view(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] values: JsValue,
     quick_add: bool,
     #[wasm_bindgen(unchecked_param_type = "string | null")] keep_label: JsValue,
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")] existing: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")]
+    existing: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Label[]")] labels: JsValue,
@@ -357,7 +379,16 @@ pub fn editor_view(
     let projects: Vec<Project> = input("projects", projects)?;
     let sections: Vec<Section> = input("sections", sections)?;
     let labels: Vec<Label> = input("labels", labels)?;
-    output(&editor::editor_view(&v, quick_add, keep.as_deref(), existing, &projects, &sections, &labels, date(today)?))
+    output(&editor::editor_view(
+        &v,
+        quick_add,
+        keep.as_deref(),
+        existing,
+        &projects,
+        &sections,
+        &labels,
+        date(today)?,
+    ))
 }
 
 /// `editor::with_title`: the values after the title is retyped.
@@ -381,7 +412,12 @@ pub fn with_stored_plain(
     let v: EditorValues = input("values", values)?;
     let projects: Vec<Project> = input("projects", projects)?;
     let sections: Vec<Section> = input("sections", sections)?;
-    output(&editor::with_stored_plain(&v, &projects, &sections, date(today)?))
+    output(&editor::with_stored_plain(
+        &v,
+        &projects,
+        &sections,
+        date(today)?,
+    ))
 }
 
 #[derive(serde::Serialize)]
@@ -394,7 +430,8 @@ struct AppliedTitle {
 #[wasm_bindgen(js_name = applyTitle, unchecked_return_type = "{ values: import('../../bindings').EditorValues; rule: import('../../bindings').Recurrence | null } | null")]
 pub fn apply_title(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] values: JsValue,
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")] existing: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")]
+    existing: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
     today: &str,
@@ -472,7 +509,13 @@ pub fn filter_reading(
     let projects: Vec<Project> = input("projects", projects)?;
     let sections: Vec<Section> = input("sections", sections)?;
     let labels: Vec<Label> = input("labels", labels)?;
-    output(&filter::read(query, date(today)?, &projects, &sections, &labels))
+    output(&filter::read(
+        query,
+        date(today)?,
+        &projects,
+        &sections,
+        &labels,
+    ))
 }
 
 /// `filter::unhighlight`: the query with the term ending at the caret
@@ -490,7 +533,12 @@ pub fn filter_unhighlight_at(
     let sections: Vec<Section> = input("sections", sections)?;
     let labels: Vec<Label> = input("labels", labels)?;
     let names = filter::names_of(&projects, &sections, &labels);
-    Ok(filter::unhighlight(query, date(today)?, &names, editor::byte_at_utf16(query, caret)))
+    Ok(filter::unhighlight(
+        query,
+        date(today)?,
+        &names,
+        editor::byte_at_utf16(query, caret),
+    ))
 }
 
 /// `editor::location_choices`: the project / section menu's items.
@@ -514,7 +562,8 @@ pub fn location_pick(value: &str) -> Result<JsValue, JsError> {
 #[wasm_bindgen(js_name = locationText)]
 pub fn location_text(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id")] project_id: JsValue,
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id | null")] section_id: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id | null")]
+    section_id: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
 ) -> Result<String, JsError> {
@@ -522,7 +571,12 @@ pub fn location_text(
     let section_id: Option<Id> = input("sectionId", section_id)?;
     let projects: Vec<Project> = input("projects", projects)?;
     let sections: Vec<Section> = input("sections", sections)?;
-    Ok(editor::location_text(&project_id, section_id.as_ref(), &projects, &sections))
+    Ok(editor::location_text(
+        &project_id,
+        section_id.as_ref(),
+        &projects,
+        &sections,
+    ))
 }
 
 /// `editor::repeat_text`: a rule as text ("Every Mon, Wed").
@@ -562,7 +616,13 @@ pub fn add_plan(
     let projects: Vec<Project> = input("projects", projects)?;
     let sections: Vec<Section> = input("sections", sections)?;
     let labels: Vec<Label> = input("labels", labels)?;
-    output(&editor::add_plan(&v, &projects, &sections, &labels, date(today)?))
+    output(&editor::add_plan(
+        &v,
+        &projects,
+        &sections,
+        &labels,
+        date(today)?,
+    ))
 }
 
 /// `editor::new_names`: the names the save prompt lists.
@@ -578,7 +638,13 @@ pub fn new_names(
     let projects: Vec<Project> = input("projects", projects)?;
     let sections: Vec<Section> = input("sections", sections)?;
     let labels: Vec<Label> = input("labels", labels)?;
-    output(&editor::new_names(&v, &projects, &sections, &labels, date(today)?))
+    output(&editor::new_names(
+        &v,
+        &projects,
+        &sections,
+        &labels,
+        date(today)?,
+    ))
 }
 
 /// `editor::keep_as_text`: the typed names left as plain text.
@@ -594,7 +660,13 @@ pub fn keep_as_text(
     let names: editor::NewNames = input("names", names)?;
     let projects: Vec<Project> = input("projects", projects)?;
     let sections: Vec<Section> = input("sections", sections)?;
-    output(&editor::keep_as_text(&v, &names, &projects, &sections, date(today)?))
+    output(&editor::keep_as_text(
+        &v,
+        &names,
+        &projects,
+        &sections,
+        date(today)?,
+    ))
 }
 
 /// `editor::with_project`: the values moved to a just-created project.
@@ -625,14 +697,21 @@ pub fn edit_plan(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id")] id: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] before: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] after: JsValue,
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")] existing: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")]
+    existing: JsValue,
     today: &str,
 ) -> Result<JsValue, JsError> {
     let id: Id = input("id", id)?;
     let before: EditorValues = input("before", before)?;
     let after: EditorValues = input("after", after)?;
     let existing: Option<Recurrence> = input("existing", existing)?;
-    output(&editor::edit_plan(&id, &before, &after, existing, date(today)?))
+    output(&editor::edit_plan(
+        &id,
+        &before,
+        &after,
+        existing,
+        date(today)?,
+    ))
 }
 
 /// `views::moved_note`: "Moved from Wed 21 Oct" for a moved occurrence, or null.
@@ -649,7 +728,8 @@ pub fn moved_note(
 pub fn moves_occurrence(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] before: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').EditorValues")] after: JsValue,
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")] existing: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")]
+    existing: JsValue,
 ) -> Result<bool, JsError> {
     let before: EditorValues = input("before", before)?;
     let after: EditorValues = input("after", after)?;
@@ -661,8 +741,10 @@ pub fn moves_occurrence(
 #[wasm_bindgen(js_name = reminderActions, unchecked_return_type = "import('../../bindings').Action[]")]
 pub fn reminder_actions(
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Id")] task_id: JsValue,
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ReminderDraft[]")] before: JsValue,
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ReminderDraft[]")] after: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ReminderDraft[]")]
+    before: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ReminderDraft[]")]
+    after: JsValue,
 ) -> Result<JsValue, JsError> {
     let task_id: Id = input("taskId", task_id)?;
     let before: Vec<ReminderDraft> = input("before", before)?;
@@ -695,8 +777,10 @@ pub fn custom_reminder_at(text: &str, today: &str) -> Result<JsValue, JsError> {
 /// `editor::quick_dates`: (label, hint, `YYYY-MM-DD`).
 #[wasm_bindgen(js_name = quickDates, unchecked_return_type = "Array<[string, string, string]>")]
 pub fn quick_dates(today: &str) -> Result<JsValue, JsError> {
-    let out: Vec<(&str, String, String)> =
-        editor::quick_dates(date(today)?).into_iter().map(|(l, h, d)| (l, h, d.format("%Y-%m-%d").to_string())).collect();
+    let out: Vec<(&str, String, String)> = editor::quick_dates(date(today)?)
+        .into_iter()
+        .map(|(l, h, d)| (l, h, d.format("%Y-%m-%d").to_string()))
+        .collect();
     output(&out)
 }
 
@@ -709,11 +793,19 @@ pub fn month_view(
     week_start: u8,
     today: &str,
     #[wasm_bindgen(unchecked_param_type = "string | null")] selected: JsValue,
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")] rule: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")]
+    rule: JsValue,
 ) -> Result<JsValue, JsError> {
     let selected = opt_date("selected", selected)?;
     let rule: Option<Recurrence> = input("rule", rule)?;
-    output(&calendar::month_view(year, month, week_day(week_start), date(today)?, selected, rule.as_ref()))
+    output(&calendar::month_view(
+        year,
+        month,
+        week_day(week_start),
+        date(today)?,
+        selected,
+        rule.as_ref(),
+    ))
 }
 
 /// A `week_start` (1 = Monday … 7 = Sunday) as its weekday.
@@ -739,8 +831,16 @@ pub fn year_choices(today: &str, shown: i32) -> Result<JsValue, JsError> {
 
 /// `calendar::month_first_weeks`. `week_start` as in `monthView`.
 #[wasm_bindgen(js_name = monthFirstWeeks, unchecked_return_type = "number[]")]
-pub fn month_first_weeks(first_year: i32, last_year: i32, week_start: u8) -> Result<JsValue, JsError> {
-    output(&calendar::month_first_weeks(first_year, last_year, week_day(week_start)))
+pub fn month_first_weeks(
+    first_year: i32,
+    last_year: i32,
+    week_start: u8,
+) -> Result<JsValue, JsError> {
+    output(&calendar::month_first_weeks(
+        first_year,
+        last_year,
+        week_day(week_start),
+    ))
 }
 
 /// `calendar::week_rows`. `week_start` as in `monthView`.
@@ -755,7 +855,8 @@ pub fn week_rows(
     shown_month: u32,
     today: &str,
     #[wasm_bindgen(unchecked_param_type = "string | null")] selected: JsValue,
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")] rule: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Recurrence | null")]
+    rule: JsValue,
 ) -> Result<JsValue, JsError> {
     let selected = opt_date("selected", selected)?;
     let rule: Option<Recurrence> = input("rule", rule)?;
@@ -800,16 +901,28 @@ mod tests {
 
     #[test]
     fn parses_a_date() {
-        assert_eq!(parse_date("2026-10-30"), Ok(NaiveDate::from_ymd_opt(2026, 10, 30).unwrap()));
+        assert_eq!(
+            parse_date("2026-10-30"),
+            Ok(NaiveDate::from_ymd_opt(2026, 10, 30).unwrap())
+        );
     }
 
     #[test]
     fn rejects_malformed_dates() {
         // Strict: a datetime is not a date (use dueDateOf for a Due).
         for bad in [
-            "", "30/10/2026", "2026-13-01", "2026-10-30T17:00:00", "2026-10-30 17:00", "2026-10-30x",
+            "",
+            "30/10/2026",
+            "2026-13-01",
+            "2026-10-30T17:00:00",
+            "2026-10-30 17:00",
+            "2026-10-30x",
         ] {
-            assert_eq!(parse_date(bad), Err(format!("invalid date \"{bad}\": expected YYYY-MM-DD")), "{bad}");
+            assert_eq!(
+                parse_date(bad),
+                Err(format!("invalid date \"{bad}\": expected YYYY-MM-DD")),
+                "{bad}"
+            );
         }
     }
 
@@ -822,14 +935,24 @@ mod tests {
 
     #[test]
     fn rejects_malformed_times() {
-        assert_eq!(parse_time("5pm"), Err("invalid time \"5pm\": expected HH:MM or HH:MM:SS".to_string()));
-        assert_eq!(parse_time("25:00"), Err("invalid time \"25:00\": expected HH:MM or HH:MM:SS".to_string()));
+        assert_eq!(
+            parse_time("5pm"),
+            Err("invalid time \"5pm\": expected HH:MM or HH:MM:SS".to_string())
+        );
+        assert_eq!(
+            parse_time("25:00"),
+            Err("invalid time \"25:00\": expected HH:MM or HH:MM:SS".to_string())
+        );
     }
 
     #[test]
     fn native_time_reads_the_time_inputs_value() {
         assert_eq!(native_time("17:30"), Some(Some("17:30".to_string())));
-        assert_eq!(native_time("07:05:00"), Some(Some("07:05".to_string())), "with seconds");
+        assert_eq!(
+            native_time("07:05:00"),
+            Some(Some("07:05".to_string())),
+            "with seconds"
+        );
         assert_eq!(native_time(""), Some(None), "cleared");
         assert_eq!(native_time("5pm"), None, "not the input's format");
     }
@@ -838,7 +961,8 @@ mod tests {
 /// `settings::reminder_menus`: the three reminder menus in Settings.
 #[wasm_bindgen(js_name = reminderMenus, unchecked_return_type = "import('../../bindings').ReminderMenus")]
 pub fn reminder_menus(
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ReminderSettings")] settings: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ReminderSettings")]
+    settings: JsValue,
 ) -> Result<JsValue, JsError> {
     let settings: ReminderSettings = input("settings", settings)?;
     output(&settings::reminder_menus(&settings))
@@ -847,7 +971,8 @@ pub fn reminder_menus(
 /// `settings::pick_setting`: the settings after a pick in one menu.
 #[wasm_bindgen(js_name = pickSetting, unchecked_return_type = "import('../../bindings').ReminderSettings")]
 pub fn pick_setting(
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ReminderSettings")] settings: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ReminderSettings")]
+    settings: JsValue,
     #[wasm_bindgen(unchecked_param_type = "import('../../bindings').MenuKind")] kind: JsValue,
     value: &str,
 ) -> Result<JsValue, JsError> {
@@ -868,7 +993,8 @@ pub fn upcoming_when(at: &str, today: &str) -> Result<String, JsError> {
 /// `settings::import_line`: one imported file's result line.
 #[wasm_bindgen(js_name = importLine)]
 pub fn import_line(
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ImportSummary")] summary: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ImportSummary")]
+    summary: JsValue,
 ) -> Result<String, JsError> {
     let summary: ImportSummary = input("summary", summary)?;
     Ok(settings::import_line(&summary))

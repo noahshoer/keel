@@ -13,9 +13,9 @@ use std::sync::OnceLock;
 
 #[cfg(not(target_os = "ios"))]
 use keel_service::diag::DiagLog;
+use keel_service::AppService;
 #[cfg(not(target_os = "ios"))]
 use std::sync::Mutex;
-use keel_service::AppService;
 
 use crate::args::{DiagLogArgs, NoArgs, SetDiagEnabledArgs};
 
@@ -42,7 +42,9 @@ pub fn init(app: &tauri::AppHandle, svc: &AppService, dir: &std::path::Path) {
     #[cfg(target_os = "ios")]
     let _ = SINK.set(Sink { app: app.clone() });
     #[cfg(not(target_os = "ios"))]
-    let _ = SINK.set(Sink { file: Mutex::new(DiagLog::new(dir)) });
+    let _ = SINK.set(Sink {
+        file: Mutex::new(DiagLog::new(dir)),
+    });
     #[cfg(target_os = "ios")]
     let _ = dir;
     #[cfg(not(target_os = "ios"))]
@@ -106,7 +108,10 @@ pub fn diag_enabled(_args: NoArgs) -> bool {
 
 /// Async: on iOS this calls into the Swift plugin (see CLAUDE.md).
 #[tauri::command(rename_all = "snake_case")]
-pub async fn set_diag_enabled(args: SetDiagEnabledArgs, state: tauri::State<'_, AppService>) -> Result<(), String> {
+pub async fn set_diag_enabled(
+    args: SetDiagEnabledArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<(), String> {
     let on = args.on;
     state.set_diag_enabled(on).map_err(|e| e.to_string())?;
     if on && !enabled() {

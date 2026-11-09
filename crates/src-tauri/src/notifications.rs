@@ -10,10 +10,10 @@
 use std::collections::HashSet;
 use std::sync::Mutex;
 
-use tauri::{AppHandle, Manager, Runtime};
-use tauri_plugin_notification::{NotificationExt, PermissionState};
 use keel_core::reminders::PlannedReminder;
 use keel_service::AppService;
+use tauri::{AppHandle, Manager, Runtime};
+use tauri_plugin_notification::{NotificationExt, PermissionState};
 
 /// The current plan, plus (desktop) which ids have already been shown.
 #[derive(Default)]
@@ -53,7 +53,10 @@ pub fn resync<R: Runtime>(app: &AppHandle<R>) {
     };
     #[cfg(mobile)]
     schedule_on_device(app, &plan);
-    *app.state::<Reminders>().plan.lock().expect("reminder plan lock") = plan;
+    *app.state::<Reminders>()
+        .plan
+        .lock()
+        .expect("reminder plan lock") = plan;
 }
 
 #[cfg(mobile)]
@@ -84,13 +87,19 @@ fn schedule_on_device<R: Runtime>(app: &AppHandle<R>, plan: &[PlannedReminder]) 
     let mut scheduled = Vec::new();
     if matches!(n.permission_state(), Ok(PermissionState::Granted)) {
         for r in plan {
-            let Some(date) = plugin_date(r.at) else { continue };
+            let Some(date) = plugin_date(r.at) else {
+                continue;
+            };
             let result = n
                 .builder()
                 .id(r.id)
                 .title(&r.title)
                 .body(&r.body)
-                .schedule(Schedule::At { date, repeating: false, allow_while_idle: true })
+                .schedule(Schedule::At {
+                    date,
+                    repeating: false,
+                    allow_while_idle: true,
+                })
                 .show();
             match result {
                 Ok(()) => scheduled.push(r.id),
@@ -108,7 +117,11 @@ fn schedule_on_device<R: Runtime>(app: &AppHandle<R>, plan: &[PlannedReminder]) 
 /// next re-plan tries again).
 #[cfg(any(mobile, test))]
 fn tracked_after(cleared: bool, previous: &[i32], scheduled: &[i32]) -> Vec<i32> {
-    let mut ids = if cleared { Vec::new() } else { previous.to_vec() };
+    let mut ids = if cleared {
+        Vec::new()
+    } else {
+        previous.to_vec()
+    };
     for id in scheduled {
         if !ids.contains(id) {
             ids.push(*id);
@@ -153,7 +166,13 @@ fn fire_due<R: Runtime>(app: &AppHandle<R>) {
             .collect()
     };
     for r in due {
-        match app.notification().builder().title(&r.title).body(&r.body).show() {
+        match app
+            .notification()
+            .builder()
+            .title(&r.title)
+            .body(&r.body)
+            .show()
+        {
             Ok(()) => eprintln!("reminders: showed {} \"{}\" (due {})", r.id, r.title, r.at),
             Err(e) => eprintln!("reminders: showing {} failed: {e}", r.id),
         }
@@ -166,7 +185,10 @@ mod tests {
 
     #[test]
     fn plugin_date_keeps_the_local_wall_clock() {
-        let at = chrono::NaiveDate::from_ymd_opt(2026, 10, 20).unwrap().and_hms_opt(14, 10, 0).unwrap();
+        let at = chrono::NaiveDate::from_ymd_opt(2026, 10, 20)
+            .unwrap()
+            .and_hms_opt(14, 10, 0)
+            .unwrap();
         let d = plugin_date(at).unwrap();
         assert_eq!((d.year(), d.month() as u8, d.day()), (2026, 10, 20));
         assert_eq!((d.hour(), d.minute(), d.second()), (14, 10, 0));

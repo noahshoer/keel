@@ -6,9 +6,9 @@ pub mod diag;
 
 use chrono::{Local, NaiveDate, NaiveDateTime};
 use keel_core::commands::{apply_at, Action, ApplyResult, Command};
-use keel_core::import::todoist::{self, ImportOp, ImportSummary};
-use keel_core::ids::Id;
 use keel_core::filter::{self, Expr, FilterContext, FilterError, FilterGroup, FilterNames, Term};
+use keel_core::ids::Id;
+use keel_core::import::todoist::{self, ImportOp, ImportSummary};
 use keel_core::model::{Due, Filter, Label, Project, Reminder, Section, Task};
 use keel_core::reminders::{self, PlannedReminder, ReminderSettings};
 use keel_core::repository::{RepoError, Repository};
@@ -62,12 +62,20 @@ impl AppService {
     /// Lists a project's tasks, first applying lazy streak-miss detection to
     /// streak-enabled tasks and reopening sub-tasks whose date has come, and
     /// persisting either (design §7).
-    pub fn list_tasks_at(&self, project_id: &str, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
+    pub fn list_tasks_at(
+        &self,
+        project_id: &str,
+        today: NaiveDate,
+    ) -> Result<Vec<Task>, RepoError> {
         let tasks = self.repo.list_tasks(&Id::from(project_id))?;
         self.recompute_streaks(tasks, today)
     }
 
-    fn recompute_streaks(&self, mut tasks: Vec<Task>, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
+    fn recompute_streaks(
+        &self,
+        mut tasks: Vec<Task>,
+        today: NaiveDate,
+    ) -> Result<Vec<Task>, RepoError> {
         for task in tasks.iter_mut() {
             let reopened = task.reopen_if_due(today);
             let before = task.streak_current;
@@ -143,7 +151,11 @@ impl AppService {
         self.project_view_at(project_id, today())
     }
 
-    pub fn project_view_at(&self, project_id: &str, today: NaiveDate) -> Result<Vec<Task>, RepoError> {
+    pub fn project_view_at(
+        &self,
+        project_id: &str,
+        today: NaiveDate,
+    ) -> Result<Vec<Task>, RepoError> {
         Ok(self
             .list_tasks_at(project_id, today)?
             .into_iter()
@@ -187,11 +199,20 @@ impl AppService {
     /// filter language, so plain words still mean "contains all of these";
     /// when it doesn't parse it is searched as plain words. Comma groups are
     /// one list, and `scope` (the page Search was opened from) limits all of them.
-    pub fn search(&self, query: &str, scope: Option<&SearchScope>) -> Result<SearchResults, RepoError> {
+    pub fn search(
+        &self,
+        query: &str,
+        scope: Option<&SearchScope>,
+    ) -> Result<SearchResults, RepoError> {
         self.search_at(query, scope, today())
     }
 
-    pub fn search_at(&self, query: &str, scope: Option<&SearchScope>, today: NaiveDate) -> Result<SearchResults, RepoError> {
+    pub fn search_at(
+        &self,
+        query: &str,
+        scope: Option<&SearchScope>,
+        today: NaiveDate,
+    ) -> Result<SearchResults, RepoError> {
         if query.trim().is_empty() {
             return Ok(SearchResults::default());
         }
@@ -203,9 +224,16 @@ impl AppService {
             projects: projects.into_iter().map(|p| (p.id, p.name)).collect(),
             sections: sections.into_iter().map(|s| (s.id, s.name)).collect(),
         };
-        let keep = |t: &Task| scope.is_none_or(|s| s.contains(t)) && groups.iter().any(|g| filter::matches(g, t, &ctx));
+        let keep = |t: &Task| {
+            scope.is_none_or(|s| s.contains(t))
+                && groups.iter().any(|g| filter::matches(g, t, &ctx))
+        };
         let words = filter::text_words(&groups);
-        let mut open: Vec<Task> = self.open_tasks(today)?.into_iter().filter(|t| keep(t)).collect();
+        let mut open: Vec<Task> = self
+            .open_tasks(today)?
+            .into_iter()
+            .filter(|t| keep(t))
+            .collect();
         open.sort_by(|a, b| {
             let (da, db) = (views::due_date_of(a), views::due_date_of(b));
             search::rank(a, &words)
@@ -223,11 +251,19 @@ impl AppService {
     /// Imports a Todoist project CSV export as a new project named
     /// `project_name`, through normal commands (so it lands in the command
     /// log). Nothing is created when the file isn't a Todoist export.
-    pub fn import_todoist_csv(&self, project_name: &str, text: &str) -> Result<ImportSummary, String> {
+    pub fn import_todoist_csv(
+        &self,
+        project_name: &str,
+        text: &str,
+    ) -> Result<ImportSummary, String> {
         let items = todoist::parse(text).map_err(|e| e.to_string())?;
         let plan = todoist::plan(&items, today());
         let run = |action: Action| -> Result<Option<Id>, String> {
-            let cmd = Command { uuid: Id::new().to_string(), temp_id: Some("new".to_string()), action };
+            let cmd = Command {
+                uuid: Id::new().to_string(),
+                temp_id: Some("new".to_string()),
+                action,
+            };
             let result = self.dispatch(cmd).map_err(|e| e.to_string())?;
             Ok(result.id_mapping.get("new").cloned())
         };
@@ -236,13 +272,16 @@ impl AppService {
             "" => "Imported from Todoist".to_string(),
             n => n.to_string(),
         };
-        let project_id = run(Action::ProjectAdd { name: name.clone() })?.ok_or("The project wasn't created.")?;
+        let project_id =
+            run(Action::ProjectAdd { name: name.clone() })?.ok_or("The project wasn't created.")?;
 
         let existing = self.list_labels().map_err(|e| e.to_string())?;
         let mut labels_created = 0;
         for label in &plan.labels {
             if !existing.iter().any(|l| l.name.eq_ignore_ascii_case(label)) {
-                run(Action::LabelAdd { name: label.clone() })?;
+                run(Action::LabelAdd {
+                    name: label.clone(),
+                })?;
                 labels_created += 1;
             }
         }
@@ -254,12 +293,26 @@ impl AppService {
             let id = match op {
                 ImportOp::Section { name } => {
                     sections += 1;
-                    run(Action::SectionAdd { project_id: project_id.clone(), name: name.clone() })?
+                    run(Action::SectionAdd {
+                        project_id: project_id.clone(),
+                        name: name.clone(),
+                    })?
                 }
                 ImportOp::Task { content, .. } if content.trim().is_empty() => None,
-                ImportOp::Task { parent, section, content, description, priority, labels, due, recurrence, deadline } => {
+                ImportOp::Task {
+                    parent,
+                    section,
+                    content,
+                    description,
+                    priority,
+                    labels,
+                    due,
+                    recurrence,
+                    deadline,
+                } => {
                     tasks += 1;
-                    let lookup = |key: &Option<usize>| key.and_then(|k| ids.get(k).cloned().flatten());
+                    let lookup =
+                        |key: &Option<usize>| key.and_then(|k| ids.get(k).cloned().flatten());
                     run(Action::TaskAdd {
                         content: content.clone(),
                         project_id: project_id.clone(),
@@ -317,7 +370,12 @@ impl AppService {
         let names = FilterNames {
             projects: projects.iter().map(|p| p.name.clone()).collect(),
             sections: sections.iter().map(|s| s.name.clone()).collect(),
-            labels: self.repo.list_labels()?.into_iter().map(|l| l.name).collect(),
+            labels: self
+                .repo
+                .list_labels()?
+                .into_iter()
+                .map(|l| l.name)
+                .collect(),
         };
         Ok((names, projects, sections))
     }
@@ -328,9 +386,14 @@ impl AppService {
 
     /// Open tasks matching each comma group of `query`, sorted by due date
     /// (undated last) then priority.
-    pub fn filter_view_at(&self, query: &str, today: NaiveDate) -> Result<Vec<FilterGroup>, RepoError> {
+    pub fn filter_view_at(
+        &self,
+        query: &str,
+        today: NaiveDate,
+    ) -> Result<Vec<FilterGroup>, RepoError> {
         let (names, projects, sections) = self.filter_names()?;
-        let groups = filter::parse(query, today, &names).map_err(|e| RepoError::Backend(format!("Invalid filter: {e}")))?;
+        let groups = filter::parse(query, today, &names)
+            .map_err(|e| RepoError::Backend(format!("Invalid filter: {e}")))?;
         let ctx = FilterContext {
             today,
             projects: projects.into_iter().map(|p| (p.id, p.name)).collect(),
@@ -352,7 +415,11 @@ impl AppService {
             .enumerate()
             .map(|(i, expr)| FilterGroup {
                 query: texts.get(i).cloned().unwrap_or_default(),
-                tasks: open.iter().filter(|t| filter::matches(expr, t, &ctx)).cloned().collect(),
+                tasks: open
+                    .iter()
+                    .filter(|t| filter::matches(expr, t, &ctx))
+                    .cloned()
+                    .collect(),
             })
             .collect())
     }
@@ -388,7 +455,8 @@ impl AppService {
     }
 
     pub fn set_reminder_settings(&self, settings: &ReminderSettings) -> Result<(), RepoError> {
-        let json = serde_json::to_string(settings).map_err(|e| RepoError::Backend(e.to_string()))?;
+        let json =
+            serde_json::to_string(settings).map_err(|e| RepoError::Backend(e.to_string()))?;
         self.repo.set_setting(REMINDER_SETTINGS_KEY, &json)
     }
 
@@ -423,7 +491,12 @@ impl AppService {
 
     pub fn reminder_plan_at(&self, now: NaiveDateTime) -> Result<Vec<PlannedReminder>, RepoError> {
         let tasks = self.open_tasks(now.date())?;
-        Ok(reminders::plan(&tasks, &self.repo.list_reminders()?, &self.reminder_settings()?, now))
+        Ok(reminders::plan(
+            &tasks,
+            &self.repo.list_reminders()?,
+            &self.reminder_settings()?,
+            now,
+        ))
     }
 
     /// Every active task reminder (the UI shows them per task).

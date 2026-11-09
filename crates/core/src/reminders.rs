@@ -76,7 +76,10 @@ pub fn plan(
         if fire <= now || fire > horizon {
             return;
         }
-        if let Some(existing) = out.iter_mut().find(|r| r.task_id.as_ref() == Some(&task.id) && r.at == fire) {
+        if let Some(existing) = out
+            .iter_mut()
+            .find(|r| r.task_id.as_ref() == Some(&task.id) && r.at == fire)
+        {
             if body == DEADLINE_BODY && !existing.body.contains(DEADLINE_BODY) {
                 existing.body = format!("{} · {DEADLINE_BODY}", existing.body);
             }
@@ -94,14 +97,22 @@ pub fn plan(
     // The global rule: at (or N minutes before) the due time; date-only
     // tasks at the all-day time.
     for task in open() {
-        let Some((base, timed)) = due_base(task, settings) else { continue };
-        let fire = if timed { base - Duration::minutes(settings.offset_minutes.max(0)) } else { base };
+        let Some((base, timed)) = due_base(task, settings) else {
+            continue;
+        };
+        let fire = if timed {
+            base - Duration::minutes(settings.offset_minutes.max(0))
+        } else {
+            base
+        };
         push(task, fire, due_body(task, fire));
     }
 
     // Each task's own reminders.
     for r in reminders.iter().filter(|r| !r.is_deleted) {
-        let Some(task) = by_id.get(&r.task_id).copied() else { continue };
+        let Some(task) = by_id.get(&r.task_id).copied() else {
+            continue;
+        };
         let fire = match r.kind {
             ReminderType::Relative => match due_base(task, settings) {
                 Some((base, _)) => base - Duration::minutes(r.minute_offset.unwrap_or(0).max(0)),
@@ -118,7 +129,10 @@ pub fn plan(
     // "Deadline today", at the all-day time.
     if let Some(time) = settings.all_day_time {
         for task in open() {
-            let deadline = task.deadline.as_deref().and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+            let deadline = task
+                .deadline
+                .as_deref()
+                .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
             if let Some(day) = deadline {
                 push(task, day.and_time(time), DEADLINE_BODY.to_string());
             }
@@ -129,7 +143,9 @@ pub fn plan(
         let mut day: NaiveDate = now.date();
         while day.and_time(time) <= horizon {
             let fire = day.and_time(time);
-            let count = open().filter(|t| views::due_date_of(t) == Some(day)).count();
+            let count = open()
+                .filter(|t| views::due_date_of(t) == Some(day))
+                .count();
             if fire > now && count > 0 {
                 let noun = if count == 1 { "task" } else { "tasks" };
                 out.push(PlannedReminder {
@@ -164,7 +180,9 @@ fn due_base(task: &Task, settings: &ReminderSettings) -> Option<(NaiveDateTime, 
 /// Notification text relative to when it fires: "Due at 5 PM",
 /// "Due in 30 min (5 PM)", "Due tomorrow at 5 PM", "Due today", "Reminder".
 fn due_body(task: &Task, fire: NaiveDateTime) -> String {
-    let Some(date) = views::due_date_of(task) else { return "Reminder".to_string() };
+    let Some(date) = views::due_date_of(task) else {
+        return "Reminder".to_string();
+    };
     let day = fire.date();
     let when = || {
         let label = views::due_label(date, day);
@@ -179,7 +197,11 @@ fn due_body(task: &Task, fire: NaiveDateTime) -> String {
             if fire >= due {
                 format!("Due at {}", views::time_label(time))
             } else {
-                format!("Due in {} ({})", minutes_text((due - fire).num_minutes()), views::time_label(time))
+                format!(
+                    "Due in {} ({})",
+                    minutes_text((due - fire).num_minutes()),
+                    views::time_label(time)
+                )
             }
         }
         Some(time) => format!("Due {} at {}", when(), views::time_label(time)),
@@ -233,7 +255,11 @@ pub fn reminder_label(r: &Reminder, today: NaiveDate) -> String {
         }
     }
     match r.at() {
-        Some(at) => format!("{} {}", views::due_label(at.date(), today), views::time_label(at.time())),
+        Some(at) => format!(
+            "{} {}",
+            views::due_label(at.date(), today),
+            views::time_label(at.time())
+        ),
         None => "Reminder".to_string(),
     }
 }
@@ -259,9 +285,18 @@ mod label_tests {
     #[test]
     fn reminders_label_by_offset_or_time() {
         let today = NaiveDate::from_ymd_opt(2026, 10, 30).unwrap();
-        assert_eq!(reminder_label(&Reminder::relative(Id::from("t"), 30), today), "30 min before");
-        let tue = NaiveDate::from_ymd_opt(2026, 11, 3).unwrap().and_hms_opt(9, 0, 0).unwrap();
-        assert_eq!(reminder_label(&Reminder::absolute(Id::from("t"), tue), today), "Tuesday 9 AM");
+        assert_eq!(
+            reminder_label(&Reminder::relative(Id::from("t"), 30), today),
+            "30 min before"
+        );
+        let tue = NaiveDate::from_ymd_opt(2026, 11, 3)
+            .unwrap()
+            .and_hms_opt(9, 0, 0)
+            .unwrap();
+        assert_eq!(
+            reminder_label(&Reminder::absolute(Id::from("t"), tue), today),
+            "Tuesday 9 AM"
+        );
         let mut broken = Reminder::absolute(Id::from("t"), tue);
         broken.due = None;
         assert_eq!(reminder_label(&broken, today), "Reminder");
@@ -271,13 +306,16 @@ mod label_tests {
 #[cfg(test)]
 mod tests {
     use super::{plan, PlannedReminder, ReminderSettings, MAX_REMINDERS};
-    use crate::model::Reminder;
     use crate::ids::Id;
+    use crate::model::Reminder;
     use crate::model::{Due, Task};
     use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
     fn at(y: i32, m: u32, d: u32, h: u32, min: u32) -> NaiveDateTime {
-        NaiveDate::from_ymd_opt(y, m, d).unwrap().and_hms_opt(h, min, 0).unwrap()
+        NaiveDate::from_ymd_opt(y, m, d)
+            .unwrap()
+            .and_hms_opt(h, min, 0)
+            .unwrap()
     }
 
     fn t(h: u32, m: u32) -> NaiveTime {
@@ -305,7 +343,10 @@ mod tests {
     }
 
     fn on() -> ReminderSettings {
-        ReminderSettings { enabled: true, ..ReminderSettings::default() }
+        ReminderSettings {
+            enabled: true,
+            ..ReminderSettings::default()
+        }
     }
 
     fn times(r: &[PlannedReminder]) -> Vec<NaiveDateTime> {
@@ -330,10 +371,19 @@ mod tests {
 
     #[test]
     fn offset_before_and_crossing_midnight() {
-        let s = ReminderSettings { offset_minutes: 30, ..on() };
-        let tasks = [task("a", Some("2026-10-19T17:00:00")), task("b", Some("2026-10-21T00:15:00"))];
+        let s = ReminderSettings {
+            offset_minutes: 30,
+            ..on()
+        };
+        let tasks = [
+            task("a", Some("2026-10-19T17:00:00")),
+            task("b", Some("2026-10-21T00:15:00")),
+        ];
         let r = plan(&tasks, &[], &s, now());
-        assert_eq!(times(&r), vec![at(2026, 10, 19, 16, 30), at(2026, 10, 20, 23, 45)]);
+        assert_eq!(
+            times(&r),
+            vec![at(2026, 10, 19, 16, 30), at(2026, 10, 20, 23, 45)]
+        );
         assert_eq!(r[0].body, "Due in 30 min (5 PM)");
     }
 
@@ -343,13 +393,19 @@ mod tests {
         let r = plan(&tasks, &[], &on(), now());
         assert_eq!(times(&r), vec![at(2026, 10, 20, 9, 0)]);
         assert_eq!(r[0].body, "Due today", "fires on the due day");
-        let none = ReminderSettings { all_day_time: None, ..on() };
+        let none = ReminderSettings {
+            all_day_time: None,
+            ..on()
+        };
         assert!(plan(&tasks, &[], &none, now()).is_empty());
     }
 
     #[test]
     fn offset_does_not_apply_to_date_only() {
-        let s = ReminderSettings { offset_minutes: 60, ..on() };
+        let s = ReminderSettings {
+            offset_minutes: 60,
+            ..on()
+        };
         let r = plan(&[task("a", Some("2026-10-20"))], &[], &s, now());
         assert_eq!(times(&r), vec![at(2026, 10, 20, 9, 0)]);
     }
@@ -377,18 +433,33 @@ mod tests {
     #[test]
     fn horizon_cap_and_sorting() {
         let tasks: Vec<Task> = (0..80)
-            .map(|i| task(&format!("t{i}"), Some(&format!("2026-10-{:02}T{:02}:00:00", 20 + i % 10, 8 + i / 10))))
+            .map(|i| {
+                task(
+                    &format!("t{i}"),
+                    Some(&format!(
+                        "2026-10-{:02}T{:02}:00:00",
+                        20 + i % 10,
+                        8 + i / 10
+                    )),
+                )
+            })
             .chain([task("far", Some("2026-11-20T10:00:00"))])
             .collect();
         let r = plan(&tasks, &[], &on(), now());
         assert_eq!(r.len(), MAX_REMINDERS);
         assert!(r.windows(2).all(|w| w[0].at <= w[1].at), "sorted");
-        assert!(r.iter().all(|r| r.title != "far"), "beyond the 14-day horizon");
+        assert!(
+            r.iter().all(|r| r.title != "far"),
+            "beyond the 14-day horizon"
+        );
     }
 
     #[test]
     fn ids_are_stable_and_distinct() {
-        let tasks = [task("a", Some("2026-10-19T17:00:00")), task("b", Some("2026-10-19T17:00:00"))];
+        let tasks = [
+            task("a", Some("2026-10-19T17:00:00")),
+            task("b", Some("2026-10-19T17:00:00")),
+        ];
         let first = plan(&tasks, &[], &on(), now());
         let again = plan(&tasks, &[], &on(), at(2026, 10, 19, 9, 0));
         assert_eq!(first[0].id, again[0].id);
@@ -398,15 +469,22 @@ mod tests {
 
     #[test]
     fn daily_summary_counts_tasks_per_day() {
-        let s = ReminderSettings { daily_summary: Some(t(7, 30)), all_day_time: None, ..on() };
+        let s = ReminderSettings {
+            daily_summary: Some(t(7, 30)),
+            all_day_time: None,
+            ..on()
+        };
         let tasks = [
             task("a", Some("2026-10-20")),
             task("b", Some("2026-10-20T17:00:00")),
             task("c", Some("2026-10-22")),
         ];
         let r = plan(&tasks, &[], &s, now());
-        let summaries: Vec<(&NaiveDateTime, &str)> =
-            r.iter().filter(|r| r.task_id.is_none()).map(|r| (&r.at, r.body.as_str())).collect();
+        let summaries: Vec<(&NaiveDateTime, &str)> = r
+            .iter()
+            .filter(|r| r.task_id.is_none())
+            .map(|r| (&r.at, r.body.as_str()))
+            .collect();
         assert_eq!(
             summaries,
             vec![
@@ -415,16 +493,27 @@ mod tests {
             ],
             "no summary today (07:30 already passed) or on empty days"
         );
-        assert_eq!(r.iter().find(|r| r.task_id.is_none()).unwrap().title, "Today");
+        assert_eq!(
+            r.iter().find(|r| r.task_id.is_none()).unwrap().title,
+            "Today"
+        );
     }
     #[test]
     fn explicit_relative_reminders() {
         let t = task("Call mom", Some("2026-10-20T17:00:00"));
-        let rs = [Reminder::relative(t.id.clone(), 60), Reminder::relative(t.id.clone(), 24 * 60)];
-        let s = ReminderSettings { all_day_time: None, ..on() };
+        let rs = [
+            Reminder::relative(t.id.clone(), 60),
+            Reminder::relative(t.id.clone(), 24 * 60),
+        ];
+        let s = ReminderSettings {
+            all_day_time: None,
+            ..on()
+        };
         let r = plan(std::slice::from_ref(&t), &rs, &s, now());
         assert_eq!(
-            r.iter().map(|r| (r.at, r.body.as_str())).collect::<Vec<_>>(),
+            r.iter()
+                .map(|r| (r.at, r.body.as_str()))
+                .collect::<Vec<_>>(),
             vec![
                 (at(2026, 10, 19, 17, 0), "Due tomorrow at 5 PM"),
                 (at(2026, 10, 20, 16, 0), "Due in 1 hr (5 PM)"),
@@ -439,19 +528,34 @@ mod tests {
         let t = task("Bins", Some("2026-10-21"));
         let rs = [Reminder::relative(t.id.clone(), 24 * 60)];
         let r = plan(std::slice::from_ref(&t), &rs, &on(), now());
-        assert_eq!(times(&r), vec![at(2026, 10, 20, 9, 0), at(2026, 10, 21, 9, 0)]);
+        assert_eq!(
+            times(&r),
+            vec![at(2026, 10, 20, 9, 0), at(2026, 10, 21, 9, 0)]
+        );
         assert_eq!(r[0].body, "Due tomorrow");
-        let off = ReminderSettings { all_day_time: None, ..on() };
-        assert!(plan(&[t], &rs, &off, now()).is_empty(), "no all-day time, no base to count back from");
+        let off = ReminderSettings {
+            all_day_time: None,
+            ..on()
+        };
+        assert!(
+            plan(&[t], &rs, &off, now()).is_empty(),
+            "no all-day time, no base to count back from"
+        );
     }
 
     #[test]
     fn absolute_reminders_fire_once_even_without_due() {
         let t = task("Water plants", None);
-        let rs = [Reminder::absolute(t.id.clone(), at(2026, 10, 19, 18, 30)), Reminder::absolute(t.id.clone(), at(2026, 10, 18, 9, 0))];
+        let rs = [
+            Reminder::absolute(t.id.clone(), at(2026, 10, 19, 18, 30)),
+            Reminder::absolute(t.id.clone(), at(2026, 10, 18, 9, 0)),
+        ];
         let r = plan(&[t], &rs, &on(), now());
         assert_eq!(r.len(), 1, "the past one is skipped");
-        assert_eq!((r[0].at, r[0].body.as_str()), (at(2026, 10, 19, 18, 30), "Reminder"));
+        assert_eq!(
+            (r[0].at, r[0].body.as_str()),
+            (at(2026, 10, 19, 18, 30), "Reminder")
+        );
     }
 
     #[test]
@@ -464,7 +568,10 @@ mod tests {
             gone,
             Reminder::relative(crate::ids::Id::from("no-such-task"), 0),
         ];
-        assert_eq!(times(&plan(&[t], &rs, &on(), now())), vec![at(2026, 10, 19, 17, 0)]);
+        assert_eq!(
+            times(&plan(&[t], &rs, &on(), now())),
+            vec![at(2026, 10, 19, 17, 0)]
+        );
     }
 
     #[test]
@@ -472,7 +579,10 @@ mod tests {
         let mut t = task("Report", None);
         t.deadline = Some("2026-10-22".into());
         let r = plan(&[t.clone()], &[], &on(), now());
-        assert_eq!((r[0].at, r[0].body.as_str()), (at(2026, 10, 22, 9, 0), "Deadline today"));
+        assert_eq!(
+            (r[0].at, r[0].body.as_str()),
+            (at(2026, 10, 22, 9, 0), "Deadline today")
+        );
         // Due the same day too: one notification that says both.
         t.due = task("x", Some("2026-10-22")).due;
         let r = plan(&[t], &[], &on(), now());

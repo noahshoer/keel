@@ -17,12 +17,19 @@ struct World {
 
 impl World {
     fn new() -> Self {
-        World { repo: SqliteRepo::open_in_memory().unwrap(), n: 0 }
+        World {
+            repo: SqliteRepo::open_in_memory().unwrap(),
+            n: 0,
+        }
     }
 
     fn run(&mut self, action: Action, today: NaiveDate) -> keel_core::commands::ApplyResult {
         self.n += 1;
-        let cmd = Command { uuid: format!("u{}", self.n), temp_id: Some("tmp".to_string()), action };
+        let cmd = Command {
+            uuid: format!("u{}", self.n),
+            temp_id: Some("tmp".to_string()),
+            action,
+        };
         apply_at(&self.repo, cmd, today).unwrap()
     }
 
@@ -98,7 +105,11 @@ fn completing_the_last_occurrence_finishes_the_task() {
     w.complete(&id, d(2026, 10, 21));
     let t = w.get(&id);
     assert!(t.checked, "no occurrence is left");
-    assert_eq!(t.due.unwrap().date, "2026-10-21", "the date stays on the last one");
+    assert_eq!(
+        t.due.unwrap().date,
+        "2026-10-21",
+        "the date stays on the last one"
+    );
 }
 
 #[test]
@@ -119,12 +130,26 @@ fn editing_keeps_sets_or_clears_the_end() {
         until: until.map(str::to_string),
     };
     w.edit_due(&id, edit("2026-10-20", None, Recurrence::Daily));
-    assert_eq!(w.get(&id).due.unwrap().until.as_deref(), Some("2026-10-21"), "same rule keeps it");
-    w.edit_due(&id, edit("2026-10-20", Some("2026-11-30"), Recurrence::Daily));
+    assert_eq!(
+        w.get(&id).due.unwrap().until.as_deref(),
+        Some("2026-10-21"),
+        "same rule keeps it"
+    );
+    w.edit_due(
+        &id,
+        edit("2026-10-20", Some("2026-11-30"), Recurrence::Daily),
+    );
     assert_eq!(w.get(&id).due.unwrap().until.as_deref(), Some("2026-11-30"));
     w.edit_due(&id, edit("2026-10-20", Some(""), Recurrence::Daily));
     assert_eq!(w.get(&id).due.unwrap().until, None, "empty clears it");
-    w.edit_due(&id, edit("2026-10-20", Some("2026-11-30"), Recurrence::Daily));
+    w.edit_due(
+        &id,
+        edit("2026-10-20", Some("2026-11-30"), Recurrence::Daily),
+    );
     w.edit_due(&id, edit("2026-10-20", None, Recurrence::Weekly(vec![1])));
-    assert_eq!(w.get(&id).due.unwrap().until, None, "a new rule starts without one");
+    assert_eq!(
+        w.get(&id).due.unwrap().until,
+        None,
+        "a new rule starts without one"
+    );
 }

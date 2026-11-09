@@ -21,7 +21,13 @@ fn cmd(uuid: &str, temp: Option<&str>, action: Action) -> Command {
 fn completed_streak_task(today: NaiveDate) -> (tempfile::TempDir, AppService, Id, Id) {
     let dir = tempfile::tempdir().unwrap();
     let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
-    let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap().id;
+    let inbox = svc
+        .list_projects()
+        .unwrap()
+        .into_iter()
+        .find(|p| p.is_inbox)
+        .unwrap()
+        .id;
 
     let res = svc
         .dispatch_at(
@@ -46,11 +52,23 @@ fn completed_streak_task(today: NaiveDate) -> (tempfile::TempDir, AppService, Id
         .unwrap();
     let id = res.id_mapping["tmp"].clone();
     svc.dispatch_at(
-        cmd("on", None, Action::TaskSetStreak { id: id.clone(), enabled: true, goal: None }),
+        cmd(
+            "on",
+            None,
+            Action::TaskSetStreak {
+                id: id.clone(),
+                enabled: true,
+                goal: None,
+            },
+        ),
         today,
     )
     .unwrap();
-    svc.dispatch_at(cmd("done", None, Action::TaskComplete { id: id.clone() }), today).unwrap();
+    svc.dispatch_at(
+        cmd("done", None, Action::TaskComplete { id: id.clone() }),
+        today,
+    )
+    .unwrap();
     (dir, svc, inbox, id)
 }
 

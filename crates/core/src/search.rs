@@ -51,16 +51,24 @@ pub fn matches(task: &Task, words: &[String]) -> bool {
     if words.is_empty() {
         return false;
     }
-    let haystack = [task.content.as_str(), task.description.as_str(), &task.labels.join(" ")]
-        .join("\n")
-        .to_lowercase();
+    let haystack = [
+        task.content.as_str(),
+        task.description.as_str(),
+        &task.labels.join(" "),
+    ]
+    .join("\n")
+    .to_lowercase();
     words.iter().all(|w| haystack.contains(w.as_str()))
 }
 
 /// 0 when every word is in the title, else 1 (for ordering).
 pub fn rank(task: &Task, words: &[String]) -> u8 {
     let title = task.content.to_lowercase();
-    if words.iter().all(|w| title.contains(w.as_str())) { 0 } else { 1 }
+    if words.iter().all(|w| title.contains(w.as_str())) {
+        0
+    } else {
+        1
+    }
 }
 
 #[cfg(test)]
@@ -82,7 +90,10 @@ mod tests {
 
     #[test]
     fn words_lowercase_and_strip_at() {
-        assert_eq!(words("  Buy  @Errands milk "), vec!["buy", "errands", "milk"]);
+        assert_eq!(
+            words("  Buy  @Errands milk "),
+            vec!["buy", "errands", "milk"]
+        );
         assert!(words("   ").is_empty());
     }
 
@@ -115,13 +126,22 @@ mod tests {
         let t = task("Buy milk", "", &["Errands"]);
         assert!(SearchScope::Project { id: Id::from("P") }.contains(&t));
         assert!(!SearchScope::Project { id: Id::from("Q") }.contains(&t));
-        assert!(SearchScope::Label { name: "errands".into() }.contains(&t));
-        assert!(!SearchScope::Label { name: "home".into() }.contains(&t));
+        assert!(SearchScope::Label {
+            name: "errands".into()
+        }
+        .contains(&t));
+        assert!(!SearchScope::Label {
+            name: "home".into()
+        }
+        .contains(&t));
     }
 
     #[test]
     fn scope_json_is_tagged_by_kind() {
-        let json = serde_json::to_string(&SearchScope::Label { name: "home".into() }).unwrap();
+        let json = serde_json::to_string(&SearchScope::Label {
+            name: "home".into(),
+        })
+        .unwrap();
         assert_eq!(json, r#"{"kind":"label","name":"home"}"#);
     }
 }

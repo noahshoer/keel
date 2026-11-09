@@ -19,14 +19,32 @@ impl F {
     fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
         let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
-        let inbox = svc.list_projects().unwrap().into_iter().find(|p| p.is_inbox).unwrap().id;
-        F { _dir: dir, svc, inbox, n: 0 }
+        let inbox = svc
+            .list_projects()
+            .unwrap()
+            .into_iter()
+            .find(|p| p.is_inbox)
+            .unwrap()
+            .id;
+        F {
+            _dir: dir,
+            svc,
+            inbox,
+            n: 0,
+        }
     }
 
     fn run(&mut self, action: Action) -> keel_core::commands::ApplyResult {
         self.n += 1;
         self.svc
-            .dispatch_at(Command { uuid: format!("u{}", self.n), temp_id: Some("t".into()), action }, today())
+            .dispatch_at(
+                Command {
+                    uuid: format!("u{}", self.n),
+                    temp_id: Some("t".into()),
+                    action,
+                },
+                today(),
+            )
             .unwrap()
     }
 
@@ -71,10 +89,17 @@ fn groups_in_order_and_open_only() {
     let done = f.task("d-done-today", Some("2026-10-19"), Priority::None, &[]);
     f.run(Action::TaskComplete { id: done });
 
-    let groups = f.svc.filter_view_at("today, overdue | @home", today()).unwrap();
+    let groups = f
+        .svc
+        .filter_view_at("today, overdue | @home", today())
+        .unwrap();
     assert_eq!(groups.len(), 2);
     assert_eq!(groups[0].query, "today");
-    assert_eq!(names(&groups[0].tasks), vec!["a-today"], "completed tasks never appear");
+    assert_eq!(
+        names(&groups[0].tasks),
+        vec!["a-today"],
+        "completed tasks never appear"
+    );
     assert_eq!(groups[1].query, "overdue | @home");
     assert_eq!(names(&groups[1].tasks), vec!["b-overdue", "c-home"]);
 }
@@ -95,7 +120,10 @@ fn sorted_by_due_then_priority() {
     f.task("z-19", Some("2026-10-19"), Priority::None, &[]);
     f.task("w-undated", None, Priority::P1, &[]);
     let groups = f.svc.filter_view_at("all", today()).unwrap();
-    assert_eq!(names(&groups[0].tasks), vec!["z-19", "y-20-p1", "x-20-p4", "w-undated"]);
+    assert_eq!(
+        names(&groups[0].tasks),
+        vec!["z-19", "y-20-p1", "x-20-p4", "w-undated"]
+    );
 }
 
 #[test]

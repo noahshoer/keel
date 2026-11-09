@@ -135,7 +135,10 @@ pub fn run(conn: &Connection) -> rusqlite::Result<()> {
         .prepare("SELECT 1 FROM pragma_table_info('task') WHERE name = 'done_with_subtasks'")?
         .exists([])?;
     if !has_done_with {
-        conn.execute("ALTER TABLE task ADD COLUMN done_with_subtasks INTEGER NOT NULL DEFAULT 0", [])?;
+        conn.execute(
+            "ALTER TABLE task ADD COLUMN done_with_subtasks INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
     }
     Ok(())
 }

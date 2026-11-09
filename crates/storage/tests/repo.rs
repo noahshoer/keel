@@ -121,7 +121,12 @@ fn list_all_tasks_spans_projects_and_excludes_deleted() {
         repo.upsert_task(t).unwrap();
     }
     repo.soft_delete_task(&gone.id).unwrap();
-    let mut ids: Vec<_> = repo.list_all_tasks().unwrap().into_iter().map(|t| t.id).collect();
+    let mut ids: Vec<_> = repo
+        .list_all_tasks()
+        .unwrap()
+        .into_iter()
+        .map(|t| t.id)
+        .collect();
     ids.sort_by(|x, y| x.as_str().cmp(y.as_str()));
     let mut want = vec![a.id.clone(), b.id.clone()];
     want.sort_by(|x, y| x.as_str().cmp(y.as_str()));
