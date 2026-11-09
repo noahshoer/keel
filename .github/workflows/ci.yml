@@ -113,8 +113,12 @@ jobs:
         run: pnpm build
 
       # The iOS-only code (#[cfg(target_os = "ios")]) that the host pass skips.
+      # Its own profile (Cargo.toml): Xcode runs cargo with DEVELOPER_DIR,
+      # SDKROOT, … set, and build scripts that watch those (cc, so sqlite and
+      # objc2) would otherwise re-run on each switch, rebuilding objc2, tao,
+      # wry and tauri inside the Xcode build.
       - name: Clippy (iOS)
-        run: cargo clippy --all-targets --target aarch64-apple-ios -- -D warnings
+        run: cargo clippy --profile clippy-ios --all-targets --target aarch64-apple-ios -- -D warnings
 
       # The device target: with the simulator target, the runner's Xcode
       # archives for a device anyway and the Rust build step gets no ARCHS.
