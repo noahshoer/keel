@@ -5,6 +5,7 @@
 pub mod diag;
 
 use chrono::{Local, NaiveDate, NaiveDateTime};
+use keel_core::arrange::PlacedArrangement;
 use keel_core::commands::{apply_at, Action, ApplyResult, Command};
 use keel_core::filter::{self, Expr, FilterContext, FilterError, FilterGroup, FilterNames, Term};
 use keel_core::ids::Id;
@@ -347,6 +348,11 @@ impl AppService {
             comments: plan.comments,
             kept_as_text: plan.kept_as_text,
         })
+    }
+
+    /// Every page's saved arrangement (pages without one are absent).
+    pub fn list_arrangements(&self) -> Result<Vec<PlacedArrangement>, RepoError> {
+        self.repo.list_arrangements()
     }
 
     pub fn list_filters(&self) -> Result<Vec<Filter>, RepoError> {

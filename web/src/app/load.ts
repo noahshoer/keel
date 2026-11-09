@@ -2,7 +2,16 @@
 // view: the same calls and branches as the Dioxus App's loader
 // (crates/ui/src/main.rs `Loaded`).
 import { useEffect, useRef, useState } from "react";
-import type { Filter, FilterGroup, Label, Project, Reminder, Section, Task } from "../bindings";
+import type {
+  Filter,
+  FilterGroup,
+  Label,
+  PlacedArrangement,
+  Project,
+  Reminder,
+  Section,
+  Task,
+} from "../bindings";
 import { localToday } from "../clock";
 import { upcomingTasks } from "../core";
 import { invoke } from "../ipc/invoke";
@@ -16,6 +25,8 @@ export type Loaded = {
   sections: Section[];
   labels: Label[];
   filters: Filter[];
+  /** Every page's saved arrangement. */
+  arrangements: PlacedArrangement[];
   inbox: Project;
   /** Every task reminder (for the rows' bell chips). */
   reminders: Reminder[];
@@ -82,11 +93,12 @@ export async function loadView(view: View, showCompleted: boolean, today: string
   const projects = await invoke("list_projects", {});
   const inbox = projects.find((p) => p.is_inbox);
   if (!inbox) throw "no inbox project";
-  const [sections, labels, reminders, filters, todayTasks, all] = await Promise.all([
+  const [sections, labels, reminders, filters, arrangements, todayTasks, all] = await Promise.all([
     Promise.all(projects.map((p) => invoke("list_sections", { project_id: p.id }))).then((s) => s.flat()),
     invoke("list_labels", {}),
     invoke("list_reminders", {}),
     invoke("list_filters", {}),
+    invoke("list_arrangements", {}),
     invoke("today_view", {}),
     invoke("all_tasks", {}),
   ]);
@@ -98,6 +110,7 @@ export async function loadView(view: View, showCompleted: boolean, today: string
     sections,
     labels,
     filters,
+    arrangements,
     inbox,
     reminders,
     tasks,

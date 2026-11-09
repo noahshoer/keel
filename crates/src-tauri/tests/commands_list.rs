@@ -39,7 +39,7 @@ fn exports_command_names() {
     json.push('\n');
     std::fs::write(bindings_dir().join("commands.json"), json).expect("write commands.json");
 
-    assert_eq!(names.len(), 31, "{names:?}");
+    assert_eq!(names.len(), 32, "{names:?}");
     for n in [
         "today_view",
         "dispatch",
@@ -99,6 +99,7 @@ fn base_capabilities_skip_glass() {
 #[cfg(feature = "ts")]
 mod ts {
     use super::{bindings_dir, command_names};
+    use keel_core::arrange::PlacedArrangement;
     use keel_core::commands::ApplyResult;
     use keel_core::filter::FilterGroup;
     use keel_core::import::todoist::ImportSummary;
@@ -193,6 +194,7 @@ mod ts {
             completed_with_label => CompletedWithLabelArgs => Vec<Task>,
             list_sections => ListSectionsArgs => Vec<Section>,
             list_filters => NoArgs => Vec<Filter>,
+            list_arrangements => NoArgs => Vec<PlacedArrangement>,
             check_filter => CheckFilterArgs => (),
             filter_view => FilterViewArgs => Vec<FilterGroup>,
             dispatch => DispatchArgs => ApplyResult,

@@ -23,6 +23,7 @@ export const COMMAND_TYPES: { [K in CommandName]: true } = {
   hold_page_scroll: true,
   import_todoist_csv: true,
   label_view: true,
+  list_arrangements: true,
   list_filters: true,
   list_labels: true,
   list_projects: true,

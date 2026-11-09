@@ -18,6 +18,7 @@ import type { LabelViewArgs } from "./LabelViewArgs";
 import type { ListSectionsArgs } from "./ListSectionsArgs";
 import type { ListTasksArgs } from "./ListTasksArgs";
 import type { NoArgs } from "./NoArgs";
+import type { PlacedArrangement } from "./PlacedArrangement";
 import type { PlannedReminder } from "./PlannedReminder";
 import type { Project } from "./Project";
 import type { ProjectViewArgs } from "./ProjectViewArgs";
@@ -45,6 +46,7 @@ export interface Commands {
   completed_with_label: { args: CompletedWithLabelArgs; ret: Array<Task> };
   list_sections: { args: ListSectionsArgs; ret: Array<Section> };
   list_filters: { args: NoArgs; ret: Array<Filter> };
+  list_arrangements: { args: NoArgs; ret: Array<PlacedArrangement> };
   check_filter: { args: CheckFilterArgs; ret: null };
   filter_view: { args: FilterViewArgs; ret: Array<FilterGroup> };
   dispatch: { args: DispatchArgs; ret: ApplyResult };
