@@ -17,9 +17,11 @@ import {
   viewSubtitle,
   viewTitle,
 } from "../app/view";
+import { ArrangedList } from "../arrange/ArrangedList";
+import { arrangementOf, isArranged, placeOf } from "../arrange/place";
 import type { Section, Task } from "../bindings";
 import { localToday } from "../clock";
-import { blankValues, cards, dateGroups, filterReading } from "../core";
+import { arrange, blankValues, cards, dateGroups, filterReading } from "../core";
 import { AddTask } from "../editor/AddTask";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
@@ -196,6 +198,20 @@ export function MainPane({
       onChanged={onChanged}
     />
   );
+  // The page's saved arrangement. A later task puts the unsaved preview in front of it here.
+  const arrangePlace = placeOf(view, loaded);
+  const arrangement = arrangementOf(arrangePlace, loaded.arrangements);
+  const arranged = isArranged(arrangement);
+  const headed = arranged && arrangement.groups.length > 0;
+  const arrangeTasks = (tasks: Task[]) =>
+    arrange(tasks, arrangement, loaded.projects, loaded.sections, loaded.labels, today);
+  const whole = arranged ? arrangeTasks(loaded.tasks) : null;
+  // A filter that matched nothing says so; the page's own empty text is for pages with no tasks.
+  const nothingMatches =
+    whole !== null && arrangement.filter.trim() !== "" && whole.filter_problem === null && whole.shown === 0;
+  // Without headings the page keeps its own grouping and each list is shaped (filtered, ordered).
+  const shape: ((tasks: Task[]) => Task[]) | null =
+    arranged && !headed ? (tasks) => arrangeTasks(tasks).groups[0]?.tasks ?? [] : null;
   const list = (tasks: Task[]) => (
     <CardList
       cards={cards(tasks, loaded.all, mode, today)}
@@ -210,20 +226,47 @@ export function MainPane({
   let body: React.ReactNode;
   if (search) {
     body = children;
+  } else if (nothingMatches) {
+    body = (
+      <>
+        <p className="view-sub arrange-empty">No tasks match this filter.</p>
+        {addRow}
+      </>
+    );
+  } else if (headed && whole !== null) {
+    body = (
+      <>
+        <ArrangedList
+          groups={whole.groups}
+          all={loaded.all}
+          mode={mode}
+          today={today}
+          locations={locations}
+          labels={loaded.labels}
+          reminders={loaded.reminders}
+          onChanged={onChanged}
+        />
+        {addRow}
+      </>
+    );
   } else if (view.kind === "filter") {
     const multi = loaded.filterGroups.length > 1;
-    const groups = loaded.filterGroups.map((group, i) => (
-      // biome-ignore lint/suspicious/noArrayIndexKey: comma groups have no id; their order is the query's.
-      <div key={`fg-${i}`}>
-        {multi ? (
-          <div className="section-title">
-            <span className="mono">{group.query}</span>
-            <span className="muted">{group.tasks.length}</span>
-          </div>
-        ) : null}
-        {list(group.tasks)}
-      </div>
-    ));
+    const groups = loaded.filterGroups.flatMap((group, i) => {
+      const tasks = shape ? shape(group.tasks) : group.tasks;
+      if (shape && tasks.length === 0) return [];
+      return [
+        // biome-ignore lint/suspicious/noArrayIndexKey: comma groups have no id; their order is the query's.
+        <div key={`fg-${i}`}>
+          {multi ? (
+            <div className="section-title">
+              <span className="mono">{group.query}</span>
+              <span className="muted">{tasks.length}</span>
+            </div>
+          ) : null}
+          {list(tasks)}
+        </div>,
+      ];
+    });
     body = (
       <>
         {groups}
@@ -231,19 +274,23 @@ export function MainPane({
       </>
     );
   } else if (view.kind === "today" || view.kind === "upcoming") {
-    const groups = dateGroups(view.kind === "today" ? "Today" : "Upcoming", loaded.tasks, today).map(
-      (group, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: date groups are positional (Overdue, then days).
-        <div key={i}>
-          {group.title !== null ? (
-            <div className="section-title">
-              {group.title}
-              <span className="muted">{group.muted}</span>
-            </div>
-          ) : null}
-          {list(group.tasks)}
-        </div>
-      ),
+    const groups = dateGroups(view.kind === "today" ? "Today" : "Upcoming", loaded.tasks, today).flatMap(
+      (group, i) => {
+        const tasks = shape ? shape(group.tasks) : group.tasks;
+        if (shape && tasks.length === 0) return [];
+        return [
+          // biome-ignore lint/suspicious/noArrayIndexKey: date groups are positional (Overdue, then days).
+          <div key={i}>
+            {group.title !== null ? (
+              <div className="section-title">
+                {group.title}
+                <span className="muted">{group.muted}</span>
+              </div>
+            ) : null}
+            {list(tasks)}
+          </div>,
+        ];
+      },
     );
     body = (
       <>
@@ -254,7 +301,7 @@ export function MainPane({
   } else {
     const unsectionedBlock = (
       <>
-        {list(unsectioned)}
+        {list(shape ? shape(unsectioned) : unsectioned)}
         {addRow}
       </>
     );
@@ -278,6 +325,7 @@ export function MainPane({
             section={section}
             tasks={loaded.tasks.filter((t) => inSection(t, section))}
             all={loaded.all}
+            shape={shape}
             loaded={loaded}
             today={today}
             reminders={loaded.reminders}
@@ -394,7 +442,11 @@ export function MainPane({
               {loaded.filterError !== null ? (
                 <div className="filter-problem big-problem">{`This filter can’t run: ${loaded.filterError}`}</div>
               ) : search ? null : (
-                <EmptyState show={empty && projectSections.length === 0} big={big} small={small} />
+                <EmptyState
+                  show={empty && projectSections.length === 0 && !nothingMatches}
+                  big={big}
+                  small={small}
+                />
               )}
               {body}
               {/* Room under the last row of the page, so the floating add button doesn't cover it. */}

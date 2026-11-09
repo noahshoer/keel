@@ -25,6 +25,7 @@ export function SectionBlock({
   section,
   tasks,
   all,
+  shape,
   loaded,
   today,
   reminders,
@@ -34,6 +35,8 @@ export function SectionBlock({
   tasks: Task[];
   /** Every task, for the cards' sub-task counts. */
   all: Task[];
+  /** The page's arrangement, when it has one: filters and orders the section's tasks. */
+  shape?: ((tasks: Task[]) => Task[]) | null;
   /** The lists the section's "+ Add task" editor picks from. */
   loaded: Pick<Loaded, "projects" | "sections" | "labels">;
   today: string;
@@ -44,7 +47,7 @@ export function SectionBlock({
   const [draft, setDraft] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const { show: showSubtasks } = useContext(ShowSubtasksContext);
-  const list = cards(tasks, all, showSubtasks ? "Grouped" : "TopLevel", today);
+  const list = cards(shape ? shape(tasks) : tasks, all, showSubtasks ? "Grouped" : "TopLevel", today);
   // What the section shows: its top-level tasks (sub-tasks go with them).
   const count = list.length;
 

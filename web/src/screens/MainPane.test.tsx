@@ -3,9 +3,12 @@ import { useState } from "react";
 import { beforeAll, expect, it, vi } from "vitest";
 import { useLoaded } from "../app/load";
 import type { View } from "../app/view";
+import type { OrderLevel, SortField } from "../bindings";
 import { localToday } from "../clock";
+import * as core from "../core";
 import { TASK_DROP } from "../gestures/drag";
 import { ROW_PRESS } from "../gestures/long-press";
+import { addLabel, arrangeView, dispatchAction, renameSection } from "../ipc/actions";
 import { invoke } from "../ipc/invoke";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
 import { TaskNavProvider } from "../taskview/nav";
@@ -558,4 +561,105 @@ it("Cancel collapses the editor; Search has no add row", async () => {
   unmount();
   const search = await show({ kind: "search" });
   expect(search.container.querySelector(".add-task-row")).toBeNull();
+});
+
+// Arranged pages (issue #7).
+const homePlace = { kind: "project", id: "p-home" } as const;
+const arrangement = (a: Partial<{ filter: string; groups: SortField[]; order: OrderLevel[] }>) => ({
+  filter: "",
+  groups: [],
+  order: [],
+  ...a,
+});
+const addTask = (content: string, extra: Record<string, unknown> = {}) =>
+  dispatchAction({ type: "task_add", project_id: "p-home", content, ...extra } as never);
+
+it("untouched page is unchanged", async () => {
+  const arrangeSpy = vi.spyOn(core, "arrange");
+  try {
+    const today = await show({ kind: "today" });
+    expect(today.container.querySelector(".arrange-sub, .arrange-empty")).toBeNull();
+    today.unmount();
+    const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+    expect(container.querySelector(".arrange-sub")).toBeNull();
+    expect(container.querySelector(".arrange-empty")).toBeNull();
+    expect(container.querySelectorAll(".add-section-row")).toHaveLength(1);
+    expect(container.querySelectorAll(".add-task-row")).toHaveLength(2);
+    expect(arrangeSpy).not.toHaveBeenCalled();
+  } finally {
+    arrangeSpy.mockRestore();
+  }
+});
+
+it("order only keeps sections", async () => {
+  await dispatchAction({ type: "task_update", id: "t-laundry", priority: "None" } as never);
+  await addTask("Urgent chore", { section_id: "s-chores", priority: "P1" });
+  await arrangeView(homePlace, arrangement({ order: [{ field: "priority", reversed: false }] }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  expect(titles(container)).toEqual(["Chores"]);
+  const block = container.querySelector(".section-block") as HTMLElement;
+  expect(block.querySelector(".task-content")?.textContent).toBe("Urgent chore");
+});
+
+it("headings replace sections", async () => {
+  await arrangeView(homePlace, arrangement({ groups: ["label"] }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  expect(titles(container)).toEqual(["errand", "No label"]);
+  expect(container.querySelector(".add-section-row")).toBeNull();
+  expect(container.querySelector(".section-block")).toBeNull();
+  expect(container.querySelectorAll(".add-task-row")).toHaveLength(1);
+});
+
+it("today grouped like Noah's example", async () => {
+  await addLabel("phone");
+  const [chores] = await invoke("list_sections", { project_id: "p-home" });
+  await renameSection(chores?.id as string, "Kitchen");
+  await dispatchAction({ type: "task_update", id: "t-laundry", labels: ["errand", "phone"] } as never);
+  await arrangeView({ kind: "today" }, arrangement({ groups: ["project", "section", "label"] }));
+  const { container } = await show({ kind: "today" });
+  expect(titles(container)).toContain("Home › Kitchen");
+  expect([...container.querySelectorAll(".arrange-sub")].map((e) => e.textContent)).toEqual([
+    "No label",
+    "errand",
+    "phone",
+    "No label",
+  ]);
+});
+
+it("two-label task shows twice and leaves twice", async () => {
+  const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    await addLabel("phone");
+    await dispatchAction({ type: "task_update", id: "t-laundry", labels: ["errand", "phone"] } as never);
+    await arrangeView(homePlace, arrangement({ groups: ["label"] }));
+    const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+    const laundry = () => contents(container).filter((c) => c === "Do laundry");
+    expect(laundry()).toHaveLength(2);
+    const row = screen.getAllByText("Do laundry")[0]?.closest(".task-row");
+    fireEvent.click(row?.querySelector("button.check") as HTMLButtonElement);
+    await act(async () => vi.advanceTimersByTimeAsync(800));
+    await waitFor(() => expect(laundry()).toHaveLength(0));
+    expect(errors.mock.calls.map((c) => String(c[0])).filter((m) => m.includes("same key"))).toEqual([]);
+  } finally {
+    vi.useRealTimers();
+    errors.mockRestore();
+  }
+});
+
+it("nothing matches", async () => {
+  await arrangeView(homePlace, arrangement({ filter: "p2" }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  expect(screen.getByText("No tasks match this filter.")).not.toBeNull();
+  expect(container.querySelectorAll(".add-task-row")).toHaveLength(1);
+  expect(container.querySelector(".empty")).toBeNull();
+});
+
+it("upcoming order only keeps days", async () => {
+  await arrangeView({ kind: "upcoming" }, arrangement({ order: [{ field: "priority", reversed: false }] }));
+  const { container } = await show({ kind: "upcoming" });
+  const plain = titles(container);
+  expect(plain[0]).toBe("Overdue");
+  expect(plain).toHaveLength(3);
+  expect(container.querySelector(".arrange-sub")).toBeNull();
 });

@@ -1524,3 +1524,9 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
     scale: calc(1 - var(--title-move, 0) * 0.412); }
   .list-body { padding-top: var(--head-h); }
 }
+
+/* Arranged pages (filter and sort): a sub-heading under a title line, and the empty filter. */
+.arrange-sub { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600;
+  padding: 4px 10px 5px; color: var(--tint, var(--secondary)); }
+.arrange-sub .icon { width: 13px; height: 13px; }
+.arrange-empty { padding: 0 10px; margin: 8px 0 4px; }
