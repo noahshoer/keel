@@ -89,9 +89,23 @@ jobs:
           # Branches restore main's cache; only main saves, so branch copies
           # don't crowd main's out of the 10 GB limit.
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2
+      # tauri-cli publishes no Apple silicon binary, so install-action's
+      # cargo-binstall fallback installs the x86_64 one. It runs under
+      # Rosetta, and so does every Xcode tool it starts (xcodebuild, clang,
+      # swift, ibtool), each translated on first launch: minutes per run.
+      # Build an arm64 tauri-cli instead, cached per version. It goes in
+      # ~/.cargo/bin, which cargo searches before PATH for `cargo tauri`.
+      - name: Cache tauri-cli (arm64)
+        id: tauri-cli-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
+          path: ~/.cargo/bin/cargo-tauri
+          key: tauri-cli-${{ runner.os }}-${{ runner.arch }}-${{ env.TAURI_CLI_VERSION }}
+      - name: Build tauri-cli (arm64)
+        if: steps.tauri-cli-cache.outputs.cache-hit != 'true'
+        run: cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked --force
+      - name: tauri-cli is arm64
+        run: file ~/.cargo/bin/cargo-tauri | tee /dev/stderr | grep -q arm64
 
       - uses: ./.github/actions/web-setup
       - name: Build the web UI
