@@ -647,6 +647,23 @@ it("two-label task shows twice and leaves twice", async () => {
   }
 });
 
+it("the menu offers Add section unless headings replace sections", async () => {
+  const home = { kind: "project", id: "p-home", name: "Home" } as const;
+  const first = await show(home);
+  fireEvent.click(screen.getByLabelText("More"));
+  expect(within(popup() as HTMLElement).queryByText("Add section")).not.toBeNull();
+  first.unmount();
+  await arrangeView(homePlace, arrangement({ order: [{ field: "priority", reversed: false }] }));
+  const ordered = await show(home);
+  fireEvent.click(screen.getByLabelText("More"));
+  expect(within(popup() as HTMLElement).queryByText("Add section")).not.toBeNull();
+  ordered.unmount();
+  await arrangeView(homePlace, arrangement({ groups: ["label"] }));
+  await show(home);
+  fireEvent.click(screen.getByLabelText("More"));
+  expect(within(popup() as HTMLElement).queryByText("Add section")).toBeNull();
+});
+
 it("nothing matches", async () => {
   await arrangeView(homePlace, arrangement({ filter: "p2" }));
   const { container } = await show({ kind: "project", id: "p-home", name: "Home" });

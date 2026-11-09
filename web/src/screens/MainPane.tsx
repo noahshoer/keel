@@ -406,7 +406,7 @@ export function MainPane({
                 }}
                 onDelete={actions.remove}
                 lead={
-                  view.kind === "project"
+                  view.kind === "project" && !headed
                     ? {
                         label: "Add section",
                         icon: <PlusIcon size={20} />,
