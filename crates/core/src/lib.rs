@@ -1,3 +1,4 @@
+pub mod arrange;
 pub mod calendar;
 pub mod commands;
 pub mod editor;

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use chrono::{Local, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::arrange::{Arrangement, PlacedArrangement, ViewPlace};
 use crate::ids::Id;
 use crate::model::{
     Due, Filter, Label, LastCompletion, Priority, Project, Reminder, Section, Task,
@@ -176,6 +177,11 @@ pub enum Action {
     FilterDelete {
         id: Id,
     },
+    /// Set how a list page is arranged. The default arrangement removes it.
+    ViewArrange {
+        place: ViewPlace,
+        arrangement: Arrangement,
+    },
     /// Rename a project. No-op for the Inbox.
     ProjectUpdate {
         id: Id,
@@ -226,6 +232,7 @@ impl Action {
             Action::ProjectAdd { .. } => "project_add",
             Action::FilterAdd { .. } => "filter_add",
             Action::FilterUpdate { .. } => "filter_update",
+            Action::ViewArrange { .. } => "view_arrange",
             Action::FilterDelete { .. } => "filter_delete",
             Action::ProjectUpdate { .. } => "project_update",
             Action::ProjectDelete { .. } => "project_delete",
@@ -633,6 +640,14 @@ pub fn apply_at<R: Repository>(
             if let Some(mut filter) = repo.list_filters()?.into_iter().find(|f| f.id == id) {
                 filter.is_deleted = true;
                 repo.upsert_filter(&filter)?;
+            }
+        }
+        Action::ViewArrange { place, arrangement } => {
+            let arrangement = arrangement.normalized();
+            if arrangement.is_default() {
+                repo.delete_arrangement(&place.key())?;
+            } else {
+                repo.upsert_arrangement(&PlacedArrangement { place, arrangement })?;
             }
         }
         Action::ProjectUpdate { id, name } => {

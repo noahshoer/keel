@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 
 use chrono::{DateTime, Utc};
+use keel_core::arrange::PlacedArrangement;
 use keel_core::ids::Id;
 use keel_core::model::{
     Due, Duration, Filter, Label, Priority, Project, Reminder, ReminderType, Section, Task,
@@ -483,6 +484,54 @@ impl Repository for SqliteRepo {
         )
         .map_err(backend)?;
         Ok(())
+    }
+
+    fn upsert_arrangement(&self, placed: &PlacedArrangement) -> Result<(), RepoError> {
+        let place_json = serde_json::to_string(&placed.place).map_err(backend)?;
+        let arrangement_json = serde_json::to_string(&placed.arrangement).map_err(backend)?;
+        let conn = self.conn.lock().map_err(backend)?;
+        conn.execute(
+            "INSERT INTO view_arrangement (place_key, place_json, arrangement_json) \
+             VALUES (?1, ?2, ?3) \
+             ON CONFLICT(place_key) DO UPDATE SET place_json=excluded.place_json, \
+                arrangement_json=excluded.arrangement_json",
+            params![placed.place.key(), place_json, arrangement_json],
+        )
+        .map_err(backend)?;
+        Ok(())
+    }
+
+    fn delete_arrangement(&self, place_key: &str) -> Result<(), RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        conn.execute(
+            "DELETE FROM view_arrangement WHERE place_key = ?1",
+            params![place_key],
+        )
+        .map_err(backend)?;
+        Ok(())
+    }
+
+    fn list_arrangements(&self) -> Result<Vec<PlacedArrangement>, RepoError> {
+        let conn = self.conn.lock().map_err(backend)?;
+        let mut stmt = conn
+            .prepare("SELECT place_json, arrangement_json FROM view_arrangement ORDER BY rowid ASC")
+            .map_err(backend)?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(backend)?;
+        let mut out = Vec::new();
+        for r in rows {
+            let (place, arrangement) = r.map_err(backend)?;
+            if let (Ok(place), Ok(arrangement)) = (
+                serde_json::from_str(&place),
+                serde_json::from_str(&arrangement),
+            ) {
+                out.push(PlacedArrangement { place, arrangement });
+            }
+        }
+        Ok(out)
     }
 
     fn list_filters(&self) -> Result<Vec<Filter>, RepoError> {

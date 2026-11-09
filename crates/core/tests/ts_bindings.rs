@@ -6,6 +6,7 @@
 
 use std::path::PathBuf;
 
+use keel_core::arrange::{Arrangement, OrderLevel, PlacedArrangement, SortField, ViewPlace};
 use keel_core::calendar::{DayCell, MonthView};
 use keel_core::commands::{Action, ApplyResult, Command, DueEdit};
 use keel_core::editor::{
@@ -91,6 +92,11 @@ fn bindings_cover_ipc_types() {
         CardRow,
         Card,
         CardMode,
+        SortField,
+        OrderLevel,
+        Arrangement,
+        ViewPlace,
+        PlacedArrangement,
         LabelChoice,
         LabelGroup,
         ProjectCount,
