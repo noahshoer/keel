@@ -17,12 +17,14 @@ import {
   viewSubtitle,
   viewTitle,
 } from "../app/view";
+import { ArrangeBar } from "../arrange/ArrangeBar";
 import { ArrangedList } from "../arrange/ArrangedList";
 import { arrangementOf, isArranged, placeOf } from "../arrange/place";
 import type { Section, Task } from "../bindings";
 import { localToday } from "../clock";
 import { arrange, blankValues, cards, dateGroups, filterReading } from "../core";
 import { AddTask } from "../editor/AddTask";
+import { arrangeView } from "../ipc/actions";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
 import { DropZone } from "../lists/DropZone";
@@ -31,7 +33,15 @@ import { LocationsContext } from "../lists/locations";
 import { INBOX_LOCATION, locationsOf, locationText } from "../lists/rowLayout";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
 import { openAndFocus } from "../shell/focus";
-import { CheckCircleIcon, ChevronLeftIcon, MenuIcon, PlusIcon, SearchIcon } from "../shell/icons";
+import {
+  CheckCircleIcon,
+  ChevronLeftIcon,
+  FunnelIcon,
+  MenuIcon,
+  PlusIcon,
+  SearchIcon,
+  SortIcon,
+} from "../shell/icons";
 import { type ListContext, type PageEditing, pageActions } from "../shell/listActions";
 import { currentPlatform, searchTooltip } from "../shell/platform";
 import { attachHeadScroll } from "./headScroll";
@@ -149,6 +159,10 @@ export function MainPane({
             },
           }
         : null;
+  // The open filter or sort panel (drawn by a later task), by place, so it doesn't outlive its page.
+  const [panelState, setPanelState] = useState<{ place: string; which: "filter" | "sort" } | null>(null);
+  const panel = panelState?.place === place ? panelState.which : null;
+  const setPanel = (which: "filter" | "sort" | null) => setPanelState(which ? { place, which } : null);
   const stopEditing = () => setEditingPlace(null);
   const titleField = useRef<HTMLInputElement>(null);
   // What the project's ••• calls to open the "Add section" field at the end of the page.
@@ -202,10 +216,15 @@ export function MainPane({
   const arrangePlace = placeOf(view, loaded);
   const arrangement = arrangementOf(arrangePlace, loaded.arrangements);
   const arranged = isArranged(arrangement);
+  const filterSet = arrangement.filter.trim() !== "";
+  const sortSet = arrangement.groups.length > 0 || arrangement.order.length > 0;
   const headed = arranged && arrangement.groups.length > 0;
   const arrangeTasks = (tasks: Task[]) =>
     arrange(tasks, arrangement, loaded.projects, loaded.sections, loaded.labels, today);
   const whole = arranged ? arrangeTasks(loaded.tasks) : null;
+  const saveArrangement = (next: typeof arrangement) => {
+    if (arrangePlace) arrangeView(arrangePlace, next).then(onChanged, onChanged);
+  };
   // A filter that matched nothing says so; the page's own empty text is for pages with no tasks.
   const nothingMatches =
     whole !== null && arrangement.filter.trim() !== "" && whole.filter_problem === null && whole.shown === 0;
@@ -381,6 +400,30 @@ export function MainPane({
                 onClose={stopEditing}
               />
             ) : null}
+            {arrangePlace !== null ? (
+              <>
+                <button
+                  type="button"
+                  className={filterSet ? "icon-btn arrange-btn on" : "icon-btn arrange-btn"}
+                  title="Filter"
+                  aria-label="Filter"
+                  aria-pressed={filterSet}
+                  onClick={() => setPanel(panel === "filter" ? null : "filter")}
+                >
+                  <FunnelIcon />
+                </button>
+                <button
+                  type="button"
+                  className={sortSet ? "icon-btn arrange-btn on" : "icon-btn arrange-btn"}
+                  title="Sort"
+                  aria-label="Sort"
+                  aria-pressed={sortSet}
+                  onClick={() => setPanel(panel === "sort" ? null : "sort")}
+                >
+                  <SortIcon />
+                </button>
+              </>
+            ) : null}
             {toggle ? (
               <button
                 type="button"
@@ -431,6 +474,13 @@ export function MainPane({
           <div ref={listScroll} className="list-scroll">
             {/* Keyed by the view, so a view lands as it is: only later changes animate (lists/presence.ts). */}
             <div key={viewKey(view)} className="list-body">
+              <ArrangeBar
+                arrangement={arrangement}
+                problem={whole?.filter_problem ?? null}
+                onOpen={setPanel}
+                onClearFilter={() => saveArrangement({ ...arrangement, filter: "" })}
+                onResetSort={() => saveArrangement({ ...arrangement, groups: [], order: [] })}
+              />
               {editing?.kind === "filter" ? (
                 <div ref={setQuerySlot} className="view-edit-query" />
               ) : subtitle ? (

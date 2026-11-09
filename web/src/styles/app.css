@@ -1248,6 +1248,15 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
   font: inherit; font-weight: 600; cursor: pointer; }
 .scope-chip svg { width: 14px; height: 14px; }
 .search-problem { color: var(--muted); }
+.arrange-btn.on { background: var(--active-tint); color: var(--accent-text); }
+.arrange-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.arrange-chip { min-width: 0; height: auto; min-height: 28px; padding: 0; cursor: default; }
+.arrange-chip button { display: inline-flex; align-items: center; gap: 4px; border: none; background: none; color: inherit;
+  font: inherit; cursor: pointer; padding: 0; }
+.arrange-chip-main { min-width: 0; padding: 4px 4px 4px 10px; text-align: left; }
+.arrange-chip-text { min-width: 0; overflow-wrap: anywhere; }
+.arrange-chip-x { align-self: stretch; padding: 0 8px 0 4px; }
+.arrange-chip.problem { background: color-mix(in srgb, var(--due-overdue) 16%, var(--bg)); color: var(--due-overdue); }
 .search-input:focus { background: var(--field-fill-focus); }
 .search-input::placeholder { color: var(--muted); }
 .search-input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
@@ -1367,6 +1376,8 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
   .view-toggle { justify-content: center; width: 44px; height: 44px; padding: 0; margin-right: -12px; }
   .view-toggle svg { width: 24px; height: 24px; }
   .view-toggle-label { display: none; }
+  .arrange-btn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; }
+  .arrange-btn svg { width: 24px; height: 24px; }
   .section-title, .section-name { padding-left: 8px; padding-right: 8px; }
   .streak-panel { margin-left: 0; }
   /* Editor: chips wrap, pickers stay on screen, the footer sticks to the bottom. */

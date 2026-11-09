@@ -680,3 +680,50 @@ it("upcoming order only keeps days", async () => {
   expect(plain).toHaveLength(3);
   expect(container.querySelector(".arrange-sub")).toBeNull();
 });
+
+// Header icons and chips (issue #7).
+it("the filter and sort icons are on lists, not on Search", async () => {
+  const search = await show({ kind: "search" });
+  expect(screen.queryByLabelText("Filter")).toBeNull();
+  expect(screen.queryByLabelText("Sort")).toBeNull();
+  search.unmount();
+  const { container } = await show({ kind: "today" });
+  expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("false");
+  expect(screen.getByLabelText("Sort").getAttribute("aria-pressed")).toBe("false");
+  expect(container.querySelector(".arrange-btn.on")).toBeNull();
+  expect(container.querySelector(".arrange-bar")).toBeNull();
+});
+
+it("a filter shows its chip and lights the button; clearing keeps the sort", async () => {
+  const order = [{ field: "priority", reversed: false }] as OrderLevel[];
+  await arrangeView(homePlace, arrangement({ filter: "p1", order }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const texts = [...container.querySelectorAll(".arrange-chip-text")].map((e) => e.textContent);
+  expect(texts).toEqual(["p1", core.arrangementSummary(arrangement({ order }))]);
+  expect(container.querySelector(".arrange-chip.problem")).toBeNull();
+  expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByLabelText("Sort").getAttribute("aria-pressed")).toBe("true");
+  expect(container.querySelector(".list-body")?.firstElementChild?.className).toBe("arrange-bar");
+  fireEvent.click(screen.getByLabelText("Clear filter"));
+  await waitFor(() => expect(screen.queryByLabelText("Clear filter")).toBeNull());
+  expect(screen.getByLabelText("Reset sort")).not.toBeNull();
+  expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("false");
+});
+
+it("resetting the sort keeps the filter", async () => {
+  await arrangeView(homePlace, arrangement({ filter: "p1", groups: ["label"] }));
+  await show({ kind: "project", id: "p-home", name: "Home" });
+  fireEvent.click(screen.getByLabelText("Reset sort"));
+  await waitFor(() => expect(screen.queryByLabelText("Reset sort")).toBeNull());
+  expect(screen.getByLabelText("Clear filter")).not.toBeNull();
+  expect(screen.getByLabelText("Sort").getAttribute("aria-pressed")).toBe("false");
+});
+
+it("a broken remembered filter marks the chip and the list still shows every task", async () => {
+  await arrangeView({ kind: "today" }, arrangement({ filter: "p1 &" }));
+  const { container } = await show({ kind: "today" });
+  const chip = container.querySelector(".arrange-chip") as HTMLElement;
+  expect(chip.classList.contains("problem")).toBe(true);
+  expect(chip.title).not.toBe("");
+  expect(contents(container)).toEqual(["File the taxes", "Do laundry"]);
+});
