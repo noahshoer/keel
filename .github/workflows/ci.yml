@@ -112,6 +112,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: wasm32-unknown-unknown
+          components: rustfmt
+      # Here rather than on Windows, whose CRLF checkout rustfmt would flag.
+      # Workspace members only, so crates/vendor stays as upstream wrote it.
+      - name: Rust formatting
+        run: cargo fmt --all --check
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: . -> target
