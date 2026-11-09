@@ -2,10 +2,19 @@ name: CI
 
 # Checks that Keel builds for Windows (desktop) and iOS with the React UI in
 # web/, and that web/ passes its gates. Nothing is signed or deployed. Plan: docs/superpowers/plans/2026-10-20-ci.md
+#
+# One run per commit: every push runs CI, and a check belongs to its commit, so
+# a PR from a branch here shows that push run's results. pull_request is only
+# for PRs from forks, which push nothing here; each job skips it otherwise.
+# Pushes that only touch docs skip CI.
 on:
   push:
+    paths-ignore: &docs-only
+      - "docs/**"
+      - "**/*.md"
   pull_request:
     branches: [main]
+    paths-ignore: *docs-only
 
 permissions:
   contents: read
@@ -22,6 +31,8 @@ env:
 jobs:
   windows:
     name: Windows (tests, desktop app)
+    # Pushes, and PRs from forks (see `on:` above).
+    if: &push-or-fork-pr github.event_name == 'push' || github.event.pull_request.head.repo.fork
     runs-on: windows-latest
     defaults:
       run:
@@ -35,6 +46,9 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: . -> target
+          # Branches restore main's cache; only main saves, so branch copies
+          # don't crowd main's out of the 10 GB limit.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2
         with:
           tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
@@ -57,6 +71,7 @@ jobs:
 
   ios:
     name: iOS (Rust + Swift, unsigned)
+    if: *push-or-fork-pr
     runs-on: macos-26
     env:
       # Cargo-only builds compile the glass plugin's Swift without Xcode's
@@ -72,6 +87,9 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: . -> target
+          # Branches restore main's cache; only main saves, so branch copies
+          # don't crowd main's out of the 10 GB limit.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2
         with:
           tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
@@ -96,6 +114,7 @@ jobs:
 
   web:
     name: Web (types, lint, tests, bindings, supply chain)
+    if: *push-or-fork-pr
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -120,6 +139,9 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: . -> target
+          # Branches restore main's cache; only main saves, so branch copies
+          # don't crowd main's out of the 10 GB limit.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: ./.github/actions/web-setup
 
       # build:wasm, tsc -b, biome ci, vitest, check:deps
