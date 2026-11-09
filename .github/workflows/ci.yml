@@ -122,9 +122,12 @@ jobs:
 
       # The device target: with the simulator target, the runner's Xcode
       # archives for a device anyway and the Rust build step gets no ARCHS.
+      # web/dist is built above, so skip beforeBuildCommand.
       - name: Build the iOS app (iPhone, unsigned)
         working-directory: crates/src-tauri
-        run: cargo tauri ios build --target aarch64 --debug --no-sign --ci
+        run: >-
+          cargo tauri ios build --target aarch64 --debug --no-sign --ci
+          --config '{"build":{"beforeBuildCommand":null}}'
 
       - name: Build for the simulator (Rust only)
         run: cargo build --lib -p keel --target aarch64-apple-ios-sim
