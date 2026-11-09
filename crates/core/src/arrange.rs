@@ -3,7 +3,11 @@
 
 use serde::{Deserialize, Serialize};
 
+use chrono::NaiveDate;
+
 use crate::ids::Id;
+use crate::model::{Label, Priority, Project, Section, Task};
+use crate::views::{due_date_of, due_time, short_date, weekday_long};
 
 /// A field a page can be grouped or ordered by. Append-only: stored as JSON.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -99,6 +103,473 @@ pub struct PlacedArrangement {
     pub arrangement: Arrangement,
 }
 
+/// Orders two optional sort values: a missing value is always after a present
+/// one; `reversed` flips only the order between two present values.
+fn cmp_missing_last<T: Ord>(a: Option<T>, b: Option<T>, reversed: bool) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    match (a, b) {
+        (Some(a), Some(b)) if reversed => b.cmp(&a),
+        (Some(a), Some(b)) => a.cmp(&b),
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
+    }
+}
+
+/// What `arrange` reads names and positions from.
+pub struct ArrangeNames<'a> {
+    pub projects: &'a [Project],
+    pub sections: &'a [Section],
+    pub labels: &'a [Label],
+}
+
+/// The innermost heading of a group, drawn under its title line.
+#[derive(Clone, PartialEq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct SubHeading {
+    pub text: String,
+    /// A label heading's color name.
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
+    pub label_color: Option<String>,
+}
+
+/// One run of tasks under the same heading values.
+#[derive(Clone, PartialEq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct ArrangedGroup {
+    /// Unique on the page and stable across reloads (built from the heading
+    /// values' ids).
+    pub key: String,
+    /// Every heading level but the innermost, joined with " › "; with one
+    /// level, that level. `None` with no headings.
+    pub title: Option<String>,
+    /// This group opens a new title line.
+    pub starts_title: bool,
+    /// Distinct tasks under this title line (valid where `starts_title`).
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub title_count: usize,
+    /// The innermost level when there are two or more.
+    pub sub: Option<SubHeading>,
+    pub tasks: Vec<Task>,
+}
+
+/// A page's tasks, grouped and ordered.
+#[derive(Clone, PartialEq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct Arranged {
+    pub groups: Vec<ArrangedGroup>,
+    pub filter_problem: Option<String>,
+    /// Distinct tasks in `groups`.
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub shown: usize,
+    /// Distinct tasks given.
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub total: usize,
+}
+
+type Rank = (i64, i64, String);
+
+/// One heading value of one entry.
+struct Heading {
+    key: String,
+    rank: Rank,
+    text: String,
+    color: Option<String>,
+}
+
+/// A task as it sits in one group (once per label when headed by Label).
+struct Entry {
+    task: Task,
+    headings: Vec<Heading>,
+}
+
+fn known_label<'a>(names: &ArrangeNames<'a>, name: &str) -> Option<(usize, &'a Label)> {
+    names
+        .labels
+        .iter()
+        .enumerate()
+        .find(|(_, l)| !l.is_deleted && l.name.eq_ignore_ascii_case(name))
+}
+
+fn project_pos(names: &ArrangeNames, id: &Id) -> usize {
+    names
+        .projects
+        .iter()
+        .position(|p| &p.id == id)
+        .unwrap_or(usize::MAX / 2)
+}
+
+fn section_of<'a>(names: &'a ArrangeNames, task: &Task) -> Option<&'a Section> {
+    let id = task.section_id.as_ref()?;
+    names.sections.iter().find(|s| &s.id == id)
+}
+
+fn parse_day(s: &str) -> Option<NaiveDate> {
+    NaiveDate::parse_from_str(s.get(..10)?, "%Y-%m-%d").ok()
+}
+
+fn day_heading(
+    prefix: &str,
+    date: Option<NaiveDate>,
+    none_text: &str,
+    today: NaiveDate,
+) -> (String, Rank, String) {
+    match date {
+        Some(d) if d < today => (
+            format!("{prefix}:overdue"),
+            (0, 0, String::new()),
+            "Overdue".into(),
+        ),
+        Some(d) => (
+            format!("{prefix}:{d}"),
+            (
+                1,
+                i64::from(chrono::Datelike::num_days_from_ce(&d)),
+                String::new(),
+            ),
+            format!("{} · {}", short_date(d), weekday_long(d)),
+        ),
+        None => (
+            format!("{prefix}:none"),
+            (2, 0, String::new()),
+            none_text.into(),
+        ),
+    }
+}
+
+fn priority_number(p: Priority) -> i64 {
+    match p {
+        Priority::P1 => 1,
+        Priority::P2 => 2,
+        Priority::P3 => 3,
+        Priority::None => 4,
+    }
+}
+
+fn heading_for(
+    field: SortField,
+    entry_task: &Task,
+    label: Option<&String>,
+    names: &ArrangeNames,
+    today: NaiveDate,
+    section_with_project: bool,
+) -> Heading {
+    match field {
+        SortField::Project => {
+            let pos = project_pos(names, &entry_task.project_id);
+            let text = names
+                .projects
+                .get(pos)
+                .map_or("No project", |p| p.name.as_str());
+            Heading {
+                key: format!("project:{}", entry_task.project_id.as_str()),
+                rank: (pos as i64, 0, String::new()),
+                text: text.into(),
+                color: None,
+            }
+        }
+        SortField::Section => {
+            let ppos = project_pos(names, &entry_task.project_id) as i64;
+            let project = names.projects.get(ppos as usize).map(|p| p.name.as_str());
+            let (key, order, name) = match section_of(names, entry_task) {
+                Some(s) => (
+                    format!("section:{}", s.id.as_str()),
+                    s.section_order,
+                    s.name.as_str(),
+                ),
+                None => (
+                    format!("section:none:{}", entry_task.project_id.as_str()),
+                    i64::MIN,
+                    "No section",
+                ),
+            };
+            let text = match project {
+                Some(p) if section_with_project => format!("{p} › {name}"),
+                _ => name.to_string(),
+            };
+            Heading {
+                key,
+                rank: (ppos, order, String::new()),
+                text,
+                color: None,
+            }
+        }
+        SortField::Label => match label {
+            Some(name) => match known_label(names, name) {
+                Some((pos, l)) => Heading {
+                    key: format!("label:{}", l.id.as_str()),
+                    rank: (0, pos as i64, String::new()),
+                    text: l.name.clone(),
+                    color: Some(l.color.clone()),
+                },
+                None => Heading {
+                    key: format!("label:name:{}", name.to_lowercase()),
+                    rank: (1, 0, name.to_lowercase()),
+                    text: name.clone(),
+                    color: None,
+                },
+            },
+            None => Heading {
+                key: "label:none".into(),
+                rank: (2, 0, String::new()),
+                text: "No label".into(),
+                color: None,
+            },
+        },
+        SortField::Priority => {
+            let n = priority_number(entry_task.priority);
+            Heading {
+                key: format!("priority:{n}"),
+                rank: (n, 0, String::new()),
+                text: format!("Priority {n}"),
+                color: None,
+            }
+        }
+        SortField::DueDate => {
+            let (key, rank, text) = day_heading("due", due_date_of(entry_task), "No date", today);
+            Heading {
+                key,
+                rank,
+                text,
+                color: None,
+            }
+        }
+        SortField::Deadline => {
+            let date = entry_task.deadline.as_deref().and_then(parse_day);
+            let (key, rank, text) = day_heading("deadline", date, "No deadline", today);
+            Heading {
+                key,
+                rank,
+                text,
+                color: None,
+            }
+        }
+    }
+}
+
+/// The value one order level sorts a task by; `None` is a missing value.
+fn order_rank(field: SortField, task: &Task, names: &ArrangeNames) -> Option<Rank> {
+    match field {
+        SortField::Project => Some((
+            project_pos(names, &task.project_id) as i64,
+            0,
+            String::new(),
+        )),
+        SortField::Section => Some((
+            project_pos(names, &task.project_id) as i64,
+            section_of(names, task).map_or(i64::MIN, |s| s.section_order),
+            String::new(),
+        )),
+        SortField::Label => task
+            .labels
+            .iter()
+            .map(|n| match known_label(names, n) {
+                Some((pos, _)) => (0, pos as i64, String::new()),
+                None => (1, 0, n.to_lowercase()),
+            })
+            .min(),
+        SortField::Priority => Some((priority_number(task.priority), 0, String::new())),
+        SortField::DueDate => due_date_of(task).map(|d| {
+            let time = due_time(task).map_or(i64::MAX, |t| {
+                i64::from(chrono::Timelike::num_seconds_from_midnight(&t))
+            });
+            (
+                i64::from(chrono::Datelike::num_days_from_ce(&d)),
+                time,
+                String::new(),
+            )
+        }),
+        SortField::Deadline => task.deadline.as_deref().and_then(parse_day).map(|d| {
+            (
+                i64::from(chrono::Datelike::num_days_from_ce(&d)),
+                0,
+                String::new(),
+            )
+        }),
+    }
+}
+
+/// Groups a page's tasks under the arrangement's headings and orders them.
+/// The filter is applied elsewhere (`filter_problem` is always `None` here).
+pub fn arrange(
+    tasks: Vec<Task>,
+    arrangement: &Arrangement,
+    names: &ArrangeNames,
+    today: NaiveDate,
+) -> Arranged {
+    let mut seen = std::collections::HashSet::new();
+    let tasks: Vec<Task> = tasks
+        .into_iter()
+        .filter(|t| seen.insert(t.id.clone()))
+        .collect();
+    let total = tasks.len();
+    let fields = &arrangement.groups;
+
+    let project_heading_at = fields.iter().position(|f| *f == SortField::Project);
+    let section_at = fields.iter().position(|f| *f == SortField::Section);
+    let many_projects = tasks
+        .iter()
+        .map(|t| &t.project_id)
+        .collect::<std::collections::HashSet<_>>()
+        .len()
+        > 1;
+    let section_with_project = many_projects
+        && match (section_at, project_heading_at) {
+            (Some(s), Some(p)) => p > s,
+            (Some(_), None) => true,
+            _ => false,
+        };
+
+    let by_label = fields.contains(&SortField::Label);
+    let mut entries: Vec<Entry> = Vec::new();
+    for task in tasks {
+        let labels: Vec<Option<String>> = if by_label {
+            let mut out: Vec<Option<String>> = Vec::new();
+            for l in &task.labels {
+                if !out.iter().flatten().any(|o| o.eq_ignore_ascii_case(l)) {
+                    out.push(Some(l.clone()));
+                }
+            }
+            if out.is_empty() {
+                out.push(None);
+            }
+            out
+        } else {
+            vec![None]
+        };
+        for label in labels {
+            let headings = fields
+                .iter()
+                .map(|f| {
+                    heading_for(
+                        *f,
+                        &task,
+                        label.as_ref(),
+                        names,
+                        today,
+                        section_with_project,
+                    )
+                })
+                .collect();
+            entries.push(Entry {
+                task: task.clone(),
+                headings,
+            });
+        }
+    }
+
+    entries.sort_by(|a, b| {
+        for (x, y) in a.headings.iter().zip(&b.headings) {
+            let c = x.rank.cmp(&y.rank).then_with(|| x.key.cmp(&y.key));
+            if c.is_ne() {
+                return c;
+            }
+        }
+        for level in &arrangement.order {
+            let c = cmp_missing_last(
+                order_rank(level.field, &a.task, names),
+                order_rank(level.field, &b.task, names),
+                level.reversed,
+            );
+            if c.is_ne() {
+                return c;
+            }
+        }
+        std::cmp::Ordering::Equal
+    });
+
+    let mut groups: Vec<ArrangedGroup> = Vec::new();
+    let mut group_keys: Vec<Vec<String>> = Vec::new();
+    for e in entries {
+        let keys: Vec<String> = e.headings.iter().map(|h| h.key.clone()).collect();
+        if group_keys.last() == Some(&keys) && !groups.is_empty() {
+            groups.last_mut().expect("a group").tasks.push(e.task);
+            continue;
+        }
+        let n = e.headings.len();
+        let (title, sub, key) = if n == 0 {
+            (None, None, "all".to_string())
+        } else {
+            if n == 1 {
+                (Some(e.headings[0].text.clone()), None, keys.join("/"))
+            } else {
+                let title = e.headings[..n - 1]
+                    .iter()
+                    .map(|h| h.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" › ");
+                let last = &e.headings[n - 1];
+                (
+                    Some(title),
+                    Some(SubHeading {
+                        text: last.text.clone(),
+                        label_color: last.color.clone(),
+                    }),
+                    keys.join("/"),
+                )
+            }
+        };
+        groups.push(ArrangedGroup {
+            key,
+            title,
+            starts_title: false,
+            title_count: 0,
+            sub,
+            tasks: vec![e.task],
+        });
+        group_keys.push(keys);
+    }
+    if groups.is_empty() && fields.is_empty() {
+        groups.push(ArrangedGroup {
+            key: "all".into(),
+            title: None,
+            starts_title: false,
+            title_count: 0,
+            sub: None,
+            tasks: Vec::new(),
+        });
+    }
+
+    // Title lines: a run of groups sharing every key but the innermost.
+    let prefix_len = fields
+        .len()
+        .saturating_sub(1)
+        .max(usize::from(fields.len() == 1));
+    let prefixes: Vec<&[String]> = group_keys
+        .iter()
+        .map(|k| &k[..prefix_len.min(k.len())])
+        .collect();
+    for i in 0..groups.len() {
+        if fields.is_empty() {
+            break;
+        }
+        if i > 0 && prefixes[i] == prefixes[i - 1] {
+            continue;
+        }
+        groups[i].starts_title = true;
+        let mut ids = std::collections::HashSet::new();
+        for j in i..groups.len() {
+            if prefixes[j] != prefixes[i] {
+                break;
+            }
+            ids.extend(groups[j].tasks.iter().map(|t| t.id.clone()));
+        }
+        groups[i].title_count = ids.len();
+    }
+
+    let shown = groups
+        .iter()
+        .flat_map(|g| g.tasks.iter().map(|t| &t.id))
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+    Arranged {
+        groups,
+        filter_problem: None,
+        shown,
+        total,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,5 +588,310 @@ mod tests {
     fn arrangement_reads_from_empty_object() {
         let a: Arrangement = serde_json::from_str("{}").unwrap();
         assert!(a.is_default());
+    }
+
+    use crate::model::{Due, Label, Priority, Project, Section, Task};
+    use chrono::NaiveDate;
+
+    fn today() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 11, 9).unwrap()
+    }
+
+    struct World {
+        projects: Vec<Project>,
+        sections: Vec<Section>,
+        labels: Vec<Label>,
+    }
+
+    fn world() -> World {
+        let mut home = Project::new("Home");
+        home.id = Id::from("home".to_string());
+        let mut work = Project::new("Work");
+        work.id = Id::from("work".to_string());
+        let mut kitchen = Section::new(home.id.clone(), "Kitchen", 1);
+        kitchen.id = Id::from("kitchen".to_string());
+        let mut desk = Section::new(work.id.clone(), "Kitchen", 1);
+        desk.id = Id::from("kitchen2".to_string());
+        World {
+            projects: vec![home, work],
+            sections: vec![kitchen, desk],
+            labels: vec![Label::new("errand"), Label::new("phone")],
+        }
+    }
+
+    impl World {
+        fn names(&self) -> ArrangeNames<'_> {
+            ArrangeNames {
+                projects: &self.projects,
+                sections: &self.sections,
+                labels: &self.labels,
+            }
+        }
+    }
+
+    fn task(id: &str) -> Task {
+        let mut t = Task::new(id, Id::from("home".to_string()));
+        t.id = Id::from(id.to_string());
+        t
+    }
+    fn in_project(mut t: Task, p: &str) -> Task {
+        t.project_id = Id::from(p.to_string());
+        t
+    }
+    fn in_section(mut t: Task, s: &str) -> Task {
+        t.section_id = Some(Id::from(s.to_string()));
+        t
+    }
+    fn labelled(mut t: Task, l: &[&str]) -> Task {
+        t.labels = l.iter().map(|s| s.to_string()).collect();
+        t
+    }
+    fn prio(mut t: Task, p: Priority) -> Task {
+        t.priority = p;
+        t
+    }
+    fn due(mut t: Task, d: &str) -> Task {
+        t.due = Some(Due {
+            date: d.into(),
+            timezone: None,
+            string: d.into(),
+            lang: "en".into(),
+            is_recurring: false,
+            recurrence: None,
+            until: None,
+            moved_from: None,
+        });
+        t
+    }
+    fn deadline(mut t: Task, d: &str) -> Task {
+        t.deadline = Some(d.into());
+        t
+    }
+    fn arr(groups: &[SortField], order: &[(SortField, bool)]) -> Arrangement {
+        Arrangement {
+            filter: String::new(),
+            groups: groups.to_vec(),
+            order: order
+                .iter()
+                .map(|&(field, reversed)| OrderLevel { field, reversed })
+                .collect(),
+        }
+    }
+    fn ids(g: &ArrangedGroup) -> Vec<String> {
+        g.tasks.iter().map(|t| t.id.as_str().to_string()).collect()
+    }
+    fn run(w: &World, tasks: Vec<Task>, a: &Arrangement) -> Arranged {
+        arrange(tasks, a, &w.names(), today())
+    }
+
+    #[test]
+    fn no_headings_is_one_group_in_input_order() {
+        let w = world();
+        let r = run(&w, vec![task("b"), task("a")], &arr(&[], &[]));
+        assert_eq!(r.groups.len(), 1);
+        assert_eq!(r.groups[0].key, "all");
+        assert_eq!(r.groups[0].title, None);
+        assert!(r.groups[0].sub.is_none());
+        assert_eq!(ids(&r.groups[0]), ["b", "a"]);
+        let empty = run(&w, vec![], &arr(&[], &[]));
+        assert_eq!(empty.groups.len(), 1);
+        assert!(empty.groups[0].tasks.is_empty());
+        assert_eq!((r.shown, r.total), (2, 2));
+    }
+
+    #[test]
+    fn noahs_example() {
+        let w = world();
+        let tasks = vec![
+            prio(
+                due(
+                    in_section(labelled(task("k-today-p3"), &["errand"]), "kitchen"),
+                    "2026-11-09",
+                ),
+                Priority::P3,
+            ),
+            prio(
+                due(
+                    in_section(labelled(task("k-today-p1"), &["errand"]), "kitchen"),
+                    "2026-11-09",
+                ),
+                Priority::P1,
+            ),
+            prio(
+                due(
+                    in_section(labelled(task("k-yest-p3"), &["errand"]), "kitchen"),
+                    "2026-11-08",
+                ),
+                Priority::P3,
+            ),
+            in_section(labelled(task("k-phone"), &["phone"]), "kitchen"),
+            labelled(task("h-errand"), &["errand"]),
+            in_project(task("w-none"), "work"),
+        ];
+        let a = arr(
+            &[SortField::Project, SortField::Section, SortField::Label],
+            &[(SortField::DueDate, false), (SortField::Priority, false)],
+        );
+        let r = run(&w, tasks, &a);
+        let seq: Vec<(String, String, Vec<String>)> = r
+            .groups
+            .iter()
+            .map(|g| {
+                (
+                    g.title.clone().unwrap(),
+                    g.sub.clone().unwrap().text,
+                    ids(g),
+                )
+            })
+            .collect();
+        let s = |a: &str, b: &str, c: &[&str]| {
+            (
+                a.to_string(),
+                b.to_string(),
+                c.iter().map(|x| x.to_string()).collect::<Vec<_>>(),
+            )
+        };
+        assert_eq!(
+            seq,
+            vec![
+                s("Home › No section", "errand", &["h-errand"]),
+                s(
+                    "Home › Kitchen",
+                    "errand",
+                    &["k-yest-p3", "k-today-p1", "k-today-p3"]
+                ),
+                s("Home › Kitchen", "phone", &["k-phone"]),
+                s("Work › No section", "No label", &["w-none"]),
+            ]
+        );
+        let starts: Vec<bool> = r.groups.iter().map(|g| g.starts_title).collect();
+        assert_eq!(starts, [true, true, false, true]);
+        assert_eq!(r.groups[1].title_count, 4);
+        assert_eq!(r.groups[0].title_count, 1);
+    }
+
+    #[test]
+    fn one_heading_has_no_sub() {
+        let w = world();
+        let tasks = vec![task("none"), prio(task("p1"), Priority::P1)];
+        let r = run(&w, tasks, &arr(&[SortField::Priority], &[]));
+        let titles: Vec<_> = r.groups.iter().map(|g| g.title.clone().unwrap()).collect();
+        assert_eq!(titles, ["Priority 1", "Priority 4"]);
+        assert!(r.groups.iter().all(|g| g.sub.is_none()));
+    }
+
+    #[test]
+    fn two_labels_two_groups() {
+        let w = world();
+        let r = run(
+            &w,
+            vec![labelled(task("t"), &["errand", "phone"])],
+            &arr(&[SortField::Label], &[]),
+        );
+        assert_eq!(r.groups.len(), 2);
+        assert_eq!(r.shown, 1);
+        assert_eq!(r.total, 1);
+    }
+
+    #[test]
+    fn missing_values_go_last_both_directions() {
+        let w = world();
+        for (field, set) in [
+            (SortField::DueDate, due as fn(Task, &str) -> Task),
+            (SortField::Deadline, deadline),
+        ] {
+            for reversed in [false, true] {
+                let tasks = vec![
+                    task("none"),
+                    set(task("a"), "2026-11-10"),
+                    set(task("b"), "2026-11-12"),
+                ];
+                let r = run(&w, tasks, &arr(&[], &[(field, reversed)]));
+                let got = ids(&r.groups[0]);
+                assert_eq!(got.last().unwrap(), "none");
+                assert_eq!(got[0], if reversed { "b" } else { "a" });
+            }
+        }
+    }
+
+    #[test]
+    fn due_date_headings() {
+        let w = world();
+        let tasks = vec![
+            task("n"),
+            due(task("t"), "2026-11-09"),
+            due(task("o"), "2026-11-01"),
+        ];
+        let r = run(&w, tasks, &arr(&[SortField::DueDate], &[]));
+        let titles: Vec<_> = r.groups.iter().map(|g| g.title.clone().unwrap()).collect();
+        assert_eq!(titles, ["Overdue", "9 Nov · Monday", "No date"]);
+        let r = run(
+            &w,
+            vec![task("n"), deadline(task("d"), "2026-11-09")],
+            &arr(&[SortField::Deadline], &[]),
+        );
+        let titles: Vec<_> = r.groups.iter().map(|g| g.title.clone().unwrap()).collect();
+        assert_eq!(titles, ["9 Nov · Monday", "No deadline"]);
+    }
+
+    #[test]
+    fn section_names_its_project_across_projects() {
+        let w = world();
+        let tasks = vec![
+            in_section(task("a"), "kitchen"),
+            in_project(in_section(task("b"), "kitchen2"), "work"),
+        ];
+        let r = run(&w, tasks, &arr(&[SortField::Section], &[]));
+        let titles: Vec<_> = r.groups.iter().map(|g| g.title.clone().unwrap()).collect();
+        assert_eq!(titles, ["Home › Kitchen", "Work › Kitchen"]);
+    }
+
+    #[test]
+    fn section_alone_in_one_project() {
+        let w = world();
+        let r = run(
+            &w,
+            vec![task("n"), in_section(task("a"), "kitchen")],
+            &arr(&[SortField::Section], &[]),
+        );
+        let titles: Vec<_> = r.groups.iter().map(|g| g.title.clone().unwrap()).collect();
+        assert_eq!(titles, ["No section", "Kitchen"]);
+    }
+
+    #[test]
+    fn ties_keep_input_order() {
+        let w = world();
+        let tasks = vec![task("c"), task("a"), task("b")];
+        let r = run(&w, tasks, &arr(&[], &[(SortField::Priority, false)]));
+        assert_eq!(ids(&r.groups[0]), ["c", "a", "b"]);
+    }
+
+    #[test]
+    fn shared_task_appears_once() {
+        let w = world();
+        let r = run(
+            &w,
+            vec![task("x"), task("x")],
+            &arr(&[SortField::Priority], &[]),
+        );
+        assert_eq!(r.groups.len(), 1);
+        assert_eq!(ids(&r.groups[0]), ["x"]);
+        assert_eq!((r.shown, r.total), (1, 1));
+    }
+
+    #[test]
+    fn group_keys_are_unique_and_stable() {
+        let w = world();
+        let tasks = vec![
+            in_section(task("a"), "kitchen"),
+            in_project(in_section(task("b"), "kitchen2"), "work"),
+        ];
+        let a = arr(&[SortField::Section], &[]);
+        let r1 = run(&w, tasks.clone(), &a);
+        let r2 = run(&w, tasks, &a);
+        let k1: Vec<_> = r1.groups.iter().map(|g| g.key.clone()).collect();
+        let k2: Vec<_> = r2.groups.iter().map(|g| g.key.clone()).collect();
+        assert_eq!(k1, k2);
+        assert_ne!(k1[0], k1[1]);
     }
 }
