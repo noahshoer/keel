@@ -26,7 +26,7 @@ Every list page has one fixed layout today: a project shows its sections, Today 
 
 ## Anti-goals
 
-- An untouched page changing in any way: its order, its headings, its drag and drop, its DOM.
+- An untouched page changing in any way: its order, its headings, its drag and drop, its DOM. "Untouched page" means its list body and how that behaves; the Filter and Sort buttons are in every list page's header by design.
 - A remembered filter that hides tasks without saying so.
 - TypeScript deciding what matches, what groups together or what comes first. That is `keel-core`.
 
@@ -64,8 +64,8 @@ The fields:
 | Section | section name, in the project's order; "No section" first | section order, reversed |
 | Label | label name with its color, in label order; "No label" last | first label's order, reversed |
 | Priority | "Priority 1" … "Priority 4" | highest first, lowest first |
-| Due date | the Upcoming page's headings: Overdue, then one per day; "No date" last | soonest first, latest first |
-| Deadline | Overdue, then one per day; "No deadline" last | soonest first, latest first |
+| Due date | the Upcoming page's headings: Overdue, then one per day, read like Upcoming's ("9 Nov · Today · Monday", "10 Nov · Tomorrow · Tuesday", "13 Nov · Friday"); "No date" last | soonest first, latest first |
+| Deadline | Overdue, then one per day, read like Upcoming's ("9 Nov · Today · Monday"); "No deadline" last | soonest first, latest first |
 
 Rules (*my calls* unless marked):
 
@@ -123,12 +123,12 @@ If a remembered filter stops parsing later (a project it names was deleted), the
 - The page then builds cards per group with the existing `views::cards` and the current `CardMode`, so sub-tasks behave as they do now inside each group.
 - The chip's sort summary and each field's display names and direction labels also come from core (as `keel_core::settings` does for the settings menus).
 
-`MainPane` branches once: no arrangement means the code path it has today, untouched. An arrangement means the arranged path.
+`MainPane` branches once: no arrangement means the code path it has today, untouched. An arrangement means the arranged path. A heading's number counts the cards drawn under it (sub-tasks hidden under a parent are not counted), as a section header's does; core's `title_count` counts distinct tasks and is not shown.
 
 ## Left to the builder
 
 - The exact shape of the arranged output and the wasm binding names.
-- How sheet rows are dragged to reorder (the existing `web/src/gestures/drag.ts` or something smaller), as long as there is a keyboard-reachable way to reorder too.
+- Reordering sheet rows is decided: rows reorder with Move up / Move down buttons (decided during the build, 2026-11-11), not by dragging.
 - React keys for a task that appears under two label headings, and making its completion animate sensibly in both places.
 - Keeping the filter sheet's field above the phone keyboard. The task view's sheet already solves this (`web/src/gestures/sheet.ts`, `pageHold.ts`); reuse it where it fits. A headless simulator shows no keyboard, so this part needs the phone.
 - CSS names for the chip row, sub-heading and sheets. New text colors must pass `web/src/styles/contrast.test.ts` in both themes.

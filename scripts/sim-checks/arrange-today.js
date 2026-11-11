@@ -32,14 +32,17 @@ if (before.title || before.sub) { check('SKIPPED Today already arranged; nothing
 const was = await window.__TAURI__.core.invoke('list_arrangements', { args: {} });
 check(`saved arrangements before: ${was.length}`);
 
-await send({ filter: '', groups: ['project', 'section', 'label'], order: [{ field: 'due_date', reversed: false }, { field: 'priority', reversed: false }] });
-await reopen();
-const set = state();
-check(`set: heading with " › " ${set.title} ${set.title ? 'PASS' : 'FAIL'}`);
-check(`set: .arrange-sub ${set.sub ? 'PASS' : 'FAIL'}`);
-await sleep(6000); // time for a screenshot of the arranged page
-
-await send({ filter: '', groups: [], order: [] });
+try {
+  await send({ filter: '', groups: ['project', 'section', 'label'], order: [{ field: 'due_date', reversed: false }, { field: 'priority', reversed: false }] });
+  await reopen();
+  const set = state();
+  check(`set: heading with " › " ${set.title} ${set.title ? 'PASS' : 'FAIL'}`);
+  check(`set: .arrange-sub ${set.sub ? 'PASS' : 'FAIL'}`);
+  await sleep(6000); // time for a screenshot of the arranged page
+} finally {
+  // However the run ends, Today goes back to how it was found.
+  await send({ filter: '', groups: [], order: [] });
+}
 await reopen();
 const reset = state();
 check(`reset: heading with " › " ${reset.title ? 'FAIL' : 'PASS'}`);
