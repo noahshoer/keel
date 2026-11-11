@@ -576,6 +576,24 @@ const arrangement = (a: Partial<{ filter: string; groups: SortField[]; order: Or
 const addTask = (content: string, extra: Record<string, unknown> = {}) =>
   dispatchAction({ type: "task_add", project_id: "p-home", content, ...extra } as never);
 
+/** `.list-body`'s markup with the dates (which follow the day the test runs) blanked. */
+const bodyHtml = (c: HTMLElement) =>
+  (c.querySelector(".list-body")?.outerHTML ?? "")
+    .replace(/\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/g, "D MON")
+    .replace(/\b(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day\b/g, "WEEKDAY");
+
+// The stored snapshots were checked against the same fixtures rendered at 6cc02fa, before
+// the feature: the list body is identical there.
+it("an untouched page's list body is the one it had before the feature", async () => {
+  const today = await show({ kind: "today" });
+  await waitFor(() => expect(today.container.querySelector(".task-row")).not.toBeNull());
+  expect(bodyHtml(today.container)).toMatchSnapshot("today");
+  today.unmount();
+  const project = await show({ kind: "project", id: "p-home", name: "Home" });
+  await waitFor(() => expect(project.container.querySelector(".task-row")).not.toBeNull());
+  expect(bodyHtml(project.container)).toMatchSnapshot("project with sections");
+});
+
 it("untouched page is unchanged", async () => {
   const arrangeSpy = vi.spyOn(core, "arrange");
   try {
