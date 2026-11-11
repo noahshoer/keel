@@ -38,7 +38,7 @@ Inbox, Today, Upcoming, every project, every label page and every saved-filter p
 
 Two `icon-btn`s join the header's right-hand icons in `web/src/screens/MainPane.tsx`, before the completed toggle: **Filter** (the existing `FunnelIcon`) and **Sort** (Phosphor `ArrowsDownUp`, bold, added to `web/src/shell/icons.tsx`). Each is tinted (`--active-tint` fill, `--accent-text` icon) while its part is set. They are hidden on the Search screen.
 
-Under the title, above the list, a chip row appears only when something is set:
+Under the title and the page's subtitle line, directly above the list (decided during the build, 2026-11-11), a chip row appears only when something is set:
 
 - **Filter chip:** funnel, the query text, ✕. Tapping the chip opens the filter sheet; ✕ clears the filter.
 - **Sort chip:** sort icon, a summary such as "Project, Section, Label · Due date, Priority" (headings, a dot, then the order; either half may be missing), ✕. Tapping opens the sort sheet; ✕ resets the sort.
@@ -54,7 +54,7 @@ Title "Sort", with "Reset to default" on the right. Two lists:
 1. **Group under headings.** An ordered list of fields, outermost first. "+ Add group" offers the fields not yet used in this list.
 2. **Then order tasks by.** An ordered list of fields, each with a direction. "+ Add order" offers the fields not yet used in this list.
 
-Rows can be dragged to reorder and removed with ✕. A field may be in both lists (grouping by priority and also ordering by it is pointless but harmless). Every change saves at once and the page behind updates.
+Rows are reordered with "Move up" / "Move down" buttons (no drag; decided during the build, 2026-11-11) and removed with ✕. A field may be in both lists (grouping by priority and also ordering by it is pointless but harmless). Every change saves at once and the page behind updates.
 
 The fields:
 
@@ -100,7 +100,9 @@ If a remembered filter stops parsing later (a project it names was deleted), the
 
 ## What turns off while a page is arranged
 
-- While any heading is set on a project or Inbox page: dragging a task between sections, the per-section "+ Add task" rows and the "Add section" row at the bottom. One "+ Add task" row stays at the end of the list, and "Add section" stays in the ••• menu.
+- While any heading is set on a project or Inbox page: dragging a task between sections, the per-section "+ Add task" rows and the "Add section" row at the bottom. One "+ Add task" row stays at the end of the list. The ••• menu does not offer "Add section" either, since a section added then would not show on the page; reset the headings to add one (decided during the build, 2026-11-11).
+- A filter that matches nothing shows "No tasks match this filter." with the "+ Add task" row (decided during the build, 2026-11-11).
+- A stored arrangement this version can't read is skipped when loading (decided during the build, 2026-11-11).
 - Nothing else changes: completing, the long-press menu, the task view, "Show sub-tasks in lists", "Show completed" (its list is not filtered or sorted), sidebar counts (they count the whole page).
 
 ## Data and where the logic lives
