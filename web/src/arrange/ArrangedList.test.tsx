@@ -56,3 +56,25 @@ it("draws a title line only where a run starts, and tints a label sub-heading", 
   expect(subs[0]?.querySelector("svg")).not.toBeNull();
   expect(subs[1]?.querySelector("svg")).toBeNull();
 });
+
+it("a title line counts the cards drawn under it, not the tasks", () => {
+  const family = tasks.filter((t) => t.id === "t-laundry" || t.parent_id === "t-laundry");
+  expect(family.length).toBeGreaterThan(1);
+  const { container } = render(
+    <TaskNavProvider all={tasks}>
+      <ArrangedList
+        groups={[
+          group({ key: "a", title: "Home", starts_title: true, title_count: family.length, tasks: family }),
+        ]}
+        all={tasks}
+        mode="TopLevel"
+        today="2026-01-01"
+        locations={new Map()}
+        labels={[]}
+        reminders={[]}
+        onChanged={() => {}}
+      />
+    </TaskNavProvider>,
+  );
+  expect(container.querySelector(".section-title .muted")?.textContent).toBe("1");
+});

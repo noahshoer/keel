@@ -30,12 +30,22 @@ export function ArrangedList({
   reminders: Reminder[];
   onChanged: () => void;
 }) {
-  return groups.map((group) => (
+  // A title line counts the cards drawn under it, as a section's header does (sub-tasks
+  // hidden under their parent, repeating tasks done for now left out), not core's task count.
+  const drawn = groups.map((group) => cards(group.tasks, all, mode, today));
+  const titleCount = groups.map((group, i) => {
+    if (!group.starts_title) return 0;
+    let n = 0;
+    for (let j = i; j < groups.length && (j === i || !groups[j]?.starts_title); j++)
+      n += drawn[j]?.length ?? 0;
+    return n;
+  });
+  return groups.map((group, i) => (
     <div key={group.key}>
       {group.starts_title && group.title !== null ? (
         <div className="section-title">
           {group.title}
-          <span className="muted">{group.title_count}</span>
+          <span className="muted">{titleCount[i]}</span>
         </div>
       ) : null}
       {group.sub !== null ? (
@@ -52,7 +62,7 @@ export function ArrangedList({
         </div>
       ) : null}
       <CardList
-        cards={cards(group.tasks, all, mode, today)}
+        cards={drawn[i] ?? []}
         today={today}
         locations={locations}
         labels={labels}

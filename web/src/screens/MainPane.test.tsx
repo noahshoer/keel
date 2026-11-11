@@ -788,3 +788,17 @@ it("on a saved filter's page the chips sit under its query line", async () => {
   expect(container.querySelector(".view-sub")?.textContent).toBe("p1");
   expect(follows(container.querySelector(".view-sub"), container.querySelector(".arrange-bar"))).toBe(true);
 });
+
+it("a filtered section's delete warning counts everything the section holds", async () => {
+  await dispatchAction({ type: "task_update", id: "t-laundry", priority: "None" } as never);
+  await addTask("Urgent chore", { section_id: "s-chores", priority: "P1" });
+  await arrangeView(homePlace, arrangement({ filter: "p1" }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const block = container.querySelector(".section-block") as HTMLElement;
+  expect(block.querySelector(".section-title .muted")?.textContent).toBe("1");
+  fireEvent.click(screen.getByLabelText("Section actions"));
+  fireEvent.click(within(popup() as HTMLElement).getByText("Delete"));
+  expect(popup()?.querySelector(".confirm-text")?.textContent).toBe(
+    "Delete section “Chores” and its 2 tasks?",
+  );
+});

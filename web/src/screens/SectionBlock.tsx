@@ -47,12 +47,15 @@ export function SectionBlock({
   const [draft, setDraft] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const { show: showSubtasks } = useContext(ShowSubtasksContext);
-  const list = cards(shape ? shape(tasks) : tasks, all, showSubtasks ? "Grouped" : "TopLevel", today);
+  const cardMode = showSubtasks ? "Grouped" : "TopLevel";
+  const list = cards(shape ? shape(tasks) : tasks, all, cardMode, today);
   // What the section shows: its top-level tasks (sub-tasks go with them).
   const count = list.length;
+  // Deleting removes everything in the section, whatever the page's filter hides.
+  const total = shape ? cards(tasks, all, cardMode, today).length : count;
 
   const row = useRef<HTMLDivElement>(null);
-  const warning = `Delete section “${section.name}” and its ${count} ${count === 1 ? "task" : "tasks"}?`;
+  const warning = `Delete section “${section.name}” and its ${total} ${total === 1 ? "task" : "tasks"}?`;
   const remove = () => {
     deleteSection(section.id).then(onChanged, onChanged);
   };
