@@ -306,7 +306,11 @@ fn day_heading(
                 i64::from(chrono::Datelike::num_days_from_ce(&d)),
                 String::new(),
             ),
-            format!("{} · {}", short_date(d), weekday_long(d)),
+            match (d - today).num_days() {
+                0 => format!("{} · Today · {}", short_date(d), weekday_long(d)),
+                1 => format!("{} · Tomorrow · {}", short_date(d), weekday_long(d)),
+                _ => format!("{} · {}", short_date(d), weekday_long(d)),
+            },
         ),
         None => (
             format!("{prefix}:none"),
@@ -945,14 +949,58 @@ mod tests {
         ];
         let r = run(&w, tasks, &arr(&[SortField::DueDate], &[]));
         let titles: Vec<_> = r.groups.iter().map(|g| g.title.clone().unwrap()).collect();
-        assert_eq!(titles, ["Overdue", "9 Nov · Monday", "No date"]);
+        assert_eq!(titles, ["Overdue", "9 Nov · Today · Monday", "No date"]);
+        let r = run(
+            &w,
+            vec![
+                due(task("a"), "2026-11-10"),
+                due(task("b"), "2026-11-13"),
+                due(task("t"), "2026-11-09"),
+            ],
+            &arr(&[SortField::DueDate], &[]),
+        );
+        let titles: Vec<_> = r.groups.iter().map(|g| g.title.clone().unwrap()).collect();
+        assert_eq!(
+            titles,
+            [
+                "9 Nov · Today · Monday",
+                "10 Nov · Tomorrow · Tuesday",
+                "13 Nov · Friday"
+            ]
+        );
         let r = run(
             &w,
             vec![task("n"), deadline(task("d"), "2026-11-09")],
             &arr(&[SortField::Deadline], &[]),
         );
         let titles: Vec<_> = r.groups.iter().map(|g| g.title.clone().unwrap()).collect();
-        assert_eq!(titles, ["9 Nov · Monday", "No deadline"]);
+        assert_eq!(titles, ["9 Nov · Today · Monday", "No deadline"]);
+    }
+
+    #[test]
+    fn timed_before_untimed_on_the_same_day() {
+        let w = world();
+        let tasks = vec![
+            due(task("untimed"), "2026-11-10"),
+            due(task("late"), "2026-11-10T15:00:00"),
+            due(task("early"), "2026-11-10T08:30:00"),
+        ];
+        let r = run(&w, tasks, &arr(&[], &[(SortField::DueDate, false)]));
+        assert_eq!(ids(&r.groups[0]), ["early", "late", "untimed"]);
+    }
+
+    #[test]
+    fn label_as_an_order_uses_the_first_label() {
+        let w = world();
+        // Label order is the labels' own order: errand, then phone.
+        let tasks = vec![
+            labelled(task("none"), &[]),
+            labelled(task("phone"), &["phone"]),
+            labelled(task("both"), &["phone", "errand"]),
+            labelled(task("errand"), &["errand"]),
+        ];
+        let r = run(&w, tasks, &arr(&[], &[(SortField::Label, false)]));
+        assert_eq!(ids(&r.groups[0]), ["both", "errand", "phone", "none"]);
     }
 
     #[test]
