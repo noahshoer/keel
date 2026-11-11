@@ -532,13 +532,6 @@ export function MainPane({
           <div ref={listScroll} className="list-scroll">
             {/* Keyed by the view, so a view lands as it is: only later changes animate (lists/presence.ts). */}
             <div key={viewKey(view)} className="list-body">
-              <ArrangeBar
-                arrangement={arrangement}
-                problem={whole?.filter_problem ?? null}
-                onOpen={setPanel}
-                onClearFilter={() => saveArrangement({ ...arrangement, filter: "" })}
-                onResetSort={() => saveArrangement({ ...arrangement, groups: [], order: [] })}
-              />
               {editing?.kind === "filter" ? (
                 <div ref={setQuerySlot} className="view-edit-query" />
               ) : subtitle ? (
@@ -547,6 +540,13 @@ export function MainPane({
               {loaded.filterError === null && queryProblem !== null && editing === null ? (
                 <p className="filter-problem view-problem">{queryProblem}</p>
               ) : null}
+              <ArrangeBar
+                arrangement={arrangement}
+                problem={whole?.filter_problem ?? null}
+                onOpen={setPanel}
+                onClearFilter={() => saveArrangement({ ...arrangement, filter: "" })}
+                onResetSort={() => saveArrangement({ ...arrangement, groups: [], order: [] })}
+              />
               {loaded.filterError !== null ? (
                 <div className="filter-problem big-problem">{`This filter can’t run: ${loaded.filterError}`}</div>
               ) : search ? null : (

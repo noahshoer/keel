@@ -133,3 +133,10 @@ it("ArrangePanel is a popover from 900px up, and a scroll does not close it", ()
     vi.unstubAllGlobals();
   }
 });
+
+it("ArrangePanel draws outside the page's own layers, above the add button", () => {
+  const { container } = panel(vi.fn());
+  const dialog = screen.getByRole("dialog", { name: "Sort" });
+  expect(container.contains(dialog)).toBe(false);
+  expect(document.body.contains(dialog)).toBe(true);
+});

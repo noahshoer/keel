@@ -768,3 +768,23 @@ it("an unsaved preview is dropped when the panel closes without a valid draft", 
   expect(contents(container)).toEqual(before);
   expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("false");
 });
+
+const follows = (a: Element | null, b: Element | null) =>
+  a !== null && b !== null && Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+it("the chips sit under the subtitle", async () => {
+  await arrangeView({ kind: "today" }, arrangement({ filter: "p1" }));
+  const { container } = await show({ kind: "today" });
+  expect(container.querySelector(".view-sub")).not.toBeNull();
+  expect(follows(container.querySelector(".view-sub"), container.querySelector(".arrange-bar"))).toBe(true);
+});
+
+it("on a saved filter's page the chips sit under its query line", async () => {
+  await arrangeView(
+    { kind: "filter", id: "f-p1" },
+    arrangement({ order: [{ field: "priority", reversed: false }] }),
+  );
+  const { container } = await show({ kind: "filter", id: "f-p1", name: "Important", query: "p1" });
+  expect(container.querySelector(".view-sub")?.textContent).toBe("p1");
+  expect(follows(container.querySelector(".view-sub"), container.querySelector(".arrange-bar"))).toBe(true);
+});

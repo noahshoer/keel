@@ -1,6 +1,7 @@
 // The shell of the filter and sort panels: a bottom sheet under 900px, a
 // popover hanging from its header button from 900px up.
 import { type ReactNode, type RefObject, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useWideLayout } from "../shell/platform";
 import { useAnchoredPopup } from "../shell/useAnchoredPopup";
 
@@ -75,5 +76,6 @@ function Sheet(props: ArrangePanelProps) {
 }
 
 export function ArrangePanel(props: ArrangePanelProps) {
-  return useWideLayout() ? <Popover {...props} /> : <Sheet {...props} />;
+  // On the body, outside the header's own layers, so the add button can't draw over it.
+  return createPortal(useWideLayout() ? <Popover {...props} /> : <Sheet {...props} />, document.body);
 }
