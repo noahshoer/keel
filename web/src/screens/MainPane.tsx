@@ -3,7 +3,7 @@
 // date groups, filters into their comma groups, projects into sections.
 // Each list ends with its "+ Add task" row, as in Dioxus.
 
-import { useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Loaded } from "../app/load";
 import {
   canShowCompleted,
@@ -19,7 +19,10 @@ import {
 } from "../app/view";
 import { ArrangeBar } from "../arrange/ArrangeBar";
 import { ArrangedList } from "../arrange/ArrangedList";
+import { ArrangePanel } from "../arrange/ArrangePanel";
 import { arrangementOf, isArranged, placeOf } from "../arrange/place";
+import { SortSheet } from "../arrange/SortSheet";
+import { resetSort } from "../arrange/sortEdit";
 import type { Section, Task } from "../bindings";
 import { localToday } from "../clock";
 import { arrange, blankValues, cards, dateGroups, filterReading } from "../core";
@@ -163,6 +166,9 @@ export function MainPane({
   const [panelState, setPanelState] = useState<{ place: string; which: "filter" | "sort" } | null>(null);
   const panel = panelState?.place === place ? panelState.which : null;
   const setPanel = (which: "filter" | "sort" | null) => setPanelState(which ? { place, which } : null);
+  const closePanel = useCallback(() => setPanelState(null), []);
+  const filterButton = useRef<HTMLButtonElement>(null);
+  const sortButton = useRef<HTMLButtonElement>(null);
   const stopEditing = () => setEditingPlace(null);
   const titleField = useRef<HTMLInputElement>(null);
   // What the project's ••• calls to open the "Add section" field at the end of the page.
@@ -403,6 +409,7 @@ export function MainPane({
             {arrangePlace !== null ? (
               <>
                 <button
+                  ref={filterButton}
                   type="button"
                   className={filterSet ? "icon-btn arrange-btn on" : "icon-btn arrange-btn"}
                   title="Filter"
@@ -413,6 +420,7 @@ export function MainPane({
                   <FunnelIcon />
                 </button>
                 <button
+                  ref={sortButton}
                   type="button"
                   className={sortSet ? "icon-btn arrange-btn on" : "icon-btn arrange-btn"}
                   title="Sort"
@@ -423,6 +431,16 @@ export function MainPane({
                   <SortIcon />
                 </button>
               </>
+            ) : null}
+            {panel === "sort" ? (
+              <ArrangePanel
+                title="Sort"
+                action={{ label: "Reset to default", run: () => saveArrangement(resetSort(arrangement)) }}
+                anchor={sortButton}
+                onClose={closePanel}
+              >
+                <SortSheet arrangement={arrangement} onChange={saveArrangement} />
+              </ArrangePanel>
             ) : null}
             {toggle ? (
               <button
