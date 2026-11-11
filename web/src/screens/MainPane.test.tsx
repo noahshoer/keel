@@ -3,13 +3,15 @@ import { useState } from "react";
 import { beforeAll, expect, it, vi } from "vitest";
 import { useLoaded } from "../app/load";
 import type { View } from "../app/view";
-import type { OrderLevel, SortField } from "../bindings";
+import type { Arrangement, OrderLevel, SortField } from "../bindings";
 import { localToday } from "../clock";
 import * as core from "../core";
 import { TASK_DROP } from "../gestures/drag";
 import { ROW_PRESS } from "../gestures/long-press";
 import { addLabel, arrangeView, dispatchAction, renameSection } from "../ipc/actions";
+import { viewIds } from "../ipc/fixtures";
 import { invoke } from "../ipc/invoke";
+import { mockHandlers } from "../ipc/mock";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
 import { TaskNavProvider } from "../taskview/nav";
 import { loadCoreForTests } from "../test/wasm";
@@ -673,12 +675,42 @@ it("nothing matches", async () => {
 });
 
 it("upcoming order only keeps days", async () => {
-  await arrangeView({ kind: "upcoming" }, arrangement({ order: [{ field: "priority", reversed: false }] }));
-  const { container } = await show({ kind: "upcoming" });
-  const plain = titles(container);
-  expect(plain[0]).toBe("Overdue");
-  expect(plain).toHaveLength(3);
-  expect(container.querySelector(".arrange-sub")).toBeNull();
+  // Call the dentist (no priority) also falls today and, unsorted, comes before the P2 laundry.
+  await dispatchAction({
+    type: "task_update",
+    id: "t-inbox",
+    priority: "None",
+    due: { date: localToday() },
+  } as never);
+  await dispatchAction({ type: "task_update", id: "t-laundry", priority: "P2" } as never);
+  viewIds.upcoming.unshift("t-inbox");
+  try {
+    const before = await show({ kind: "upcoming" });
+    const days = titles(before.container);
+    expect(contents(before.container)).toEqual([
+      "File the taxes",
+      "Call the dentist",
+      "Do laundry",
+      "Buy groceries",
+    ]);
+    before.unmount();
+    await arrangeView({ kind: "upcoming" }, arrangement({ order: [{ field: "priority", reversed: false }] }));
+    const { container } = await show({ kind: "upcoming" });
+    // The days stay in date order: overdue, today, tomorrow.
+    expect(days[0]).toBe("Overdue");
+    expect(days).toHaveLength(3);
+    expect(titles(container)).toEqual(days);
+    expect(container.querySelector(".arrange-sub")).toBeNull();
+    // Inside the day, by priority: the P2 laundry now comes before the unprioritised dentist.
+    expect(contents(container)).toEqual([
+      "File the taxes",
+      "Do laundry",
+      "Call the dentist",
+      "Buy groceries",
+    ]);
+  } finally {
+    viewIds.upcoming.shift();
+  }
 });
 
 // Header icons and chips (issue #7).
@@ -801,4 +833,110 @@ it("a filtered section's delete warning counts everything the section holds", as
   expect(popup()?.querySelector(".confirm-text")?.textContent).toBe(
     "Delete section “Chores” and its 2 tasks?",
   );
+});
+
+const choice = (field: string) => {
+  const c = core.sortChoices().find((x) => x.field === field);
+  if (!c) throw new Error(field);
+  return c;
+};
+
+/** Slows every arrangement save by `ms` and records what was sent, in the order it arrived. */
+const slowSaves = (ms: number) => {
+  const sent: Arrangement[] = [];
+  const real = mockHandlers.dispatch;
+  const spy = vi.spyOn(mockHandlers, "dispatch").mockImplementation(async (args) => {
+    const action = args.cmd.action;
+    if (action.type === "view_arrange") {
+      await new Promise((r) => setTimeout(r, ms));
+      sent.push(structuredClone(action.arrangement));
+    }
+    return real(args);
+  });
+  return { sent, restore: () => spy.mockRestore() };
+};
+
+it("two quick Move down taps in the sort panel move a row two places", async () => {
+  const levels: OrderLevel[] = [
+    { field: "priority", reversed: false },
+    { field: "due_date", reversed: false },
+    { field: "label", reversed: false },
+  ];
+  await arrangeView(homePlace, arrangement({ order: levels }));
+  const slow = slowSaves(40);
+  try {
+    await show({ kind: "project", id: "p-home", name: "Home" });
+    fireEvent.click(screen.getByLabelText("Sort"));
+    const down = choice("priority").name;
+    fireEvent.click(await screen.findByLabelText(`Move ${down} down`));
+    fireEvent.click(screen.getByLabelText(`Move ${down} down`));
+    await waitFor(() => expect(slow.sent).toHaveLength(2));
+    expect(slow.sent[1]?.order.map((o) => o.field)).toEqual(["due_date", "label", "priority"]);
+    const rows = [...document.querySelectorAll(".sort-row .sort-name")].map((e) => e.textContent);
+    expect(rows[2]).toBe(down);
+  } finally {
+    slow.restore();
+  }
+});
+
+it("a double tap on a direction ends where it began, and quick adds both stay", async () => {
+  await arrangeView(homePlace, arrangement({ order: [{ field: "priority", reversed: false }] }));
+  const slow = slowSaves(40);
+  try {
+    await show({ kind: "project", id: "p-home", name: "Home" });
+    fireEvent.click(screen.getByLabelText("Sort"));
+    const priority = choice("priority");
+    fireEvent.click(await screen.findByRole("button", { name: priority.order_label }));
+    fireEvent.click(screen.getByRole("button", { name: priority.reversed_label }));
+    await waitFor(() => expect(slow.sent).toHaveLength(2));
+    expect(slow.sent[1]?.order).toEqual([{ field: "priority", reversed: false }]);
+    // Add group then Add order, back to back.
+    fireEvent.click(screen.getByRole("button", { name: "Add group" }));
+    fireEvent.click(screen.getByRole("button", { name: choice("label").name }));
+    fireEvent.click(screen.getByRole("button", { name: "Add order" }));
+    fireEvent.click(screen.getByRole("button", { name: choice("due_date").name }));
+    await waitFor(() => expect(slow.sent).toHaveLength(4));
+    expect(slow.sent[3]?.groups).toEqual(["label"]);
+    expect(slow.sent[3]?.order.map((o) => o.field)).toEqual(["priority", "due_date"]);
+  } finally {
+    slow.restore();
+  }
+});
+
+it("a chip opens the filter panel with the field focused, and closing returns focus to the header button", async () => {
+  await arrangeView(homePlace, arrangement({ filter: "p1" }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  fireEvent.click(container.querySelector(".arrange-chip-main") as HTMLElement);
+  const field = await screen.findByLabelText("Query");
+  expect(document.activeElement).toBe(field);
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(document.activeElement).toBe(screen.getByLabelText("Filter"));
+  fireEvent.click(screen.getByLabelText("Sort"));
+  expect(screen.getByRole("dialog").getAttribute("aria-modal")).toBe("true");
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(document.activeElement).toBe(screen.getByLabelText("Sort"));
+});
+
+it("closing the filter panel keeps the draft's result on the page until the save has landed", async () => {
+  await dispatchAction({ type: "task_update", id: "t-laundry", priority: "None" } as never);
+  await addTask("Urgent chore", { priority: "P1" });
+  const slow = slowSaves(60);
+  try {
+    const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+    expect(contents(container).length).toBeGreaterThan(1);
+    fireEvent.click(screen.getByLabelText("Filter"));
+    fireEvent.change(await screen.findByLabelText("Query"), { target: { value: "p1" } });
+    await waitFor(() => expect(contents(container)).toEqual(["Urgent chore"]));
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(slow.sent).toHaveLength(0);
+    expect(contents(container)).toEqual(["Urgent chore"]);
+    await waitFor(() => expect(slow.sent).toHaveLength(1));
+    await waitFor(() => expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("true"));
+    expect(contents(container)).toEqual(["Urgent chore"]);
+  } finally {
+    slow.restore();
+  }
 });

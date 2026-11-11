@@ -3,7 +3,7 @@
 // date groups, filters into their comma groups, projects into sections.
 // Each list ends with its "+ Add task" row, as in Dioxus.
 
-import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Loaded } from "../app/load";
 import {
   canShowCompleted,
@@ -54,6 +54,9 @@ import { PageEdit } from "./PageEdit";
 import { AddSection, SectionBlock } from "./SectionBlock";
 import { useTitleFit } from "./titleFit";
 import { ViewMenu } from "./ViewMenu";
+
+/** A just-saved arrangement, held until the reload after its save has landed. */
+type Held = { place: string; id: number; arrangement: Arrangement; settledOn: Loaded | null };
 
 const SEARCH = viewPlace({ kind: "search" });
 
@@ -173,13 +176,18 @@ export function MainPane({
   // The filter being typed, before it's saved; it goes with the panel or the page.
   const [previewState, setPreviewState] = useState<{ place: string; arrangement: Arrangement } | null>(null);
   const preview = previewState?.place === place && panel === "filter" ? previewState.arrangement : null;
-  const closePanel = useCallback(() => {
-    setPanelState(null);
-    setPreviewState(null);
-  }, []);
   const filterField = useRef<HTMLTextAreaElement>(null);
   const filterButton = useRef<HTMLButtonElement>(null);
   const sortButton = useRef<HTMLButtonElement>(null);
+  // Closing a panel puts focus back on the header button that owns it.
+  const openPanel = useRef(panel);
+  openPanel.current = panel;
+  const closePanel = useCallback(() => {
+    const which = openPanel.current;
+    setPanelState(null);
+    setPreviewState(null);
+    if (which !== null) (which === "sort" ? sortButton : filterButton).current?.focus();
+  }, []);
   const stopEditing = () => setEditingPlace(null);
   const titleField = useRef<HTMLInputElement>(null);
   // What the project's ••• calls to open the "Add section" field at the end of the page.
@@ -231,24 +239,52 @@ export function MainPane({
   );
   // The page's saved arrangement, or the filter being typed over it.
   const arrangePlace = placeOf(view, loaded);
-  const saved = arrangementOf(arrangePlace, loaded.arrangements);
+  const stored = arrangementOf(arrangePlace, loaded.arrangements);
+  // What was just saved shows until the reload that follows the save has landed (and, in the
+  // sort panel, is what the next edit builds on), so quick edits and a closing draft don't
+  // flash or lose the old value.
+  const [held, setHeld] = useState<Held | null>(null);
+  const saved = held?.place === place ? held.arrangement : stored;
   const arrangement = preview ?? saved;
+  const loadedNow = useRef(loaded);
+  loadedNow.current = loaded;
+  useEffect(() => {
+    if (held !== null && (held.place !== place || (held.settledOn !== null && held.settledOn !== loaded)))
+      setHeld(null);
+  }, [held, place, loaded]);
+  const saving = useRef<Promise<unknown>>(Promise.resolve());
+  const saves = useRef(0);
   const arranged = isArranged(arrangement);
   const filterSet = arrangement.filter.trim() !== "";
   const sortSet = arrangement.groups.length > 0 || arrangement.order.length > 0;
   const headed = arranged && arrangement.groups.length > 0;
-  const arrangeTasks = (tasks: Task[]) =>
-    arrange(tasks, arrangement, loaded.projects, loaded.sections, loaded.labels, today);
-  const whole = arranged ? arrangeTasks(loaded.tasks) : null;
+  const arrangeTasks = useCallback(
+    (tasks: Task[]) => arrange(tasks, arrangement, loaded.projects, loaded.sections, loaded.labels, today),
+    [arrangement, loaded.projects, loaded.sections, loaded.labels, today],
+  );
+  const whole = useMemo(
+    () => (arranged ? arrangeTasks(loaded.tasks) : null),
+    [arranged, arrangeTasks, loaded.tasks],
+  );
+  // Saves reach the backend in the order they were made.
   const saveArrangement = (next: Arrangement) => {
-    if (arrangePlace) arrangeView(arrangePlace, next).then(onChanged, onChanged);
+    if (!arrangePlace) return;
+    const id = ++saves.current;
+    setHeld({ place, id, arrangement: next, settledOn: null });
+    const settle = () => {
+      setHeld((h) => (h !== null && h.id === id ? { ...h, settledOn: loadedNow.current } : h));
+      onChanged();
+    };
+    saving.current = saving.current.then(() => arrangeView(arrangePlace, next)).then(settle, settle);
   };
   // A filter that matched nothing says so; the page's own empty text is for pages with no tasks.
   const nothingMatches =
     whole !== null && arrangement.filter.trim() !== "" && whole.filter_problem === null && whole.shown === 0;
   // Without headings the page keeps its own grouping and each list is shaped (filtered, ordered).
-  const shape: ((tasks: Task[]) => Task[]) | null =
-    arranged && !headed ? (tasks) => arrangeTasks(tasks).groups[0]?.tasks ?? [] : null;
+  const shape = useMemo<((tasks: Task[]) => Task[]) | null>(
+    () => (arranged && !headed ? (tasks) => arrangeTasks(tasks).groups[0]?.tasks ?? [] : null),
+    [arranged, headed, arrangeTasks],
+  );
   const list = (tasks: Task[]) => (
     <CardList
       cards={cards(tasks, loaded.all, mode, today)}
@@ -474,12 +510,12 @@ export function MainPane({
             {panel === "sort" ? (
               <ArrangePanel
                 title="Sort"
-                action={{ label: "Reset to default", run: () => saveArrangement(resetSort(arrangement)) }}
+                action={{ label: "Reset to default", run: () => saveArrangement(resetSort(saved)) }}
                 anchor={sortButton}
                 onClose={closePanel}
                 layoutKey={`${arrangement.groups.length}|${arrangement.order.length}`}
               >
-                <SortSheet arrangement={arrangement} onChange={saveArrangement} />
+                <SortSheet arrangement={saved} onChange={saveArrangement} />
               </ArrangePanel>
             ) : null}
             {toggle ? (
@@ -543,7 +579,9 @@ export function MainPane({
               <ArrangeBar
                 arrangement={arrangement}
                 problem={whole?.filter_problem ?? null}
-                onOpen={setPanel}
+                onOpen={(which) =>
+                  which === "filter" ? openAndFocus(() => setPanel("filter"), filterField) : setPanel(which)
+                }
                 onClearFilter={() => saveArrangement({ ...arrangement, filter: "" })}
                 onResetSort={() => saveArrangement({ ...arrangement, groups: [], order: [] })}
               />

@@ -160,7 +160,8 @@ export function FilterSheet({
                     title={f.query}
                     onClick={() => check.setQuery(f.query)}
                   >
-                    {f.name}
+                    <span className="filter-row-name">{f.name}</span>
+                    <span className="filter-row-query mono">{f.query}</span>
                   </button>
                 </li>
               ))}

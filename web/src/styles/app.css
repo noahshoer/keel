@@ -1287,6 +1287,10 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 .sort-add, .sort-choice { display: flex; align-items: center; gap: 6px; border: none; background: none; padding: 10px 0;
   color: var(--accent-text); font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer; }
 .sort-choices { display: flex; flex-direction: column; }
+.filter-panel .sort-list li { display: flex; }
+.filter-panel .sort-choice { flex: 1; min-width: 0; text-align: left; }
+.filter-row-name { flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-row-query { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-weight: 400; }
 .sort-choice { color: inherit; font-weight: 500; border-bottom: 1px solid var(--border); }
 @media (pointer: coarse) {
   .sort-row, .sort-add, .sort-choice { min-height: 44px; }

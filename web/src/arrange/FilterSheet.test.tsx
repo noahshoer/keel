@@ -109,6 +109,13 @@ it("tapping a saved filter puts its query in the field and previews it", () => {
   expect(screen.getByText("Your filters")).toBeTruthy();
 });
 
+it("each saved filter shows its query after its name", () => {
+  setup({ filters: [saved("f1", "Urgent", "p1 & today")] });
+  const row = screen.getByRole("button", { name: /Urgent/ });
+  expect(row.textContent).toBe("Urgentp1 & today");
+  expect(row.querySelector(".filter-row-query")?.textContent).toBe("p1 & today");
+});
+
 it("Save as a filter is hidden for a blank, invalid or already saved draft", () => {
   setup({ filters: [saved("f1", "Urgent", "p1")] });
   expect(screen.queryByRole("button", { name: "Save as a filter" })).toBeNull();
