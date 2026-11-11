@@ -1269,6 +1269,12 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 .arrange-panel-title { margin: 0; font-size: 17px; font-weight: 700; }
 .arrange-panel-action { border: none; background: none; padding: 8px 0 8px 8px; color: var(--accent-text); font: inherit;
   font-size: 14px; font-weight: 600; cursor: pointer; }
+.filter-panel { padding-bottom: 4px; }
+.filter-panel .filter-field { margin-top: 4px; }
+.filter-count { margin: 8px 0 4px; font-size: 13px; color: var(--muted); }
+.filter-save-as { border: none; background: none; padding: 10px 0; color: var(--accent-text); font: inherit; font-weight: 600;
+  cursor: pointer; min-height: 44px; }
+.filter-panel .project-input { margin: 4px 0 8px; width: 100%; }
 .sort-section { margin: 12px 0 4px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
 .sort-list { list-style: none; margin: 0; padding: 0; }
 .sort-row { display: flex; align-items: center; gap: 2px; min-height: 44px; border-bottom: 1px solid var(--border); }

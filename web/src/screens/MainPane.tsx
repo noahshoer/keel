@@ -20,10 +20,11 @@ import {
 import { ArrangeBar } from "../arrange/ArrangeBar";
 import { ArrangedList } from "../arrange/ArrangedList";
 import { ArrangePanel } from "../arrange/ArrangePanel";
+import { FilterSheet } from "../arrange/FilterSheet";
 import { arrangementOf, isArranged, placeOf } from "../arrange/place";
 import { SortSheet } from "../arrange/SortSheet";
 import { resetSort } from "../arrange/sortEdit";
-import type { Section, Task } from "../bindings";
+import type { Arrangement, Section, Task } from "../bindings";
 import { localToday } from "../clock";
 import { arrange, blankValues, cards, dateGroups, filterReading } from "../core";
 import { AddTask } from "../editor/AddTask";
@@ -165,8 +166,18 @@ export function MainPane({
   // The open filter or sort panel (drawn by a later task), by place, so it doesn't outlive its page.
   const [panelState, setPanelState] = useState<{ place: string; which: "filter" | "sort" } | null>(null);
   const panel = panelState?.place === place ? panelState.which : null;
-  const setPanel = (which: "filter" | "sort" | null) => setPanelState(which ? { place, which } : null);
-  const closePanel = useCallback(() => setPanelState(null), []);
+  const setPanel = (which: "filter" | "sort" | null) => {
+    setPreviewState(null);
+    setPanelState(which ? { place, which } : null);
+  };
+  // The filter being typed, before it's saved; it goes with the panel or the page.
+  const [previewState, setPreviewState] = useState<{ place: string; arrangement: Arrangement } | null>(null);
+  const preview = previewState?.place === place && panel === "filter" ? previewState.arrangement : null;
+  const closePanel = useCallback(() => {
+    setPanelState(null);
+    setPreviewState(null);
+  }, []);
+  const filterField = useRef<HTMLTextAreaElement>(null);
   const filterButton = useRef<HTMLButtonElement>(null);
   const sortButton = useRef<HTMLButtonElement>(null);
   const stopEditing = () => setEditingPlace(null);
@@ -218,9 +229,10 @@ export function MainPane({
       onChanged={onChanged}
     />
   );
-  // The page's saved arrangement. A later task puts the unsaved preview in front of it here.
+  // The page's saved arrangement, or the filter being typed over it.
   const arrangePlace = placeOf(view, loaded);
-  const arrangement = arrangementOf(arrangePlace, loaded.arrangements);
+  const saved = arrangementOf(arrangePlace, loaded.arrangements);
+  const arrangement = preview ?? saved;
   const arranged = isArranged(arrangement);
   const filterSet = arrangement.filter.trim() !== "";
   const sortSet = arrangement.groups.length > 0 || arrangement.order.length > 0;
@@ -228,7 +240,7 @@ export function MainPane({
   const arrangeTasks = (tasks: Task[]) =>
     arrange(tasks, arrangement, loaded.projects, loaded.sections, loaded.labels, today);
   const whole = arranged ? arrangeTasks(loaded.tasks) : null;
-  const saveArrangement = (next: typeof arrangement) => {
+  const saveArrangement = (next: Arrangement) => {
     if (arrangePlace) arrangeView(arrangePlace, next).then(onChanged, onChanged);
   };
   // A filter that matched nothing says so; the page's own empty text is for pages with no tasks.
@@ -415,7 +427,14 @@ export function MainPane({
                   title="Filter"
                   aria-label="Filter"
                   aria-pressed={filterSet}
-                  onClick={() => setPanel(panel === "filter" ? null : "filter")}
+                  onClick={() => {
+                    if (panel === "filter") {
+                      // The button doesn't count as outside the panel, so keeping a draft that reads is done here.
+                      if (preview !== null && preview.filter.trim() !== saved.filter.trim())
+                        saveArrangement(preview);
+                      closePanel();
+                    } else openAndFocus(() => setPanel("filter"), filterField);
+                  }}
                 >
                   <FunnelIcon />
                 </button>
@@ -432,12 +451,33 @@ export function MainPane({
                 </button>
               </>
             ) : null}
+            {panel === "filter" ? (
+              <FilterSheet
+                pageName={viewTitle(view)}
+                initial={saved.filter}
+                names={loaded}
+                filters={loaded.filters}
+                counts={{
+                  shown: whole?.shown ?? loaded.tasks.length,
+                  total: whole?.total ?? loaded.tasks.length,
+                }}
+                anchor={filterButton}
+                fieldRef={filterField}
+                onDraft={(query) =>
+                  setPreviewState(query === null ? null : { place, arrangement: { ...saved, filter: query } })
+                }
+                onSave={(query) => saveArrangement({ ...saved, filter: query })}
+                onFilterAdded={onChanged}
+                onClose={closePanel}
+              />
+            ) : null}
             {panel === "sort" ? (
               <ArrangePanel
                 title="Sort"
                 action={{ label: "Reset to default", run: () => saveArrangement(resetSort(arrangement)) }}
                 anchor={sortButton}
                 onClose={closePanel}
+                layoutKey={`${arrangement.groups.length}|${arrangement.order.length}`}
               >
                 <SortSheet arrangement={arrangement} onChange={saveArrangement} />
               </ArrangePanel>

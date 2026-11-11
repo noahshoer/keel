@@ -108,3 +108,28 @@ it("ArrangePanel closes on a click on the scrim and runs its action", () => {
   fireEvent.click(scrim);
   expect(onClose).toHaveBeenCalled();
 });
+
+const wide = (matches: boolean) =>
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+
+it("ArrangePanel is a popover from 900px up, and a scroll does not close it", () => {
+  wide(true);
+  try {
+    const onClose = vi.fn();
+    const { container } = panel(onClose);
+    expect(container.ownerDocument.querySelector(".arrange-popover")).not.toBeNull();
+    expect(container.ownerDocument.querySelector(".arrange-scrim")).toBeNull();
+    fireEvent.scroll(screen.getByText("body"));
+    fireEvent.scroll(window);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

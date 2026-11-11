@@ -727,3 +727,44 @@ it("a broken remembered filter marks the chip and the list still shows every tas
   expect(chip.title).not.toBe("");
   expect(contents(container)).toEqual(["File the taxes", "Do laundry"]);
 });
+
+// The filter panel (issue #7).
+it("typing a filter narrows the list behind the panel before anything is saved", async () => {
+  await dispatchAction({ type: "task_update", id: "t-laundry", priority: "None" } as never);
+  await addTask("Urgent chore", { priority: "P1" });
+  const sent: string[] = [];
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const before = contents(container);
+  expect(before).toContain("Urgent chore");
+  expect(before.length).toBeGreaterThan(1);
+  const real = window.__TAURI__?.core.invoke;
+  if (real && window.__TAURI__) {
+    window.__TAURI__.core.invoke = (cmd, args) => {
+      if (cmd === "dispatch") sent.push(cmd);
+      return real(cmd, args);
+    };
+  }
+  fireEvent.click(screen.getByLabelText("Filter"));
+  const field = await screen.findByLabelText("Query");
+  fireEvent.change(field, { target: { value: "p1" } });
+  await waitFor(() => expect(contents(container)).toEqual(["Urgent chore"]));
+  expect(sent).toEqual([]);
+  expect(screen.getByText(/^1 of \d+ tasks match$/)).not.toBeNull();
+  // Closing saves it.
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("true"));
+  expect(contents(container)).toEqual(["Urgent chore"]);
+  if (real && window.__TAURI__) window.__TAURI__.core.invoke = real;
+});
+
+it("an unsaved preview is dropped when the panel closes without a valid draft", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const before = contents(container);
+  fireEvent.click(screen.getByLabelText("Filter"));
+  fireEvent.change(await screen.findByLabelText("Query"), { target: { value: "p1 &" } });
+  expect(contents(container)).toEqual(before);
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(contents(container)).toEqual(before);
+  expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("false");
+});

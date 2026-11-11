@@ -11,10 +11,12 @@ export type ArrangePanelProps = {
   anchor: RefObject<HTMLElement | null>;
   /** Must keep its identity. */
   onClose: () => void;
+  /** The popover is placed again when this changes (its content's size does). */
+  layoutKey?: unknown;
   children: ReactNode;
 };
 
-function Body({ title, action, children }: Omit<ArrangePanelProps, "anchor" | "onClose">) {
+function Body({ title, action, children }: Omit<ArrangePanelProps, "anchor" | "onClose" | "layoutKey">) {
   return (
     <>
       <div className="arrange-panel-head">
@@ -30,7 +32,15 @@ function Body({ title, action, children }: Omit<ArrangePanelProps, "anchor" | "o
 
 function Popover(props: ArrangePanelProps) {
   const popup = useRef<HTMLDivElement>(null);
-  useAnchoredPopup({ anchor: props.anchor, popup, toggle: props.anchor, close: props.onClose });
+  // Not on a scroll: the panel scrolls itself, and the list behind it re-flows as a filter is typed.
+  useAnchoredPopup({
+    anchor: props.anchor,
+    popup,
+    toggle: props.anchor,
+    close: props.onClose,
+    layoutKey: props.layoutKey,
+    closeOnScroll: false,
+  });
   return (
     <div ref={popup} className="arrange-panel arrange-popover" role="dialog" aria-label={props.title}>
       <Body {...props} />

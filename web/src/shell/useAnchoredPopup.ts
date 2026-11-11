@@ -9,6 +9,7 @@ export function useAnchoredPopup({
   toggle,
   close,
   layoutKey,
+  closeOnScroll = true,
 }: {
   /** What it opens against. */
   anchor: RefObject<HTMLElement | null>;
@@ -19,6 +20,8 @@ export function useAnchoredPopup({
   close: () => void;
   /** Placed again when this changes (the popup's size does). */
   layoutKey?: unknown;
+  /** Whether any scroll closes it (the default). A popup whose content re-flows the page turns it off. */
+  closeOnScroll?: boolean;
 }) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: `layoutKey` is the trigger, not an input.
   useLayoutEffect(() => {
@@ -48,7 +51,7 @@ export function useAnchoredPopup({
     document.addEventListener("contextmenu", outside, true);
     document.addEventListener("touchstart", outside, { capture: true, passive: true });
     document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", close, true);
+    if (closeOnScroll) window.addEventListener("scroll", close, true);
     return () => {
       document.removeEventListener("click", outside, true);
       document.removeEventListener("contextmenu", outside, true);
@@ -56,5 +59,5 @@ export function useAnchoredPopup({
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", close, true);
     };
-  }, [popup, toggle, close]);
+  }, [popup, toggle, close, closeOnScroll]);
 }
