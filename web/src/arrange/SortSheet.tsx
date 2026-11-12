@@ -1,6 +1,6 @@
 // The sort panel's contents: the heading fields (groups) and the order levels.
 // Every edit calls onChange; the page saves it at once.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Arrangement, SortChoice, SortField } from "../bindings";
 import { sortChoices } from "../core";
 import { ChevronDownSmallIcon, PlusIcon, XSmallIcon } from "../shell/icons";
@@ -102,7 +102,8 @@ export function SortSheet({
   arrangement: Arrangement;
   onChange: (a: Arrangement) => void;
 }) {
-  const choices = sortChoices();
+  // The fields and their labels never change.
+  const choices = useMemo(sortChoices, []);
   const find = (field: SortField) => choices.find((c) => c.field === field);
   return (
     <div className="sort-sheet">

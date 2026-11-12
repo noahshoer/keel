@@ -30,7 +30,7 @@ export function placeOf(view: View, loaded: Pick<Loaded, "inbox" | "labels">): V
   }
 }
 
-const samePlace = (a: ViewPlace, b: ViewPlace): boolean =>
+export const samePlace = (a: ViewPlace, b: ViewPlace): boolean =>
   a.kind === b.kind && (a.kind === "today" || a.kind === "upcoming" || ("id" in b && a.id === b.id));
 
 /** The page's saved arrangement, or `NO_ARRANGEMENT`. */
@@ -39,7 +39,11 @@ export function arrangementOf(place: ViewPlace | null, all: PlacedArrangement[])
   return all.find((p) => samePlace(p.place, place))?.arrangement ?? NO_ARRANGEMENT;
 }
 
-/** Whether the arrangement changes the page (a blank filter doesn't). */
-export function isArranged(a: Arrangement): boolean {
-  return a.filter.trim() !== "" || a.groups.length > 0 || a.order.length > 0;
-}
+/** Whether it filters the page (a blank filter doesn't). */
+export const hasFilter = (a: Arrangement): boolean => a.filter.trim() !== "";
+
+/** Whether it groups or orders the page. */
+export const hasSort = (a: Arrangement): boolean => a.groups.length > 0 || a.order.length > 0;
+
+/** Whether the arrangement changes the page at all. */
+export const isArranged = (a: Arrangement): boolean => hasFilter(a) || hasSort(a);

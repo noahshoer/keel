@@ -2,7 +2,7 @@
 // title line when it starts one, its sub-heading, and its cards. A task in two
 // label groups is drawn in both, each copy in its own group's element.
 
-import type { CSSProperties } from "react";
+import { type CSSProperties, useMemo } from "react";
 import type { ArrangedGroup, CardMode, Id, Label, Reminder, Task } from "../bindings";
 import { cards } from "../core";
 import { labelColorVar } from "../editor/labelColors";
@@ -31,15 +31,17 @@ export function ArrangedList({
   onChanged: () => void;
 }) {
   // A title line counts the cards drawn under it, as a section's header does (sub-tasks
-  // hidden under their parent, repeating tasks done for now left out), not core's task count.
-  const drawn = groups.map((group) => cards(group.tasks, all, mode, today));
-  const titleCount = groups.map((group, i) => {
-    if (!group.starts_title) return 0;
-    let n = 0;
-    for (let j = i; j < groups.length && (j === i || !groups[j]?.starts_title); j++)
-      n += drawn[j]?.length ?? 0;
-    return n;
-  });
+  // hidden under their parent, repeating tasks done for now left out).
+  const { drawn, titleCount } = useMemo(() => {
+    const drawn = groups.map((group) => cards(group.tasks, all, mode, today));
+    const titleCount: number[] = [];
+    let head = 0;
+    groups.forEach((group, i) => {
+      if (group.starts_title) head = i;
+      titleCount[head] = (titleCount[head] ?? 0) + (drawn[i]?.length ?? 0);
+    });
+    return { drawn, titleCount };
+  }, [groups, all, mode, today]);
   return groups.map((group, i) => (
     <div key={group.key}>
       {group.starts_title && group.title !== null ? (

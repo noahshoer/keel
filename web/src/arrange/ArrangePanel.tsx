@@ -4,7 +4,6 @@ import { type ReactNode, type RefObject, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useWideLayout } from "../shell/platform";
 import { useAnchoredPopup } from "../shell/useAnchoredPopup";
-import { keyboardInset } from "./keyboardInset";
 
 export type ArrangePanelProps = {
   title: string;
@@ -52,25 +51,7 @@ function Popover(props: ArrangePanelProps) {
 
 function Sheet(props: ArrangePanelProps) {
   const { onClose } = props;
-  const sheet = useRef<HTMLDivElement>(null);
-  // The page is held while the keyboard is up and `dvh` doesn't shrink for it, so the sheet
-  // sits on the keyboard itself: how much of the bottom is covered, and how tall what's visible is.
-  useEffect(() => {
-    const vv = window.visualViewport;
-    const el = sheet.current;
-    if (!vv || !el) return;
-    const follow = () => {
-      el.style.setProperty("--kb", `${keyboardInset(window.innerHeight, vv.height, vv.offsetTop)}px`);
-      el.style.setProperty("--vvh", `${vv.height}px`);
-    };
-    follow();
-    vv.addEventListener("resize", follow);
-    vv.addEventListener("scroll", follow);
-    return () => {
-      vv.removeEventListener("resize", follow);
-      vv.removeEventListener("scroll", follow);
-    };
-  }, []);
+  // It sits on the keyboard through `--kb` / `--vv-h`, which gestures/sheet.ts keeps on the root (app.css).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -87,13 +68,7 @@ function Sheet(props: ArrangePanelProps) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div
-        ref={sheet}
-        className="arrange-panel arrange-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-label={props.title}
-      >
+      <div className="arrange-panel arrange-sheet" role="dialog" aria-modal="true" aria-label={props.title}>
         <Body {...props} />
       </div>
     </div>

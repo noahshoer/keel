@@ -21,7 +21,7 @@ import { ArrangeBar } from "../arrange/ArrangeBar";
 import { ArrangedList } from "../arrange/ArrangedList";
 import { ArrangePanel } from "../arrange/ArrangePanel";
 import { FilterSheet } from "../arrange/FilterSheet";
-import { arrangementOf, isArranged, placeOf } from "../arrange/place";
+import { arrangementOf, hasFilter, hasSort, placeOf } from "../arrange/place";
 import { SortSheet } from "../arrange/SortSheet";
 import { resetSort } from "../arrange/sortEdit";
 import type { Arrangement, Section, Task } from "../bindings";
@@ -166,17 +166,20 @@ export function MainPane({
             },
           }
         : null;
-  // The open filter or sort panel (drawn by a later task), by place, so it doesn't outlive its page.
-  const [panelState, setPanelState] = useState<{ place: string; which: "filter" | "sort" } | null>(null);
-  const panel = panelState?.place === place ? panelState.which : null;
-  const setPanel = (which: "filter" | "sort" | null) => {
-    setPreviewState(null);
-    setPanelState(which ? { place, which } : null);
-  };
-  // The filter being typed, before it's saved; it goes with the panel or the page.
-  const [previewState, setPreviewState] = useState<{ place: string; arrangement: Arrangement } | null>(null);
-  const preview = previewState?.place === place && panel === "filter" ? previewState.arrangement : null;
+  // The open filter or sort panel, by place, so it doesn't outlive its page; with it, the
+  // filter being typed before it's saved (`preview`), which goes when the panel does.
+  const [panelState, setPanelState] = useState<{
+    place: string;
+    which: "filter" | "sort";
+    preview: Arrangement | null;
+  } | null>(null);
+  const here = panelState?.place === place ? panelState : null;
+  const panel = here?.which ?? null;
+  const preview = here?.preview ?? null;
+  const setPanel = (which: "filter" | "sort" | null) =>
+    setPanelState(which ? { place, which, preview: null } : null);
   const filterField = useRef<HTMLTextAreaElement>(null);
+  const openFilter = () => openAndFocus(() => setPanel("filter"), filterField);
   const filterButton = useRef<HTMLButtonElement>(null);
   const sortButton = useRef<HTMLButtonElement>(null);
   // Closing a panel puts focus back on the header button that owns it.
@@ -185,7 +188,6 @@ export function MainPane({
   const closePanel = useCallback(() => {
     const which = openPanel.current;
     setPanelState(null);
-    setPreviewState(null);
     if (which !== null) (which === "sort" ? sortButton : filterButton).current?.focus();
   }, []);
   const stopEditing = () => setEditingPlace(null);
@@ -254,17 +256,17 @@ export function MainPane({
   }, [held, place, loaded]);
   const saving = useRef<Promise<unknown>>(Promise.resolve());
   const saves = useRef(0);
-  const arranged = isArranged(arrangement);
-  const filterSet = arrangement.filter.trim() !== "";
-  const sortSet = arrangement.groups.length > 0 || arrangement.order.length > 0;
-  const headed = arranged && arrangement.groups.length > 0;
-  const arrangeTasks = useCallback(
-    (tasks: Task[]) => arrange(tasks, arrangement, loaded.projects, loaded.sections, loaded.labels, today),
-    [arrangement, loaded.projects, loaded.sections, loaded.labels, today],
-  );
+  const filterSet = hasFilter(arrangement);
+  const sortSet = hasSort(arrangement);
+  const arranged = filterSet || sortSet;
+  const headed = arrangement.groups.length > 0;
+  // keel-core's reading of the whole page, once per change; nothing is asked of it on a page with no arrangement.
   const whole = useMemo(
-    () => (arranged ? arrangeTasks(loaded.tasks) : null),
-    [arranged, arrangeTasks, loaded.tasks],
+    () =>
+      arranged
+        ? arrange(loaded.tasks, arrangement, loaded.projects, loaded.sections, loaded.labels, today)
+        : null,
+    [arranged, arrangement, loaded.tasks, loaded.projects, loaded.sections, loaded.labels, today],
   );
   // Saves reach the backend in the order they were made.
   const saveArrangement = (next: Arrangement) => {
@@ -278,13 +280,15 @@ export function MainPane({
     saving.current = saving.current.then(() => arrangeView(arrangePlace, next)).then(settle, settle);
   };
   // A filter that matched nothing says so; the page's own empty text is for pages with no tasks.
-  const nothingMatches =
-    whole !== null && arrangement.filter.trim() !== "" && whole.filter_problem === null && whole.shown === 0;
-  // Without headings the page keeps its own grouping and each list is shaped (filtered, ordered).
-  const shape = useMemo<((tasks: Task[]) => Task[]) | null>(
-    () => (arranged && !headed ? (tasks) => arrangeTasks(tasks).groups[0]?.tasks ?? [] : null),
-    [arranged, headed, arrangeTasks],
-  );
+  const nothingMatches = whole !== null && filterSet && whole.filter_problem === null && whole.shown === 0;
+  // Without headings the page keeps its own grouping, and each of its lists keeps the tasks
+  // the whole-page reading kept, in that reading's order.
+  const shape = useMemo<((tasks: Task[]) => Task[]) | null>(() => {
+    if (whole === null || headed) return null;
+    const at = new Map((whole.groups[0]?.tasks ?? []).map((t, i) => [t.id, i]));
+    const pos = (t: Task) => at.get(t.id) ?? 0;
+    return (tasks) => tasks.filter((t) => at.has(t.id)).sort((a, b) => pos(a) - pos(b));
+  }, [whole, headed]);
   const list = (tasks: Task[]) => (
     <CardList
       cards={cards(tasks, loaded.all, mode, today)}
@@ -469,7 +473,7 @@ export function MainPane({
                       if (preview !== null && preview.filter.trim() !== saved.filter.trim())
                         saveArrangement(preview);
                       closePanel();
-                    } else openAndFocus(() => setPanel("filter"), filterField);
+                    } else openFilter();
                   }}
                 >
                   <FunnelIcon />
@@ -500,7 +504,9 @@ export function MainPane({
                 anchor={filterButton}
                 fieldRef={filterField}
                 onDraft={(query) =>
-                  setPreviewState(query === null ? null : { place, arrangement: { ...saved, filter: query } })
+                  setPanelState(
+                    (p) => p && { ...p, preview: query === null ? null : { ...saved, filter: query } },
+                  )
                 }
                 onSave={(query) => saveArrangement({ ...saved, filter: query })}
                 onFilterAdded={onChanged}
@@ -579,11 +585,9 @@ export function MainPane({
               <ArrangeBar
                 arrangement={arrangement}
                 problem={whole?.filter_problem ?? null}
-                onOpen={(which) =>
-                  which === "filter" ? openAndFocus(() => setPanel("filter"), filterField) : setPanel(which)
-                }
+                onOpen={(which) => (which === "filter" ? openFilter() : setPanel(which))}
                 onClearFilter={() => saveArrangement({ ...arrangement, filter: "" })}
-                onResetSort={() => saveArrangement({ ...arrangement, groups: [], order: [] })}
+                onResetSort={() => saveArrangement(resetSort(arrangement))}
               />
               {loaded.filterError !== null ? (
                 <div className="filter-problem big-problem">{`This filter can’t run: ${loaded.filterError}`}</div>

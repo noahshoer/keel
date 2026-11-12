@@ -21,10 +21,6 @@ title: string | null,
  */
 starts_title: boolean, 
 /**
- * Distinct tasks under this title line (valid where `starts_title`).
- */
-title_count: number, 
-/**
  * The innermost level when there are two or more.
  */
 sub: SubHeading | null, tasks: Array<Task>, };

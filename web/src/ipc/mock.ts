@@ -4,6 +4,8 @@
 // and the dated views return fixture ids (recurrence, filters and grouping
 // stay in keel-core). Every handler returns a copy, and `resetMock()` (run
 // before each test, src/test/setup.ts) starts over from the fixtures.
+
+import { isArranged, samePlace } from "../arrange/place";
 import type {
   Action,
   Due,
@@ -207,11 +209,8 @@ function apply(a: Action): string | null {
       return null;
     }
     case "view_arrange": {
-      const same = (p: PlacedArrangement) =>
-        p.place.kind === a.place.kind && (p.place as { id?: string }).id === (a.place as { id?: string }).id;
-      state.arrangements = state.arrangements.filter((p) => !same(p));
-      const { filter, groups, order } = a.arrangement;
-      if (filter.trim() !== "" || groups.length > 0 || order.length > 0) {
+      state.arrangements = state.arrangements.filter((p) => !samePlace(p.place, a.place));
+      if (isArranged(a.arrangement)) {
         state.arrangements.push(structuredClone({ place: a.place, arrangement: a.arrangement }));
       }
       return null;

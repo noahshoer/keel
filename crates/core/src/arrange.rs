@@ -224,9 +224,6 @@ pub struct ArrangedGroup {
     pub title: Option<String>,
     /// This group opens a new title line.
     pub starts_title: bool,
-    /// Distinct tasks under this title line (valid where `starts_title`).
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
-    pub title_count: usize,
     /// The innermost level when there are two or more.
     pub sub: Option<SubHeading>,
     pub tasks: Vec<Task>,
@@ -260,6 +257,8 @@ struct Heading {
 struct Entry {
     task: Task,
     headings: Vec<Heading>,
+    /// The task's value at each order level, worked out once (not per comparison).
+    order: Vec<Option<Rank>>,
 }
 
 fn known_label<'a>(names: &ArrangeNames<'a>, name: &str) -> Option<(usize, &'a Label)> {
@@ -301,11 +300,7 @@ fn day_heading(
         ),
         Some(d) => (
             format!("{prefix}:{d}"),
-            (
-                1,
-                i64::from(chrono::Datelike::num_days_from_ce(&d)),
-                String::new(),
-            ),
+            (1, day_rank(d), String::new()),
             match (d - today).num_days() {
                 0 => format!("{} · Today · {}", short_date(d), weekday_long(d)),
                 1 => format!("{} · Tomorrow · {}", short_date(d), weekday_long(d)),
@@ -430,6 +425,11 @@ fn heading_for(
     }
 }
 
+/// A day as a number that sorts in date order.
+fn day_rank(d: NaiveDate) -> i64 {
+    i64::from(chrono::Datelike::num_days_from_ce(&d))
+}
+
 /// The value one order level sorts a task by; `None` is a missing value.
 fn order_rank(field: SortField, task: &Task, names: &ArrangeNames) -> Option<Rank> {
     match field {
@@ -456,19 +456,13 @@ fn order_rank(field: SortField, task: &Task, names: &ArrangeNames) -> Option<Ran
             let time = due_time(task).map_or(i64::MAX, |t| {
                 i64::from(chrono::Timelike::num_seconds_from_midnight(&t))
             });
-            (
-                i64::from(chrono::Datelike::num_days_from_ce(&d)),
-                time,
-                String::new(),
-            )
+            (day_rank(d), time, String::new())
         }),
-        SortField::Deadline => task.deadline.as_deref().and_then(parse_day).map(|d| {
-            (
-                i64::from(chrono::Datelike::num_days_from_ce(&d)),
-                0,
-                String::new(),
-            )
-        }),
+        SortField::Deadline => task
+            .deadline
+            .as_deref()
+            .and_then(parse_day)
+            .map(|d| (day_rank(d), 0, String::new())),
     }
 }
 
@@ -562,6 +556,11 @@ pub fn arrange(
         } else {
             vec![None]
         };
+        let order: Vec<Option<Rank>> = arrangement
+            .order
+            .iter()
+            .map(|level| order_rank(level.field, &task, names))
+            .collect();
         for label in labels {
             let headings = fields
                 .iter()
@@ -579,6 +578,7 @@ pub fn arrange(
             entries.push(Entry {
                 task: task.clone(),
                 headings,
+                order: order.clone(),
             });
         }
     }
@@ -590,12 +590,8 @@ pub fn arrange(
                 return c;
             }
         }
-        for level in &arrangement.order {
-            let c = cmp_missing_last(
-                order_rank(level.field, &a.task, names),
-                order_rank(level.field, &b.task, names),
-                level.reversed,
-            );
+        for ((x, y), level) in a.order.iter().zip(&b.order).zip(&arrangement.order) {
+            let c = cmp_missing_last(x.as_ref(), y.as_ref(), level.reversed);
             if c.is_ne() {
                 return c;
             }
@@ -638,7 +634,6 @@ pub fn arrange(
             key,
             title,
             starts_title: false,
-            title_count: 0,
             sub,
             tasks: vec![e.task],
         });
@@ -649,7 +644,6 @@ pub fn arrange(
             key: "all".into(),
             title: None,
             starts_title: false,
-            title_count: 0,
             sub: None,
             tasks: Vec::new(),
         });
@@ -664,22 +658,10 @@ pub fn arrange(
         .iter()
         .map(|k| &k[..prefix_len.min(k.len())])
         .collect();
-    for i in 0..groups.len() {
-        if fields.is_empty() {
-            break;
+    if !fields.is_empty() {
+        for (i, group) in groups.iter_mut().enumerate() {
+            group.starts_title = i == 0 || prefixes[i] != prefixes[i - 1];
         }
-        if i > 0 && prefixes[i] == prefixes[i - 1] {
-            continue;
-        }
-        groups[i].starts_title = true;
-        let mut ids = std::collections::HashSet::new();
-        for j in i..groups.len() {
-            if prefixes[j] != prefixes[i] {
-                break;
-            }
-            ids.extend(groups[j].tasks.iter().map(|t| t.id.clone()));
-        }
-        groups[i].title_count = ids.len();
     }
 
     let shown = groups
@@ -891,8 +873,6 @@ mod tests {
         );
         let starts: Vec<bool> = r.groups.iter().map(|g| g.starts_title).collect();
         assert_eq!(starts, [true, true, false, true]);
-        assert_eq!(r.groups[1].title_count, 4);
-        assert_eq!(r.groups[0].title_count, 1);
     }
 
     #[test]

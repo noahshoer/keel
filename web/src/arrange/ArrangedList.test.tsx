@@ -13,7 +13,6 @@ beforeAll(() => {
 const group = (g: Partial<ArrangedGroup> & Pick<ArrangedGroup, "key">): ArrangedGroup => ({
   title: null,
   starts_title: false,
-  title_count: 0,
   sub: null,
   tasks: [],
   ...g,
@@ -29,7 +28,6 @@ it("draws a title line only where a run starts, and tints a label sub-heading", 
             key: "a/b",
             title: "Home › Chores",
             starts_title: true,
-            title_count: 1,
             sub: { text: "errand", label_color: "orange" },
             tasks: laundry,
           }),
@@ -63,9 +61,7 @@ it("a title line counts the cards drawn under it, not the tasks", () => {
   const { container } = render(
     <TaskNavProvider all={tasks}>
       <ArrangedList
-        groups={[
-          group({ key: "a", title: "Home", starts_title: true, title_count: family.length, tasks: family }),
-        ]}
+        groups={[group({ key: "a", title: "Home", starts_title: true, tasks: family })]}
         all={tasks}
         mode="TopLevel"
         today="2026-01-01"

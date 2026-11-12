@@ -2,10 +2,11 @@
 // filter's query and the sort's summary, each with a ✕ that clears it. A page
 // with no arrangement draws nothing at all.
 
+import { useMemo } from "react";
 import type { Arrangement } from "../bindings";
 import { arrangementSummary } from "../core";
 import { FunnelIcon, SortIcon, XSmallIcon } from "../shell/icons";
-import { isArranged } from "./place";
+import { hasFilter, hasSort } from "./place";
 
 export function ArrangeBar({
   arrangement,
@@ -21,9 +22,10 @@ export function ArrangeBar({
   onClearFilter: () => void;
   onResetSort: () => void;
 }) {
-  if (!isArranged(arrangement)) return null;
-  const filtered = arrangement.filter.trim() !== "";
-  const sorted = arrangement.groups.length > 0 || arrangement.order.length > 0;
+  const filtered = hasFilter(arrangement);
+  const sorted = hasSort(arrangement);
+  const summary = useMemo(() => (sorted ? arrangementSummary(arrangement) : ""), [sorted, arrangement]);
+  if (!filtered && !sorted) return null;
   return (
     <div className="arrange-bar">
       {filtered ? (
@@ -44,7 +46,7 @@ export function ArrangeBar({
         <span className="scope-chip arrange-chip">
           <button type="button" className="arrange-chip-main" onClick={() => onOpen("sort")}>
             <SortIcon />
-            <span className="arrange-chip-text">{arrangementSummary(arrangement)}</span>
+            <span className="arrange-chip-text">{summary}</span>
           </button>
           <button type="button" className="arrange-chip-x" aria-label="Reset sort" onClick={onResetSort}>
             <XSmallIcon />
