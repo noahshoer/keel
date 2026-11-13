@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
-use crate::model::Task;
+use crate::model::{contains_name, Task};
 
 /// Search results for the Search view.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -32,7 +32,7 @@ impl SearchScope {
     pub fn contains(&self, task: &Task) -> bool {
         match self {
             SearchScope::Project { id } => task.project_id == *id,
-            SearchScope::Label { name } => task.labels.iter().any(|l| l.eq_ignore_ascii_case(name)),
+            SearchScope::Label { name } => contains_name(&task.labels, name),
         }
     }
 }

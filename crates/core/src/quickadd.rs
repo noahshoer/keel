@@ -8,7 +8,7 @@
 use chrono::{Duration, Months, NaiveDate, NaiveTime};
 
 use crate::ids::Id;
-use crate::model::{ymd, Priority, Project, Section};
+use crate::model::{contains_name, ymd, Priority, Project, Section};
 use crate::phrases::{
     match_date, match_deadline, match_name, match_priority, match_repeat, match_time, number_word,
     resolve_repeat, sigil_name, tokens, unread_every, RepeatSpec, Token,
@@ -293,7 +293,7 @@ fn parse_tokens(
             }
         }
         if let Some(name) = sigil_name(&t[i].raw, "@") {
-            if !q.labels.iter().any(|l| l.eq_ignore_ascii_case(&name)) {
+            if !contains_name(&q.labels, &name) {
                 q.labels.push(name);
             }
             take(&mut used, &mut spans, i, 1, SpanKind::Label);

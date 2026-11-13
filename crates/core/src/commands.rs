@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use crate::arrange::{Arrangement, PlacedArrangement, ViewPlace};
 use crate::ids::Id;
 use crate::model::{
-    parse_ymd, parse_ymd_prefix, ymd, Due, Filter, Label, LastCompletion, Priority, Project,
-    Reminder, Section, Task,
+    contains_name, parse_ymd, parse_ymd_prefix, ymd, Due, Filter, Label, LastCompletion, Priority,
+    Project, Reminder, Section, Task,
 };
 use crate::recurrence::Recurrence;
 use crate::repository::{RepoError, Repository};
@@ -483,9 +483,7 @@ pub fn apply_at<R: Repository>(
                     {
                         if new.recurrence.as_ref() == Some(rule) && due_date(old) != due_date(new) {
                             new.moved_from = moved_occurrence(old, new, rule);
-                            task.streak_current = 0;
-                            task.streak_last_period = None;
-                            task.last_completion = None;
+                            task.reset_streak();
                         } else if new.recurrence.as_ref() == Some(rule) {
                             new.moved_from = old.moved_from.clone();
                         }
@@ -493,9 +491,7 @@ pub fn apply_at<R: Repository>(
                     let new_rule = task.due.as_ref().and_then(|d| d.recurrence.clone());
                     // A different schedule invalidates the occurrence history.
                     if new_rule != old_rule {
-                        task.streak_current = 0;
-                        task.streak_last_period = None;
-                        task.last_completion = None;
+                        task.reset_streak();
                     }
                 }
                 task.updated_at = Utc::now();
@@ -696,7 +692,7 @@ pub fn apply_at<R: Repository>(
                     .map(|l| l.name.clone());
                 let new_name = target.clone().unwrap_or_else(|| name.clone());
                 for mut task in repo.list_all_tasks()? {
-                    if !task.labels.iter().any(|n| n.eq_ignore_ascii_case(&old)) {
+                    if !contains_name(&task.labels, &old) {
                         continue;
                     }
                     let mut renamed: Vec<String> = Vec::new();
@@ -706,7 +702,7 @@ pub fn apply_at<R: Repository>(
                         } else {
                             n
                         };
-                        if !renamed.iter().any(|r| r.eq_ignore_ascii_case(&n)) {
+                        if !contains_name(&renamed, &n) {
                             renamed.push(n);
                         }
                     }

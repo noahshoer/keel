@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::calendar::{MONTHS_SHORT, WEEKDAYS_LONG};
 use crate::ids::Id;
-use crate::model::{parse_ymd_prefix, ymd, Due, Label, Task};
+use crate::model::{contains_name, parse_ymd_prefix, ymd, Due, Label, Task};
 use crate::streak;
 
 /// Which colored due chip a date gets, relative to today.
@@ -281,7 +281,7 @@ pub struct LabelChoice {
 /// Whether `name` is among the chosen labels, matching as `label_groups` does.
 pub fn label_chosen(selected: &[String], name: &str) -> bool {
     let name = name.trim();
-    selected.iter().any(|s| s.eq_ignore_ascii_case(name))
+    contains_name(selected, name)
 }
 
 /// The labels whose names contain `query` (any case), each marked if chosen.

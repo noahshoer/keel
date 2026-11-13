@@ -115,6 +115,12 @@ pub fn parse_ymd_prefix(s: &str) -> Option<NaiveDate> {
     s.get(..10).and_then(parse_ymd)
 }
 
+/// Whether `name` is in `names`, ignoring ASCII case (how label names on a
+/// task compare). Neither side is trimmed.
+pub fn contains_name(names: &[String], name: &str) -> bool {
+    names.iter().any(|n| n.eq_ignore_ascii_case(name))
+}
+
 /// `d` as `YYYY-MM-DD`, the format every stored date uses.
 pub fn ymd(d: NaiveDate) -> String {
     d.format("%Y-%m-%d").to_string()
@@ -217,6 +223,14 @@ impl Task {
         self.reopens_on = None;
         self.updated_at = Utc::now();
         true
+    }
+
+    /// Forgets the current run and the completion undo would put back (a new
+    /// schedule starts the streak over); the best run stays.
+    pub fn reset_streak(&mut self) {
+        self.streak_current = 0;
+        self.streak_last_period = None;
+        self.last_completion = None;
     }
 
     /// A new task in `project_id` with sensible defaults (streaks off).
@@ -456,9 +470,19 @@ impl Reminder {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_ymd, parse_ymd_prefix, ymd, Due, Priority, Task};
+    use super::{contains_name, parse_ymd, parse_ymd_prefix, ymd, Due, Priority, Task};
     use crate::ids::Id;
     use chrono::NaiveDate;
+
+    #[test]
+    fn contains_name_ignores_ascii_case_only() {
+        let names = vec!["Home".to_string(), "Éclair".to_string()];
+        assert!(contains_name(&names, "home"));
+        assert!(contains_name(&names, "HOME"));
+        assert!(!contains_name(&names, "home "), "no trimming");
+        assert!(!contains_name(&names, "éclair"), "ASCII case only");
+        assert!(!contains_name(&[], "home"));
+    }
 
     #[test]
     fn ymd_round_trips_a_date() {
@@ -540,6 +564,28 @@ mod tests {
         assert_eq!(Priority::from_api(1), Priority::None);
         assert_eq!(Priority::from_api(0), Priority::None);
         assert_eq!(Priority::from_api(9), Priority::None);
+    }
+
+    #[test]
+    fn reset_streak_keeps_only_the_best() {
+        let mut task = Task::new("run", Id::new());
+        task.streak_current = 4;
+        task.streak_best = 9;
+        task.streak_last_period = Some("2026-10-19".to_string());
+        task.last_completion = Some(super::LastCompletion {
+            moved_to: "2026-10-20".to_string(),
+            date: "2026-10-19".to_string(),
+            streak_current: 3,
+            streak_best: 9,
+            streak_last_period: None,
+            moved_from: None,
+            completed_on: None,
+        });
+        task.reset_streak();
+        assert_eq!(task.streak_current, 0);
+        assert_eq!(task.streak_best, 9);
+        assert_eq!(task.streak_last_period, None);
+        assert_eq!(task.last_completion, None);
     }
 
     #[test]

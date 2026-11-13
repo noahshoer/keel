@@ -10,7 +10,8 @@ use crate::calendar::{MONTHS_SHORT, WEEKDAYS_SHORT};
 use crate::commands::{Action, DueEdit};
 use crate::ids::Id;
 use crate::model::{
-    parse_ymd, ymd, Due, Label, Priority, Project, Reminder, ReminderType, Section, Task,
+    contains_name, parse_ymd, ymd, Due, Label, Priority, Project, Reminder, ReminderType, Section,
+    Task,
 };
 use crate::phrases::{phrase_name, same_name};
 use crate::quickadd::{self, QuickAdd, Span, SpanKind};
@@ -814,7 +815,7 @@ pub fn toggle_label(
     let mut names = v.labels.clone();
     if quick_add {
         for l in parse_title(v, projects, sections, today).labels {
-            if !names.iter().any(|n| n.eq_ignore_ascii_case(&l)) {
+            if !contains_name(&names, &l) {
                 names.push(l);
             }
         }
@@ -894,7 +895,7 @@ pub fn new_task_from(v: &EditorValues, qa: &QuickAdd, today: NaiveDate) -> NewTa
         .or_else(|| rule_of(v, &date, None, today));
     let mut labels = v.labels.clone();
     for l in &qa.labels {
-        if !labels.iter().any(|x| x.eq_ignore_ascii_case(l)) {
+        if !contains_name(&labels, l) {
             labels.push(l.clone());
         }
     }
@@ -1072,7 +1073,7 @@ pub fn title_segments(value: &str, spans: &[Span]) -> Vec<TitleSegment> {
 fn shown_values(v: &EditorValues, qa: &QuickAdd) -> EditorValues {
     let mut labels = v.labels.clone();
     for l in &qa.labels {
-        if !labels.iter().any(|n| n.eq_ignore_ascii_case(l)) {
+        if !contains_name(&labels, l) {
             labels.push(l.clone());
         }
     }
@@ -1510,7 +1511,7 @@ pub fn add_plan(
     let mut new_labels: Vec<String> = Vec::new();
     for name in qa.labels.iter().chain(&v.labels) {
         let known = labels.iter().any(|l| l.name.eq_ignore_ascii_case(name));
-        if !known && !new_labels.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+        if !known && !contains_name(&new_labels, name) {
             new_labels.push(name.clone());
         }
     }
