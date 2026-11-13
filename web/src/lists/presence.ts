@@ -11,7 +11,7 @@ import { prefersReducedMotion } from "../shell/device";
 /** How long a collapse or grow takes (`.presence` in app.css matches it). */
 export const LEAVE_MS = 280;
 
-export type Presence = "out" | "entering" | "shown" | "leaving";
+type Presence = "out" | "entering" | "shown" | "leaving";
 type PresenceEvent = "show" | "hide" | "frame" | "done";
 
 /**

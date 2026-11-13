@@ -9,30 +9,30 @@ export const NARROW_MAX = 700;
 /** The task view is a bottom sheet below this width, a panel at it and above. */
 export const SHEET_MAX = WIDE_MIN;
 /** A swipe must travel at least this far sideways... */
-export const MIN_DISTANCE = 60;
+const MIN_DISTANCE = 60;
 /** ...and stay mostly horizontal (|dy| under this share of |dx|). */
-export const MAX_SLOPE = 0.6;
+const MAX_SLOPE = 0.6;
 
 /** Released past this far down, the task sheet closes... */
-export const CLOSE_DISTANCE = 80;
+const CLOSE_DISTANCE = 80;
 /** ...or sooner on a downward flick this fast (px per ms)... */
-export const FLICK_SPEED = 0.5;
+const FLICK_SPEED = 0.5;
 /**
  * ...that travelled at least this far. From the large height, only a flick
  * this fast closes it outright (a normal flick steps down to medium).
  */
-export const FLICK_MIN = 16;
-export const STRONG_FLICK = 1.5;
+const FLICK_MIN = 16;
+const STRONG_FLICK = 1.5;
 /** A touch on the sheet is a tap until it moves this far either way. */
-export const DRAG_SLOP = 8;
+const DRAG_SLOP = 8;
 /** A swipe back starts this close to the sheet's left edge... */
 export const EDGE_WIDTH = 24;
 /**
  * ...and goes back when released past this share of the width, or on a
  * rightward flick this fast (px per ms) that travelled at least FLICK_MIN x 2.
  */
-export const BACK_SHARE = 0.4;
-export const BACK_FLICK = 0.5;
+const BACK_SHARE = 0.4;
+const BACK_FLICK = 0.5;
 
 /** Seconds the sheet and the swipe back take to settle, and their easing. */
 export const SETTLE_S = 0.3;
@@ -159,7 +159,7 @@ export function dragFrom(detent: Detent, settling: number | null, medium: number
 }
 
 /** Where a released drag sends the sheet; "close" slides down and the view closes. */
-export type Settle = Detent | "close";
+type Settle = Detent | "close";
 
 /**
  * The release decision. `y` is the sheet's offset below its large height,
@@ -231,7 +231,7 @@ export function atEdge(x: number): boolean {
 }
 
 /** What a touch that began at the left edge of the sheet turns into. */
-export type EdgeBack = "pending" | "drag" | "ignore";
+type EdgeBack = "pending" | "drag" | "ignore";
 
 /**
  * `can`: the touch began at the edge of a sheet that has a Back (inside a
@@ -286,7 +286,7 @@ export function panProgress(dx: number, dir: 1 | -1, range: number): number {
 }
 
 /** Past this far, a released pan carries on. */
-export const PAN_COMMIT = 0.5;
+const PAN_COMMIT = 0.5;
 
 /**
  * Whether a released pan carries on (true) or springs back: past halfway, or

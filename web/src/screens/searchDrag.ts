@@ -20,7 +20,7 @@ import { makeTimers } from "../gestures/timers";
 import { prefersReducedMotion } from "../shell/device";
 import { ghost } from "./ghost";
 
-export type SearchDragControl = {
+type SearchDragControl = {
   isSearch: () => boolean;
   drawerOpen: () => boolean;
   /** Back: the drag began: go to the page Search was opened from (it loads under the ghost). */

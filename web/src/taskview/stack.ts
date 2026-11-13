@@ -3,7 +3,7 @@
 import type { Id, Task } from "../bindings";
 import { chain } from "../core";
 
-export type ViewStack = readonly Id[];
+type ViewStack = readonly Id[];
 
 /** `id` on top of its live ancestors, top-level first, so Back walks up to the parent. */
 export function openChain(id: Id, all: Task[]): Id[] {

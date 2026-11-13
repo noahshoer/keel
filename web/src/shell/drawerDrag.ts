@@ -19,7 +19,7 @@ import { EASE_SOFT } from "../gestures/sheet-rules";
 import { makeTimers } from "../gestures/timers";
 
 /** What the drawer drag needs from the app. */
-export type DrawerControl = {
+type DrawerControl = {
   isOpen: () => boolean;
   /** False where the page's own swipe takes over (the Search screen goes back). */
   canOpen: () => boolean;

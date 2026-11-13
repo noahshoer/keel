@@ -54,7 +54,7 @@ export function textRoomUnderPicker(
 }
 
 /** `room` is the height of what's visible, which the task card has to fit in. */
-export type KeyboardState = { inset: number; up: boolean; room: number };
+type KeyboardState = { inset: number; up: boolean; room: number };
 
 /** The keyboard as Swift reports it starting to move (`window.keelKeyboard`), as `KEYBOARD_EVENT` carries it. */
 export type KeyboardMove = {
@@ -94,7 +94,7 @@ export function paceOf(m: KeyboardMove): Pace {
 const pickerRides = new WeakMap<HTMLElement, { anim: Animation; path: number[]; ms: number }>();
 
 /** How long a picker built during a ride takes to unroll up to its full height. */
-export const UNROLL_MS = 250;
+const UNROLL_MS = 250;
 /**
  * How far ahead of the ride the unroll's clip runs. The card's transform is
  * drawn by the compositor; a clip-path is worked out on the page's thread and

@@ -121,7 +121,7 @@ export async function loadView(view: View, showCompleted: boolean, today: string
   };
 }
 
-export type LoadState = { loaded: Loaded | null; error: string | null };
+type LoadState = { loaded: Loaded | null; error: string | null };
 
 /**
  * Loads `view` again whenever it, `showCompleted` or `reloadKey` changes.
