@@ -1,6 +1,8 @@
 use chrono::{Datelike, Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 
+use crate::calendar::{MONTHS_SHORT, WEEKDAYS_SHORT};
+
 /// A recurrence rule. Weekdays are 0 = Monday … 6 = Sunday.
 ///
 /// Interval rules carry an `anchor` (any occurrence) that fixes their phase.
@@ -98,11 +100,6 @@ fn last_of_month(date: NaiveDate) -> NaiveDate {
     monthly_date(date.year(), date.month(), 31)
 }
 
-const WEEKDAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
 /// "1st", "2nd", "3rd", "11th", "22nd".
 pub fn ordinal(n: u32) -> String {
     let suffix = match (n % 10, n % 100) {
@@ -135,7 +132,7 @@ fn every_n(n: u32, unit: &str) -> String {
 
 fn day_list(days: &[u8]) -> String {
     days.iter()
-        .filter_map(|d| WEEKDAYS.get(*d as usize).copied())
+        .filter_map(|d| WEEKDAYS_SHORT.get(*d as usize).copied())
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -272,7 +269,7 @@ impl Recurrence {
             Recurrence::Yearly { month, day } => {
                 format!(
                     "every year on {} {day}",
-                    MONTHS[(*month as usize).clamp(1, 12) - 1]
+                    MONTHS_SHORT[(*month as usize).clamp(1, 12) - 1]
                 )
             }
             Recurrence::MonthlyLastDay => "every last day of the month".to_string(),
@@ -281,7 +278,7 @@ impl Recurrence {
                 format!(
                     "every {} {}",
                     nth_word(*nth),
-                    WEEKDAYS[(*weekday as usize).min(6)]
+                    WEEKDAYS_SHORT[(*weekday as usize).min(6)]
                 )
             }
         }

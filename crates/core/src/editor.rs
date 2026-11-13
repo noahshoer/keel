@@ -6,6 +6,7 @@
 use chrono::{Datelike, Duration, NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};
 
+use crate::calendar::{MONTHS_SHORT, WEEKDAYS_SHORT};
 use crate::commands::{Action, DueEdit};
 use crate::ids::Id;
 use crate::model::{
@@ -976,8 +977,6 @@ pub fn reminders_text(reminders: &[ReminderDraft], today: NaiveDate) -> String {
     }
 }
 
-const DOW: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
 /// The date picker's shortcuts: (label, hint, date).
 pub fn quick_dates(today: NaiveDate) -> Vec<(&'static str, String, NaiveDate)> {
     let saturday =
@@ -987,21 +986,21 @@ pub fn quick_dates(today: NaiveDate) -> Vec<(&'static str, String, NaiveDate)> {
     vec![
         (
             "Today",
-            DOW[today.weekday().num_days_from_monday() as usize].to_string(),
+            WEEKDAYS_SHORT[today.weekday().num_days_from_monday() as usize].to_string(),
             today,
         ),
         (
             "Tomorrow",
-            DOW[tomorrow.weekday().num_days_from_monday() as usize].to_string(),
+            WEEKDAYS_SHORT[tomorrow.weekday().num_days_from_monday() as usize].to_string(),
             tomorrow,
         ),
-        ("This weekend", DOW[5].to_string(), saturday),
+        ("This weekend", WEEKDAYS_SHORT[5].to_string(), saturday),
         (
             "Next week",
             format!(
                 "Mon {} {}",
                 next_monday.day(),
-                &crate::calendar::MONTHS[next_monday.month0() as usize][..3]
+                MONTHS_SHORT[next_monday.month0() as usize]
             ),
             next_monday,
         ),

@@ -22,6 +22,25 @@ pub const MONTHS: [&str; 12] = [
     "December",
 ];
 
+/// Month names in three letters ("Jan" … "Dec").
+pub(crate) const MONTHS_SHORT: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/// Weekday names in three letters, Monday first ("Mon" … "Sun").
+pub(crate) const WEEKDAYS_SHORT: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/// Weekday names in full, Monday first.
+pub(crate) const WEEKDAYS_LONG: [&str; 7] = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+];
+
 /// One day in the grid.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -277,6 +296,12 @@ mod tests {
         assert_eq!(year_choices(today, 2040).last(), Some(&2040));
         assert_eq!(year_choices(today, 2020).first(), Some(&2020));
         assert_eq!(MONTHS[9], "October");
+        for (long, short) in MONTHS.iter().zip(MONTHS_SHORT) {
+            assert_eq!(&long[..3], short);
+        }
+        for (long, short) in WEEKDAYS_LONG.iter().zip(WEEKDAYS_SHORT) {
+            assert_eq!(&long[..3], short);
+        }
     }
 
     #[test]

@@ -6,6 +6,7 @@ use std::collections::HashSet;
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
+use crate::calendar::{MONTHS_SHORT, WEEKDAYS_LONG};
 use crate::ids::Id;
 use crate::model::{parse_ymd_prefix, ymd, Due, Label, Task};
 use crate::streak;
@@ -31,20 +32,6 @@ pub fn due_bucket(due: NaiveDate, today: NaiveDate) -> DueBucket {
         _ => DueBucket::Later,
     }
 }
-
-const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-const WEEKDAYS_LONG: [&str; 7] = [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
-];
 
 /// Todoist-style chip text: Today / Tomorrow / Yesterday / weekday / "3 Nov"
 /// (with the year when it differs from today's).
@@ -76,7 +63,7 @@ pub fn due_label(due: NaiveDate, today: NaiveDate) -> String {
         -1 => "Yesterday".to_string(),
         2..=6 => WEEKDAYS_LONG[due.weekday().num_days_from_monday() as usize].to_string(),
         _ => {
-            let month = MONTHS[due.month0() as usize];
+            let month = MONTHS_SHORT[due.month0() as usize];
             if due.year() == today.year() {
                 format!("{} {}", due.day(), month)
             } else {
@@ -608,7 +595,7 @@ pub enum DateGroupMode {
 
 /// "30 Oct".
 pub(crate) fn short_date(d: NaiveDate) -> String {
-    format!("{} {}", d.day(), MONTHS[d.month0() as usize])
+    format!("{} {}", d.day(), MONTHS_SHORT[d.month0() as usize])
 }
 
 pub(crate) fn weekday_long(d: NaiveDate) -> &'static str {
