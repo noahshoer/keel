@@ -311,15 +311,15 @@ export function App() {
   }
 
   return (
-    <CompletionIconContext.Provider value={icon}>
-      <ShowSubtasksContext.Provider value={subtasks}>
+    <CompletionIconContext value={icon}>
+      <ShowSubtasksContext value={subtasks}>
         <TaskNavProvider all={loaded?.all ?? []}>
           <Frame loaded={loaded} drawer={drawer} onCloseDrawer={() => setDrawer(false)}>
             {body}
           </Frame>
         </TaskNavProvider>
-      </ShowSubtasksContext.Provider>
-    </CompletionIconContext.Provider>
+      </ShowSubtasksContext>
+    </CompletionIconContext>
   );
 }
 

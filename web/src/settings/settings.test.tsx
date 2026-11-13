@@ -231,9 +231,9 @@ it("the sub-tasks switch is off by default, and is stored and passed up", async 
   backend();
   const setShow = vi.fn();
   render(
-    <ShowSubtasksContext.Provider value={{ show: false, setShow }}>
+    <ShowSubtasksContext value={{ show: false, setShow }}>
       <Settings onClose={vi.fn()} onImported={vi.fn()} icon="wave" setIcon={vi.fn()} />
-    </ShowSubtasksContext.Provider>,
+    </ShowSubtasksContext>,
   );
   await screen.findByText("Task reminders");
   expect(savedShowSubtasks()).toBe(false);
