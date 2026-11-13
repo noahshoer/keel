@@ -7,7 +7,7 @@ use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
-use crate::model::{Label, Task};
+use crate::model::{parse_ymd_prefix, ymd, Due, Label, Task};
 use crate::streak;
 
 /// Which colored due chip a date gets, relative to today.
@@ -61,7 +61,7 @@ pub fn moved_text(
 /// [`moved_text`] for a task's due: what a list row says about a moved occurrence.
 pub fn moved_note(task: &Task) -> Option<String> {
     let due = task.due.as_ref()?;
-    let parse = |s: &str| NaiveDate::parse_from_str(s.get(..10)?, "%Y-%m-%d").ok();
+    let parse = parse_ymd_prefix;
     moved_text(
         parse(due.moved_from.as_deref()?)?,
         parse(&due.date)?,
@@ -223,9 +223,8 @@ pub fn done_for_now(t: &Task, today: NaiveDate) -> bool {
 pub fn done_today(t: &Task, today: NaiveDate) -> bool {
     t.checked
         || (done_for_now(t, today)
-            && streak::undoable_completion(t, today).is_some_and(|u| {
-                u.completed_on.as_deref() == Some(today.format("%Y-%m-%d").to_string().as_str())
-            }))
+            && streak::undoable_completion(t, today)
+                .is_some_and(|u| u.completed_on.as_deref() == Some(ymd(today).as_str())))
 }
 
 /// Whether every sub-task its "x of y" counts is done (false with none).
@@ -535,10 +534,7 @@ pub fn time_label(t: chrono::NaiveTime) -> String {
 
 /// The calendar date of a task's due (`YYYY-MM-DD` or a datetime string).
 pub fn due_date_of(task: &Task) -> Option<NaiveDate> {
-    task.due
-        .as_ref()
-        .and_then(|d| d.date.get(..10))
-        .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+    task.due.as_ref().and_then(|d| parse_ymd_prefix(&d.date))
 }
 
 /// Whether the task has an occurrence `d` with `from <= d < to`. Its next date
@@ -556,9 +552,7 @@ pub fn occurs_in(task: &Task, from: NaiveDate, to: NaiveDate) -> bool {
     let Some(rule) = due.and_then(|d| d.recurrence.as_ref()) else {
         return false;
     };
-    let until = due
-        .and_then(|d| d.until.as_deref())
-        .and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok());
+    let until = due.and_then(Due::until_date);
     // The first date the rule contains on or after `from` (every later
     // occurrence is a date the rule contains), without walking up to it.
     let day = rule.next_after(from - chrono::Duration::days(1));
@@ -585,11 +579,7 @@ pub fn occurs_after(task: &Task, day: NaiveDate) -> bool {
         return false;
     };
     let next = rule.next_after(day.max(first));
-    match due
-        .until
-        .as_deref()
-        .and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok())
-    {
+    match due.until_date() {
         Some(u) => next <= u,
         None => true,
     }
@@ -1424,7 +1414,7 @@ mod date_group_tests {
         cards, date_groups, deadline_urgent, upcoming_tasks, CardMode, DateGroupMode, Progress,
     };
     use crate::ids::Id;
-    use crate::model::{Due, Task};
+    use crate::model::{ymd, Due, Task};
     use chrono::{Datelike, NaiveDate};
 
     fn d(y: i32, m: u32, day: u32) -> NaiveDate {
@@ -1436,7 +1426,7 @@ mod date_group_tests {
         t.id = Id::from(name);
         t.parent_id = parent.map(|p| p.id.clone());
         t.due = Some(Due {
-            date: due.format("%Y-%m-%d").to_string(),
+            date: ymd(due),
             timezone: None,
             string: String::new(),
             lang: "en".to_string(),
@@ -1725,13 +1715,13 @@ mod label_group_tests {
 mod sidebar_count_tests {
     use super::{sidebar_counts, ProjectCount};
     use crate::ids::Id;
-    use crate::model::{Due, Task};
+    use crate::model::{parse_ymd, Due, Task};
     use chrono::NaiveDate;
 
     const TODAY: &str = "2026-11-01";
 
     fn today() -> NaiveDate {
-        NaiveDate::parse_from_str(TODAY, "%Y-%m-%d").unwrap()
+        parse_ymd(TODAY).unwrap()
     }
 
     fn task(name: &str, project: &str, due: Option<&str>) -> Task {

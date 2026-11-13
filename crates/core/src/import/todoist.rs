@@ -6,7 +6,7 @@
 
 use chrono::NaiveDate;
 
-use crate::model::Priority;
+use crate::model::{parse_ymd, ymd, Priority};
 use crate::quickadd;
 use crate::recurrence::Recurrence;
 
@@ -270,8 +270,8 @@ fn read_date(text: &str, lang: &str, today: NaiveDate) -> DateRead {
             return DateRead::Read(dt.format("%Y-%m-%dT%H:%M:00").to_string(), None);
         }
     }
-    if let Ok(d) = NaiveDate::parse_from_str(text, "%Y-%m-%d") {
-        return DateRead::Read(d.format("%Y-%m-%d").to_string(), None);
+    if let Some(d) = parse_ymd(text) {
+        return DateRead::Read(ymd(d), None);
     }
     let q = quickadd::parse(&format!("x {text}"), today, &[], &[]);
     let only_a_date = q.content == "x"

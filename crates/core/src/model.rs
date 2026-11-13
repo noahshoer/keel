@@ -73,6 +73,29 @@ pub struct Due {
     pub moved_from: Option<String>,
 }
 
+impl Due {
+    /// The repeat's end ([`Due::until`]) as a date, when it is one.
+    pub fn until_date(&self) -> Option<NaiveDate> {
+        self.until.as_deref().and_then(parse_ymd)
+    }
+}
+
+/// A `YYYY-MM-DD` date: the whole of `s`, untrimmed.
+pub fn parse_ymd(s: &str) -> Option<NaiveDate> {
+    NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
+}
+
+/// The `YYYY-MM-DD` date in the first ten bytes of `s`, so a datetime
+/// (`YYYY-MM-DDTHH:MM…`) gives its day. `None` when `s` is shorter.
+pub fn parse_ymd_prefix(s: &str) -> Option<NaiveDate> {
+    s.get(..10).and_then(parse_ymd)
+}
+
+/// `d` as `YYYY-MM-DD`, the format every stored date uses.
+pub fn ymd(d: NaiveDate) -> String {
+    d.format("%Y-%m-%d").to_string()
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub enum DurationUnit {
@@ -161,10 +184,7 @@ pub struct LastCompletion {
 impl Task {
     /// Reopens the task if its `reopens_on` has come. True when it changed.
     pub fn reopen_if_due(&mut self, today: NaiveDate) -> bool {
-        let date = self
-            .reopens_on
-            .as_deref()
-            .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+        let date = self.reopens_on.as_deref().and_then(parse_ymd);
         if !date.is_some_and(|d| d <= today) {
             return false;
         }
@@ -421,8 +441,52 @@ impl Reminder {
 
 #[cfg(test)]
 mod tests {
-    use super::{Due, Priority, Task};
+    use super::{parse_ymd, parse_ymd_prefix, ymd, Due, Priority, Task};
     use crate::ids::Id;
+    use chrono::NaiveDate;
+
+    #[test]
+    fn ymd_round_trips_a_date() {
+        let d = NaiveDate::from_ymd_opt(2026, 3, 7).unwrap();
+        assert_eq!(ymd(d), "2026-03-07");
+        assert_eq!(parse_ymd("2026-03-07"), Some(d));
+    }
+
+    #[test]
+    fn parse_ymd_takes_the_whole_string() {
+        assert_eq!(parse_ymd(""), None);
+        assert_eq!(parse_ymd("2026-02-30"), None);
+        assert_eq!(parse_ymd("2026-03-07T09:00:00"), None);
+    }
+
+    #[test]
+    fn parse_ymd_prefix_reads_the_date_of_a_datetime() {
+        let d = NaiveDate::from_ymd_opt(2026, 3, 7).unwrap();
+        assert_eq!(parse_ymd_prefix("2026-03-07"), Some(d));
+        assert_eq!(parse_ymd_prefix("2026-03-07T09:00:00"), Some(d));
+        // Shorter than ten bytes is not a date, even one chrono would read.
+        assert_eq!(parse_ymd_prefix("2026-3-7"), None);
+        assert_eq!(parse_ymd_prefix(""), None);
+    }
+
+    #[test]
+    fn until_date_reads_the_repeat_end() {
+        let mut due = Due {
+            date: "2026-10-19".to_string(),
+            timezone: None,
+            string: "every day".to_string(),
+            lang: "en".to_string(),
+            is_recurring: false,
+            recurrence: None,
+            until: None,
+            moved_from: None,
+        };
+        assert_eq!(due.until_date(), None);
+        due.until = Some("2026-11-30".to_string());
+        assert_eq!(due.until_date(), NaiveDate::from_ymd_opt(2026, 11, 30));
+        due.until = Some("soon".to_string());
+        assert_eq!(due.until_date(), None);
+    }
 
     #[test]
     fn id_new_is_unique_and_sortable() {

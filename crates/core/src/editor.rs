@@ -8,7 +8,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::{Action, DueEdit};
 use crate::ids::Id;
-use crate::model::{Due, Label, Priority, Project, Reminder, ReminderType, Section, Task};
+use crate::model::{
+    parse_ymd, ymd, Due, Label, Priority, Project, Reminder, ReminderType, Section, Task,
+};
 use crate::phrases::{phrase_name, same_name};
 use crate::quickadd::{self, QuickAdd, Span, SpanKind};
 use crate::recurrence::{self, Recurrence};
@@ -158,7 +160,7 @@ impl EditorValues {
         match (self.date.is_empty(), self.time.is_empty()) {
             (true, true) => String::new(),
             (false, true) => self.date.clone(),
-            (true, false) => format!("{}T{}:00", today.format("%Y-%m-%d"), self.time),
+            (true, false) => format!("{}T{}:00", ymd(today), self.time),
             (false, false) => format!("{}T{}:00", self.date, self.time),
         }
     }
@@ -389,8 +391,7 @@ pub fn recurrence_for(
     existing: Option<Recurrence>,
     today: NaiveDate,
 ) -> Option<Recurrence> {
-    let anchor =
-        NaiveDate::parse_from_str(date.get(..10).unwrap_or(date), "%Y-%m-%d").unwrap_or(today);
+    let anchor = parse_ymd(date.get(..10).unwrap_or(date)).unwrap_or(today);
     match choice {
         "daily" => Some(Recurrence::Daily),
         "weekdays" => Some(Recurrence::Weekly(vec![0, 1, 2, 3, 4])),
@@ -452,17 +453,13 @@ pub struct RepeatReading {
 /// Reads a typed repeat, anchored on `date` (today when it's empty or past).
 /// `None` when the text isn't a repeat alone.
 pub fn read_repeat(text: &str, date: &str, today: NaiveDate) -> Option<RepeatReading> {
-    let start = NaiveDate::parse_from_str(date.get(..10).unwrap_or(date), "%Y-%m-%d")
-        .map_or(today, |d| d.max(today));
+    let start = parse_ymd(date.get(..10).unwrap_or(date)).map_or(today, |d| d.max(today));
     let q = quickadd::parse_repeat(text, today, start)?;
     let rule = q.recurrence?;
-    let until = q
-        .until
-        .map(|d| d.format("%Y-%m-%d").to_string())
-        .unwrap_or_default();
+    let until = q.until.map(ymd).unwrap_or_default();
     Some(RepeatReading {
         text: with_end(repeat_text(&rule), Some(&until)),
-        date: q.date.unwrap_or(start).format("%Y-%m-%d").to_string(),
+        date: ymd(q.date.unwrap_or(start)),
         time: q
             .time
             .map(|t| t.format("%H:%M").to_string())
@@ -507,7 +504,7 @@ pub fn repeat_options(
     keep_label: Option<&str>,
     today: NaiveDate,
 ) -> Vec<(String, String)> {
-    let anchor = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap_or(today);
+    let anchor = parse_ymd(date).unwrap_or(today);
     let mut opts = vec![
         ("none".to_string(), "No repeat".to_string()),
         ("daily".to_string(), "Every day".to_string()),
@@ -540,7 +537,7 @@ pub fn repeat_chip_text(repeat: &str, opts: &[(String, String)]) -> String {
 
 /// A repeat's text with its end: "Every day until Oct 21".
 fn with_end(text: String, until: Option<&str>) -> String {
-    match until.and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok()) {
+    match until.and_then(parse_ymd) {
         Some(end) => format!("{text} until {}", end.format("%b %-d")),
         None => text,
     }
@@ -747,10 +744,7 @@ pub fn apply_pick(
         typed_goal = qa.streak_goal;
         let mut kinds = kinds_for(pick).to_vec();
         if let Pick::Date { date, .. } = pick {
-            let shown = qa
-                .date
-                .map(|d| d.format("%Y-%m-%d").to_string())
-                .unwrap_or_else(|| v.date.clone());
+            let shown = qa.date.map(ymd).unwrap_or_else(|| v.date.clone());
             if *date != shown {
                 kinds.extend([SpanKind::Repeat, SpanKind::Streak]);
             }
@@ -807,7 +801,7 @@ pub fn apply_pick(
     }
     // A repeat always has a date: today, by default.
     if v.repeat != "none" && v.date.is_empty() {
-        v.date = today.format("%Y-%m-%d").to_string();
+        v.date = ymd(today);
     }
 }
 
@@ -894,8 +888,8 @@ pub fn new_task_from(v: &EditorValues, qa: &QuickAdd, today: NaiveDate) -> NewTa
     // A typed date wins; a picked time goes with it unless a time was typed.
     let date = match (qa.date, qa.time) {
         (Some(d), None) => match NaiveTime::parse_from_str(&v.time, "%H:%M") {
-            Ok(t) => format!("{}T{}", d.format("%Y-%m-%d"), t.format("%H:%M:00")),
-            Err(_) => d.format("%Y-%m-%d").to_string(),
+            Ok(t) => format!("{}T{}", ymd(d), t.format("%H:%M:00")),
+            Err(_) => ymd(d),
         },
         _ => qa.due_string().unwrap_or_else(|| v.due_string(today)),
     };
@@ -923,10 +917,7 @@ pub fn new_task_from(v: &EditorValues, qa: &QuickAdd, today: NaiveDate) -> NewTa
         labels,
         section_id,
         parent_id: v.parent_id.clone(),
-        deadline: qa
-            .deadline
-            .map(|d| d.format("%Y-%m-%d").to_string())
-            .unwrap_or_else(|| v.deadline.clone()),
+        deadline: qa.deadline.map(ymd).unwrap_or_else(|| v.deadline.clone()),
         until: shown_until(v, qa),
     }
 }
@@ -934,7 +925,7 @@ pub fn new_task_from(v: &EditorValues, qa: &QuickAdd, today: NaiveDate) -> NewTa
 /// The repeat's end: a typed repeat brings its own (or none).
 fn shown_until(v: &EditorValues, qa: &QuickAdd) -> String {
     match (&qa.recurrence, qa.until) {
-        (Some(_), Some(end)) => end.format("%Y-%m-%d").to_string(),
+        (Some(_), Some(end)) => ymd(end),
         (Some(_), None) => String::new(),
         (None, _) => v.until.clone(),
     }
@@ -1108,10 +1099,7 @@ fn shown_values(v: &EditorValues, qa: &QuickAdd) -> EditorValues {
         (None, _) => (v.project_id.clone(), v.section_id.clone()),
     };
     EditorValues {
-        date: qa
-            .date
-            .map(|d| d.format("%Y-%m-%d").to_string())
-            .unwrap_or_else(|| v.date.clone()),
+        date: qa.date.map(ymd).unwrap_or_else(|| v.date.clone()),
         time: qa
             .time
             .map(|t| t.format("%H:%M").to_string())
@@ -1120,10 +1108,7 @@ fn shown_values(v: &EditorValues, qa: &QuickAdd) -> EditorValues {
             .priority
             .map(|p| (5 - p.to_api()).to_string())
             .unwrap_or_else(|| v.priority.clone()),
-        deadline: qa
-            .deadline
-            .map(|d| d.format("%Y-%m-%d").to_string())
-            .unwrap_or_else(|| v.deadline.clone()),
+        deadline: qa.deadline.map(ymd).unwrap_or_else(|| v.deadline.clone()),
         until: shown_until(v, qa),
         labels,
         project_id,
@@ -1235,12 +1220,12 @@ pub fn editor_view(
     } else {
         v.repeat.clone()
     };
-    let date = NaiveDate::parse_from_str(&shown.date, "%Y-%m-%d").ok();
+    let date = parse_ymd(&shown.date);
     let time = NaiveTime::parse_from_str(&shown.time, "%H:%M").ok();
-    let deadline = NaiveDate::parse_from_str(&shown.deadline, "%Y-%m-%d").ok();
+    let deadline = parse_ymd(&shown.deadline);
     let mut date_chip = date_chip(date, time, today);
     // A moved occurrence says which day it stands in for, while it's off the repeat.
-    let moved = NaiveDate::parse_from_str(&shown.moved_from, "%Y-%m-%d").ok();
+    let moved = parse_ymd(&shown.moved_from);
     if let (Some(from), Some(day), Some(rule)) = (moved, date, &repeat_rule) {
         if let Some(note) = views::moved_text(from, day, rule) {
             date_chip.0 = format!("{} · {}", date_chip.0, note.replacen("Moved", "moved", 1));

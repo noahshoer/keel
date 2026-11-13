@@ -4,7 +4,7 @@
 
 use chrono::NaiveDate;
 
-use crate::model::{LastCompletion, Task};
+use crate::model::{parse_ymd, parse_ymd_prefix, ymd, LastCompletion, Task};
 use crate::recurrence::Recurrence;
 
 fn rule(task: &Task) -> Option<Recurrence> {
@@ -12,9 +12,7 @@ fn rule(task: &Task) -> Option<Recurrence> {
 }
 
 fn last_period(task: &Task) -> Option<NaiveDate> {
-    task.streak_last_period
-        .as_deref()
-        .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+    task.streak_last_period.as_deref().and_then(parse_ymd)
 }
 
 /// A streak in words, in the unit its repeat counts: "4 day streak", or "Streak
@@ -53,7 +51,7 @@ pub fn credit_completion(task: &mut Task, today: NaiveDate) {
         _ => task.streak_current = 1,
     }
     task.streak_best = task.streak_best.max(task.streak_current);
-    task.streak_last_period = Some(today.format("%Y-%m-%d").to_string());
+    task.streak_last_period = Some(ymd(today));
 }
 
 /// The completion that undoing would put back, if there is one. One from before
@@ -66,7 +64,7 @@ pub fn undoable_completion(task: &Task, today: NaiveDate) -> Option<LastCompleti
         }
     }
     let rule = due.recurrence.as_ref()?;
-    let moved_to = NaiveDate::parse_from_str(due.date.get(..10)?, "%Y-%m-%d").ok()?;
+    let moved_to = parse_ymd_prefix(&due.date)?;
     if !task.streak_enabled
         || last_period(task) != Some(today)
         || rule.next_after(today) != moved_to
@@ -76,21 +74,16 @@ pub fn undoable_completion(task: &Task, today: NaiveDate) -> Option<LastCompleti
     let streak_current = (task.streak_current - 1).max(0);
     Some(LastCompletion {
         moved_to: due.date.clone(),
-        date: format!(
-            "{}{}",
-            today.format("%Y-%m-%d"),
-            due.date.get(10..).unwrap_or("")
-        ),
+        date: format!("{}{}", ymd(today), due.date.get(10..).unwrap_or("")),
         streak_current,
         streak_best: if task.streak_best == task.streak_current {
             streak_current
         } else {
             task.streak_best
         },
-        streak_last_period: (streak_current > 0)
-            .then(|| rule.prev_before(today).format("%Y-%m-%d").to_string()),
+        streak_last_period: (streak_current > 0).then(|| ymd(rule.prev_before(today))),
         moved_from: None,
-        completed_on: Some(today.format("%Y-%m-%d").to_string()),
+        completed_on: Some(ymd(today)),
     })
 }
 

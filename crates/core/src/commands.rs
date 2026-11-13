@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use crate::arrange::{Arrangement, PlacedArrangement, ViewPlace};
 use crate::ids::Id;
 use crate::model::{
-    Due, Filter, Label, LastCompletion, Priority, Project, Reminder, Section, Task,
+    parse_ymd, parse_ymd_prefix, ymd, Due, Filter, Label, LastCompletion, Priority, Project,
+    Reminder, Section, Task,
 };
 use crate::recurrence::Recurrence;
 use crate::repository::{RepoError, Repository};
@@ -251,9 +252,7 @@ fn parse_local_datetime(s: &str) -> Option<chrono::NaiveDateTime> {
 
 /// `YYYY-MM-DD` when `s` is a real date (anything else, e.g. "", gives `None`).
 fn valid_date(s: &str) -> Option<String> {
-    NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d")
-        .ok()
-        .map(iso)
+    parse_ymd(s.trim()).map(ymd)
 }
 
 /// Human text for a rule, stored in `Due.string` (Todoist-style).
@@ -284,13 +283,10 @@ fn build_due(
             } else {
                 r.next_after(today)
             };
-            (iso(first), describe(r))
+            (ymd(first), describe(r))
         }
     };
-    let string = match until
-        .as_deref()
-        .and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok())
-    {
+    let string = match until.as_deref().and_then(parse_ymd) {
         Some(end) => format!("{string} until {}", end.format("%b %-d")),
         None => string,
     };
@@ -309,11 +305,7 @@ fn build_due(
 /// True when the occurrence a completion on `today` is for is the repeat's
 /// last: the next one would fall past its end.
 fn repeat_ends(due: &Due, rule: &Recurrence, current: NaiveDate, today: NaiveDate) -> bool {
-    let Some(end) = due
-        .until
-        .as_deref()
-        .and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok())
-    else {
+    let Some(end) = due.until_date() else {
         return false;
     };
     let occurrence = moved_from(due).unwrap_or_else(|| completed_occurrence(rule, current, today));
@@ -322,9 +314,7 @@ fn repeat_ends(due: &Due, rule: &Recurrence, current: NaiveDate, today: NaiveDat
 
 /// The occurrence a moved due date stands in for.
 fn moved_from(due: &Due) -> Option<NaiveDate> {
-    due.moved_from
-        .as_deref()
-        .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
+    due.moved_from.as_deref().and_then(parse_ymd)
 }
 
 /// After an edit that kept the rule: the occurrence the new date stands in
@@ -335,18 +325,12 @@ fn moved_occurrence(old: &Due, new: &Due, rule: &Recurrence) -> Option<String> {
         return None;
     }
     let old_day = due_date(old).filter(|d| rule.contains(*d));
-    moved_from(old).or(old_day).map(iso)
-}
-
-fn iso(date: NaiveDate) -> String {
-    date.format("%Y-%m-%d").to_string()
+    moved_from(old).or(old_day).map(ymd)
 }
 
 /// The date part of a Todoist-style due (`YYYY-MM-DD` or `YYYY-MM-DDTHH:MM…`).
 fn due_date(due: &Due) -> Option<NaiveDate> {
-    due.date
-        .get(..10)
-        .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+    parse_ymd_prefix(&due.date)
 }
 
 /// Apply a command to the repository using the local date as "today".
@@ -973,7 +957,7 @@ fn complete_occurrence(
         let suffix = d.date.get(10..).unwrap_or("").to_string();
         let before = std::mem::replace(
             &mut d.date,
-            format!("{}{}", iso(rule.next_after(passed)), suffix),
+            format!("{}{}", ymd(rule.next_after(passed)), suffix),
         );
         let was_moved = d.moved_from.take();
         undo = Some(LastCompletion {
@@ -983,7 +967,7 @@ fn complete_occurrence(
             streak_best: task.streak_best,
             streak_last_period: task.streak_last_period.clone(),
             moved_from: was_moved,
-            completed_on: Some(iso(today)),
+            completed_on: Some(ymd(today)),
         });
     }
     task.last_completion = undo;
@@ -1011,7 +995,7 @@ fn already_credited(task: &Task, occurrence: NaiveDate) -> bool {
         && task
             .streak_last_period
             .as_deref()
-            .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+            .and_then(parse_ymd)
             .is_some_and(|last| occurrence <= last)
 }
 

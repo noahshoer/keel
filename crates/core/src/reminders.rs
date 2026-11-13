@@ -8,7 +8,7 @@ use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::Id;
-use crate::model::{Reminder, ReminderType, Task};
+use crate::model::{parse_ymd, Reminder, ReminderType, Task};
 use crate::views;
 
 /// Device-local notification preferences.
@@ -129,10 +129,7 @@ pub fn plan(
     // "Deadline today", at the all-day time.
     if let Some(time) = settings.all_day_time {
         for task in open() {
-            let deadline = task
-                .deadline
-                .as_deref()
-                .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+            let deadline = task.deadline.as_deref().and_then(parse_ymd);
             if let Some(day) = deadline {
                 push(task, day.and_time(time), DEADLINE_BODY.to_string());
             }
