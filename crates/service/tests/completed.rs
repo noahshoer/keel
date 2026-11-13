@@ -1,66 +1,19 @@
 use chrono::{Duration, Local};
-use keel_core::commands::{Action, Command};
 use keel_core::ids::Id;
-use keel_service::AppService;
 
-struct F {
-    _dir: tempfile::TempDir,
-    svc: AppService,
-    inbox: Id,
-    n: u32,
-}
+mod common;
+use common::{Fx, NewTask};
 
-impl F {
-    fn new() -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
-        let inbox = svc
-            .list_projects()
-            .unwrap()
-            .into_iter()
-            .find(|p| p.is_inbox)
-            .unwrap()
-            .id;
-        F {
-            _dir: dir,
-            svc,
-            inbox,
-            n: 0,
-        }
-    }
-
-    fn run(&mut self, action: Action) -> keel_core::commands::ApplyResult {
-        self.n += 1;
-        self.svc
-            .dispatch(Command {
-                uuid: format!("u{}", self.n),
-                temp_id: Some("t".into()),
-                action,
-            })
-            .unwrap()
-    }
-
+impl Fx {
     fn task(&mut self, content: &str, project: &Id, labels: &[&str]) -> Id {
-        self.run(Action::TaskAdd {
-            content: content.into(),
-            project_id: project.clone(),
-            description: None,
-            priority: None,
-            due: None,
-            labels: Some(labels.iter().map(|s| s.to_string()).collect()),
-            parent_id: None,
-            section_id: None,
-            recurrence: None,
-            deadline: None,
-        })
-        .id_mapping["t"]
-            .clone()
+        self.add_task(NewTask::new(content).project(project).labels(labels))
     }
 
-    fn complete(&mut self, id: &Id) {
-        // Distinct completion timestamps so newest-first ordering is deterministic.
+    /// Completes with a pause first, so completion timestamps are distinct
+    /// and newest-first ordering is deterministic.
+    fn complete_later(&mut self, id: &Id) {
         std::thread::sleep(std::time::Duration::from_millis(3));
-        self.run(Action::TaskComplete { id: id.clone() });
+        self.complete(id);
     }
 }
 
@@ -70,13 +23,13 @@ fn names(tasks: Vec<keel_core::model::Task>) -> Vec<String> {
 
 #[test]
 fn project_completed_newest_first() {
-    let mut f = F::new();
+    let mut f = Fx::new();
     let inbox = f.inbox.clone();
     let a = f.task("a", &inbox, &[]);
     f.task("b-open", &inbox, &[]);
     let c = f.task("c", &inbox, &[]);
-    f.complete(&a);
-    f.complete(&c);
+    f.complete_later(&a);
+    f.complete_later(&c);
     assert_eq!(
         names(f.svc.completed_in_project(inbox.as_str()).unwrap()),
         vec!["c", "a"]
@@ -85,14 +38,14 @@ fn project_completed_newest_first() {
 
 #[test]
 fn label_completed() {
-    let mut f = F::new();
+    let mut f = Fx::new();
     let inbox = f.inbox.clone();
     let other = Id::from("OTHER");
     let x = f.task("x", &inbox, &["home"]);
     let y = f.task("y", &other, &["Home"]);
     f.task("z-open", &inbox, &["home"]);
-    f.complete(&x);
-    f.complete(&y);
+    f.complete_later(&x);
+    f.complete_later(&y);
     let mut got = names(f.svc.completed_with_label("HOME").unwrap());
     got.sort();
     assert_eq!(got, vec!["x", "y"]);
@@ -100,10 +53,10 @@ fn label_completed() {
 
 #[test]
 fn completed_today_only_today() {
-    let mut f = F::new();
+    let mut f = Fx::new();
     let inbox = f.inbox.clone();
     let id = f.task("done", &inbox, &[]);
-    f.complete(&id);
+    f.complete_later(&id);
     let today = Local::now().date_naive();
     assert_eq!(
         names(f.svc.completed_today_at(today).unwrap()),

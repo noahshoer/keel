@@ -1,81 +1,32 @@
 use chrono::NaiveDate;
-use keel_core::commands::{Action, Command};
+use keel_core::commands::Action;
 use keel_core::ids::Id;
-use keel_service::AppService;
+
+mod common;
+use common::{d, Fx, NewTask};
 
 fn today() -> NaiveDate {
-    NaiveDate::from_ymd_opt(2026, 10, 19).unwrap()
-}
-
-fn add(svc: &AppService, n: &mut u32, content: &str, project: &Id, labels: &[&str]) -> Id {
-    *n += 1;
-    let res = svc
-        .dispatch_at(
-            Command {
-                uuid: format!("u{n}"),
-                temp_id: Some("t".into()),
-                action: Action::TaskAdd {
-                    content: content.into(),
-                    project_id: project.clone(),
-                    description: None,
-                    priority: None,
-                    due: None,
-                    labels: Some(labels.iter().map(|s| s.to_string()).collect()),
-                    parent_id: None,
-                    section_id: None,
-                    recurrence: None,
-                    deadline: None,
-                },
-            },
-            today(),
-        )
-        .unwrap();
-    res.id_mapping["t"].clone()
+    d(2026, 10, 19)
 }
 
 #[test]
 fn label_view_spans_projects_and_hides_completed() {
-    let dir = tempfile::tempdir().unwrap();
-    let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
-    let inbox = svc
-        .list_projects()
-        .unwrap()
-        .into_iter()
-        .find(|p| p.is_inbox)
-        .unwrap()
-        .id;
+    let mut f = Fx::on(today());
     let other = Id::from("OTHER");
-    let mut n = 0;
 
-    svc.dispatch_at(
-        Command {
-            uuid: "lbl".into(),
-            temp_id: None,
-            action: Action::LabelAdd {
-                name: "home".into(),
-            },
-        },
-        today(),
-    )
-    .unwrap();
-    assert_eq!(svc.list_labels().unwrap().len(), 1);
+    f.run(Action::LabelAdd {
+        name: "home".into(),
+    });
+    assert_eq!(f.svc.list_labels().unwrap().len(), 1);
 
-    add(&svc, &mut n, "dishes", &inbox, &["home"]);
-    add(&svc, &mut n, "laundry", &other, &["Home"]);
-    add(&svc, &mut n, "report", &inbox, &["work"]);
-    let done = add(&svc, &mut n, "vacuum", &inbox, &["home"]);
-    n += 1;
-    svc.dispatch_at(
-        Command {
-            uuid: format!("u{n}"),
-            temp_id: None,
-            action: Action::TaskComplete { id: done },
-        },
-        today(),
-    )
-    .unwrap();
+    f.add_task(NewTask::new("dishes").labels(&["home"]));
+    f.add_task(NewTask::new("laundry").project(&other).labels(&["Home"]));
+    f.add_task(NewTask::new("report").labels(&["work"]));
+    let done = f.add_task(NewTask::new("vacuum").labels(&["home"]));
+    f.complete(&done);
 
-    let mut names: Vec<String> = svc
+    let mut names: Vec<String> = f
+        .svc
         .label_view_at("home", today())
         .unwrap()
         .into_iter()
