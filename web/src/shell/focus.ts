@@ -4,7 +4,7 @@
 import type { RefObject } from "react";
 import { flushSync } from "react-dom";
 
-export function openAndFocus(open: () => void, field: RefObject<HTMLInputElement | null>): void {
+export function openAndFocus(open: () => void, field: RefObject<{ focus(): void } | null>): void {
   flushSync(open);
   field.current?.focus();
 }

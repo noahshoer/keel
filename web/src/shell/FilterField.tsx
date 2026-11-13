@@ -1,7 +1,7 @@
 // A filter's query field: the terms keel-core recognizes are highlighted as on
 // the task card, an unknown name is underlined red, and the line under it says
 // what's wrong, with the fix as a button (or the hint while there's nothing to say).
-import { useId } from "react";
+import { type RefObject, useId } from "react";
 import type { Label } from "../bindings";
 import { HighlightedTitle } from "../editor/HighlightedTitle";
 import { FILTER_HINT, type QueryCheck } from "./filterQuery";
@@ -12,6 +12,7 @@ export function FilterField({
   label,
   onSubmit,
   onEscape,
+  inputRef,
 }: {
   check: QueryCheck;
   labels: Label[];
@@ -19,6 +20,8 @@ export function FilterField({
   label?: string;
   onSubmit: () => void;
   onEscape: () => void;
+  /** To focus it inside the tap that opened it. */
+  inputRef?: RefObject<HTMLTextAreaElement | null> | undefined;
 }) {
   const { query, setQuery, segments, problem, fix, unhighlight } = check;
   const problemId = useId();
@@ -33,6 +36,7 @@ export function FilterField({
         label={label}
         invalid={problem !== null}
         describedBy={problem !== null ? problemId : undefined}
+        inputRef={inputRef}
         autoFocus={false}
         onInput={setQuery}
         onEnter={onSubmit}

@@ -29,6 +29,7 @@ describe("icons", () => {
       "TagIcon",
       "CircleDashedIcon",
       "CheckCircleIcon",
+      "SortIcon",
     ]) {
       expect(names).toContain(name);
     }

@@ -4,6 +4,7 @@
 // and calendars are Keel's own rounder drawings of Phosphor's (see `Drawn`).
 import { ArrowBendDownRight } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
 import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { ArrowsDownUp } from "@phosphor-icons/react/dist/csr/ArrowsDownUp";
 import { ArrowUp } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { Bell } from "@phosphor-icons/react/dist/csr/Bell";
 import { BellRinging } from "@phosphor-icons/react/dist/csr/BellRinging";
@@ -201,6 +202,10 @@ export function TrophySmallIcon() {
 
 export function FunnelIcon() {
   return <Ph icon={Funnel} size={18} />;
+}
+
+export function SortIcon() {
+  return <Ph icon={ArrowsDownUp} size={18} />;
 }
 
 export function CalendarSmallIcon() {

@@ -75,6 +75,12 @@ pub fn run(conn: &Connection) -> rusqlite::Result<()> {
             is_deleted  INTEGER NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS view_arrangement (
+            place_key        TEXT PRIMARY KEY,
+            place_json       TEXT NOT NULL,
+            arrangement_json TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS section (
             id            TEXT PRIMARY KEY,
             project_id    TEXT NOT NULL,

@@ -2,10 +2,18 @@
 // "+ Add section" below the last one (crates/ui/src/main.rs `SectionBlock`,
 // `AddSection`). Forms opened by a tap focus their field inside the tap, so
 // iOS raises the keyboard.
-import { type FormEvent, type MutableRefObject, useContext, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type MutableRefObject,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import type { Loaded } from "../app/load";
-import type { Id, Reminder, Section, Task } from "../bindings";
+import type { CardMode, Id, Reminder, Section, Task } from "../bindings";
 import { blankValues, cards } from "../core";
 import { AddTask } from "../editor/AddTask";
 import { TASK_DROP } from "../gestures/drag";
@@ -25,6 +33,8 @@ export function SectionBlock({
   section,
   tasks,
   all,
+  shape,
+  mode: listMode,
   loaded,
   today,
   reminders,
@@ -34,6 +44,10 @@ export function SectionBlock({
   tasks: Task[];
   /** Every task, for the cards' sub-task counts. */
   all: Task[];
+  /** The page's arrangement, when it has one: filters and orders the section's tasks. */
+  shape?: ((tasks: Task[]) => Task[]) | null;
+  /** How the page draws its cards, when not the section's own (a filtered page draws matches under their parents). */
+  mode?: CardMode;
   /** The lists the section's "+ Add task" editor picks from. */
   loaded: Pick<Loaded, "projects" | "sections" | "labels">;
   today: string;
@@ -44,12 +58,21 @@ export function SectionBlock({
   const [draft, setDraft] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const { show: showSubtasks } = useContext(ShowSubtasksContext);
-  const list = cards(tasks, all, showSubtasks ? "Grouped" : "TopLevel", today);
+  const cardMode = showSubtasks ? "Grouped" : "TopLevel";
+  const list = cards(shape ? shape(tasks) : tasks, all, listMode ?? cardMode, today);
   // What the section shows: its top-level tasks (sub-tasks go with them).
   const count = list.length;
+  // Deleting removes everything in the section, whatever the page's filter hides. Worked out
+  // once per change to the section, not on every keystroke of a filter draft.
+  const filtered = !!shape;
+  const total =
+    useMemo(
+      () => (filtered ? cards(tasks, all, cardMode, today).length : null),
+      [filtered, tasks, all, cardMode, today],
+    ) ?? count;
 
   const row = useRef<HTMLDivElement>(null);
-  const warning = `Delete section “${section.name}” and its ${count} ${count === 1 ? "task" : "tasks"}?`;
+  const warning = `Delete section “${section.name}” and its ${total} ${total === 1 ? "task" : "tasks"}?`;
   const remove = () => {
     deleteSection(section.id).then(onChanged, onChanged);
   };

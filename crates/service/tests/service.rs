@@ -66,3 +66,32 @@ fn seed_inbox_is_idempotent_across_reopen() {
         "no duplicate Inbox on reopen"
     );
 }
+
+#[test]
+fn list_arrangements_returns_what_was_dispatched() {
+    use keel_core::arrange::{Arrangement, PlacedArrangement, SortField, ViewPlace};
+    let dir = tempfile::tempdir().unwrap();
+    let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
+    assert!(svc.list_arrangements().unwrap().is_empty());
+    let arrangement = Arrangement {
+        filter: "p1".into(),
+        groups: vec![SortField::Priority],
+        order: vec![],
+    };
+    svc.dispatch(Command {
+        uuid: "arr1".into(),
+        temp_id: None,
+        action: Action::ViewArrange {
+            place: ViewPlace::Today,
+            arrangement: arrangement.clone(),
+        },
+    })
+    .unwrap();
+    assert_eq!(
+        svc.list_arrangements().unwrap(),
+        vec![PlacedArrangement {
+            place: ViewPlace::Today,
+            arrangement
+        }]
+    );
+}

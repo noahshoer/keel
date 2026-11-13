@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use chrono::{Local, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::arrange::{Arrangement, PlacedArrangement, ViewPlace};
 use crate::ids::Id;
 use crate::model::{
     Due, Filter, Label, LastCompletion, Priority, Project, Reminder, Section, Task,
@@ -176,6 +177,11 @@ pub enum Action {
     FilterDelete {
         id: Id,
     },
+    /// Set how a list page is arranged. The default arrangement removes it.
+    ViewArrange {
+        place: ViewPlace,
+        arrangement: Arrangement,
+    },
     /// Rename a project. No-op for the Inbox.
     ProjectUpdate {
         id: Id,
@@ -226,6 +232,7 @@ impl Action {
             Action::ProjectAdd { .. } => "project_add",
             Action::FilterAdd { .. } => "filter_add",
             Action::FilterUpdate { .. } => "filter_update",
+            Action::ViewArrange { .. } => "view_arrange",
             Action::FilterDelete { .. } => "filter_delete",
             Action::ProjectUpdate { .. } => "project_update",
             Action::ProjectDelete { .. } => "project_delete",
@@ -599,6 +606,7 @@ pub fn apply_at<R: Repository>(
                 label.is_deleted = true;
                 repo.upsert_label(&label)?;
             }
+            repo.delete_arrangement(&ViewPlace::Label { id }.key())?;
         }
         Action::ProjectAdd { name } => {
             let project = Project::new(name);
@@ -634,6 +642,15 @@ pub fn apply_at<R: Repository>(
                 filter.is_deleted = true;
                 repo.upsert_filter(&filter)?;
             }
+            repo.delete_arrangement(&ViewPlace::Filter { id }.key())?;
+        }
+        Action::ViewArrange { place, arrangement } => {
+            let arrangement = arrangement.normalized();
+            if arrangement.is_default() {
+                repo.delete_arrangement(&place.key())?;
+            } else {
+                repo.upsert_arrangement(&PlacedArrangement { place, arrangement })?;
+            }
         }
         Action::ProjectUpdate { id, name } => {
             let name = name.trim().to_string();
@@ -657,6 +674,7 @@ pub fn apply_at<R: Repository>(
             for task in repo.list_tasks(&id)? {
                 repo.soft_delete_task(&task.id)?;
             }
+            repo.delete_arrangement(&ViewPlace::Project { id }.key())?;
         }
         Action::TaskUncomplete { id } => {
             let was_done = repo

@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::arrange::PlacedArrangement;
 use crate::ids::Id;
 use crate::model::{Filter, Label, Project, Reminder, Section, Task};
 
@@ -45,6 +46,10 @@ pub trait Repository {
     fn upsert_filter(&self, filter: &Filter) -> Result<(), RepoError>;
     /// Active filters, in creation order.
     fn list_filters(&self) -> Result<Vec<Filter>, RepoError>;
+    fn upsert_arrangement(&self, placed: &PlacedArrangement) -> Result<(), RepoError>;
+    fn delete_arrangement(&self, place_key: &str) -> Result<(), RepoError>;
+    /// Rows that don't deserialize are skipped.
+    fn list_arrangements(&self) -> Result<Vec<PlacedArrangement>, RepoError>;
 
     fn upsert_label(&self, label: &Label) -> Result<(), RepoError>;
     /// Active (non-deleted) labels, sorted by name case-insensitively.

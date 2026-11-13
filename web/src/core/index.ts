@@ -4,6 +4,9 @@
 import type {
   Action,
   AddPlan,
+  Arranged,
+  Arrangement,
+  ArrangementFlags,
   Card,
   CardMode,
   DateGroup,
@@ -35,6 +38,7 @@ import type {
   RepeatReading,
   Section,
   SidebarCounts,
+  SortChoice,
   Task,
   TaskDetail,
 } from "../bindings";
@@ -97,6 +101,37 @@ export function progress(parent: Id, all: Task[], today: string): Progress | nul
 export function cards(matched: Task[], all: Task[], mode: CardMode, today: string): Card[] {
   ready();
   return core.cards(matched, all, mode, today);
+}
+
+/** Filters a page's tasks by its arrangement, then groups and orders them. */
+export function arrange(
+  tasks: Task[],
+  arrangement: Arrangement,
+  projects: Project[],
+  sections: Section[],
+  labels: Label[],
+  today: string,
+): Arranged {
+  ready();
+  return core.arrange(tasks, arrangement, projects, sections, labels, today);
+}
+
+/** An arrangement in words ("Priority · Due date (latest first)"). */
+export function arrangementSummary(a: Arrangement): string {
+  ready();
+  return core.arrangementSummary(a);
+}
+
+/** Whether an arrangement filters its page and whether it groups or orders it. */
+export function arrangementFlags(a: Arrangement): ArrangementFlags {
+  ready();
+  return core.arrangementFlags(a);
+}
+
+/** The sort fields in menu order with their direction labels. */
+export function sortChoices(): SortChoice[] {
+  ready();
+  return core.sortChoices();
 }
 
 /** Which coloured due chip a `YYYY-MM-DD` due gets relative to `today`. */

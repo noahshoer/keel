@@ -3,10 +3,15 @@ import { useState } from "react";
 import { beforeAll, expect, it, vi } from "vitest";
 import { useLoaded } from "../app/load";
 import type { View } from "../app/view";
+import type { Arrangement, OrderLevel, SortField } from "../bindings";
 import { localToday } from "../clock";
+import * as core from "../core";
 import { TASK_DROP } from "../gestures/drag";
 import { ROW_PRESS } from "../gestures/long-press";
+import { addLabel, arrangeView, dispatchAction, renameSection } from "../ipc/actions";
+import { viewIds } from "../ipc/fixtures";
 import { invoke } from "../ipc/invoke";
+import { mockHandlers } from "../ipc/mock";
 import { ShowSubtasksContext } from "../lists/showSubtasks";
 import { TaskNavProvider } from "../taskview/nav";
 import { loadCoreForTests } from "../test/wasm";
@@ -558,4 +563,448 @@ it("Cancel collapses the editor; Search has no add row", async () => {
   unmount();
   const search = await show({ kind: "search" });
   expect(search.container.querySelector(".add-task-row")).toBeNull();
+});
+
+// Arranged pages (issue #7).
+const homePlace = { kind: "project", id: "p-home" } as const;
+const arrangement = (a: Partial<{ filter: string; groups: SortField[]; order: OrderLevel[] }>) => ({
+  filter: "",
+  groups: [],
+  order: [],
+  ...a,
+});
+const addTask = (content: string, extra: Record<string, unknown> = {}) =>
+  dispatchAction({ type: "task_add", project_id: "p-home", content, ...extra } as never);
+
+/** `.list-body`'s markup with the dates (which follow the day the test runs) blanked. */
+const bodyHtml = (c: HTMLElement) =>
+  (c.querySelector(".list-body")?.outerHTML ?? "")
+    .replace(/\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/g, "D MON")
+    .replace(/\b(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day\b/g, "WEEKDAY");
+
+// The stored snapshots were checked against the same fixtures rendered at 6cc02fa, before
+// the feature: the list body is identical there.
+it("an untouched page's list body is the one it had before the feature", async () => {
+  const today = await show({ kind: "today" });
+  await waitFor(() => expect(today.container.querySelector(".task-row")).not.toBeNull());
+  expect(bodyHtml(today.container)).toMatchSnapshot("today");
+  today.unmount();
+  const project = await show({ kind: "project", id: "p-home", name: "Home" });
+  await waitFor(() => expect(project.container.querySelector(".task-row")).not.toBeNull());
+  expect(bodyHtml(project.container)).toMatchSnapshot("project with sections");
+});
+
+it("untouched page is unchanged", async () => {
+  const arrangeSpy = vi.spyOn(core, "arrange");
+  try {
+    const today = await show({ kind: "today" });
+    expect(today.container.querySelector(".arrange-sub, .arrange-empty")).toBeNull();
+    today.unmount();
+    const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+    expect(container.querySelector(".arrange-sub")).toBeNull();
+    expect(container.querySelector(".arrange-empty")).toBeNull();
+    expect(container.querySelectorAll(".add-section-row")).toHaveLength(1);
+    expect(container.querySelectorAll(".add-task-row")).toHaveLength(2);
+    expect(arrangeSpy).not.toHaveBeenCalled();
+  } finally {
+    arrangeSpy.mockRestore();
+  }
+});
+
+it("order only keeps sections", async () => {
+  await dispatchAction({ type: "task_update", id: "t-laundry", priority: "None" } as never);
+  await addTask("Urgent chore", { section_id: "s-chores", priority: "P1" });
+  await arrangeView(homePlace, arrangement({ order: [{ field: "priority", reversed: false }] }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  expect(titles(container)).toEqual(["Chores"]);
+  const block = container.querySelector(".section-block") as HTMLElement;
+  expect(block.querySelector(".task-content")?.textContent).toBe("Urgent chore");
+});
+
+it("headings replace sections", async () => {
+  await arrangeView(homePlace, arrangement({ groups: ["label"] }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  expect(titles(container)).toEqual(["errand", "No label"]);
+  expect(container.querySelector(".add-section-row")).toBeNull();
+  expect(container.querySelector(".section-block")).toBeNull();
+  expect(container.querySelectorAll(".add-task-row")).toHaveLength(1);
+});
+
+it("today grouped like Noah's example", async () => {
+  await addLabel("phone");
+  const [chores] = await invoke("list_sections", { project_id: "p-home" });
+  await renameSection(chores?.id as string, "Kitchen");
+  await dispatchAction({ type: "task_update", id: "t-laundry", labels: ["errand", "phone"] } as never);
+  await arrangeView({ kind: "today" }, arrangement({ groups: ["project", "section", "label"] }));
+  const { container } = await show({ kind: "today" });
+  expect(titles(container)).toContain("Home › Kitchen");
+  expect([...container.querySelectorAll(".arrange-sub")].map((e) => e.textContent)).toEqual([
+    "No label",
+    "errand",
+    "phone",
+    "No label",
+  ]);
+});
+
+it("two-label task shows twice and leaves twice", async () => {
+  const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    await addLabel("phone");
+    await dispatchAction({ type: "task_update", id: "t-laundry", labels: ["errand", "phone"] } as never);
+    await arrangeView(homePlace, arrangement({ groups: ["label"] }));
+    const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+    const laundry = () => contents(container).filter((c) => c === "Do laundry");
+    expect(laundry()).toHaveLength(2);
+    const row = screen.getAllByText("Do laundry")[0]?.closest(".task-row");
+    fireEvent.click(row?.querySelector("button.check") as HTMLButtonElement);
+    await act(async () => vi.advanceTimersByTimeAsync(800));
+    await waitFor(() => expect(laundry()).toHaveLength(0));
+    expect(errors.mock.calls.map((c) => String(c[0])).filter((m) => m.includes("same key"))).toEqual([]);
+  } finally {
+    vi.useRealTimers();
+    errors.mockRestore();
+  }
+});
+
+it("the menu offers Add section unless headings replace sections", async () => {
+  const home = { kind: "project", id: "p-home", name: "Home" } as const;
+  const first = await show(home);
+  fireEvent.click(screen.getByLabelText("More"));
+  expect(within(popup() as HTMLElement).queryByText("Add section")).not.toBeNull();
+  first.unmount();
+  await arrangeView(homePlace, arrangement({ order: [{ field: "priority", reversed: false }] }));
+  const ordered = await show(home);
+  fireEvent.click(screen.getByLabelText("More"));
+  expect(within(popup() as HTMLElement).queryByText("Add section")).not.toBeNull();
+  ordered.unmount();
+  await arrangeView(homePlace, arrangement({ groups: ["label"] }));
+  await show(home);
+  fireEvent.click(screen.getByLabelText("More"));
+  expect(within(popup() as HTMLElement).queryByText("Add section")).toBeNull();
+});
+
+it("nothing matches", async () => {
+  await arrangeView(homePlace, arrangement({ filter: "p2" }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  expect(screen.getByText("No tasks match this filter.")).not.toBeNull();
+  expect(container.querySelectorAll(".add-task-row")).toHaveLength(1);
+  expect(container.querySelector(".empty")).toBeNull();
+});
+
+it("upcoming order only keeps days", async () => {
+  // Call the dentist (no priority) also falls today and, unsorted, comes before the P2 laundry.
+  await dispatchAction({
+    type: "task_update",
+    id: "t-inbox",
+    priority: "None",
+    due: { date: localToday() },
+  } as never);
+  await dispatchAction({ type: "task_update", id: "t-laundry", priority: "P2" } as never);
+  viewIds.upcoming.unshift("t-inbox");
+  try {
+    const before = await show({ kind: "upcoming" });
+    const days = titles(before.container);
+    expect(contents(before.container)).toEqual([
+      "File the taxes",
+      "Call the dentist",
+      "Do laundry",
+      "Buy groceries",
+    ]);
+    before.unmount();
+    await arrangeView({ kind: "upcoming" }, arrangement({ order: [{ field: "priority", reversed: false }] }));
+    const { container } = await show({ kind: "upcoming" });
+    // The days stay in date order: overdue, today, tomorrow.
+    expect(days[0]).toBe("Overdue");
+    expect(days).toHaveLength(3);
+    expect(titles(container)).toEqual(days);
+    expect(container.querySelector(".arrange-sub")).toBeNull();
+    // Inside the day, by priority: the P2 laundry now comes before the unprioritised dentist.
+    expect(contents(container)).toEqual([
+      "File the taxes",
+      "Do laundry",
+      "Call the dentist",
+      "Buy groceries",
+    ]);
+  } finally {
+    viewIds.upcoming.shift();
+  }
+});
+
+// Header icons and chips (issue #7).
+it("the filter and sort icons are on lists, not on Search", async () => {
+  const search = await show({ kind: "search" });
+  expect(screen.queryByLabelText("Filter")).toBeNull();
+  expect(screen.queryByLabelText("Sort")).toBeNull();
+  search.unmount();
+  const { container } = await show({ kind: "today" });
+  expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("false");
+  expect(screen.getByLabelText("Sort").getAttribute("aria-pressed")).toBe("false");
+  expect(container.querySelector(".arrange-btn.on")).toBeNull();
+  expect(container.querySelector(".arrange-bar")).toBeNull();
+});
+
+it("a filter shows its chip and lights the button; clearing keeps the sort", async () => {
+  const order = [{ field: "priority", reversed: false }] as OrderLevel[];
+  await arrangeView(homePlace, arrangement({ filter: "p1", order }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const texts = [...container.querySelectorAll(".arrange-chip-text")].map((e) => e.textContent);
+  expect(texts).toEqual(["p1", core.arrangementSummary(arrangement({ order }))]);
+  expect(container.querySelector(".arrange-chip.problem")).toBeNull();
+  expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByLabelText("Sort").getAttribute("aria-pressed")).toBe("true");
+  expect(container.querySelector(".list-body")?.firstElementChild?.className).toBe("arrange-bar");
+  fireEvent.click(screen.getByLabelText("Clear filter"));
+  await waitFor(() => expect(screen.queryByLabelText("Clear filter")).toBeNull());
+  expect(screen.getByLabelText("Reset sort")).not.toBeNull();
+  expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("false");
+});
+
+it("resetting the sort keeps the filter", async () => {
+  await arrangeView(homePlace, arrangement({ filter: "p1", groups: ["label"] }));
+  await show({ kind: "project", id: "p-home", name: "Home" });
+  fireEvent.click(screen.getByLabelText("Reset sort"));
+  await waitFor(() => expect(screen.queryByLabelText("Reset sort")).toBeNull());
+  expect(screen.getByLabelText("Clear filter")).not.toBeNull();
+  expect(screen.getByLabelText("Sort").getAttribute("aria-pressed")).toBe("false");
+});
+
+it("a broken remembered filter marks the chip and the list still shows every task", async () => {
+  await arrangeView({ kind: "today" }, arrangement({ filter: "p1 &" }));
+  const { container } = await show({ kind: "today" });
+  const chip = container.querySelector(".arrange-chip") as HTMLElement;
+  expect(chip.classList.contains("problem")).toBe(true);
+  expect(chip.title).not.toBe("");
+  expect(contents(container)).toEqual(["File the taxes", "Do laundry"]);
+});
+
+// The filter panel (issue #7).
+it("typing a filter narrows the list behind the panel before anything is saved", async () => {
+  await dispatchAction({ type: "task_update", id: "t-laundry", priority: "None" } as never);
+  await addTask("Urgent chore", { priority: "P1" });
+  const sent: string[] = [];
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const before = contents(container);
+  expect(before).toContain("Urgent chore");
+  expect(before.length).toBeGreaterThan(1);
+  const real = window.__TAURI__?.core.invoke;
+  if (real && window.__TAURI__) {
+    window.__TAURI__.core.invoke = (cmd, args) => {
+      if (cmd === "dispatch") sent.push(cmd);
+      return real(cmd, args);
+    };
+  }
+  fireEvent.click(screen.getByLabelText("Filter"));
+  const field = await screen.findByLabelText("Query");
+  fireEvent.change(field, { target: { value: "p1" } });
+  await waitFor(() => expect(contents(container)).toEqual(["Urgent chore"]));
+  expect(sent).toEqual([]);
+  expect(screen.getByText(/^1 of \d+ tasks match$/)).not.toBeNull();
+  // Closing saves it.
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("true"));
+  expect(contents(container)).toEqual(["Urgent chore"]);
+  if (real && window.__TAURI__) window.__TAURI__.core.invoke = real;
+});
+
+it("an unsaved preview is dropped when the panel closes without a valid draft", async () => {
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const before = contents(container);
+  fireEvent.click(screen.getByLabelText("Filter"));
+  fireEvent.change(await screen.findByLabelText("Query"), { target: { value: "p1 &" } });
+  expect(contents(container)).toEqual(before);
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(contents(container)).toEqual(before);
+  expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("false");
+});
+
+const follows = (a: Element | null, b: Element | null) =>
+  a !== null && b !== null && Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+it("the chips sit under the subtitle", async () => {
+  await arrangeView({ kind: "today" }, arrangement({ filter: "p1" }));
+  const { container } = await show({ kind: "today" });
+  expect(container.querySelector(".view-sub")).not.toBeNull();
+  expect(follows(container.querySelector(".view-sub"), container.querySelector(".arrange-bar"))).toBe(true);
+});
+
+it("on a saved filter's page the chips sit under its query line", async () => {
+  await arrangeView(
+    { kind: "filter", id: "f-p1" },
+    arrangement({ order: [{ field: "priority", reversed: false }] }),
+  );
+  const { container } = await show({ kind: "filter", id: "f-p1", name: "Important", query: "p1" });
+  expect(container.querySelector(".view-sub")?.textContent).toBe("p1");
+  expect(follows(container.querySelector(".view-sub"), container.querySelector(".arrange-bar"))).toBe(true);
+});
+
+it("a filtered section's delete warning counts everything the section holds", async () => {
+  await dispatchAction({ type: "task_update", id: "t-laundry", priority: "None" } as never);
+  await addTask("Urgent chore", { section_id: "s-chores", priority: "P1" });
+  await arrangeView(homePlace, arrangement({ filter: "p1" }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  const block = container.querySelector(".section-block") as HTMLElement;
+  expect(block.querySelector(".section-title .muted")?.textContent).toBe("1");
+  fireEvent.click(screen.getByLabelText("Section actions"));
+  fireEvent.click(within(popup() as HTMLElement).getByText("Delete"));
+  expect(popup()?.querySelector(".confirm-text")?.textContent).toBe(
+    "Delete section “Chores” and its 2 tasks?",
+  );
+});
+
+const choice = (field: string) => {
+  const c = core.sortChoices().find((x) => x.field === field);
+  if (!c) throw new Error(field);
+  return c;
+};
+
+/** Slows every arrangement save by `ms` and records what was sent, in the order it arrived. */
+const slowSaves = (ms: number) => {
+  const sent: Arrangement[] = [];
+  const real = mockHandlers.dispatch;
+  const spy = vi.spyOn(mockHandlers, "dispatch").mockImplementation(async (args) => {
+    const action = args.cmd.action;
+    if (action.type === "view_arrange") {
+      await new Promise((r) => setTimeout(r, ms));
+      sent.push(structuredClone(action.arrangement));
+    }
+    return real(args);
+  });
+  return { sent, restore: () => spy.mockRestore() };
+};
+
+it("two quick Move down taps in the sort panel move a row two places", async () => {
+  const levels: OrderLevel[] = [
+    { field: "priority", reversed: false },
+    { field: "due_date", reversed: false },
+    { field: "label", reversed: false },
+  ];
+  await arrangeView(homePlace, arrangement({ order: levels }));
+  const slow = slowSaves(40);
+  try {
+    await show({ kind: "project", id: "p-home", name: "Home" });
+    fireEvent.click(screen.getByLabelText("Sort"));
+    const down = choice("priority").name;
+    fireEvent.click(await screen.findByLabelText(`Move ${down} down`));
+    fireEvent.click(screen.getByLabelText(`Move ${down} down`));
+    await waitFor(() => expect(slow.sent).toHaveLength(2));
+    expect(slow.sent[1]?.order.map((o) => o.field)).toEqual(["due_date", "label", "priority"]);
+    const rows = [...document.querySelectorAll(".sort-row .sort-name")].map((e) => e.textContent);
+    expect(rows[2]).toBe(down);
+  } finally {
+    slow.restore();
+  }
+});
+
+it("a double tap on a direction ends where it began, and quick adds both stay", async () => {
+  await arrangeView(homePlace, arrangement({ order: [{ field: "priority", reversed: false }] }));
+  const slow = slowSaves(40);
+  try {
+    await show({ kind: "project", id: "p-home", name: "Home" });
+    fireEvent.click(screen.getByLabelText("Sort"));
+    const priority = choice("priority");
+    fireEvent.click(await screen.findByRole("button", { name: priority.order_label }));
+    fireEvent.click(screen.getByRole("button", { name: priority.reversed_label }));
+    await waitFor(() => expect(slow.sent).toHaveLength(2));
+    expect(slow.sent[1]?.order).toEqual([{ field: "priority", reversed: false }]);
+    // Add group then Add order, back to back.
+    fireEvent.click(screen.getByRole("button", { name: "Add group" }));
+    fireEvent.click(screen.getByRole("button", { name: choice("label").name }));
+    fireEvent.click(screen.getByRole("button", { name: "Add order" }));
+    fireEvent.click(screen.getByRole("button", { name: choice("due_date").name }));
+    await waitFor(() => expect(slow.sent).toHaveLength(4));
+    expect(slow.sent[3]?.groups).toEqual(["label"]);
+    expect(slow.sent[3]?.order.map((o) => o.field)).toEqual(["priority", "due_date"]);
+  } finally {
+    slow.restore();
+  }
+});
+
+it("a chip opens the filter panel with the field focused, and closing returns focus to the header button", async () => {
+  await arrangeView(homePlace, arrangement({ filter: "p1" }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  fireEvent.click(container.querySelector(".arrange-chip-main") as HTMLElement);
+  const field = await screen.findByLabelText("Query");
+  expect(document.activeElement).toBe(field);
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(document.activeElement).toBe(screen.getByLabelText("Filter"));
+  fireEvent.click(screen.getByLabelText("Sort"));
+  expect(screen.getByRole("dialog").getAttribute("aria-modal")).toBe("true");
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(document.activeElement).toBe(screen.getByLabelText("Sort"));
+});
+
+it("closing the filter panel keeps the draft's result on the page until the save has landed", async () => {
+  await dispatchAction({ type: "task_update", id: "t-laundry", priority: "None" } as never);
+  await addTask("Urgent chore", { priority: "P1" });
+  const slow = slowSaves(60);
+  try {
+    const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+    expect(contents(container).length).toBeGreaterThan(1);
+    fireEvent.click(screen.getByLabelText("Filter"));
+    fireEvent.change(await screen.findByLabelText("Query"), { target: { value: "p1" } });
+    await waitFor(() => expect(contents(container)).toEqual(["Urgent chore"]));
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(slow.sent).toHaveLength(0);
+    expect(contents(container)).toEqual(["Urgent chore"]);
+    await waitFor(() => expect(slow.sent).toHaveLength(1));
+    await waitFor(() => expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("true"));
+    expect(contents(container)).toEqual(["Urgent chore"]);
+  } finally {
+    slow.restore();
+  }
+});
+
+it("a project filtered down to a sub-task shows it under its parent, and the count is the cards drawn", async () => {
+  const untouched = await show({ kind: "project", id: "p-home", name: "Home" });
+  const cardsBefore = untouched.container.querySelectorAll(".task-row").length;
+  untouched.unmount();
+  await arrangeView(homePlace, arrangement({ filter: "sheets" }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  expect(screen.queryByText("No tasks match this filter.")).toBeNull();
+  const body = container.querySelector(".list-body")?.textContent ?? "";
+  expect(body).toContain("Do laundry");
+  expect(body).not.toContain("Buy groceries");
+  fireEvent.click(screen.getByLabelText("Filter"));
+  expect(document.body.querySelector(".filter-count")?.textContent).toBe(`1 of ${cardsBefore} tasks match`);
+});
+
+it("a filter the backend turns down isn't saved, and the page says why", async () => {
+  const check = vi.spyOn(mockHandlers, "check_filter").mockRejectedValue("No good.");
+  try {
+    const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+    fireEvent.click(screen.getByLabelText("Filter"));
+    fireEvent.change(await screen.findByLabelText("Query"), { target: { value: "p1" } });
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() =>
+      expect(container.querySelector(".arrange-save-problem")?.textContent).toContain("No good."),
+    );
+    expect(await invoke("list_arrangements", {})).toEqual([]);
+    await waitFor(() => expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("false"));
+  } finally {
+    check.mockRestore();
+  }
+});
+
+it("a failed save says so on the page", async () => {
+  const real = mockHandlers.dispatch;
+  const spy = vi.spyOn(mockHandlers, "dispatch").mockImplementation(async (args) => {
+    if (args.cmd.action.type === "view_arrange") throw "disk full";
+    return real(args);
+  });
+  try {
+    const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+    fireEvent.click(screen.getByLabelText("Sort"));
+    fireEvent.click(await screen.findByText("Add order"));
+    fireEvent.click(screen.getByRole("button", { name: "Priority" }));
+    await waitFor(() =>
+      expect(container.querySelector(".arrange-save-problem")?.textContent).toContain("disk full"),
+    );
+  } finally {
+    spy.mockRestore();
+  }
 });

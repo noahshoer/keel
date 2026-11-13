@@ -6,6 +6,7 @@ pub mod args;
 mod diag;
 mod notifications;
 
+use keel_core::arrange::PlacedArrangement;
 use keel_core::commands::ApplyResult;
 use keel_core::filter::FilterGroup;
 use keel_core::import::todoist::ImportSummary;
@@ -114,6 +115,14 @@ fn list_sections(
     state
         .list_sections(&args.project_id)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+fn list_arrangements(
+    _args: NoArgs,
+    state: tauri::State<'_, AppService>,
+) -> Result<Vec<PlacedArrangement>, String> {
+    state.list_arrangements().map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -327,6 +336,7 @@ pub fn run() {
             completed_with_label,
             list_sections,
             list_filters,
+            list_arrangements,
             check_filter,
             filter_view,
             dispatch,

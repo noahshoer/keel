@@ -617,11 +617,11 @@ pub enum DateGroupMode {
 }
 
 /// "30 Oct".
-fn short_date(d: NaiveDate) -> String {
+pub(crate) fn short_date(d: NaiveDate) -> String {
     format!("{} {}", d.day(), MONTHS[d.month0() as usize])
 }
 
-fn weekday_long(d: NaiveDate) -> &'static str {
+pub(crate) fn weekday_long(d: NaiveDate) -> &'static str {
     WEEKDAYS_LONG[d.weekday().num_days_from_monday() as usize]
 }
 

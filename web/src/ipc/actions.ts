@@ -2,7 +2,7 @@
 // a fresh uuid makes it idempotent, and creates carry a temp id the backend
 // maps to the new id (`ApplyResult.id_mapping`). The same helpers and temp
 // flags as crates/ui/src/api.rs.
-import type { Action, ApplyResult, Command, Id } from "../bindings";
+import type { Action, ApplyResult, Arrangement, Command, Id, ViewPlace } from "../bindings";
 import { invoke } from "./invoke";
 
 export function command(action: Action, temp: boolean): Command {
@@ -15,6 +15,10 @@ export function dispatchAction(action: Action, temp = false): Promise<ApplyResul
 }
 
 const send = dispatchAction;
+
+/** Saves a page's filter, grouping and order; the default arrangement clears it. */
+export const arrangeView = (place: ViewPlace, arrangement: Arrangement) =>
+  send({ type: "view_arrange", place, arrangement });
 
 export const completeTask = (id: Id) => send({ type: "task_complete", id });
 export const uncompleteTask = (id: Id) => send({ type: "task_uncomplete", id });

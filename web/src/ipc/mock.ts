@@ -4,7 +4,19 @@
 // and the dated views return fixture ids (recurrence, filters and grouping
 // stay in keel-core). Every handler returns a copy, and `resetMock()` (run
 // before each test, src/test/setup.ts) starts over from the fixtures.
-import type { Action, Due, DueEdit, Filter, Label, Project, Section, Task } from "../bindings";
+
+import { isArranged, samePlace } from "../arrange/place";
+import type {
+  Action,
+  Due,
+  DueEdit,
+  Filter,
+  Label,
+  PlacedArrangement,
+  Project,
+  Section,
+  Task,
+} from "../bindings";
 import type { CommandName, Handlers } from "./commands";
 import * as fx from "./fixtures";
 
@@ -15,6 +27,7 @@ function fresh() {
     sections: structuredClone(fx.sections),
     labels: structuredClone(fx.labels),
     filters: structuredClone(fx.filters),
+    arrangements: [] as PlacedArrangement[],
     reminders: structuredClone(fx.reminders),
     reminderSettings: structuredClone(fx.reminderSettings),
     diag: false,
@@ -195,6 +208,13 @@ function apply(a: Action): string | null {
       label.name = a.name;
       return null;
     }
+    case "view_arrange": {
+      state.arrangements = state.arrangements.filter((p) => !samePlace(p.place, a.place));
+      if (isArranged(a.arrangement)) {
+        state.arrangements.push(structuredClone({ place: a.place, arrangement: a.arrangement }));
+      }
+      return null;
+    }
     case "label_set_color": {
       find(state.labels, a.id).color = a.color;
       return null;
@@ -267,6 +287,7 @@ const handlers: Handlers = {
   completed_with_label: async ({ name }) => done().filter((t) => t.labels.includes(name)),
   list_sections: async ({ project_id }): Promise<Section[]> =>
     alive(state.sections).filter((s) => s.project_id === project_id),
+  list_arrangements: async (): Promise<PlacedArrangement[]> => structuredClone(state.arrangements),
   list_filters: async (): Promise<Filter[]> => alive(state.filters),
   check_filter: async ({ query }) => {
     checkQuery(query);

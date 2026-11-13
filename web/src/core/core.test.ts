@@ -4,6 +4,8 @@ import { makeTask } from "../ipc/fixtures";
 import { loadCoreForTests } from "../test/wasm";
 import {
   allDone,
+  arrange,
+  arrangementSummary,
   cards,
   chain,
   dateGroups,
@@ -24,6 +26,7 @@ import {
   progressShort,
   reminderLabel,
   reminderMenus,
+  sortChoices,
   taskDetail,
   timeLabel,
   upcomingTasks,
@@ -301,5 +304,28 @@ describe("labelGroups", () => {
       { color: "charcoal", names: ["zzz"] },
       { color: "red", names: ["A"] },
     ]);
+  });
+});
+
+describe("arrange", () => {
+  it("orders tasks under priority headings", () => {
+    const task = (id: string, priority: Task["priority"]) =>
+      makeTask({ id, project_id: "p", content: id, priority });
+    const arranged = arrange(
+      [task("low", "P3"), task("high", "P1"), task("mid", "P2")],
+      { filter: "", groups: ["priority"], order: [] },
+      [],
+      [],
+      [],
+      "2026-10-29",
+    );
+    expect(arranged.groups.flatMap((g) => g.tasks.map((t) => t.content))).toEqual(["high", "mid", "low"]);
+    expect(arranged.shown).toBe(3);
+  });
+
+  it("summarises an arrangement and lists the six sort fields", () => {
+    expect(arrangementSummary({ filter: "", groups: [], order: [] })).toBe("");
+    expect(arrangementSummary({ filter: "", groups: ["priority"], order: [] })).toContain("Priority");
+    expect(sortChoices()).toHaveLength(6);
   });
 });

@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeAll, expect, it } from "vitest";
 import { localToday } from "../clock";
+import { arrangeView } from "../ipc/actions";
 import { loadCoreForTests } from "../test/wasm";
 import { type Loaded, loadView, useLoaded } from "./load";
 import type { View } from "./view";
@@ -48,4 +49,11 @@ it("a slow earlier load never replaces a newer one", async () => {
   await waitFor(() => expect(result.current.loaded?.view.kind).toBe("inbox"));
   await act(async () => pending.get("today")?.(real));
   expect(result.current.loaded?.view.kind).toBe("inbox");
+});
+
+it("loads the saved arrangements with the view", async () => {
+  const arrangement = { filter: "p1", groups: [], order: [] } as const;
+  await arrangeView({ kind: "today" }, { ...arrangement, groups: [], order: [] });
+  const loaded = await loadView({ kind: "today" }, false, today);
+  expect(loaded.arrangements).toEqual([{ place: { kind: "today" }, arrangement }]);
 });

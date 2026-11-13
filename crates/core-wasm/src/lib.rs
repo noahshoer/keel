@@ -11,6 +11,7 @@
 //! strings are parsed here, everything else is `keel_core`'s.
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Weekday};
+use keel_core::arrange::{self, ArrangeNames, Arrangement};
 use keel_core::calendar;
 use keel_core::editor::{self, EditorValues, Pick, ReminderDraft};
 use keel_core::filter;
@@ -180,6 +181,57 @@ pub fn cards(
     let mode: CardMode = input("mode", mode)?;
     let today = parse_date(today).map_err(|e| JsError::new(&e))?;
     output(&views::cards(matched, &all, mode, today))
+}
+
+/// `arrange::arrange`: filters a page's tasks, groups and orders them.
+#[wasm_bindgen(js_name = arrange, unchecked_return_type = "import('../../bindings').Arranged")]
+pub fn arrange(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Task[]")] tasks: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Arrangement")]
+    arrangement: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Project[]")] projects: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Section[]")] sections: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Label[]")] labels: JsValue,
+    today: &str,
+) -> Result<JsValue, JsError> {
+    let tasks: Vec<Task> = input("tasks", tasks)?;
+    let arrangement: Arrangement = input("arrangement", arrangement)?;
+    let projects: Vec<Project> = input("projects", projects)?;
+    let sections: Vec<Section> = input("sections", sections)?;
+    let labels: Vec<Label> = input("labels", labels)?;
+    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    let names = ArrangeNames {
+        projects: &projects,
+        sections: &sections,
+        labels: &labels,
+    };
+    output(&arrange::arrange(tasks, &arrangement, &names, today))
+}
+
+/// `arrange::summary`: an arrangement in words, for the toolbar.
+#[wasm_bindgen(js_name = arrangementSummary)]
+pub fn arrangement_summary(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Arrangement")]
+    arrangement: JsValue,
+) -> Result<String, JsError> {
+    let arrangement: Arrangement = input("arrangement", arrangement)?;
+    Ok(arrange::summary(&arrangement))
+}
+
+/// `Arrangement::flags`: whether an arrangement filters and whether it sorts.
+#[wasm_bindgen(js_name = arrangementFlags, unchecked_return_type = "import('../../bindings').ArrangementFlags")]
+pub fn arrangement_flags(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Arrangement")]
+    arrangement: JsValue,
+) -> Result<JsValue, JsError> {
+    let arrangement: Arrangement = input("arrangement", arrangement)?;
+    output(&arrangement.flags())
+}
+
+/// `arrange::sort_choices`: the fields in menu order with their direction labels.
+#[wasm_bindgen(js_name = sortChoices, unchecked_return_type = "import('../../bindings').SortChoice[]")]
+pub fn sort_choices() -> Result<JsValue, JsError> {
+    output(&arrange::sort_choices())
 }
 
 /// `views::due_bucket`: which coloured chip a `YYYY-MM-DD` due gets.

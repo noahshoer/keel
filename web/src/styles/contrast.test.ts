@@ -92,6 +92,33 @@ describe.each(THEMES)("a new name's pill, %s", (_theme, tokens) => {
   });
 });
 
+/** The token's color over `--bg`: hex as is, `rgba()` mixed in. */
+function onBg(value: string, bg: string): string {
+  const m = value.match(/^rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)$/);
+  if (!m) return value;
+  const hex = (n: number) => n.toString(16).padStart(2, "0");
+  return mix(`#${hex(Number(m[1]))}${hex(Number(m[2]))}${hex(Number(m[3]))}`, Number(m[4]), bg);
+}
+
+describe.each(THEMES)("the filter and sort buttons and chips, %s", (_theme, tokens) => {
+  it("a set button's icon on --active-tint is at least 4.5:1", () => {
+    expect(css).toMatch(
+      /\.arrange-btn\.on \{[^}]*background: var\(--active-tint\)[^}]*color: var\(--accent-text\)/,
+    );
+    // `block` reads hex only; the dark themes' tint is an rgba() (both dark blocks use the same one).
+    const rgba = [...css.matchAll(/--active-tint:\s*(rgba\([^)]*\))/g)].pop()?.[1];
+    const tint = onBg(tokens["--active-tint"] ?? (rgba as string), tokens["--bg"] as string);
+    expect(contrast(tokens["--accent-text"] as string, tint)).toBeGreaterThanOrEqual(4.5);
+  });
+  it("a broken filter's chip text on its fill is at least 4.5:1", () => {
+    expect(css).toMatch(
+      /\.arrange-chip\.problem \{[^}]*background: color-mix\(in srgb, var\(--due-overdue\) 16%, var\(--bg\)\); color: var\(--due-overdue\)/,
+    );
+    const fg = tokens["--due-overdue"] as string;
+    expect(contrast(fg, mix(fg, 0.16, tokens["--bg"] as string))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe.each(THEMES)("a filled pill, %s", (_theme, tokens) => {
   it.each(PILL_TEXT)("%s on its own tint is at least 4.5:1", (t) => {
     const fg = tokens[t] as string;
