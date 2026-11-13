@@ -5,11 +5,11 @@
 // first render shows what it has without animating; MainPane keys the list by
 // view, so a switch starts over.
 import { useEffect, useLayoutEffect, useReducer, useRef } from "react";
+import { EASE_SOFT } from "../gestures/sheet-rules";
 import { prefersReducedMotion } from "../shell/device";
 
 /** How long a collapse or grow takes (`.presence` in app.css matches it). */
 export const LEAVE_MS = 280;
-const EASE = "cubic-bezier(.2,.8,.2,1)";
 
 export type Presence = "out" | "entering" | "shown" | "leaving";
 type PresenceEvent = "show" | "hide" | "frame" | "done";
@@ -76,7 +76,7 @@ export function useFreshIds(ids: readonly string[], now: () => number = Date.now
 export function growIn(el: HTMLElement, reduced: boolean): void {
   if (typeof el.animate !== "function") return;
   if (reduced) {
-    el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: LEAVE_MS, easing: EASE });
+    el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: LEAVE_MS, easing: EASE_SOFT });
     return;
   }
   const height = el.getBoundingClientRect().height;
@@ -86,7 +86,7 @@ export function growIn(el: HTMLElement, reduced: boolean): void {
       { height: "0px", marginBottom: "0px", opacity: 0, overflow: "hidden" },
       { height: `${height}px`, marginBottom: margin, opacity: 1, overflow: "hidden" },
     ],
-    { duration: LEAVE_MS, easing: EASE },
+    { duration: LEAVE_MS, easing: EASE_SOFT },
   );
 }
 

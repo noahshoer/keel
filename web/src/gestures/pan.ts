@@ -6,7 +6,7 @@
 // cancelled and `onMove` gets the progress, 0 to 1, as the finger goes. The
 // anchor is where the pan started, so the view doesn't jump by the slop.
 
-import { type PanIntent, panCommits, panIntent, panProgress, velocity } from "./sheet-rules";
+import { NARROW_MAX, type PanIntent, panCommits, panIntent, panProgress, velocity } from "./sheet-rules";
 import { type TouchContext, touchContext } from "./swipe";
 
 export type Pan = {
@@ -33,6 +33,11 @@ type Active = {
   progress: number;
   samples: Array<[number, number]>;
 };
+
+/** Whether a touch may start a phone pan: on the narrow layout, with no sheet, Settings or field in the way. */
+export function canPan(ctx: TouchContext): boolean {
+  return !(ctx.blocked || ctx.inSheet || ctx.inSettings || ctx.width > NARROW_MAX);
+}
 
 /** Installs the listeners on `doc`; returns a function that removes them. */
 export function installPan(doc: Document, begin: (ctx: TouchContext) => Pan | null): () => void {

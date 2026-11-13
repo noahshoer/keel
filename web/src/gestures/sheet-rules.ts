@@ -37,6 +37,8 @@ export const BACK_FLICK = 0.5;
 /** Seconds the sheet and the swipe back take to settle, and their easing. */
 export const SETTLE_S = 0.3;
 export const EASE = "cubic-bezier(.32,.72,0,1)";
+/** The softer curve the drawer and the list's fades use (`--ease` in app.css). */
+export const EASE_SOFT = "cubic-bezier(.2,.8,.2,1)";
 
 /** One finished touch. */
 export type Swipe = {
