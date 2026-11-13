@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { stubMedia } from "../test/media";
 import { attachHeadScroll, type Followed, followStep, headCollapse, listFade, titleMove } from "./headScroll";
 
 describe("headCollapse", () => {
@@ -101,12 +102,7 @@ describe("followStep", () => {
 describe("attachHeadScroll", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  const phone = (matches: boolean) =>
-    vi.stubGlobal("matchMedia", () => ({
-      matches,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    }));
+  const phone = (matches: boolean) => stubMedia({ coarse: matches });
   const value = (el: HTMLElement, name: string) => Number(el.style.getPropertyValue(name));
 
   /** A scroller and target, with frames run by hand. */

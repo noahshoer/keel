@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { touch as sharedTouch } from "../test/touch";
 import { installDrag, TASK_DROP } from "./drag";
 import { ROW_DRAG, ROW_HOLD, ROW_PRESS } from "./long-press";
 
@@ -44,11 +45,7 @@ const el = (id: string) => document.getElementById(id) as HTMLElement;
 const ghost = () => document.querySelector(".drag-ghost");
 
 function touch(type: "touchmove" | "touchend" | "touchcancel", x = 50, y = 120) {
-  const ev = new Event(type, { bubbles: true, cancelable: true });
-  Object.defineProperty(ev, "touches", { value: type === "touchmove" ? [{ clientX: x, clientY: y }] : [] });
-  Object.defineProperty(ev, "changedTouches", { value: [{ clientX: x, clientY: y }] });
-  document.body.dispatchEvent(ev);
-  return ev;
+  return sharedTouch(type, document.body, x, y);
 }
 const hold = (id = "task", x = 50, y = 120) =>
   el(id).dispatchEvent(new CustomEvent(ROW_HOLD, { bubbles: true, detail: { x, y } }));

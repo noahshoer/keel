@@ -15,6 +15,7 @@ import { taskDetail } from "../core";
 import { setStreak } from "../ipc/actions";
 import { invoke } from "../ipc/invoke";
 import { mockHandlers } from "../ipc/mock";
+import { stubMedia } from "../test/media";
 import { loadCoreForTests } from "../test/wasm";
 import { TaskNavProvider } from "./nav";
 import { useTaskNav } from "./nav-context";
@@ -269,7 +270,7 @@ it("the streak row shows a goal that's set", async () => {
 });
 
 it("on touch, a tracked streak opens on the keyboard with its goal focused inside the tap", async () => {
-  vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+  stubMedia({ coarse: true });
   await setStreak("t-trip", true, null);
   await show(["t-trip"]);
   fireEvent.click(top().querySelector(".tv-streak") as HTMLElement);

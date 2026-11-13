@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { haptic } from "../shell/haptics";
+import { touch as sharedTouch } from "../test/touch";
 import { HOLD_MS, installLongPress, ROW_HOLD, ROW_PRESS } from "./long-press";
 
 vi.mock("../shell/haptics", () => ({ haptic: vi.fn() }));
@@ -31,12 +32,8 @@ afterEach(() => {
 
 const el = (id: string) => document.getElementById(id) as HTMLElement;
 
-// jsdom has no Touch constructor: a plain event carrying the touch points.
 function touch(type: "touchstart" | "touchmove" | "touchend", target: HTMLElement, x = 10, y = 10) {
-  const ev = new Event(type, { bubbles: true });
-  const points = type === "touchend" ? [] : [{ clientX: x, clientY: y }];
-  Object.defineProperty(ev, "touches", { value: points });
-  target.dispatchEvent(ev);
+  sharedTouch(type, target, x, y);
 }
 
 it("a half-second hold lifts the task and opens its menu, finger still down", () => {
@@ -69,9 +66,7 @@ it("lifting or cancelling before the half second opens nothing", () => {
   vi.advanceTimersByTime(2000);
   touch("touchstart", el("body"));
   vi.advanceTimersByTime(HOLD_MS - 1);
-  const cancel = new Event("touchcancel", { bubbles: true });
-  Object.defineProperty(cancel, "touches", { value: [] });
-  el("body").dispatchEvent(cancel);
+  sharedTouch("touchcancel", el("body"), 10, 10);
   vi.advanceTimersByTime(2000);
   expect(pressed).not.toHaveBeenCalled();
 });

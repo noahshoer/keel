@@ -10,6 +10,7 @@ import { KEYBOARD_EVENT } from "../gestures/sheet-rules";
 import * as fx from "../ipc/fixtures";
 import { mockPageScrollHeld } from "../ipc/mock";
 import { CheckSmallIcon } from "../shell/icons";
+import { stubMedia } from "../test/media";
 import { loadCoreForTests } from "../test/wasm";
 import { TaskEditor } from "./TaskEditor";
 
@@ -221,7 +222,7 @@ describe("the Streak pill", () => {
 
 describe("a card too long for the screen", () => {
   beforeEach(() => {
-    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+    stubMedia({ coarse: true });
     vi.stubGlobal("visualViewport", Object.assign(new EventTarget(), { offsetTop: 0, height: 478 }));
   });
   afterEach(() => {
@@ -256,7 +257,7 @@ describe("a card too long for the screen", () => {
 
 describe("on touch", () => {
   beforeEach(() => {
-    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+    stubMedia({ coarse: true });
   });
   afterEach(() => {
     vi.unstubAllGlobals();
