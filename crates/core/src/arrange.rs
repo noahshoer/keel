@@ -812,16 +812,7 @@ mod tests {
         t
     }
     fn due(mut t: Task, d: &str) -> Task {
-        t.due = Some(Due {
-            date: d.into(),
-            timezone: None,
-            string: d.into(),
-            lang: "en".into(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        t.due = Some(Due::new(d, d));
         t
     }
     fn deadline(mut t: Task, d: &str) -> Task {

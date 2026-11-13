@@ -36,14 +36,8 @@ impl World {
     /// A daily task from Oct 19 that ends on `until`.
     fn add_daily(&mut self, until: Option<&str>) -> Id {
         let due = Due {
-            date: "2026-10-19".to_string(),
-            timezone: None,
-            string: String::new(),
-            lang: "en".to_string(),
-            is_recurring: true,
-            recurrence: Some(Recurrence::Daily),
             until: until.map(str::to_string),
-            moved_from: None,
+            ..Due::repeating("2026-10-19", "", Recurrence::Daily)
         };
         let action = Action::TaskAdd {
             content: "x".to_string(),

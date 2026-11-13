@@ -291,14 +291,10 @@ fn build_due(
         None => string,
     };
     Some(Due {
-        date,
-        timezone: None,
-        string,
-        lang: "en".to_string(),
         is_recurring: rule.is_some(),
         recurrence: rule,
         until,
-        moved_from: None,
+        ..Due::new(date, string)
     })
 }
 

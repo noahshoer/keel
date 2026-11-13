@@ -743,16 +743,7 @@ mod tests {
     fn due_date_of_reads_date_and_datetime() {
         let mut t = Task::new("x", Id::new());
         assert_eq!(due_date_of(&t), None);
-        t.due = Some(Due {
-            date: "2026-10-19T09:30:00".to_string(),
-            timezone: None,
-            string: "today at 9:30".to_string(),
-            lang: "en".to_string(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        t.due = Some(Due::new("2026-10-19T09:30:00", "today at 9:30"));
         assert_eq!(due_date_of(&t), Some(d(2026, 10, 19)));
     }
 }
@@ -848,16 +839,7 @@ mod time_tests {
     fn reads_time_from_due() {
         let mut task = Task::new("x", Id::from("P"));
         assert_eq!(due_time(&task), None);
-        let due = |date: &str| Due {
-            date: date.into(),
-            timezone: None,
-            string: String::new(),
-            lang: "en".into(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        };
+        let due = |date: &str| Due::new(date, "");
         task.due = Some(due("2026-10-19"));
         assert_eq!(due_time(&task), None, "date-only due has no time");
         task.due = Some(due("2026-10-19T17:30:00"));
@@ -875,16 +857,7 @@ mod sidebar_count_mode_tests {
     fn task(name: &str, parent: Option<&Task>, date: Option<&str>) -> Task {
         let mut t = Task::new(name, Id::from("P"));
         t.parent_id = parent.map(|p| p.id.clone());
-        t.due = date.map(|d| Due {
-            date: d.into(),
-            timezone: None,
-            string: d.into(),
-            lang: "en".into(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        t.due = date.map(|d| Due::new(d, d));
         t
     }
 
@@ -930,14 +903,8 @@ mod progress_tests {
         task.checked = checked;
         if recurring {
             task.due = Some(Due {
-                date: "2026-10-23".into(),
-                timezone: None,
-                string: "every day".into(),
-                lang: "en".into(),
                 is_recurring: true,
-                recurrence: None,
-                until: None,
-                moved_from: None,
+                ..Due::new("2026-10-23", "every day")
             });
         }
         task
@@ -991,14 +958,8 @@ mod progress_tests {
 
     fn dated(mut task: Task, date: &str) -> Task {
         task.due = Some(Due {
-            date: date.into(),
-            timezone: None,
-            string: "every day".into(),
-            lang: "en".into(),
             is_recurring: true,
-            recurrence: None,
-            until: None,
-            moved_from: None,
+            ..Due::new(date, "every day")
         });
         task
     }
@@ -1169,14 +1130,8 @@ mod card_tests {
         let f = fx();
         let mut done = f.chargers.clone();
         done.due = Some(Due {
-            date: "2026-11-04".into(),
-            timezone: None,
-            string: "every day".into(),
-            lang: "en".into(),
             is_recurring: true,
-            recurrence: None,
-            until: None,
-            moved_from: None,
+            ..Due::new("2026-11-04", "every day")
         });
         done.last_completion = Some(crate::model::LastCompletion {
             moved_to: "2026-11-04".into(),
@@ -1283,14 +1238,8 @@ mod card_tests {
         f.pack.checked = true;
         let mut h = task("H", Some(&f.pack));
         h.due = Some(Due {
-            date: "2026-10-23".into(),
-            timezone: None,
-            string: "every day".into(),
-            lang: "en".into(),
             is_recurring: true,
-            recurrence: None,
-            until: None,
-            moved_from: None,
+            ..Due::new("2026-10-23", "every day")
         });
         let mut a = all(&f);
         a.push(h.clone());
@@ -1425,16 +1374,7 @@ mod date_group_tests {
         let mut t = Task::new(name, Id::from("proj"));
         t.id = Id::from(name);
         t.parent_id = parent.map(|p| p.id.clone());
-        t.due = Some(Due {
-            date: ymd(due),
-            timezone: None,
-            string: String::new(),
-            lang: "en".to_string(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        t.due = Some(Due::new(ymd(due), ""));
         t
     }
 
@@ -1727,16 +1667,7 @@ mod sidebar_count_tests {
     fn task(name: &str, project: &str, due: Option<&str>) -> Task {
         let mut t = Task::new(name, Id::from(project));
         t.id = Id::from(name);
-        t.due = due.map(|d| Due {
-            date: d.to_string(),
-            is_recurring: false,
-            string: d.to_string(),
-            lang: "en".to_string(),
-            timezone: None,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        t.due = due.map(|d| Due::new(d, d));
         t
     }
 
@@ -1860,14 +1791,8 @@ mod moved_tests {
     fn every_wed(date: &str, moved_from: Option<&str>) -> Task {
         let mut t = Task::new("Swim", Id::from("P"));
         t.due = Some(Due {
-            date: date.into(),
-            timezone: None,
-            string: String::new(),
-            lang: "en".into(),
-            is_recurring: true,
-            recurrence: Some(Recurrence::Weekly(vec![2])),
-            until: None,
             moved_from: moved_from.map(str::to_string),
+            ..Due::repeating(date, "", Recurrence::Weekly(vec![2]))
         });
         t
     }
@@ -1908,14 +1833,11 @@ mod occurrence_tests {
     ) -> Task {
         let mut t = Task::new("x", Id::new());
         t.due = Some(Due {
-            date: date.to_string(),
-            timezone: None,
-            string: String::new(),
-            lang: "en".to_string(),
             is_recurring: rule.is_some(),
             recurrence: rule,
             until: until.map(String::from),
             moved_from: moved.map(String::from),
+            ..Due::new(date, "")
         });
         t
     }

@@ -115,16 +115,7 @@ mod tests {
 
     fn streak_task(rule: Recurrence) -> Task {
         let mut t = Task::new("habit", Id::new());
-        t.due = Some(Due {
-            date: "2026-01-05".to_string(),
-            timezone: None,
-            string: "every day".to_string(),
-            lang: "en".to_string(),
-            is_recurring: true,
-            recurrence: Some(rule),
-            until: None,
-            moved_from: None,
-        });
+        t.due = Some(Due::repeating("2026-01-05", "every day", rule));
         t.streak_enabled = true;
         t
     }
@@ -207,16 +198,7 @@ mod streak_text_tests {
     fn task(rule: Option<Recurrence>, current: i64) -> Task {
         let mut t = Task::new("t", Id::from("p"));
         t.streak_current = current as _;
-        t.due = rule.map(|r| Due {
-            date: "2026-11-01".into(),
-            is_recurring: true,
-            string: String::new(),
-            lang: "en".into(),
-            timezone: None,
-            recurrence: Some(r),
-            until: None,
-            moved_from: None,
-        });
+        t.due = rule.map(|r| Due::repeating("2026-11-01", "", r));
         t
     }
 

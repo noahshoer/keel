@@ -50,16 +50,7 @@ fn floating_due_stored_as_null_tz() {
     let (_d, repo) = temp_db();
     let project = Id::new();
     let mut task = Task::new("float", project);
-    task.due = Some(Due {
-        date: "2026-10-19".to_string(),
-        timezone: None,
-        string: "today".to_string(),
-        lang: "en".to_string(),
-        is_recurring: false,
-        recurrence: None,
-        until: None,
-        moved_from: None,
-    });
+    task.due = Some(Due::new("2026-10-19", "today"));
     repo.upsert_task(&task).unwrap();
     let got = repo.get_task(&task.id).unwrap().unwrap();
     assert_eq!(got.due.unwrap().timezone, None);

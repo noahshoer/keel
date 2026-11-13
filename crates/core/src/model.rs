@@ -74,6 +74,30 @@ pub struct Due {
 }
 
 impl Due {
+    /// A one-off due on `date` (`YYYY-MM-DD` or a datetime), described by
+    /// `string`: floating, in English, with no repeat.
+    pub fn new(date: impl Into<String>, string: impl Into<String>) -> Due {
+        Due {
+            date: date.into(),
+            timezone: None,
+            string: string.into(),
+            lang: "en".to_string(),
+            is_recurring: false,
+            recurrence: None,
+            until: None,
+            moved_from: None,
+        }
+    }
+
+    /// [`Due::new`] repeating by `rule`, with no end.
+    pub fn repeating(date: impl Into<String>, string: impl Into<String>, rule: Recurrence) -> Due {
+        Due {
+            is_recurring: true,
+            recurrence: Some(rule),
+            ..Due::new(date, string)
+        }
+    }
+
     /// The repeat's end ([`Due::until`]) as a date, when it is one.
     pub fn until_date(&self) -> Option<NaiveDate> {
         self.until.as_deref().and_then(parse_ymd)
@@ -415,16 +439,7 @@ impl Reminder {
             id: Id::new(),
             task_id,
             kind: ReminderType::Absolute,
-            due: Some(Due {
-                date: date.clone(),
-                timezone: None,
-                string: date,
-                lang: "en".to_string(),
-                is_recurring: false,
-                recurrence: None,
-                until: None,
-                moved_from: None,
-            }),
+            due: Some(Due::new(date.clone(), date)),
             minute_offset: None,
             is_deleted: false,
         }
@@ -470,17 +485,34 @@ mod tests {
     }
 
     #[test]
-    fn until_date_reads_the_repeat_end() {
-        let mut due = Due {
+    fn due_constructors_fill_the_plain_fields() {
+        use crate::recurrence::Recurrence;
+        let plain = Due {
             date: "2026-10-19".to_string(),
             timezone: None,
-            string: "every day".to_string(),
+            string: "today".to_string(),
             lang: "en".to_string(),
             is_recurring: false,
             recurrence: None,
             until: None,
             moved_from: None,
         };
+        assert_eq!(Due::new("2026-10-19", "today"), plain);
+        let repeating = Due {
+            is_recurring: true,
+            recurrence: Some(Recurrence::Daily),
+            string: "every day".to_string(),
+            ..plain
+        };
+        assert_eq!(
+            Due::repeating("2026-10-19", "every day", Recurrence::Daily),
+            repeating
+        );
+    }
+
+    #[test]
+    fn until_date_reads_the_repeat_end() {
+        let mut due = Due::new("2026-10-19", "every day");
         assert_eq!(due.until_date(), None);
         due.until = Some("2026-11-30".to_string());
         assert_eq!(due.until_date(), NaiveDate::from_ymd_opt(2026, 11, 30));
@@ -523,16 +555,7 @@ mod tests {
 
     #[test]
     fn floating_due_keeps_none_timezone() {
-        let due = Due {
-            date: "2026-10-19".to_string(),
-            timezone: None,
-            string: "today".to_string(),
-            lang: "en".to_string(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        };
+        let due = Due::new("2026-10-19", "today");
         let json = serde_json::to_string(&due).expect("serialize");
         let back: Due = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back.timezone, None);

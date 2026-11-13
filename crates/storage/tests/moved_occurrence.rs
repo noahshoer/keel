@@ -37,14 +37,8 @@ impl World {
 
     fn add(&mut self, date: &str, rule: Recurrence, until: Option<&str>) -> Id {
         let due = Due {
-            date: date.to_string(),
-            timezone: None,
-            string: String::new(),
-            lang: "en".to_string(),
-            is_recurring: true,
-            recurrence: Some(rule.clone()),
             until: until.map(str::to_string),
-            moved_from: None,
+            ..Due::repeating(date, "", rule.clone())
         };
         let action = Action::TaskAdd {
             content: "x".to_string(),

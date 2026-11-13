@@ -326,16 +326,7 @@ mod tests {
 
     fn task(name: &str, due: Option<&str>) -> Task {
         let mut task = Task::new(name, Id::from("P"));
-        task.due = due.map(|date| Due {
-            date: date.into(),
-            timezone: None,
-            string: String::new(),
-            lang: "en".into(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        task.due = due.map(|date| Due::new(date, ""));
         task
     }
 

@@ -346,14 +346,8 @@ impl NewTask {
     /// The `TaskAdd` that creates this task.
     pub fn into_action(self) -> Action {
         let due = (!self.date.is_empty()).then(|| Due {
-            date: self.date.clone(),
-            timezone: None,
-            string: self.date.clone(),
-            lang: "en".to_string(),
-            is_recurring: false,
-            recurrence: None,
             until: (!self.until.is_empty()).then(|| self.until.clone()),
-            moved_from: None,
+            ..Due::new(self.date.clone(), self.date.clone())
         });
         let description =
             (!self.description.trim().is_empty()).then(|| self.description.trim().to_string());
@@ -2605,14 +2599,8 @@ mod tests {
         let mut task = Task::new("Swim", Id::from("P-IN"));
         task.id = Id::from("T-1");
         task.due = Some(Due {
-            date: date.into(),
-            timezone: None,
-            string: String::new(),
-            lang: "en".into(),
-            is_recurring: true,
-            recurrence: Some(Recurrence::Weekly(vec![2])),
-            until: None,
             moved_from: moved_from.map(str::to_string),
+            ..Due::repeating(date, "", Recurrence::Weekly(vec![2]))
         });
         task
     }
@@ -2779,14 +2767,8 @@ mod tests {
         let mut task = Task::new("Stretch", Id::from("P-IN"));
         task.id = Id::from("T-1");
         task.due = Some(Due {
-            date: "2026-10-19".into(),
-            timezone: None,
-            string: String::new(),
-            lang: "en".into(),
-            is_recurring: true,
-            recurrence: Some(Recurrence::Daily),
             until: Some("2026-10-21".into()),
-            moved_from: None,
+            ..Due::repeating("2026-10-19", "", Recurrence::Daily)
         });
         let before = EditorValues::from_task(&task);
         assert_eq!(before.until, "2026-10-21");
