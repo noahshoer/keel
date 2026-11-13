@@ -14,6 +14,7 @@ import { NARROW_MAX } from "../gestures/sheet-rules";
 import { invoke } from "../ipc/invoke";
 import { COMPLETION_ICONS, type CompletionIcon, iconLabel, saveIcon } from "../lists/completion";
 import { ShowSubtasksContext, saveShowSubtasks } from "../lists/showSubtasks";
+import { NARROW_QUERY } from "../shell/device";
 import {
   BellSmallIcon,
   CalendarSmallIcon,
@@ -145,7 +146,7 @@ export function Settings({
   const [leaving, setLeaving] = useState(false);
   const close = () => {
     if (leaving) return;
-    if (!window.matchMedia?.("(max-width: 899px)").matches) return onClose();
+    if (!window.matchMedia?.(NARROW_QUERY).matches) return onClose();
     setLeaving(true);
     setTimeout(onClose, 260);
   };

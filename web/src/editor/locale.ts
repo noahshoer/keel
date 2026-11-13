@@ -17,6 +17,3 @@ export function weekStart(): number {
     return 1;
   }
 }
-
-// `isTouch` lives with the other device checks; the editors still import it from here.
-export { isTouch } from "../shell/device";

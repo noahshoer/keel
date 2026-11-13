@@ -20,16 +20,7 @@ impl Fx {
     }
 
     fn task(&mut self, content: &str, project: &Id, due: Option<&str>, priority: Priority) -> Id {
-        let due = due.map(|date| Due {
-            date: date.to_string(),
-            timezone: None,
-            string: date.to_string(),
-            lang: "en".into(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        let due = due.map(|date| Due::new(date, date));
         self.add_task(
             NewTask::new(content)
                 .project(project)
@@ -39,16 +30,7 @@ impl Fx {
     }
 
     fn subtask(&mut self, content: &str, parent: &Id, due: Option<&str>) -> Id {
-        let due = due.map(|date| Due {
-            date: date.to_string(),
-            timezone: None,
-            string: date.to_string(),
-            lang: "en".into(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        let due = due.map(|date| Due::new(date, date));
         self.add_task(NewTask::new(content).parent(parent).due(due))
     }
 

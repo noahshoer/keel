@@ -87,11 +87,6 @@ impl Progress {
         self.total > 0 && self.done == self.total
     }
 
-    /// Compact count for rows: "2/5".
-    pub fn short(&self) -> String {
-        format!("{}/{}", self.done, self.total)
-    }
-
     /// Spelled-out count for the task view header: "2 of 5".
     pub fn long(&self) -> String {
         format!("{} of {}", self.done, self.total)
@@ -885,7 +880,6 @@ mod progress_tests {
 
     #[test]
     fn progress_text() {
-        assert_eq!(Progress { done: 2, total: 5 }.short(), "2/5");
         assert_eq!(Progress { done: 5, total: 5 }.long(), "5 of 5");
     }
 

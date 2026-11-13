@@ -5,8 +5,8 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import type { EditorValues, Label, Project, Section } from "../bindings";
 import { localToday } from "../clock";
+import { isTouch } from "../shell/device";
 import { PlusIcon } from "../shell/icons";
-import { isTouch } from "./locale";
 import { addFromEditor } from "./save";
 import { TaskEditor } from "./TaskEditor";
 

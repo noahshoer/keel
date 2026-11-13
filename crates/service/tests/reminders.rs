@@ -16,16 +16,7 @@ fn at(d: u32, h: u32, m: u32) -> NaiveDateTime {
 
 impl Fx {
     fn add(&mut self, name: &str, due: &str) -> Id {
-        let due = Due {
-            date: due.into(),
-            timezone: None,
-            string: due.into(),
-            lang: "en".into(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        };
+        let due = Due::new(due, due);
         self.add_task(NewTask::new(name).due(Some(due)))
     }
 }

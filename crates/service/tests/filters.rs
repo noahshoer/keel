@@ -12,16 +12,7 @@ fn today() -> NaiveDate {
 
 impl Fx {
     fn task(&mut self, name: &str, due: Option<&str>, priority: Priority, labels: &[&str]) -> Id {
-        let due = due.map(|d| Due {
-            date: d.into(),
-            timezone: None,
-            string: d.into(),
-            lang: "en".into(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        let due = due.map(|d| Due::new(d, d));
         self.add_task(
             NewTask::new(name)
                 .priority(priority)

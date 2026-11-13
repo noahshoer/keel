@@ -123,12 +123,6 @@ pub fn month_view(
     }
 }
 
-/// The month `delta` months from `year`/`month`.
-pub fn shift_month(year: i32, month: u32, delta: i32) -> (i32, u32) {
-    let index = year * 12 + month as i32 - 1 + delta;
-    (index.div_euclid(12), index.rem_euclid(12) as u32 + 1)
-}
-
 /// The years the calendar and its month / year wheel offer: last year to ten
 /// ahead, stretched to hold the `shown` year.
 pub fn year_choices(today: NaiveDate, shown: i32) -> Vec<i32> {
@@ -244,14 +238,6 @@ mod tests {
         let v = month_view(2026, 10, Weekday::Mon, d(2026, 10, 23), None, None);
         assert_eq!(v.weekdays[0], "M");
         assert_eq!(v.weeks[0][0].date, d(2026, 9, 28));
-    }
-
-    #[test]
-    fn months_shift_across_years() {
-        assert_eq!(shift_month(2026, 10, 1), (2026, 11));
-        assert_eq!(shift_month(2026, 12, 1), (2027, 1));
-        assert_eq!(shift_month(2026, 1, -1), (2025, 12));
-        assert_eq!(shift_month(2026, 10, -22), (2024, 12));
     }
 
     #[test]

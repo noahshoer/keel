@@ -36,6 +36,7 @@ import {
   unhighlightAt,
   withTitle,
 } from "../core";
+import { isTouch } from "../shell/device";
 import { ArrowUpIcon, FlagFilledIcon, RepeatSmallIcon } from "../shell/icons";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
@@ -43,7 +44,6 @@ import { HighlightedTitle } from "./HighlightedTitle";
 import { flagClass, locationChosen, locationFace, locationItems, PRIORITY_ITEMS } from "./items";
 import { CARD_GAP, lowerKeyboardNow, useHeldKeyboard, useKeyboard } from "./keyboardAnchor";
 import { LabelPicker } from "./LabelPicker";
-import { isTouch } from "./locale";
 import { Menu, type MenuItem } from "./Menu";
 import { NewNamesPrompt } from "./NewNamesPrompt";
 import { type TypedPills, usePillFade, useRevealFilled } from "./pillFade";
