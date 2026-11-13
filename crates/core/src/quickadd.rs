@@ -82,19 +82,6 @@ impl QuickAdd {
             None => ymd(d),
         })
     }
-
-    /// True when nothing besides the title was recognized.
-    pub fn is_plain(&self) -> bool {
-        self.date.is_none()
-            && self.time.is_none()
-            && self.recurrence.is_none()
-            && self.priority.is_none()
-            && self.project_id.is_none()
-            && self.section_id.is_none()
-            && self.new_project.is_none()
-            && self.labels.is_empty()
-            && self.deadline.is_none()
-    }
 }
 
 /// `input` without the recognized phrases of the given kinds, with the

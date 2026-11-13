@@ -682,14 +682,14 @@ pub fn has_name(
     sections: &[Section],
     today: NaiveDate,
 ) -> bool {
-    if quick_add {
-        !parse_title(v, projects, sections, today)
-            .content
-            .trim()
-            .is_empty()
-    } else {
-        !v.content.trim().is_empty()
-    }
+    let qa = quick_add.then(|| parse_title(v, projects, sections, today));
+    title_has_name(v, qa.as_ref())
+}
+
+/// [`has_name`] given the title's quick-add parse (`None` without quick add).
+fn title_has_name(v: &EditorValues, qa: Option<&QuickAdd>) -> bool {
+    let name = qa.map_or(v.content.as_str(), |q| q.content.as_str());
+    !name.trim().is_empty()
 }
 
 /// The typed phrases a pick replaces.
@@ -926,17 +926,6 @@ fn shown_until(v: &EditorValues, qa: &QuickAdd) -> String {
     }
 }
 
-/// The labels a pick added by a name no label has yet (any case), so they
-/// can be created: names already on the task aren't.
-pub fn labels_to_create(before: &[String], after: &[String], known: &[Label]) -> Vec<String> {
-    after
-        .iter()
-        .filter(|n| !before.iter().any(|b| b.eq_ignore_ascii_case(n)))
-        .filter(|n| !known.iter().any(|l| l.name.eq_ignore_ascii_case(n)))
-        .cloned()
-        .collect()
-}
-
 /// The Date chip's text and due bucket (`None` when no date is set; a time
 /// alone means today).
 pub fn date_chip(
@@ -1166,10 +1155,7 @@ pub fn editor_view(
     today: NaiveDate,
 ) -> EditorView {
     let qa = quick_add.then(|| parse_title(v, projects, sections, today));
-    let can_submit = match &qa {
-        Some(q) => !q.content.trim().is_empty(),
-        None => !v.content.trim().is_empty(),
-    };
+    let can_submit = title_has_name(v, qa.as_ref());
     let spans = qa.as_ref().map(|q| q.spans.as_slice()).unwrap_or(&[]);
     let mut shown = qa
         .as_ref()
@@ -1593,20 +1579,6 @@ mod tests {
     }
 
     #[test]
-    fn a_label_picked_by_a_new_name_is_created_once() {
-        let known = vec![Label::new("home")];
-        let before: Vec<String> = vec!["home".into()];
-        let after: Vec<String> = vec!["home".into(), "Travel".into()];
-        assert_eq!(labels_to_create(&before, &after, &known), ["Travel"]);
-        // Known names (any case) and names already on the task aren't created.
-        let after: Vec<String> = vec!["HOME".into()];
-        assert!(labels_to_create(&before, &after, &known).is_empty());
-        let before: Vec<String> = vec!["Travel".into()];
-        let after: Vec<String> = vec!["travel".into()];
-        assert!(labels_to_create(&before, &after, &known).is_empty());
-    }
-
-    #[test]
     fn edit_changes_leave_quick_add_text_alone() {
         let mut task = Task::new("Buy p1 batteries #2", Id::from("P-IN"));
         task.id = Id::from("T-1");
@@ -1892,6 +1864,18 @@ mod tests {
 
     #[test]
     fn editor_view_cannot_submit_a_phrase_alone() {
+        for (text, quick_add) in [
+            ("tomorrow", true),
+            ("x tomorrow", true),
+            ("tomorrow", false),
+        ] {
+            let v = typed(text);
+            assert_eq!(
+                has_name(&v, quick_add, &[], &[], day30()),
+                view_of(&v, quick_add).can_submit,
+                "{text}"
+            );
+        }
         assert!(!view_of(&typed("tomorrow"), true).can_submit);
         assert!(view_of(&typed("x tomorrow"), true).can_submit);
         assert!(
