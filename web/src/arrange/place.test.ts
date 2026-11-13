@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { View } from "../app/view";
 import type { Label, PlacedArrangement, Project } from "../bindings";
+import { loadCoreForTests } from "../test/wasm";
 import { arrangementOf, isArranged, NO_ARRANGEMENT, placeOf } from "./place";
+
+beforeAll(() => {
+  loadCoreForTests();
+});
 
 const inbox = { id: "p-inbox", name: "Inbox", is_inbox: true } as Project;
 const labels = [{ id: "l-errand", name: "errand" }] as Label[];

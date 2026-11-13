@@ -958,3 +958,53 @@ it("closing the filter panel keeps the draft's result on the page until the save
     slow.restore();
   }
 });
+
+it("a project filtered down to a sub-task shows it under its parent, and the count is the cards drawn", async () => {
+  const untouched = await show({ kind: "project", id: "p-home", name: "Home" });
+  const cardsBefore = untouched.container.querySelectorAll(".task-row").length;
+  untouched.unmount();
+  await arrangeView(homePlace, arrangement({ filter: "sheets" }));
+  const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+  expect(screen.queryByText("No tasks match this filter.")).toBeNull();
+  const body = container.querySelector(".list-body")?.textContent ?? "";
+  expect(body).toContain("Do laundry");
+  expect(body).not.toContain("Buy groceries");
+  fireEvent.click(screen.getByLabelText("Filter"));
+  expect(document.body.querySelector(".filter-count")?.textContent).toBe(`1 of ${cardsBefore} tasks match`);
+});
+
+it("a filter the backend turns down isn't saved, and the page says why", async () => {
+  const check = vi.spyOn(mockHandlers, "check_filter").mockRejectedValue("No good.");
+  try {
+    const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+    fireEvent.click(screen.getByLabelText("Filter"));
+    fireEvent.change(await screen.findByLabelText("Query"), { target: { value: "p1" } });
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() =>
+      expect(container.querySelector(".arrange-save-problem")?.textContent).toContain("No good."),
+    );
+    expect(await invoke("list_arrangements", {})).toEqual([]);
+    await waitFor(() => expect(screen.getByLabelText("Filter").getAttribute("aria-pressed")).toBe("false"));
+  } finally {
+    check.mockRestore();
+  }
+});
+
+it("a failed save says so on the page", async () => {
+  const real = mockHandlers.dispatch;
+  const spy = vi.spyOn(mockHandlers, "dispatch").mockImplementation(async (args) => {
+    if (args.cmd.action.type === "view_arrange") throw "disk full";
+    return real(args);
+  });
+  try {
+    const { container } = await show({ kind: "project", id: "p-home", name: "Home" });
+    fireEvent.click(screen.getByLabelText("Sort"));
+    fireEvent.click(await screen.findByText("Add order"));
+    fireEvent.click(screen.getByRole("button", { name: "Priority" }));
+    await waitFor(() =>
+      expect(container.querySelector(".arrange-save-problem")?.textContent).toContain("disk full"),
+    );
+  } finally {
+    spy.mockRestore();
+  }
+});

@@ -29,6 +29,7 @@ import { localToday } from "../clock";
 import { arrange, blankValues, cards, dateGroups, filterReading } from "../core";
 import { AddTask } from "../editor/AddTask";
 import { arrangeView } from "../ipc/actions";
+import { invoke } from "../ipc/invoke";
 import { CardList } from "../lists/CardList";
 import { CompletedRow } from "../lists/CompletedRow";
 import { DropZone } from "../lists/DropZone";
@@ -59,6 +60,9 @@ import { ViewMenu } from "./ViewMenu";
 type Held = { place: string; id: number; arrangement: Arrangement; settledOn: Loaded | null };
 
 const SEARCH = viewPlace({ kind: "search" });
+
+/** Each task once (a filter page lists a task once per comma group it matches). */
+const distinct = (tasks: Task[]): Task[] => [...new Map(tasks.map((t) => [t.id, t])).values()];
 
 function contentClass(motion: Motion, swap: number): string {
   if (motion === "pop") return "content view-pop";
@@ -214,9 +218,16 @@ export function MainPane({
   const namesProject = showsProject(view);
   const search = view.kind === "search";
   const projectId = view.kind === "project" ? view.id : view.kind === "inbox" ? loaded.inbox.id : null;
-  const projectSections: Section[] =
-    projectId === null ? [] : loaded.sections.filter((s) => s.project_id === projectId);
+  const projectSections: Section[] = useMemo(
+    () => (projectId === null ? [] : loaded.sections.filter((s) => s.project_id === projectId)),
+    [loaded.sections, projectId],
+  );
   const inSection = (t: Task, s: Section) => t.section_id === s.id;
+  // Each section's tasks, kept between renders so a section's own work isn't redone on every keystroke.
+  const sectionTasks = useMemo(
+    () => new Map(projectSections.map((s) => [s.id, loaded.tasks.filter((t) => t.section_id === s.id)])),
+    [projectSections, loaded.tasks],
+  );
   const unsectioned = loaded.tasks.filter((t) => !projectSections.some((s) => inSection(t, s)));
   const empty = loaded.tasks.length === 0;
   const [big, small] = emptyText(view);
@@ -260,6 +271,9 @@ export function MainPane({
   const sortSet = hasSort(arrangement);
   const arranged = filterSet || sortSet;
   const headed = arrangement.groups.length > 0;
+  // A filtered project page lists what matched, not the whole project, so a matched sub-task
+  // whose parent didn't match is drawn under that parent, as on Today.
+  const listMode = filterSet && mode === "TopLevel" ? "Heads" : mode;
   // keel-core's reading of the whole page, once per change; nothing is asked of it on a page with no arrangement.
   const whole = useMemo(
     () =>
@@ -268,19 +282,49 @@ export function MainPane({
         : null,
     [arranged, arrangement, loaded.tasks, loaded.projects, loaded.sections, loaded.labels, today],
   );
-  // Saves reach the backend in the order they were made.
+  // Why the last save didn't go through, until the next one does.
+  const [saveProblem, setSaveProblem] = useState<string | null>(null);
+  // Saves reach the backend in the order they were made. A new filter is checked by the backend
+  // first, however the panel closed; one it turns down isn't saved, and the page says why.
   const saveArrangement = (next: Arrangement) => {
     if (!arrangePlace) return;
     const id = ++saves.current;
+    const check = hasFilter(next) && next.filter.trim() !== saved.filter.trim();
     setHeld({ place, id, arrangement: next, settledOn: null });
     const settle = () => {
       setHeld((h) => (h !== null && h.id === id ? { ...h, settledOn: loadedNow.current } : h));
       onChanged();
     };
-    saving.current = saving.current.then(() => arrangeView(arrangePlace, next)).then(settle, settle);
+    saving.current = saving.current
+      .then(() => (check ? invoke("check_filter", { query: next.filter }) : undefined))
+      .then(() => arrangeView(arrangePlace, next))
+      .then(
+        () => {
+          setSaveProblem(null);
+          settle();
+        },
+        (e: unknown) => {
+          setSaveProblem(`Couldn’t save how this page is arranged: ${String(e)}`);
+          settle();
+        },
+      );
   };
+  // How many cards the page draws, with and without its filter (a section's header counts the
+  // same way): a sub-task hidden under its parent's card isn't one of them.
+  const shownCards = useMemo(
+    () =>
+      whole === null
+        ? null
+        : cards(distinct(whole.groups.flatMap((g) => g.tasks)), loaded.all, listMode, today).length,
+    [whole, loaded.all, listMode, today],
+  );
+  const filterOpen = panel === "filter";
+  const totalCards = useMemo(
+    () => (filterOpen ? cards(distinct(loaded.tasks), loaded.all, mode, today).length : 0),
+    [filterOpen, loaded.tasks, loaded.all, mode, today],
+  );
   // A filter that matched nothing says so; the page's own empty text is for pages with no tasks.
-  const nothingMatches = whole !== null && filterSet && whole.filter_problem === null && whole.shown === 0;
+  const nothingMatches = whole !== null && filterSet && whole.filter_problem === null && shownCards === 0;
   // Without headings the page keeps its own grouping, and each of its lists keeps the tasks
   // the whole-page reading kept, in that reading's order.
   const shape = useMemo<((tasks: Task[]) => Task[]) | null>(() => {
@@ -291,7 +335,7 @@ export function MainPane({
   }, [whole, headed]);
   const list = (tasks: Task[]) => (
     <CardList
-      cards={cards(tasks, loaded.all, mode, today)}
+      cards={cards(tasks, loaded.all, listMode, today)}
       today={today}
       locations={locations}
       labels={loaded.labels}
@@ -316,7 +360,7 @@ export function MainPane({
         <ArrangedList
           groups={whole.groups}
           all={loaded.all}
-          mode={mode}
+          mode={listMode}
           today={today}
           locations={locations}
           labels={loaded.labels}
@@ -400,9 +444,10 @@ export function MainPane({
           <SectionBlock
             key={section.id}
             section={section}
-            tasks={loaded.tasks.filter((t) => inSection(t, section))}
+            tasks={sectionTasks.get(section.id) ?? []}
             all={loaded.all}
             shape={shape}
+            mode={listMode}
             loaded={loaded}
             today={today}
             reminders={loaded.reminders}
@@ -497,10 +542,7 @@ export function MainPane({
                 initial={saved.filter}
                 names={loaded}
                 filters={loaded.filters}
-                counts={{
-                  shown: whole?.shown ?? loaded.tasks.length,
-                  total: whole?.total ?? loaded.tasks.length,
-                }}
+                counts={{ shown: shownCards ?? totalCards, total: totalCards }}
                 anchor={filterButton}
                 fieldRef={filterField}
                 onDraft={(query) =>
@@ -589,6 +631,9 @@ export function MainPane({
                 onClearFilter={() => saveArrangement({ ...arrangement, filter: "" })}
                 onResetSort={() => saveArrangement(resetSort(arrangement))}
               />
+              {saveProblem !== null ? (
+                <p className="filter-problem view-problem arrange-save-problem">{saveProblem}</p>
+              ) : null}
               {loaded.filterError !== null ? (
                 <div className="filter-problem big-problem">{`This filter can’t run: ${loaded.filterError}`}</div>
               ) : search ? null : (

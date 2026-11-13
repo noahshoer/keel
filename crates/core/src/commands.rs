@@ -606,6 +606,7 @@ pub fn apply_at<R: Repository>(
                 label.is_deleted = true;
                 repo.upsert_label(&label)?;
             }
+            repo.delete_arrangement(&ViewPlace::Label { id }.key())?;
         }
         Action::ProjectAdd { name } => {
             let project = Project::new(name);
@@ -641,6 +642,7 @@ pub fn apply_at<R: Repository>(
                 filter.is_deleted = true;
                 repo.upsert_filter(&filter)?;
             }
+            repo.delete_arrangement(&ViewPlace::Filter { id }.key())?;
         }
         Action::ViewArrange { place, arrangement } => {
             let arrangement = arrangement.normalized();
@@ -672,6 +674,7 @@ pub fn apply_at<R: Repository>(
             for task in repo.list_tasks(&id)? {
                 repo.soft_delete_task(&task.id)?;
             }
+            repo.delete_arrangement(&ViewPlace::Project { id }.key())?;
         }
         Action::TaskUncomplete { id } => {
             let was_done = repo

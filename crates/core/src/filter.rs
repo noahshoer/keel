@@ -741,10 +741,22 @@ pub fn read(
     sections: &[Section],
     labels: &[Label],
 ) -> FilterReading {
+    read_parsed(query, today, projects, sections, labels).0
+}
+
+/// [`read`], with what [`parse`] made of the query (it parses it once).
+pub fn read_parsed(
+    query: &str,
+    today: NaiveDate,
+    projects: &[Project],
+    sections: &[Section],
+    labels: &[Label],
+) -> (FilterReading, Result<Vec<Expr>, FilterError>) {
     let names = names_of(projects, sections, labels);
     let spans = spans(query, today, &names);
-    let error = parse(query, today, &names).err();
-    let bad = error.as_ref().and_then(|e| e.at);
+    let parsed = parse(query, today, &names);
+    let error = parsed.as_ref().err();
+    let bad = error.and_then(|e| e.at);
     // Each segment with its byte start, computed once; a syntax error's range
     // splits the segments it crosses.
     let mut parts: Vec<(usize, TitleSegment)> = Vec::new();
@@ -825,14 +837,15 @@ pub fn read(
         }
     }
     if let Some(e) = error {
-        problem = Some(e.message);
+        problem = Some(e.message.clone());
         fix = None;
     }
-    FilterReading {
+    let reading = FilterReading {
         segments: parts.into_iter().map(|(_, s)| s).collect(),
         problem,
         fix,
-    }
+    };
+    (reading, parsed)
 }
 
 /// `query` with the term ending at byte `end` turned into quoted text

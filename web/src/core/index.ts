@@ -6,6 +6,7 @@ import type {
   AddPlan,
   Arranged,
   Arrangement,
+  ArrangementFlags,
   Card,
   CardMode,
   DateGroup,
@@ -119,6 +120,12 @@ export function arrange(
 export function arrangementSummary(a: Arrangement): string {
   ready();
   return core.arrangementSummary(a);
+}
+
+/** Whether an arrangement filters its page and whether it groups or orders it. */
+export function arrangementFlags(a: Arrangement): ArrangementFlags {
+  ready();
+  return core.arrangementFlags(a);
 }
 
 /** The sort fields in menu order with their direction labels. */

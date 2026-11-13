@@ -7,8 +7,8 @@
 use std::path::PathBuf;
 
 use keel_core::arrange::{
-    Arranged, ArrangedGroup, Arrangement, OrderLevel, PlacedArrangement, SortChoice, SortField,
-    SubHeading, ViewPlace,
+    Arranged, ArrangedGroup, Arrangement, ArrangementFlags, OrderLevel, PlacedArrangement,
+    SortChoice, SortField, SubHeading, ViewPlace,
 };
 use keel_core::calendar::{DayCell, MonthView};
 use keel_core::commands::{Action, ApplyResult, Command, DueEdit};
@@ -99,6 +99,7 @@ fn bindings_cover_ipc_types() {
         SortChoice,
         OrderLevel,
         Arrangement,
+        ArrangementFlags,
         ViewPlace,
         PlacedArrangement,
         SubHeading,

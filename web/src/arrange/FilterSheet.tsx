@@ -91,16 +91,22 @@ export function FilterSheet({
 
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
+  // Why "Save as a filter" didn't go through, until the name changes or it's tried again.
+  const [createProblem, setCreateProblem] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const saveable = !blank && problem === null && !filters.some((f) => f.query.trim() === query.trim());
   const create = () => {
     const n = name.trim();
     if (n === "" || !saveable) return;
-    void addFilter(n, query.trim()).then(() => {
-      setNaming(false);
-      setName("");
-      onFilterAdded?.();
-    });
+    setCreateProblem(null);
+    addFilter(n, query.trim()).then(
+      () => {
+        setNaming(false);
+        setName("");
+        onFilterAdded?.();
+      },
+      (e: unknown) => setCreateProblem(`Couldn’t save the filter: ${String(e)}`),
+    );
   };
 
   return (
@@ -109,7 +115,7 @@ export function FilterSheet({
       action={{ label: "Clear", run: clear }}
       anchor={anchor}
       onClose={close}
-      layoutKey={`${problem !== null}|${filters.length}|${saveable}|${naming}`}
+      layoutKey={`${problem !== null}|${filters.length}|${saveable}|${naming}|${createProblem !== null}`}
     >
       <div className="filter-panel">
         <FilterField
@@ -122,23 +128,29 @@ export function FilterSheet({
         />
         <p className="filter-count">{`${counts.shown} of ${counts.total} tasks match`}</p>
         {saveable && naming ? (
-          <input
-            ref={nameRef}
-            className="project-input"
-            placeholder="Filter name"
-            aria-label="Filter name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                create();
-              } else if (e.key === "Escape") {
-                e.stopPropagation();
-                setNaming(false);
-              }
-            }}
-          />
+          <>
+            <input
+              ref={nameRef}
+              className="project-input"
+              placeholder="Filter name"
+              aria-label="Filter name"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setCreateProblem(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  create();
+                } else if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setNaming(false);
+                }
+              }}
+            />
+            {createProblem !== null ? <p className="filter-problem">{createProblem}</p> : null}
+          </>
         ) : saveable ? (
           <button
             type="button"

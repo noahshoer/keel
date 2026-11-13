@@ -5,6 +5,7 @@ export type * from "./ApplyResult";
 export type * from "./Arranged";
 export type * from "./ArrangedGroup";
 export type * from "./Arrangement";
+export type * from "./ArrangementFlags";
 export type * from "./Card";
 export type * from "./CardMode";
 export type * from "./CardRow";

@@ -44,10 +44,29 @@ pub struct Arrangement {
     pub order: Vec<OrderLevel>,
 }
 
+/// What an arrangement does to its page.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct ArrangementFlags {
+    /// It has a filter (a blank one doesn't count).
+    pub filtered: bool,
+    /// It groups or orders the page.
+    pub sorted: bool,
+}
+
 impl Arrangement {
+    /// What it does to the page.
+    pub fn flags(&self) -> ArrangementFlags {
+        ArrangementFlags {
+            filtered: !self.filter.trim().is_empty(),
+            sorted: !self.groups.is_empty() || !self.order.is_empty(),
+        }
+    }
+
     /// True when the page is arranged as it is without any setting.
     pub fn is_default(&self) -> bool {
-        self.filter.trim().is_empty() && self.groups.is_empty() && self.order.is_empty()
+        let flags = self.flags();
+        !flags.filtered && !flags.sorted
     }
 
     /// The filter trimmed; a field repeated in `groups` or in `order` keeps
@@ -269,12 +288,14 @@ fn known_label<'a>(names: &ArrangeNames<'a>, name: &str) -> Option<(usize, &'a L
         .find(|(_, l)| !l.is_deleted && l.name.eq_ignore_ascii_case(name))
 }
 
-fn project_pos(names: &ArrangeNames, id: &Id) -> usize {
-    names
-        .projects
-        .iter()
-        .position(|p| &p.id == id)
-        .unwrap_or(usize::MAX / 2)
+/// Where a project sits in the sidebar; `None` when it isn't there.
+fn project_pos(names: &ArrangeNames, id: &Id) -> Option<usize> {
+    names.projects.iter().position(|p| &p.id == id)
+}
+
+/// A project's sidebar position as a rank; an unknown project sorts after every known one.
+fn project_rank(names: &ArrangeNames, id: &Id) -> i64 {
+    project_pos(names, id).map_or(i64::MAX, |p| p as i64)
 }
 
 fn section_of<'a>(names: &'a ArrangeNames, task: &Task) -> Option<&'a Section> {
@@ -334,21 +355,23 @@ fn heading_for(
 ) -> Heading {
     match field {
         SortField::Project => {
-            let pos = project_pos(names, &entry_task.project_id);
-            let text = names
-                .projects
-                .get(pos)
-                .map_or("No project", |p| p.name.as_str());
+            let text = project_pos(names, &entry_task.project_id)
+                .map_or("No project", |p| names.projects[p].name.as_str());
             Heading {
                 key: format!("project:{}", entry_task.project_id.as_str()),
-                rank: (pos as i64, 0, String::new()),
+                rank: (
+                    project_rank(names, &entry_task.project_id),
+                    0,
+                    String::new(),
+                ),
                 text: text.into(),
                 color: None,
             }
         }
         SortField::Section => {
-            let ppos = project_pos(names, &entry_task.project_id) as i64;
-            let project = names.projects.get(ppos as usize).map(|p| p.name.as_str());
+            let ppos = project_rank(names, &entry_task.project_id);
+            let project =
+                project_pos(names, &entry_task.project_id).map(|p| names.projects[p].name.as_str());
             let (key, order, name) = match section_of(names, entry_task) {
                 Some(s) => (
                     format!("section:{}", s.id.as_str()),
@@ -433,13 +456,9 @@ fn day_rank(d: NaiveDate) -> i64 {
 /// The value one order level sorts a task by; `None` is a missing value.
 fn order_rank(field: SortField, task: &Task, names: &ArrangeNames) -> Option<Rank> {
     match field {
-        SortField::Project => Some((
-            project_pos(names, &task.project_id) as i64,
-            0,
-            String::new(),
-        )),
+        SortField::Project => Some((project_rank(names, &task.project_id), 0, String::new())),
         SortField::Section => Some((
-            project_pos(names, &task.project_id) as i64,
+            project_rank(names, &task.project_id),
             section_of(names, task).map_or(i64::MIN, |s| s.section_order),
             String::new(),
         )),
@@ -478,15 +497,13 @@ fn apply_filter(
     if query.trim().is_empty() {
         return (tasks, None);
     }
-    let filter_names = filter::names_of(names.projects, names.sections, names.labels);
-    let groups = match filter::parse(query, today, &filter_names) {
-        Ok(groups) => groups,
-        Err(e) => return (tasks, Some(e.message)),
+    let (reading, parsed) =
+        filter::read_parsed(query, today, names.projects, names.sections, names.labels);
+    let groups = match (reading.problem, parsed) {
+        (Some(problem), _) => return (tasks, Some(problem)),
+        (None, Err(e)) => return (tasks, Some(e.message)),
+        (None, Ok(groups)) => groups,
     };
-    let reading = filter::read(query, today, names.projects, names.sections, names.labels);
-    if let Some(problem) = reading.problem {
-        return (tasks, Some(problem));
-    }
     let ctx = FilterContext {
         today,
         projects: names
@@ -689,6 +706,43 @@ mod tests {
         assert_eq!(ViewPlace::Project { id: id.clone() }.key(), "project:a");
         assert_eq!(ViewPlace::Label { id: id.clone() }.key(), "label:a");
         assert_eq!(ViewPlace::Filter { id }.key(), "filter:a");
+    }
+
+    #[test]
+    fn flags_say_what_an_arrangement_does() {
+        let blank = Arrangement {
+            filter: "  ".into(),
+            ..Arrangement::default()
+        };
+        assert_eq!(
+            blank.flags(),
+            ArrangementFlags {
+                filtered: false,
+                sorted: false
+            }
+        );
+        let filtered = Arrangement {
+            filter: "p1".into(),
+            ..Arrangement::default()
+        };
+        assert!(filtered.flags().filtered && !filtered.flags().sorted);
+        let grouped = Arrangement {
+            groups: vec![SortField::Label],
+            ..Arrangement::default()
+        };
+        assert!(grouped.flags().sorted && !grouped.flags().filtered);
+        let ordered = Arrangement {
+            order: vec![OrderLevel {
+                field: SortField::Priority,
+                reversed: false,
+            }],
+            ..Arrangement::default()
+        };
+        assert!(ordered.flags().sorted);
+        for a in [blank, filtered, grouped, ordered] {
+            let f = a.flags();
+            assert_eq!(a.is_default(), !f.filtered && !f.sorted);
+        }
     }
 
     #[test]

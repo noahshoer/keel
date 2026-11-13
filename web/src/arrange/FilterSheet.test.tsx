@@ -147,3 +147,19 @@ it("Clear saves an empty filter and closes", () => {
   expect(onSave).toHaveBeenCalledWith("");
   expect(onClose).toHaveBeenCalledTimes(1);
 });
+
+it("a filter that can't be created says why and keeps the name", async () => {
+  addFilter.mockImplementationOnce(() => Promise.reject("Name taken."));
+  const onFilterAdded = vi.fn();
+  setup({ onFilterAdded });
+  type("p2");
+  fireEvent.click(screen.getByRole("button", { name: "Save as a filter" }));
+  const name = screen.getByPlaceholderText("Filter name") as HTMLInputElement;
+  fireEvent.change(name, { target: { value: "Second" } });
+  await act(async () => {
+    fireEvent.keyDown(name, { key: "Enter" });
+  });
+  await waitFor(() => expect(screen.getByText("Couldn’t save the filter: Name taken.")).toBeTruthy());
+  expect((screen.getByPlaceholderText("Filter name") as HTMLInputElement).value).toBe("Second");
+  expect(onFilterAdded).not.toHaveBeenCalled();
+});

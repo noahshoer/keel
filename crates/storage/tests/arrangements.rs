@@ -155,3 +155,88 @@ fn unreadable_row_is_skipped() {
     assert_eq!(all.len(), 1);
     assert_eq!(all[0].place, ViewPlace::Today);
 }
+
+fn create(repo: &SqliteRepo, uuid: &str, action: Action) -> Id {
+    let result = apply(
+        repo,
+        Command {
+            uuid: uuid.into(),
+            temp_id: Some("t".into()),
+            action,
+        },
+    )
+    .unwrap();
+    result.id_mapping["t"].clone()
+}
+
+fn run(repo: &SqliteRepo, uuid: &str, action: Action) {
+    apply(
+        repo,
+        Command {
+            uuid: uuid.into(),
+            temp_id: None,
+            action,
+        },
+    )
+    .unwrap();
+}
+
+#[test]
+fn deleting_a_page_drops_its_arrangement() {
+    let repo = SqliteRepo::open_in_memory().unwrap();
+    let project = create(
+        &repo,
+        "p",
+        Action::ProjectAdd {
+            name: "Home".into(),
+        },
+    );
+    let label = create(
+        &repo,
+        "l",
+        Action::LabelAdd {
+            name: "errand".into(),
+        },
+    );
+    let filter = create(
+        &repo,
+        "f",
+        Action::FilterAdd {
+            name: "Urgent".into(),
+            query: "p1".into(),
+        },
+    );
+    arrange(
+        &repo,
+        "a1",
+        ViewPlace::Project {
+            id: project.clone(),
+        },
+        by_priority(),
+    );
+    arrange(
+        &repo,
+        "a2",
+        ViewPlace::Label { id: label.clone() },
+        by_priority(),
+    );
+    arrange(
+        &repo,
+        "a3",
+        ViewPlace::Filter { id: filter.clone() },
+        by_priority(),
+    );
+    arrange(&repo, "a4", ViewPlace::Today, by_priority());
+
+    run(&repo, "d1", Action::ProjectDelete { id: project });
+    run(&repo, "d2", Action::LabelDelete { id: label });
+    run(&repo, "d3", Action::FilterDelete { id: filter });
+
+    let left: Vec<ViewPlace> = repo
+        .list_arrangements()
+        .unwrap()
+        .into_iter()
+        .map(|p| p.place)
+        .collect();
+    assert_eq!(left, vec![ViewPlace::Today]);
+}

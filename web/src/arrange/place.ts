@@ -4,6 +4,7 @@
 import type { Loaded } from "../app/load";
 import type { View } from "../app/view";
 import type { Arrangement, PlacedArrangement, ViewPlace } from "../bindings";
+import { arrangementFlags } from "../core";
 
 export const NO_ARRANGEMENT: Arrangement = { filter: "", groups: [], order: [] };
 
@@ -39,11 +40,14 @@ export function arrangementOf(place: ViewPlace | null, all: PlacedArrangement[])
   return all.find((p) => samePlace(p.place, place))?.arrangement ?? NO_ARRANGEMENT;
 }
 
-/** Whether it filters the page (a blank filter doesn't). */
-export const hasFilter = (a: Arrangement): boolean => a.filter.trim() !== "";
+/** Whether it filters the page (a blank filter doesn't): keel-core's `Arrangement::flags`. */
+export const hasFilter = (a: Arrangement): boolean => arrangementFlags(a).filtered;
 
 /** Whether it groups or orders the page. */
-export const hasSort = (a: Arrangement): boolean => a.groups.length > 0 || a.order.length > 0;
+export const hasSort = (a: Arrangement): boolean => arrangementFlags(a).sorted;
 
 /** Whether the arrangement changes the page at all. */
-export const isArranged = (a: Arrangement): boolean => hasFilter(a) || hasSort(a);
+export const isArranged = (a: Arrangement): boolean => {
+  const { filtered, sorted } = arrangementFlags(a);
+  return filtered || sorted;
+};

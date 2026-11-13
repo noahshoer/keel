@@ -218,6 +218,16 @@ pub fn arrangement_summary(
     Ok(arrange::summary(&arrangement))
 }
 
+/// `Arrangement::flags`: whether an arrangement filters and whether it sorts.
+#[wasm_bindgen(js_name = arrangementFlags, unchecked_return_type = "import('../../bindings').ArrangementFlags")]
+pub fn arrangement_flags(
+    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Arrangement")]
+    arrangement: JsValue,
+) -> Result<JsValue, JsError> {
+    let arrangement: Arrangement = input("arrangement", arrangement)?;
+    output(&arrangement.flags())
+}
+
 /// `arrange::sort_choices`: the fields in menu order with their direction labels.
 #[wasm_bindgen(js_name = sortChoices, unchecked_return_type = "import('../../bindings').SortChoice[]")]
 pub fn sort_choices() -> Result<JsValue, JsError> {
