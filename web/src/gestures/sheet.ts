@@ -19,6 +19,7 @@
 //   and a medium sheet goes to large alongside and stays there.
 // Reduced motion snaps.
 import { log } from "../diag";
+import { prefersReducedMotion } from "../shell/device";
 import { currentPlatform } from "../shell/platform";
 import {
   atEdge,
@@ -110,8 +111,7 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
     }, ms);
     timers.add(t);
   };
-  const reduce = () =>
-    typeof win.matchMedia === "function" && win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduce = () => prefersReducedMotion(win);
   const sheetEl = () => doc.querySelector<HTMLElement>(".tv-sheet");
   const scrim = () => doc.querySelector<HTMLElement>(".tv-scrim");
   const closest = (target: EventTarget | null, sel: string): Element | null =>

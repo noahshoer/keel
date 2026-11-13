@@ -1,3 +1,4 @@
+import { prefersReducedMotion } from "../shell/device";
 // The page left behind when Search pushes in or pops out
 // (crates/ui/src/main.rs `GHOST_JS`): ghost(dir) lays a still copy of the
 // page over the main pane as the view changes (under it for a push, over it
@@ -6,7 +7,7 @@
 
 export function ghost(dir: "push" | "pop", doc: Document = document): void {
   for (const g of doc.querySelectorAll(".view-ghost")) g.remove();
-  if (doc.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  if (prefersReducedMotion(doc.defaultView)) return;
   const app = doc.querySelector<HTMLElement>(".app");
   const main = app?.querySelector<HTMLElement>(".main");
   const content = main?.querySelector<HTMLElement>(".content");

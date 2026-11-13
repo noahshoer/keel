@@ -26,7 +26,6 @@ import {
   withStoredPlain,
   withTitle,
 } from "../core";
-import { isTouch } from "../editor/locale";
 import { usePillFade } from "../editor/pillFade";
 import type { Pop } from "../editor/pop";
 import { saveEdit } from "../editor/save";
@@ -40,6 +39,7 @@ import {
   uncompleteTask,
 } from "../ipc/actions";
 import { CHECK_CLASS } from "../lists/chips";
+import { isTouch } from "../shell/device";
 import { openAndFocus } from "../shell/focus";
 import { haptic } from "../shell/haptics";
 import {

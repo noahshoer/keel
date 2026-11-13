@@ -18,7 +18,5 @@ export function weekStart(): number {
   }
 }
 
-/** True on touch screens (phones), where the task card sits on the keyboard and time is a wheel. */
-export function isTouch(): boolean {
-  return typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
-}
+// `isTouch` lives with the other device checks; the editors still import it from here.
+export { isTouch } from "../shell/device";

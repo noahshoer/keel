@@ -16,6 +16,7 @@
 // swipes instead (gestures/sheet-rules.ts).
 import { installPan } from "../gestures/pan";
 import { NARROW_MAX } from "../gestures/sheet-rules";
+import { prefersReducedMotion } from "../shell/device";
 import { ghost } from "./ghost";
 
 export type SearchDragControl = {
@@ -59,7 +60,7 @@ export function installSearchDrag(doc: Document, ctl: SearchDragControl): () => 
     }, ms);
     timers.add(t);
   };
-  const reduced = () => doc.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+  const reduced = () => prefersReducedMotion(doc.defaultView);
 
   const back = installPan(doc, (ctx) => {
     if (ctx.blocked || ctx.inSheet || ctx.inSettings || ctx.width > NARROW_MAX) return null;

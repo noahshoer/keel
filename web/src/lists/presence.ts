@@ -5,6 +5,7 @@
 // first render shows what it has without animating; MainPane keys the list by
 // view, so a switch starts over.
 import { useEffect, useLayoutEffect, useReducer, useRef } from "react";
+import { prefersReducedMotion } from "../shell/device";
 
 /** How long a collapse or grow takes (`.presence` in app.css matches it). */
 export const LEAVE_MS = 280;
@@ -95,7 +96,7 @@ export function useGrowIn(ref: React.RefObject<HTMLElement | null>, fresh: boole
   useLayoutEffect(() => {
     const el = ref.current;
     if (!first.current || el === null) return;
-    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const reduced = prefersReducedMotion();
     growIn(el, reduced);
   }, [ref]);
 }

@@ -1,3 +1,5 @@
+import { WIDE_MIN } from "../shell/device";
+
 // Pure rules for the phone's gestures: the drawer swipe, the task sheet's
 // drag and detents, the keyboard's inset, and the swipe back inside a
 // sub-task. Ported from crates/ui/src/gestures.rs with the same numbers.
@@ -5,7 +7,7 @@
 /** The layout is a drawer below this width (matches the CSS breakpoint). */
 export const NARROW_MAX = 700;
 /** The task view is a bottom sheet below this width, a panel at it and above. */
-export const SHEET_MAX = 900;
+export const SHEET_MAX = WIDE_MIN;
 /** A swipe must travel at least this far sideways... */
 export const MIN_DISTANCE = 60;
 /** ...and stay mostly horizontal (|dy| under this share of |dx|). */

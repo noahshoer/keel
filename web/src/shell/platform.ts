@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
+import { WIDE_QUERY } from "./device";
 // Which kind of device the UI runs on, for text that names keys
 // (crates/ui/src/platform.rs).
 export type Platform = "touch" | "mac" | "other";
@@ -34,18 +35,16 @@ export function searchTooltip(p: Platform): string {
   return "Search (/ or Ctrl+K)";
 }
 
-const WIDE = "(min-width: 900px)";
+function subscribeWide(notify: () => void): () => void {
+  if (typeof matchMedia !== "function") return () => {};
+  const media = matchMedia(WIDE_QUERY);
+  media.addEventListener("change", notify);
+  return () => media.removeEventListener("change", notify);
+}
+
+const wideNow = () => typeof matchMedia === "function" && matchMedia(WIDE_QUERY).matches;
 
 /** Whether the window has the desktop layout, with the sidebar always showing. */
 export function useWideLayout(): boolean {
-  const [wide, setWide] = useState(() => typeof matchMedia === "function" && matchMedia(WIDE).matches);
-  useEffect(() => {
-    if (typeof matchMedia !== "function") return;
-    const media = matchMedia(WIDE);
-    const update = () => setWide(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
-  return wide;
+  return useSyncExternalStore(subscribeWide, wideNow, () => false);
 }
