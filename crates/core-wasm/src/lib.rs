@@ -35,6 +35,11 @@ fn parse_date(s: &str) -> Result<NaiveDate, String> {
         .map_err(|_| format!("invalid date \"{s}\": expected YYYY-MM-DD"))
 }
 
+/// `parse_date` as a JS error.
+fn date(s: &str) -> Result<NaiveDate, JsError> {
+    parse_date(s).map_err(|e| JsError::new(&e))
+}
+
 /// Parses an `HH:MM` or `HH:MM:SS` time of day.
 fn parse_time(s: &str) -> Result<NaiveTime, String> {
     NaiveTime::parse_from_str(s, "%H:%M:%S")
@@ -62,8 +67,8 @@ fn output<T: Serialize>(value: &T) -> Result<JsValue, JsError> {
 /// `views::due_label` for two `YYYY-MM-DD` date strings.
 #[wasm_bindgen(js_name = dueLabel)]
 pub fn due_label(due: &str, today: &str) -> Result<String, JsError> {
-    let due = parse_date(due).map_err(|e| JsError::new(&e))?;
-    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    let due = date(due)?;
+    let today = date(today)?;
     Ok(views::due_label(due, today))
 }
 
@@ -104,7 +109,7 @@ pub fn progress(
 ) -> Result<JsValue, JsError> {
     let parent: Id = input("parent", parent)?;
     let all: Vec<Task> = input("all", all)?;
-    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    let today = date(today)?;
     output(&views::progress(&parent, &all, today))
 }
 
@@ -126,7 +131,7 @@ pub fn sidebar_counts(
     show_subtasks: bool,
 ) -> Result<JsValue, JsError> {
     let all: Vec<Task> = input("all", all)?;
-    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    let today = date(today)?;
     output(&views::sidebar_counts(
         &all,
         today,
@@ -179,7 +184,7 @@ pub fn cards(
     let matched: Vec<Task> = input("matched", matched)?;
     let all: Vec<Task> = input("all", all)?;
     let mode: CardMode = input("mode", mode)?;
-    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    let today = date(today)?;
     output(&views::cards(matched, &all, mode, today))
 }
 
@@ -199,7 +204,7 @@ pub fn arrange(
     let projects: Vec<Project> = input("projects", projects)?;
     let sections: Vec<Section> = input("sections", sections)?;
     let labels: Vec<Label> = input("labels", labels)?;
-    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    let today = date(today)?;
     let names = ArrangeNames {
         projects: &projects,
         sections: &sections,
@@ -237,8 +242,8 @@ pub fn sort_choices() -> Result<JsValue, JsError> {
 /// `views::due_bucket`: which coloured chip a `YYYY-MM-DD` due gets.
 #[wasm_bindgen(js_name = dueBucket, unchecked_return_type = "import('../../bindings').DueBucket")]
 pub fn due_bucket(due: &str, today: &str) -> Result<JsValue, JsError> {
-    let due = parse_date(due).map_err(|e| JsError::new(&e))?;
-    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    let due = date(due)?;
+    let today = date(today)?;
     output(&views::due_bucket(due, today))
 }
 
@@ -260,7 +265,7 @@ pub fn date_groups(
 ) -> Result<JsValue, JsError> {
     let mode: DateGroupMode = input("mode", mode)?;
     let tasks: Vec<Task> = input("tasks", tasks)?;
-    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    let today = date(today)?;
     output(&views::date_groups(mode, tasks, today))
 }
 
@@ -273,15 +278,15 @@ pub fn upcoming_tasks(
 ) -> Result<JsValue, JsError> {
     let today_tasks: Vec<Task> = input("todayTasks", today_tasks)?;
     let window: Vec<Task> = input("window", window)?;
-    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    let today = date(today)?;
     output(&views::upcoming_tasks(today_tasks, window, today))
 }
 
 /// `views::deadline_urgent` for two `YYYY-MM-DD` dates.
 #[wasm_bindgen(js_name = deadlineUrgent)]
 pub fn deadline_urgent(deadline: &str, today: &str) -> Result<bool, JsError> {
-    let deadline = parse_date(deadline).map_err(|e| JsError::new(&e))?;
-    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    let deadline = date(deadline)?;
+    let today = date(today)?;
     Ok(views::deadline_urgent(deadline, today))
 }
 
@@ -292,16 +297,14 @@ pub fn reminder_label(
     today: &str,
 ) -> Result<String, JsError> {
     let reminder: Reminder = input("reminder", reminder)?;
-    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    let today = date(today)?;
     Ok(reminders::reminder_label(&reminder, today))
 }
 
 /// `views::day_subtitle` for a `YYYY-MM-DD` date: "Friday 30 Oct".
 #[wasm_bindgen(js_name = daySubtitle)]
 pub fn day_subtitle(today: &str) -> Result<String, JsError> {
-    Ok(views::day_subtitle(
-        parse_date(today).map_err(|e| JsError::new(&e))?,
-    ))
+    Ok(views::day_subtitle(date(today)?))
 }
 
 /// `Progress::long`: "2 of 5".
@@ -332,7 +335,7 @@ pub fn task_detail(
     today: &str,
 ) -> Result<JsValue, JsError> {
     let all: Vec<Task> = input("all", all)?;
-    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    let today = date(today)?;
     output(&task_view::detail(
         &Id::from(id),
         &all,
@@ -355,13 +358,9 @@ pub fn chain(
 fn opt_date(name: &str, value: JsValue) -> Result<Option<NaiveDate>, JsError> {
     let s: Option<String> = input(name, value)?;
     match s.filter(|s| !s.is_empty()) {
-        Some(s) => Ok(Some(parse_date(&s).map_err(|e| JsError::new(&e))?)),
+        Some(s) => Ok(Some(date(&s)?)),
         None => Ok(None),
     }
-}
-
-fn date(s: &str) -> Result<NaiveDate, JsError> {
-    parse_date(s).map_err(|e| JsError::new(&e))
 }
 
 /// `EditorValues::blank`.
@@ -979,7 +978,7 @@ pub fn pick_setting(
 #[wasm_bindgen(js_name = upcomingWhen)]
 pub fn upcoming_when(at: &str, today: &str) -> Result<String, JsError> {
     let at = parse_datetime(at).map_err(|e| JsError::new(&e))?;
-    let today = parse_date(today).map_err(|e| JsError::new(&e))?;
+    let today = date(today)?;
     Ok(settings::upcoming_when(at, today))
 }
 
