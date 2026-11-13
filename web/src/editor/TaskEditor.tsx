@@ -21,7 +21,6 @@ import type {
   Label,
   NewNames,
   Project,
-  Recurrence,
   Section,
   SpanKind,
 } from "../bindings";
@@ -94,12 +93,7 @@ export function TaskEditor({
   projects,
   sections,
   labels,
-  keepLabel,
-  existing,
   submitText,
-  quickAdd,
-  keepOpen,
-  askNewNames = false,
   onSubmit,
   onCancel,
   onChanged,
@@ -109,46 +103,29 @@ export function TaskEditor({
   projects: Project[];
   sections: Section[];
   labels: Label[];
-  /** Text for the "keep current rule" repeat option, when the rule is custom. */
-  keepLabel: string | null;
-  /** The edited task's recurrence (what "keep" repeats by). */
-  existing: Recurrence | null;
   submitText: string;
-  /** Parse the title as quick add (adding), filling the pills from it. */
-  quickAdd: boolean;
-  /** Stay open after submitting, reset to `initial` (Todoist's add flow). */
-  keepOpen: boolean;
-  /**
-   * Saving a title that names projects or labels that don't exist yet asks
-   * first which to create (the prompt takes the card's place).
-   */
-  askNewNames?: boolean;
   onSubmit: (v: EditorValues) => void;
   onCancel: () => void;
   /** After a label was created from the labels menu. */
   onChanged: () => void;
   /** The title field, for a caller that focuses it inside a tap. */
-  titleRef?: RefObject<HTMLTextAreaElement | null>;
+  titleRef: RefObject<HTMLTextAreaElement | null>;
 }) {
   const [values, setValues] = useState(initial);
   const [open, setOpen] = useState<Pop>(null);
   const [touch] = useState(isTouch);
   const keyboard = useHeldKeyboard(useKeyboard(touch, true), open === "streak-goal");
   useEffect(() => (touch ? holdPage() : undefined), [touch]);
-  const ownTitle = useRef<HTMLTextAreaElement>(null);
-  const title = titleRef ?? ownTitle;
+  const title = titleRef;
   // The date's calendar needs more room than the keyboard leaves, so it lowers
   // the keyboard; whatever replaces it brings the keyboard back, inside the tap.
   // The deadline's is the grid alone, which fits above the keyboard.
   const madeRoom = useRef(false);
   const beforeCalendar = useRef(initial);
   const roomFrom = useRef<HTMLElement | null>(null);
-  const startCalendar = () => {
+  const makeRoom = () => {
     // What the calendar's X goes back to.
     beforeCalendar.current = latest.current;
-  };
-  const makeRoom = () => {
-    startCalendar();
     if (!touch) return;
     madeRoom.current = true;
     // The field the keyboard is up for, unless it's inside the picker being replaced.
@@ -171,7 +148,7 @@ export function TaskEditor({
       // The picker's own field is going away; the keyboard stays for the title.
       title.current?.focus();
     }
-    if (p === "deadline") startCalendar();
+    if (p === "deadline") beforeCalendar.current = latest.current;
   };
   /** Going to the title or description closes the picker; that field keeps the keyboard. */
   const closeForField = () => {
@@ -184,16 +161,14 @@ export function TaskEditor({
     if ((e.target as HTMLElement).closest(".title-input, .desc")) closeForField();
   };
   const pillRow = usePillFade(values);
-  // Submits once: a fast second Enter (before the editor closes) is ignored.
-  // In keep-open mode the form resets to blank instead (an empty title can't
-  // be submitted, so a second Enter is a no-op there too). Refs, so two
-  // Enters handled before a re-render still see the first one's effect.
-  const submitted = useRef(false);
+  // Submitting resets the form to blank (an empty title can't be submitted, so
+  // a second Enter is a no-op). A ref, so two Enters handled before a re-render
+  // still see the first one's effect.
   const latest = useRef(values);
   latest.current = values;
   const today = localToday();
-  const view = editorView(values, quickAdd, keepLabel, existing, projects, sections, labels, today);
-  const pick = (p: EditorPick) => setValues((v) => applyPick(v, p, quickAdd, projects, sections, today));
+  const view = editorView(values, true, null, null, projects, sections, labels, today);
+  const pick = (p: EditorPick) => setValues((v) => applyPick(v, p, true, projects, sections, today));
   const typedRepeat = {
     read: (text: string) => readRepeat(text, view.shown.date, today)?.text ?? null,
     onSubmit: (text: string) => pick({ type: "repeatText", text }),
@@ -203,19 +178,15 @@ export function TaskEditor({
   const [asking, setAsking] = useState<{ names: NewNames; values: EditorValues } | null>(null);
   const submit = () => {
     const v = latest.current;
-    if (
-      submitted.current ||
-      asking !== null ||
-      !editorView(v, quickAdd, keepLabel, existing, projects, sections, labels, today).can_submit
-    )
+    if (asking !== null || !editorView(v, true, null, null, projects, sections, labels, today).can_submit)
       return;
-    if (askNewNames) {
-      const names = newNames(v, projects, sections, labels, today);
-      if (names.projects.length > 0 || names.labels.length > 0) {
-        setPop(null);
-        setAsking({ names, values: v });
-        return;
-      }
+    // Saving a title that names projects or labels that don't exist yet asks
+    // first which to create (the prompt takes the card's place).
+    const names = newNames(v, projects, sections, labels, today);
+    if (names.projects.length > 0 || names.labels.length > 0) {
+      setPop(null);
+      setAsking({ names, values: v });
+      return;
     }
     finish(v);
   };
@@ -230,15 +201,11 @@ export function TaskEditor({
     finish(keepAsText(v, unticked, projects, sections, today));
   };
   const finish = (v: EditorValues) => {
-    if (keepOpen) {
-      latest.current = initial;
-      setValues(initial);
-      setPop(null);
-      // The next task starts with its title, wherever this one ended.
-      title.current?.focus();
-    } else {
-      submitted.current = true;
-    }
+    latest.current = initial;
+    setValues(initial);
+    setPop(null);
+    // The next task starts with its title, wherever this one ended.
+    title.current?.focus();
     onSubmit(v);
   };
 
@@ -330,7 +297,7 @@ export function TaskEditor({
         hasNew={view.new_labels.length > 0}
         open={open}
         setOpen={setPop}
-        onToggle={(name) => setValues((v) => toggleLabel(v, name, quickAdd, projects, sections, today))}
+        onToggle={(name) => setValues((v) => toggleLabel(v, name, true, projects, sections, today))}
         onChanged={onChanged}
       />
       <ReminderPicker
@@ -387,7 +354,7 @@ export function TaskEditor({
           segments={view.segments}
           labels={labels}
           value={values.content}
-          placeholder={quickAdd ? "Task name — try “Call mom tomorrow 5pm p1 #Home @phone”" : "Task name"}
+          placeholder="Task name — try “Call mom tomorrow 5pm p1 #Home @phone”"
           onInput={(text) => {
             closeForField();
             setValues((v) => withTitle(v, text));
@@ -395,7 +362,7 @@ export function TaskEditor({
           onEnter={submit}
           onUnhighlight={(caret) => {
             closeForField();
-            setValues((v) => (quickAdd ? (unhighlightAt(v, projects, sections, today, caret) ?? v) : v));
+            setValues((v) => unhighlightAt(v, projects, sections, today, caret) ?? v);
           }}
           inputRef={title}
         />

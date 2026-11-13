@@ -2,9 +2,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { createRef } from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditorValues } from "../bindings";
-import { blankValues, valuesFromTask } from "../core";
+import { blankValues } from "../core";
 import { KEYBOARD_EVENT } from "../gestures/sheet-rules";
 import * as fx from "../ipc/fixtures";
 import { mockPageScrollHeld } from "../ipc/mock";
@@ -37,14 +38,11 @@ function adding() {
       projects={fx.projects}
       sections={fx.sections}
       labels={fx.labels}
-      keepLabel={null}
-      existing={null}
       submitText="Add task"
-      quickAdd
-      keepOpen
       onSubmit={onSubmit}
       onCancel={onCancel}
       onChanged={() => {}}
+      titleRef={createRef()}
     />,
   );
   return screen.getByPlaceholderText(
@@ -905,32 +903,4 @@ it("picks a priority and a project from the menus", () => {
     project_id: "p-home",
     section_id: "s-chores",
   });
-});
-
-it("edit mode never highlights and saves once", async () => {
-  const task = fx.tasks.find((t) => t.id === "t-inbox");
-  if (task === undefined) throw new Error("fixture");
-  render(
-    <TaskEditor
-      initial={valuesFromTask({ ...task, content: "Call tomorrow p1" })}
-      projects={fx.projects}
-      sections={fx.sections}
-      labels={fx.labels}
-      keepLabel={null}
-      existing={null}
-      submitText="Save"
-      quickAdd={false}
-      keepOpen={false}
-      onSubmit={onSubmit}
-      onCancel={onCancel}
-      onChanged={() => {}}
-    />,
-  );
-  const title = screen.getByPlaceholderText("Task name") as HTMLTextAreaElement;
-  expect(marks()).toEqual([]);
-  await act(async () => {
-    fireEvent.keyDown(title, { key: "Enter" });
-    fireEvent.keyDown(title, { key: "Enter" });
-  });
-  expect(onSubmit).toHaveBeenCalledTimes(1);
 });

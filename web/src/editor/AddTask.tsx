@@ -77,12 +77,7 @@ export function AddTask({
       projects={projects}
       sections={sections}
       labels={labels}
-      keepLabel={null}
-      existing={null}
       submitText="Add task"
-      quickAdd
-      askNewNames
-      keepOpen
       onSubmit={(v) => {
         addFromEditor(v, projects, sections, labels, localToday()).then(onChanged, onChanged);
       }}
