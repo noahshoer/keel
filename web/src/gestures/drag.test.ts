@@ -4,7 +4,6 @@ import { installDrag, TASK_DROP } from "./drag";
 import { ROW_DRAG, ROW_HOLD, ROW_PRESS } from "./long-press";
 
 let uninstall: () => void;
-let hit: { y: number };
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -21,7 +20,6 @@ beforeEach(() => {
       <div id="chores" data-drop-zone data-drop-project="p" data-drop-section="s" data-drop-name="Chores"></div>
       <div id="new" data-drop-zone data-drop-project="p" data-drop-new="" data-drop-name=""></div>
     </div>`;
-  hit = { y: 0 };
   // Rows above 300 are in Home, below it in Chores; above 0 or past 900 is nothing.
   uninstall = installDrag(document, window, {
     at: (_x, y) =>
