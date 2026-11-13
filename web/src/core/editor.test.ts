@@ -13,11 +13,9 @@ import {
   locationText,
   monthNames,
   monthView,
-  nativeTime,
   quickDates,
   reminderDraftOf,
   repeatText,
-  shiftMonth,
   typedTime,
   unhighlightAt,
   withTitle,
@@ -85,9 +83,6 @@ describe("editor over wasm", () => {
     expect(quickDates(TODAY)[0]).toEqual(["Today", "Fri", "2026-10-30"]);
     expect(typedTime("5pm")).toBe("17:00");
     expect(typedTime("bad")).toBeNull();
-    expect(nativeTime("")).toBeNull();
-    expect(nativeTime("07:05:00")).toBe("07:05");
-    expect(nativeTime("5pm")).toBeUndefined();
   });
 
   it("calendar", () => {
@@ -95,7 +90,6 @@ describe("editor over wasm", () => {
     expect(view.title).toBe("October 2026");
     expect(view.weeks).toHaveLength(6);
     expect(view.weeks[0]?.[0]?.date).toBe("2026-09-28");
-    expect(shiftMonth(2026, 12, 1)).toEqual([2027, 1]);
     expect(yearChoices(TODAY, 2026)[0]).toBe(2025);
     expect(monthNames()[0]).toBe("January");
   });

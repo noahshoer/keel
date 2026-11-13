@@ -304,15 +304,6 @@ pub fn day_subtitle(today: &str) -> Result<String, JsError> {
     ))
 }
 
-/// `Progress::short`: "2/5".
-#[wasm_bindgen(js_name = progressShort)]
-pub fn progress_short(
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').Progress")] progress: JsValue,
-) -> Result<String, JsError> {
-    let progress: Progress = input("progress", progress)?;
-    Ok(progress.short())
-}
-
 /// `Progress::long`: "2 of 5".
 #[wasm_bindgen(js_name = progressLong)]
 pub fn progress_long(
@@ -358,18 +349,6 @@ pub fn chain(
 ) -> Result<JsValue, JsError> {
     let all: Vec<Task> = input("all", all)?;
     output(&views::chain(&Id::from(id), &all))
-}
-
-/// A browser `<input type="time">` value: `""` (cleared) is `None`,
-/// `HH:MM[:SS]` is `Some(HH:MM)`; anything else isn't the input's format.
-fn native_time(v: &str) -> Option<Option<String>> {
-    if v.is_empty() {
-        return Some(None);
-    }
-    NaiveTime::parse_from_str(v, "%H:%M")
-        .or_else(|_| NaiveTime::parse_from_str(v, "%H:%M:%S"))
-        .ok()
-        .map(|t| Some(t.format("%H:%M").to_string()))
 }
 
 /// An optional `YYYY-MM-DD` (`null` or `""` is none).
@@ -804,16 +783,6 @@ pub fn reminder_actions(
     output(&editor::reminder_actions(&task_id, &before, &after))
 }
 
-/// `ReminderDraft::label`: "30 min before", "Tuesday 9 AM".
-#[wasm_bindgen(js_name = reminderDraftLabel)]
-pub fn reminder_draft_label(
-    #[wasm_bindgen(unchecked_param_type = "import('../../bindings').ReminderDraft")] draft: JsValue,
-    today: &str,
-) -> Result<String, JsError> {
-    let draft: ReminderDraft = input("draft", draft)?;
-    Ok(draft.label(date(today)?))
-}
-
 /// `editor::reminder_presets`: (minutes before, text).
 #[wasm_bindgen(js_name = reminderPresets, unchecked_return_type = "Array<[number, string]>")]
 pub fn reminder_presets() -> Result<JsValue, JsError> {
@@ -867,12 +836,6 @@ fn week_day(week_start: u8) -> Weekday {
         6 => Weekday::Sat,
         _ => Weekday::Mon,
     }
-}
-
-/// `calendar::shift_month`: `[year, month]`.
-#[wasm_bindgen(js_name = shiftMonth, unchecked_return_type = "[number, number]")]
-pub fn shift_month(year: i32, month: u32, delta: i32) -> Result<JsValue, JsError> {
-    output(&calendar::shift_month(year, month, delta))
 }
 
 /// `calendar::year_choices`.
@@ -936,19 +899,9 @@ pub fn typed_time(text: &str) -> Result<JsValue, JsError> {
     output(&quickadd::parse_time(text).map(|t| t.format("%H:%M").to_string()))
 }
 
-/// A `<input type="time">` value as `HH:MM`; `null` when cleared,
-/// `undefined` when it isn't the input's format.
-#[wasm_bindgen(js_name = nativeTime, unchecked_return_type = "string | null | undefined")]
-pub fn native_time_js(value: &str) -> Result<JsValue, JsError> {
-    match native_time(value) {
-        Some(t) => output(&t),
-        None => Ok(JsValue::UNDEFINED),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{native_time, parse_date, parse_time};
+    use super::{parse_date, parse_time};
     use chrono::{NaiveDate, NaiveTime};
 
     #[test]
@@ -995,18 +948,6 @@ mod tests {
             parse_time("25:00"),
             Err("invalid time \"25:00\": expected HH:MM or HH:MM:SS".to_string())
         );
-    }
-
-    #[test]
-    fn native_time_reads_the_time_inputs_value() {
-        assert_eq!(native_time("17:30"), Some(Some("17:30".to_string())));
-        assert_eq!(
-            native_time("07:05:00"),
-            Some(Some("07:05".to_string())),
-            "with seconds"
-        );
-        assert_eq!(native_time(""), Some(None), "cleared");
-        assert_eq!(native_time("5pm"), None, "not the input's format");
     }
 }
 
