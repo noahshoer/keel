@@ -12,3 +12,15 @@ tauri-plugin-notification = { path = "crates/vendor/tauri-plugin-notification" }
 # SDKROOT, …); sharing them made each rebuild the other's dependencies.
 [profile.clippy-ios]
 inherits = "dev"
+
+# keel-core's wasm for the web UI (web/scripts/build-wasm.ts). A profile of its
+# own, so its settings never touch the app's release build. WebKit compiles the
+# whole file before the first screen, so its size is launch time.
+[profile.wasm-release]
+inherits = "release"
+# "s" with LTO: 729 KB against 1,178 KB for plain release (opt 3, no LTO);
+# "z" reaches 554 KB but inlines less, and this code runs on every keystroke.
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

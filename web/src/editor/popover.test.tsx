@@ -1,15 +1,9 @@
 import { act, render } from "@testing-library/react";
 import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { placePopover, type Rect, usePlacedPopover } from "./popover";
-
-const rect = (left: number, top: number, width: number, height: number): Rect => ({
-  left,
-  top,
-  width,
-  height,
-  bottom: top + height,
-});
+import { rect } from "../test/dom";
+import { stubMedia } from "../test/media";
+import { placePopover, usePlacedPopover } from "./popover";
 
 describe("placePopover", () => {
   const pop = rect(0, 0, 280, 300);
@@ -75,7 +69,7 @@ describe("usePlacedPopover by its chip, when the keyboard comes up", () => {
   const setup = (coarse: boolean) => {
     const viewport = Object.assign(new EventTarget(), { offsetTop: 0, height: 874, scale: 1 });
     vi.stubGlobal("visualViewport", viewport);
-    vi.stubGlobal("matchMedia", (q: string) => ({ matches: coarse && q.includes("coarse") }));
+    stubMedia({ coarse });
     vi.spyOn(document.documentElement, "clientHeight", "get").mockReturnValue(874);
     const { container } = render(<ChipPicker />);
     const chip = container.querySelector("button") as HTMLElement;

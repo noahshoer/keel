@@ -99,9 +99,9 @@ async function completeWith(autoCompleted: string[]) {
   const onChanged = vi.fn();
   const t = task({ parent_id: "p" });
   const c = render(
-    <TaskNavContext.Provider value={stubNav(completedHere)}>
+    <TaskNavContext value={stubNav(completedHere)}>
       <SubtaskRow row={{ task: t, progress: null, done: false }} onOpen={() => {}} onChanged={onChanged} />
-    </TaskNavContext.Provider>,
+    </TaskNavContext>,
   ).container;
   fireEvent.click(c.querySelector("button.check") as HTMLButtonElement);
   await vi.waitFor(() => expect(onChanged).toHaveBeenCalled());

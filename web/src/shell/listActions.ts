@@ -22,8 +22,8 @@ export type ListContext = {
   settle: (p: Promise<unknown>) => Promise<unknown>;
 };
 
-export type NameActions = { warning: string; rename: (name: string) => void; remove: () => void };
-export type FilterActions = {
+type NameActions = { warning: string; rename: (name: string) => void; remove: () => void };
+type FilterActions = {
   warning: string;
   save: (name: string, query: string) => void;
   remove: () => void;
@@ -95,7 +95,7 @@ export type PageEditing =
   | { kind: "name"; name: string; rename: (name: string) => void }
   | { kind: "filter"; filter: Filter; save: (name: string, query: string) => void };
 
-export type PageActions = { warning: string; remove: () => void; editing: PageEditing };
+type PageActions = { warning: string; remove: () => void; editing: PageEditing };
 
 /** What a view's page offers: only a project, label or filter has actions. */
 export function pageActions(

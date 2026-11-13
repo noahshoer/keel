@@ -92,5 +92,5 @@ export function TaskNavProvider({ all, children }: { all: Task[]; children: Reac
       prune,
     ],
   );
-  return <TaskNavContext.Provider value={value}>{children}</TaskNavContext.Provider>;
+  return <TaskNavContext value={value}>{children}</TaskNavContext>;
 }

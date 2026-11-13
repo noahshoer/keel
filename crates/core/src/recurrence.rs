@@ -1,6 +1,8 @@
 use chrono::{Datelike, Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 
+use crate::calendar::{MONTHS_SHORT, WEEKDAYS_SHORT};
+
 /// A recurrence rule. Weekdays are 0 = Monday … 6 = Sunday.
 ///
 /// Interval rules carry an `anchor` (any occurrence) that fixes their phase.
@@ -98,11 +100,6 @@ fn last_of_month(date: NaiveDate) -> NaiveDate {
     monthly_date(date.year(), date.month(), 31)
 }
 
-const WEEKDAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
 /// "1st", "2nd", "3rd", "11th", "22nd".
 pub fn ordinal(n: u32) -> String {
     let suffix = match (n % 10, n % 100) {
@@ -135,7 +132,7 @@ fn every_n(n: u32, unit: &str) -> String {
 
 fn day_list(days: &[u8]) -> String {
     days.iter()
-        .filter_map(|d| WEEKDAYS.get(*d as usize).copied())
+        .filter_map(|d| WEEKDAYS_SHORT.get(*d as usize).copied())
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -205,15 +202,6 @@ impl Recurrence {
         }
     }
 
-    /// The days in `[from, from + days)` the rule falls on, in order:
-    /// what the date pickers ring as repeats.
-    pub fn days_within(&self, from: NaiveDate, days: i64) -> Vec<NaiveDate> {
-        (0..days)
-            .map(|i| from + chrono::Duration::days(i))
-            .filter(|d| self.contains(*d))
-            .collect()
-    }
-
     /// The first occurrence strictly after `date`.
     pub fn next_after(&self, date: NaiveDate) -> NaiveDate {
         match self {
@@ -272,7 +260,7 @@ impl Recurrence {
             Recurrence::Yearly { month, day } => {
                 format!(
                     "every year on {} {day}",
-                    MONTHS[(*month as usize).clamp(1, 12) - 1]
+                    MONTHS_SHORT[(*month as usize).clamp(1, 12) - 1]
                 )
             }
             Recurrence::MonthlyLastDay => "every last day of the month".to_string(),
@@ -281,7 +269,7 @@ impl Recurrence {
                 format!(
                     "every {} {}",
                     nth_word(*nth),
-                    WEEKDAYS[(*weekday as usize).min(6)]
+                    WEEKDAYS_SHORT[(*weekday as usize).min(6)]
                 )
             }
         }
@@ -586,23 +574,5 @@ mod tests {
             .describe(),
             "every last Fri"
         );
-    }
-
-    #[test]
-    fn days_within_lists_each_occurrence_in_the_window() {
-        let mon_fri = Recurrence::Weekly(vec![0, 4]);
-        let from = NaiveDate::from_ymd_opt(2026, 10, 23).unwrap(); // a Friday
-        let days = mon_fri.days_within(from, 14);
-        let ymd = |d: u32| NaiveDate::from_ymd_opt(2026, 10, d).unwrap();
-        assert_eq!(
-            days,
-            vec![
-                ymd(23),
-                ymd(26),
-                ymd(30),
-                NaiveDate::from_ymd_opt(2026, 11, 2).unwrap()
-            ]
-        );
-        assert!(Recurrence::Daily.days_within(from, 0).is_empty());
     }
 }

@@ -3,7 +3,7 @@
 
 use chrono::{Datelike, Duration, Months, NaiveDate, NaiveTime};
 
-use crate::model::Priority;
+use crate::model::{parse_ymd, Priority};
 use crate::recurrence::Recurrence;
 
 pub(crate) struct Token {
@@ -151,7 +151,7 @@ pub(crate) fn match_date(t: &[Token], i: usize, today: NaiveDate) -> Option<(usi
             return Some((3, d));
         }
     }
-    if let Ok(d) = NaiveDate::parse_from_str(w(0), "%Y-%m-%d") {
+    if let Some(d) = parse_ymd(w(0)) {
         return Some((1, d));
     }
     // "oct 20 [2027]" or "20 oct [2027]".

@@ -73,6 +73,59 @@ pub struct Due {
     pub moved_from: Option<String>,
 }
 
+impl Due {
+    /// A one-off due on `date` (`YYYY-MM-DD` or a datetime), described by
+    /// `string`: floating, in English, with no repeat.
+    pub fn new(date: impl Into<String>, string: impl Into<String>) -> Due {
+        Due {
+            date: date.into(),
+            timezone: None,
+            string: string.into(),
+            lang: "en".to_string(),
+            is_recurring: false,
+            recurrence: None,
+            until: None,
+            moved_from: None,
+        }
+    }
+
+    /// [`Due::new`] repeating by `rule`, with no end.
+    pub fn repeating(date: impl Into<String>, string: impl Into<String>, rule: Recurrence) -> Due {
+        Due {
+            is_recurring: true,
+            recurrence: Some(rule),
+            ..Due::new(date, string)
+        }
+    }
+
+    /// The repeat's end ([`Due::until`]) as a date, when it is one.
+    pub fn until_date(&self) -> Option<NaiveDate> {
+        self.until.as_deref().and_then(parse_ymd)
+    }
+}
+
+/// A `YYYY-MM-DD` date: the whole of `s`, untrimmed.
+pub fn parse_ymd(s: &str) -> Option<NaiveDate> {
+    NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
+}
+
+/// The `YYYY-MM-DD` date in the first ten bytes of `s`, so a datetime
+/// (`YYYY-MM-DDTHH:MM…`) gives its day. `None` when `s` is shorter.
+pub fn parse_ymd_prefix(s: &str) -> Option<NaiveDate> {
+    s.get(..10).and_then(parse_ymd)
+}
+
+/// Whether `name` is in `names`, ignoring ASCII case (how label names on a
+/// task compare). Neither side is trimmed.
+pub fn contains_name(names: &[String], name: &str) -> bool {
+    names.iter().any(|n| n.eq_ignore_ascii_case(name))
+}
+
+/// `d` as `YYYY-MM-DD`, the format every stored date uses.
+pub fn ymd(d: NaiveDate) -> String {
+    d.format("%Y-%m-%d").to_string()
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub enum DurationUnit {
@@ -161,10 +214,7 @@ pub struct LastCompletion {
 impl Task {
     /// Reopens the task if its `reopens_on` has come. True when it changed.
     pub fn reopen_if_due(&mut self, today: NaiveDate) -> bool {
-        let date = self
-            .reopens_on
-            .as_deref()
-            .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+        let date = self.reopens_on.as_deref().and_then(parse_ymd);
         if !date.is_some_and(|d| d <= today) {
             return false;
         }
@@ -173,6 +223,14 @@ impl Task {
         self.reopens_on = None;
         self.updated_at = Utc::now();
         true
+    }
+
+    /// Forgets the current run and the completion undo would put back (a new
+    /// schedule starts the streak over); the best run stays.
+    pub fn reset_streak(&mut self) {
+        self.streak_current = 0;
+        self.streak_last_period = None;
+        self.last_completion = None;
     }
 
     /// A new task in `project_id` with sensible defaults (streaks off).
@@ -395,16 +453,7 @@ impl Reminder {
             id: Id::new(),
             task_id,
             kind: ReminderType::Absolute,
-            due: Some(Due {
-                date: date.clone(),
-                timezone: None,
-                string: date,
-                lang: "en".to_string(),
-                is_recurring: false,
-                recurrence: None,
-                until: None,
-                moved_from: None,
-            }),
+            due: Some(Due::new(date.clone(), date)),
             minute_offset: None,
             is_deleted: false,
         }
@@ -421,8 +470,79 @@ impl Reminder {
 
 #[cfg(test)]
 mod tests {
-    use super::{Due, Priority, Task};
+    use super::{contains_name, parse_ymd, parse_ymd_prefix, ymd, Due, Priority, Task};
     use crate::ids::Id;
+    use chrono::NaiveDate;
+
+    #[test]
+    fn contains_name_ignores_ascii_case_only() {
+        let names = vec!["Home".to_string(), "Éclair".to_string()];
+        assert!(contains_name(&names, "home"));
+        assert!(contains_name(&names, "HOME"));
+        assert!(!contains_name(&names, "home "), "no trimming");
+        assert!(!contains_name(&names, "éclair"), "ASCII case only");
+        assert!(!contains_name(&[], "home"));
+    }
+
+    #[test]
+    fn ymd_round_trips_a_date() {
+        let d = NaiveDate::from_ymd_opt(2026, 3, 7).unwrap();
+        assert_eq!(ymd(d), "2026-03-07");
+        assert_eq!(parse_ymd("2026-03-07"), Some(d));
+    }
+
+    #[test]
+    fn parse_ymd_takes_the_whole_string() {
+        assert_eq!(parse_ymd(""), None);
+        assert_eq!(parse_ymd("2026-02-30"), None);
+        assert_eq!(parse_ymd("2026-03-07T09:00:00"), None);
+    }
+
+    #[test]
+    fn parse_ymd_prefix_reads_the_date_of_a_datetime() {
+        let d = NaiveDate::from_ymd_opt(2026, 3, 7).unwrap();
+        assert_eq!(parse_ymd_prefix("2026-03-07"), Some(d));
+        assert_eq!(parse_ymd_prefix("2026-03-07T09:00:00"), Some(d));
+        // Shorter than ten bytes is not a date, even one chrono would read.
+        assert_eq!(parse_ymd_prefix("2026-3-7"), None);
+        assert_eq!(parse_ymd_prefix(""), None);
+    }
+
+    #[test]
+    fn due_constructors_fill_the_plain_fields() {
+        use crate::recurrence::Recurrence;
+        let plain = Due {
+            date: "2026-10-19".to_string(),
+            timezone: None,
+            string: "today".to_string(),
+            lang: "en".to_string(),
+            is_recurring: false,
+            recurrence: None,
+            until: None,
+            moved_from: None,
+        };
+        assert_eq!(Due::new("2026-10-19", "today"), plain);
+        let repeating = Due {
+            is_recurring: true,
+            recurrence: Some(Recurrence::Daily),
+            string: "every day".to_string(),
+            ..plain
+        };
+        assert_eq!(
+            Due::repeating("2026-10-19", "every day", Recurrence::Daily),
+            repeating
+        );
+    }
+
+    #[test]
+    fn until_date_reads_the_repeat_end() {
+        let mut due = Due::new("2026-10-19", "every day");
+        assert_eq!(due.until_date(), None);
+        due.until = Some("2026-11-30".to_string());
+        assert_eq!(due.until_date(), NaiveDate::from_ymd_opt(2026, 11, 30));
+        due.until = Some("soon".to_string());
+        assert_eq!(due.until_date(), None);
+    }
 
     #[test]
     fn id_new_is_unique_and_sortable() {
@@ -447,6 +567,28 @@ mod tests {
     }
 
     #[test]
+    fn reset_streak_keeps_only_the_best() {
+        let mut task = Task::new("run", Id::new());
+        task.streak_current = 4;
+        task.streak_best = 9;
+        task.streak_last_period = Some("2026-10-19".to_string());
+        task.last_completion = Some(super::LastCompletion {
+            moved_to: "2026-10-20".to_string(),
+            date: "2026-10-19".to_string(),
+            streak_current: 3,
+            streak_best: 9,
+            streak_last_period: None,
+            moved_from: None,
+            completed_on: None,
+        });
+        task.reset_streak();
+        assert_eq!(task.streak_current, 0);
+        assert_eq!(task.streak_best, 9);
+        assert_eq!(task.streak_last_period, None);
+        assert_eq!(task.last_completion, None);
+    }
+
+    #[test]
     fn task_serde_roundtrip() {
         let project = Id::new();
         let mut task = Task::new("write the plan", project.clone());
@@ -459,16 +601,7 @@ mod tests {
 
     #[test]
     fn floating_due_keeps_none_timezone() {
-        let due = Due {
-            date: "2026-10-19".to_string(),
-            timezone: None,
-            string: "today".to_string(),
-            lang: "en".to_string(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        };
+        let due = Due::new("2026-10-19", "today");
         let json = serde_json::to_string(&due).expect("serialize");
         let back: Due = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back.timezone, None);

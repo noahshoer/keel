@@ -4,6 +4,7 @@ import { blankValues } from "../core";
 import * as fx from "../ipc/fixtures";
 import { invoke } from "../ipc/invoke";
 import { mockHandlers } from "../ipc/mock";
+import { stubMedia } from "../test/media";
 import { loadCoreForTests } from "../test/wasm";
 import { AddTask } from "./AddTask";
 
@@ -46,7 +47,7 @@ it("has no floating button on a section's own row", () => {
 });
 
 it("on touch, keeps the row's place in the list while the card is open, so the list doesn't move", () => {
-  vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+  stubMedia({ coarse: true });
   const { container } = add(false);
   fireEvent.click(screen.getByText("Add task"));
   expect(screen.getByPlaceholderText(PLACEHOLDER)).toBeTruthy();
@@ -121,7 +122,7 @@ it("the prompt takes focus on its first header check, and Escape goes back to th
 });
 
 it("on touch, a tap outside the prompt goes back to the card, saving nothing", async () => {
-  vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+  stubMedia({ coarse: true });
   const sent: string[] = [];
   const dispatch = mockHandlers.dispatch;
   const spy = vi.spyOn(mockHandlers, "dispatch").mockImplementation((args) => {
@@ -145,7 +146,7 @@ it("on touch, a tap outside the prompt goes back to the card, saving nothing", a
 });
 
 it("on touch, the prompt shows in the card on the keyboard, and Save creates the project", async () => {
-  vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("coarse") }));
+  stubMedia({ coarse: true });
   const { container } = add(false);
   fireEvent.click(screen.getByText("Add task"));
   typeAndAdd("Order toner #wrok3");

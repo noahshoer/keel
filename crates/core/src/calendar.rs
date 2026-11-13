@@ -22,6 +22,25 @@ pub const MONTHS: [&str; 12] = [
     "December",
 ];
 
+/// Month names in three letters ("Jan" … "Dec").
+pub(crate) const MONTHS_SHORT: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/// Weekday names in three letters, Monday first ("Mon" … "Sun").
+pub(crate) const WEEKDAYS_SHORT: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/// Weekday names in full, Monday first.
+pub(crate) const WEEKDAYS_LONG: [&str; 7] = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+];
+
 /// One day in the grid.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -104,12 +123,6 @@ pub fn month_view(
     }
 }
 
-/// The month `delta` months from `year`/`month`.
-pub fn shift_month(year: i32, month: u32, delta: i32) -> (i32, u32) {
-    let index = year * 12 + month as i32 - 1 + delta;
-    (index.div_euclid(12), index.rem_euclid(12) as u32 + 1)
-}
-
 /// The years the calendar and its month / year wheel offer: last year to ten
 /// ahead, stretched to hold the `shown` year.
 pub fn year_choices(today: NaiveDate, shown: i32) -> Vec<i32> {
@@ -173,16 +186,6 @@ pub fn week_rows(
         .collect()
 }
 
-/// The weeks shown for the month containing `day`: always 6 rows of
-/// Monday–Sunday, starting with the week that holds the 1st.
-pub fn month_weeks(day: NaiveDate) -> Vec<[NaiveDate; 7]> {
-    let first = day.with_day(1).expect("day 1 exists");
-    let start = first - Duration::days(first.weekday().num_days_from_monday() as i64);
-    (0..6)
-        .map(|w| std::array::from_fn(|d| start + Duration::days(w * 7 + d as i64)))
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,30 +194,6 @@ mod tests {
 
     fn d(y: i32, m: u32, day: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, day).unwrap()
-    }
-
-    #[test]
-    fn six_monday_first_weeks() {
-        // October 2026 starts on a Thursday.
-        let weeks = month_weeks(d(2026, 10, 19));
-        assert_eq!(weeks.len(), 6);
-        assert_eq!(weeks[0][0], d(2026, 9, 28), "leading days from September");
-        assert_eq!(weeks[0][3], d(2026, 10, 1));
-        assert_eq!(weeks[5][6], d(2026, 11, 8), "trailing days from November");
-    }
-
-    #[test]
-    fn month_starting_monday_has_no_leading_days() {
-        // June 2026 starts on a Monday.
-        assert_eq!(month_weeks(d(2026, 6, 30))[0][0], d(2026, 6, 1));
-    }
-
-    #[test]
-    fn crosses_year_boundary() {
-        // January 2027 starts on a Friday.
-        let weeks = month_weeks(d(2027, 1, 1));
-        assert_eq!(weeks[0][0], d(2026, 12, 28));
-        assert_eq!(weeks[0][4], d(2027, 1, 1));
     }
 
     #[test]
@@ -255,18 +234,10 @@ mod tests {
     }
 
     #[test]
-    fn monday_first_weeks_match_month_weeks() {
+    fn monday_first_weeks_start_on_the_monday_before_the_1st() {
         let v = month_view(2026, 10, Weekday::Mon, d(2026, 10, 23), None, None);
         assert_eq!(v.weekdays[0], "M");
         assert_eq!(v.weeks[0][0].date, d(2026, 9, 28));
-    }
-
-    #[test]
-    fn months_shift_across_years() {
-        assert_eq!(shift_month(2026, 10, 1), (2026, 11));
-        assert_eq!(shift_month(2026, 12, 1), (2027, 1));
-        assert_eq!(shift_month(2026, 1, -1), (2025, 12));
-        assert_eq!(shift_month(2026, 10, -22), (2024, 12));
     }
 
     #[test]
@@ -277,6 +248,12 @@ mod tests {
         assert_eq!(year_choices(today, 2040).last(), Some(&2040));
         assert_eq!(year_choices(today, 2020).first(), Some(&2020));
         assert_eq!(MONTHS[9], "October");
+        for (long, short) in MONTHS.iter().zip(MONTHS_SHORT) {
+            assert_eq!(&long[..3], short);
+        }
+        for (long, short) in WEEKDAYS_LONG.iter().zip(WEEKDAYS_SHORT) {
+            assert_eq!(&long[..3], short);
+        }
     }
 
     #[test]

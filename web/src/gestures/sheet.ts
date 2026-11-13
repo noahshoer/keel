@@ -19,6 +19,7 @@
 //   and a medium sheet goes to large alongside and stays there.
 // Reduced motion snaps.
 import { log } from "../diag";
+import { prefersReducedMotion } from "../shell/device";
 import { currentPlatform } from "../shell/platform";
 import {
   atEdge,
@@ -42,6 +43,7 @@ import {
   sheetSettle,
   velocity,
 } from "./sheet-rules";
+import { makeTimers } from "./timers";
 
 /** A keyboard move as Swift reports it: `kb` px of the web view it will cover (0 as it goes), its pace and curve. */
 export type KeyboardMove = {
@@ -102,16 +104,8 @@ export function slideClose(doc: Document, win: Window): boolean {
 
 /** Installs the sheet's listeners on `doc` and `win`; returns a function that removes them. */
 export function installSheet(doc: Document, win: Window, onClose: () => void): () => void {
-  const timers = new Set<ReturnType<typeof setTimeout>>();
-  const later = (f: () => void, ms: number) => {
-    const t = setTimeout(() => {
-      timers.delete(t);
-      f();
-    }, ms);
-    timers.add(t);
-  };
-  const reduce = () =>
-    typeof win.matchMedia === "function" && win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const { later, clear: clearTimers } = makeTimers();
+  const reduce = () => prefersReducedMotion(win);
   const sheetEl = () => doc.querySelector<HTMLElement>(".tv-sheet");
   const scrim = () => doc.querySelector<HTMLElement>(".tv-scrim");
   const closest = (target: EventTarget | null, sel: string): Element | null =>
@@ -455,8 +449,7 @@ export function installSheet(doc: Document, win: Window, onClose: () => void): (
   active = slide;
 
   return () => {
-    for (const t of timers) clearTimeout(t);
-    timers.clear();
+    clearTimers();
     doc.removeEventListener("touchstart", onDragStart, true);
     doc.removeEventListener("touchmove", onDragMove, true);
     doc.removeEventListener("touchstart", onEdgeStart, true);

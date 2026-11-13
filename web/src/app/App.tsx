@@ -17,6 +17,7 @@ import { ghost, ghostGo } from "../screens/ghost";
 import { MainPane } from "../screens/MainPane";
 import { SearchPane } from "../screens/SearchPane";
 import { clearPush, installSearchDrag } from "../screens/searchDrag";
+import { prefersReducedMotion } from "../shell/device";
 import { clearDrag, installDrawerDrag } from "../shell/drawerDrag";
 import { Sidebar } from "../shell/Sidebar";
 import { applyTheme, savedTheme, type Theme } from "../shell/theme";
@@ -134,7 +135,7 @@ export function App() {
     () =>
       installSwipe(document, (s) => {
         const onSearch = viewNow.current.kind === "search";
-        const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        const reduced = prefersReducedMotion();
         if (reduced && searchSwipe(s, drawerNow.current, !onSearch)) {
           openSearchNow.current();
           return;
@@ -310,15 +311,15 @@ export function App() {
   }
 
   return (
-    <CompletionIconContext.Provider value={icon}>
-      <ShowSubtasksContext.Provider value={subtasks}>
+    <CompletionIconContext value={icon}>
+      <ShowSubtasksContext value={subtasks}>
         <TaskNavProvider all={loaded?.all ?? []}>
           <Frame loaded={loaded} drawer={drawer} onCloseDrawer={() => setDrawer(false)}>
             {body}
           </Frame>
         </TaskNavProvider>
-      </ShowSubtasksContext.Provider>
-    </CompletionIconContext.Provider>
+      </ShowSubtasksContext>
+    </CompletionIconContext>
   );
 }
 

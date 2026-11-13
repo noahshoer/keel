@@ -5,8 +5,8 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import type { EditorValues, Label, Project, Section } from "../bindings";
 import { localToday } from "../clock";
+import { isTouch } from "../shell/device";
 import { PlusIcon } from "../shell/icons";
-import { isTouch } from "./locale";
 import { addFromEditor } from "./save";
 import { TaskEditor } from "./TaskEditor";
 
@@ -77,12 +77,7 @@ export function AddTask({
       projects={projects}
       sections={sections}
       labels={labels}
-      keepLabel={null}
-      existing={null}
       submitText="Add task"
-      quickAdd
-      askNewNames
-      keepOpen
       onSubmit={(v) => {
         addFromEditor(v, projects, sections, labels, localToday()).then(onChanged, onChanged);
       }}

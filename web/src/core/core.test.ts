@@ -23,7 +23,6 @@ import {
   pickSetting,
   progress,
   progressLong,
-  progressShort,
   reminderLabel,
   reminderMenus,
   sortChoices,
@@ -181,10 +180,9 @@ describe("keel-core over wasm", () => {
     );
   });
 
-  it("the day subtitle and the sub-task count come from Rust", () => {
+  it("the day subtitle comes from Rust", () => {
     expect(daySubtitle("2026-10-30")).toBe("Friday 30 Oct");
     expect(daySubtitle("2026-11-01")).toBe("Sunday 1 Nov");
-    expect(progressShort({ done: 2, total: 5 })).toBe("2/5");
   });
 
   it("field layout splits set fields from pills", () => {

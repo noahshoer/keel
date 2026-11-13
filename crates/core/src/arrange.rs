@@ -7,7 +7,7 @@ use chrono::NaiveDate;
 
 use crate::filter::{self, FilterContext};
 use crate::ids::Id;
-use crate::model::{Label, Priority, Project, Section, Task};
+use crate::model::{parse_ymd_prefix, Label, Priority, Project, Section, Task};
 use crate::views::{due_date_of, due_time, short_date, weekday_long};
 
 /// A field a page can be grouped or ordered by. Append-only: stored as JSON.
@@ -304,7 +304,7 @@ fn section_of<'a>(names: &'a ArrangeNames, task: &Task) -> Option<&'a Section> {
 }
 
 fn parse_day(s: &str) -> Option<NaiveDate> {
-    NaiveDate::parse_from_str(s.get(..10)?, "%Y-%m-%d").ok()
+    parse_ymd_prefix(s)
 }
 
 fn day_heading(
@@ -812,16 +812,7 @@ mod tests {
         t
     }
     fn due(mut t: Task, d: &str) -> Task {
-        t.due = Some(Due {
-            date: d.into(),
-            timezone: None,
-            string: d.into(),
-            lang: "en".into(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        t.due = Some(Due::new(d, d));
         t
     }
     fn deadline(mut t: Task, d: &str) -> Task {

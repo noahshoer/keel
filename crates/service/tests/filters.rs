@@ -1,78 +1,24 @@
 use chrono::NaiveDate;
-use keel_core::commands::{Action, Command};
+use keel_core::commands::Action;
 use keel_core::ids::Id;
 use keel_core::model::{Due, Priority};
-use keel_service::AppService;
+
+mod common;
+use common::{d, Fx, NewTask};
 
 fn today() -> NaiveDate {
-    NaiveDate::from_ymd_opt(2026, 10, 19).unwrap()
+    d(2026, 10, 19)
 }
 
-struct F {
-    _dir: tempfile::TempDir,
-    svc: AppService,
-    inbox: Id,
-    n: u32,
-}
-
-impl F {
-    fn new() -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
-        let inbox = svc
-            .list_projects()
-            .unwrap()
-            .into_iter()
-            .find(|p| p.is_inbox)
-            .unwrap()
-            .id;
-        F {
-            _dir: dir,
-            svc,
-            inbox,
-            n: 0,
-        }
-    }
-
-    fn run(&mut self, action: Action) -> keel_core::commands::ApplyResult {
-        self.n += 1;
-        self.svc
-            .dispatch_at(
-                Command {
-                    uuid: format!("u{}", self.n),
-                    temp_id: Some("t".into()),
-                    action,
-                },
-                today(),
-            )
-            .unwrap()
-    }
-
+impl Fx {
     fn task(&mut self, name: &str, due: Option<&str>, priority: Priority, labels: &[&str]) -> Id {
-        let inbox = self.inbox.clone();
-        self.run(Action::TaskAdd {
-            content: name.into(),
-            project_id: inbox,
-            description: None,
-            priority: Some(priority),
-            due: due.map(|d| Due {
-                date: d.into(),
-                timezone: None,
-                string: d.into(),
-                lang: "en".into(),
-                is_recurring: false,
-                recurrence: None,
-                until: None,
-                moved_from: None,
-            }),
-            labels: Some(labels.iter().map(|s| s.to_string()).collect()),
-            parent_id: None,
-            section_id: None,
-            recurrence: None,
-            deadline: None,
-        })
-        .id_mapping["t"]
-            .clone()
+        let due = due.map(|d| Due::new(d, d));
+        self.add_task(
+            NewTask::new(name)
+                .priority(priority)
+                .due(due)
+                .labels(labels),
+        )
     }
 }
 
@@ -82,7 +28,7 @@ fn names(tasks: &[keel_core::model::Task]) -> Vec<String> {
 
 #[test]
 fn groups_in_order_and_open_only() {
-    let mut f = F::new();
+    let mut f = Fx::on(today());
     f.task("a-today", Some("2026-10-19"), Priority::P1, &[]);
     f.task("b-overdue", Some("2026-10-10"), Priority::None, &[]);
     f.task("c-home", None, Priority::None, &["home"]);
@@ -106,7 +52,7 @@ fn groups_in_order_and_open_only() {
 
 #[test]
 fn invalid_query_errors() {
-    let f = F::new();
+    let f = Fx::on(today());
     assert!(f.svc.filter_view_at("today &", today()).is_err());
     assert!(f.svc.check_filter("today &").is_err());
     assert!(f.svc.check_filter("#Inbox & p1").is_ok());
@@ -114,7 +60,7 @@ fn invalid_query_errors() {
 
 #[test]
 fn sorted_by_due_then_priority() {
-    let mut f = F::new();
+    let mut f = Fx::on(today());
     f.task("x-20-p4", Some("2026-10-20"), Priority::None, &[]);
     f.task("y-20-p1", Some("2026-10-20"), Priority::P1, &[]);
     f.task("z-19", Some("2026-10-19"), Priority::None, &[]);
@@ -128,7 +74,7 @@ fn sorted_by_due_then_priority() {
 
 #[test]
 fn saved_filter_with_deleted_project_still_runs() {
-    let mut f = F::new();
+    let mut f = Fx::on(today());
     f.task("a-today", Some("2026-10-19"), Priority::None, &[]);
     f.task("b-today", Some("2026-10-19"), Priority::None, &[]);
     let groups = f.svc.filter_view_at("#Gone, today", today()).unwrap();

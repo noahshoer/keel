@@ -1,7 +1,7 @@
 // Synthetic touches for gesture tests. jsdom has no Touch constructor: a
 // plain cancelable event carrying the touch points, at a chosen time.
 
-export type TouchType = "touchstart" | "touchmove" | "touchend" | "touchcancel";
+type TouchType = "touchstart" | "touchmove" | "touchend" | "touchcancel";
 
 export function touch(type: TouchType, target: Element, x: number, y: number, at = 0): Event {
   const ev = new Event(type, { bubbles: true, cancelable: true });

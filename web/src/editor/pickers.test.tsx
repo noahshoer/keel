@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { DueBucket, Label, ReminderDraft } from "../bindings";
 import { invoke } from "../ipc/invoke";
 import { CheckCircleIcon } from "../shell/icons";
+import { stubMedia } from "../test/media";
 import { loadCoreForTests } from "../test/wasm";
 import { DatePicker } from "./DatePicker";
 import { DeadlinePicker } from "./DeadlinePicker";
@@ -631,7 +632,7 @@ describe("DatePicker", () => {
 
   describe("on touch screens", () => {
     const wheelOpen = (date: string, onChange: (d: string, t: string) => void, time = "") => {
-      vi.stubGlobal("matchMedia", (q: string) => ({ matches: q === "(pointer: coarse)" }));
+      stubMedia({ coarse: true });
       render(<DateHost onChange={onChange} date={date} time={time} />);
       openIt();
       calendar();

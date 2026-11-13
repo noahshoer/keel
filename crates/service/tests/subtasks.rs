@@ -1,11 +1,11 @@
 use chrono::NaiveDate;
-use keel_core::commands::{Action, Command};
-use keel_core::ids::Id;
-use keel_core::model::Task;
+use keel_core::commands::Action;
 use keel_core::recurrence::Recurrence;
 use keel_core::views::{is_done, progress, Progress};
-use keel_service::AppService;
 use keel_storage::SqliteRepo;
+
+mod common;
+use common::Fx;
 
 const FRIDAY: u8 = 4;
 
@@ -17,102 +17,13 @@ fn tomorrow() -> NaiveDate {
     today().succ_opt().unwrap()
 }
 
-struct Fx {
-    _dir: tempfile::TempDir,
-    path: String,
-    svc: AppService,
-    inbox: Id,
-    n: u32,
-}
-
-impl Fx {
-    fn new() -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("keel.db").to_str().unwrap().to_string();
-        let svc = AppService::open(&path).unwrap();
-        let inbox = svc
-            .list_projects()
-            .unwrap()
-            .into_iter()
-            .find(|p| p.is_inbox)
-            .unwrap()
-            .id;
-        Fx {
-            _dir: dir,
-            path,
-            svc,
-            inbox,
-            n: 0,
-        }
-    }
-
-    fn run_on(&mut self, action: Action, day: NaiveDate) -> Option<Id> {
-        self.n += 1;
-        let cmd = Command {
-            uuid: format!("u{}", self.n),
-            temp_id: Some("t".into()),
-            action,
-        };
-        self.svc
-            .dispatch_at(cmd, day)
-            .unwrap()
-            .id_mapping
-            .get("t")
-            .cloned()
-    }
-
-    fn add(&mut self, parent: Option<&Id>, recurrence: Option<Recurrence>) -> Id {
-        let action = Action::TaskAdd {
-            content: "t".to_string(),
-            project_id: self.inbox.clone(),
-            description: None,
-            priority: None,
-            due: None,
-            labels: None,
-            parent_id: parent.cloned(),
-            section_id: None,
-            recurrence,
-            deadline: None,
-        };
-        self.run_on(action, today()).unwrap()
-    }
-
-    fn streak(&mut self, id: &Id) {
-        self.run_on(
-            Action::TaskSetStreak {
-                id: id.clone(),
-                enabled: true,
-                goal: None,
-            },
-            today(),
-        );
-    }
-
-    fn complete(&mut self, id: &Id) {
-        self.run_on(Action::TaskComplete { id: id.clone() }, today());
-    }
-
-    fn get(&self, id: &Id) -> Task {
-        self.svc
-            .all_tasks_at(today())
-            .unwrap()
-            .into_iter()
-            .find(|t| &t.id == id)
-            .unwrap()
-    }
-
-    fn date(&self, id: &Id) -> String {
-        self.get(id).due.unwrap().date
-    }
-}
-
 #[test]
 fn completing_a_parent_completes_plain_and_repeating_sub_tasks() {
-    let mut f = Fx::new();
-    let parent = f.add(None, None);
-    let plain = f.add(Some(&parent), None);
-    let repeating = f.add(Some(&parent), Some(Recurrence::Daily));
-    let grandchild = f.add(Some(&plain), Some(Recurrence::Daily));
+    let mut f = Fx::on(today());
+    let parent = f.add_under(None, None);
+    let plain = f.add_under(Some(&parent), None);
+    let repeating = f.add_under(Some(&parent), Some(Recurrence::Daily));
+    let grandchild = f.add_under(Some(&plain), Some(Recurrence::Daily));
 
     f.complete(&parent);
 
@@ -125,9 +36,9 @@ fn completing_a_parent_completes_plain_and_repeating_sub_tasks() {
 
 #[test]
 fn completing_a_repeating_parent_completes_its_repeating_sub_tasks() {
-    let mut f = Fx::new();
-    let parent = f.add(None, Some(Recurrence::Daily));
-    let child = f.add(Some(&parent), Some(Recurrence::Daily));
+    let mut f = Fx::on(today());
+    let parent = f.add_under(None, Some(Recurrence::Daily));
+    let child = f.add_under(Some(&parent), Some(Recurrence::Daily));
     f.streak(&child);
 
     f.complete(&parent);
@@ -144,9 +55,9 @@ fn completing_a_repeating_parent_completes_its_repeating_sub_tasks() {
 
 #[test]
 fn a_sub_task_done_earlier_is_not_completed_twice() {
-    let mut f = Fx::new();
-    let parent = f.add(None, Some(Recurrence::Daily));
-    let child = f.add(Some(&parent), Some(Recurrence::Daily));
+    let mut f = Fx::on(today());
+    let parent = f.add_under(None, Some(Recurrence::Daily));
+    let child = f.add_under(Some(&parent), Some(Recurrence::Daily));
     f.streak(&child);
     f.complete(&child);
     assert_eq!(f.date(&child), "2026-01-06");
@@ -159,11 +70,11 @@ fn a_sub_task_done_earlier_is_not_completed_twice() {
 
 #[test]
 fn a_repeating_parent_does_not_pull_a_later_sub_task_forward() {
-    let mut f = Fx::new();
-    let parent = f.add(None, Some(Recurrence::Daily));
+    let mut f = Fx::on(today());
+    let parent = f.add_under(None, Some(Recurrence::Daily));
     // Weekly on Fridays: next due Jan 9, after the parent's Jan 5 occurrence.
     let weekly = Recurrence::Weekly(vec![FRIDAY]);
-    let child = f.add(Some(&parent), Some(weekly));
+    let child = f.add_under(Some(&parent), Some(weekly));
     let before = f.date(&child);
     assert!(before.as_str() > "2026-01-05", "{before}");
 
@@ -174,11 +85,11 @@ fn a_repeating_parent_does_not_pull_a_later_sub_task_forward() {
 
 #[test]
 fn completing_a_repeating_parent_keeps_plain_sub_tasks_completed_until_its_next_date() {
-    let mut f = Fx::new();
-    let parent = f.add(None, Some(Recurrence::Daily));
-    let done_first = f.add(Some(&parent), None);
-    let still_open = f.add(Some(&parent), None);
-    let grandchild = f.add(Some(&still_open), None);
+    let mut f = Fx::on(today());
+    let parent = f.add_under(None, Some(Recurrence::Daily));
+    let done_first = f.add_under(Some(&parent), None);
+    let still_open = f.add_under(Some(&parent), None);
+    let grandchild = f.add_under(Some(&still_open), None);
     f.complete(&done_first);
 
     f.complete(&parent);
@@ -213,10 +124,10 @@ fn completing_a_repeating_parent_keeps_plain_sub_tasks_completed_until_its_next_
 
 #[test]
 fn a_plain_sub_task_reopened_by_hand_stays_open_and_the_rest_stay_completed() {
-    let mut f = Fx::new();
-    let parent = f.add(None, Some(Recurrence::Daily));
-    let a = f.add(Some(&parent), None);
-    let b = f.add(Some(&parent), None);
+    let mut f = Fx::on(today());
+    let parent = f.add_under(None, Some(Recurrence::Daily));
+    let a = f.add_under(Some(&parent), None);
+    let b = f.add_under(Some(&parent), None);
     f.complete(&parent);
 
     f.run_on(Action::TaskUncomplete { id: a.clone() }, today());
@@ -227,9 +138,9 @@ fn a_plain_sub_task_reopened_by_hand_stays_open_and_the_rest_stay_completed() {
 
 #[test]
 fn a_plain_sub_task_completed_by_hand_does_not_reopen_on_its_own() {
-    let mut f = Fx::new();
-    let parent = f.add(None, Some(Recurrence::Daily));
-    let a = f.add(Some(&parent), None);
+    let mut f = Fx::on(today());
+    let parent = f.add_under(None, Some(Recurrence::Daily));
+    let a = f.add_under(Some(&parent), None);
     f.complete(&a);
     let next_all = f.svc.all_tasks_at(tomorrow()).unwrap();
     assert!(next_all.iter().find(|t| t.id == a).unwrap().checked);
@@ -237,9 +148,9 @@ fn a_plain_sub_task_completed_by_hand_does_not_reopen_on_its_own() {
 
 #[test]
 fn a_sub_task_of_a_parent_that_does_not_repeat_never_reopens() {
-    let mut f = Fx::new();
-    let parent = f.add(None, None);
-    let a = f.add(Some(&parent), None);
+    let mut f = Fx::on(today());
+    let parent = f.add_under(None, None);
+    let a = f.add_under(Some(&parent), None);
     f.complete(&parent);
     let next_all = f.svc.all_tasks_at(tomorrow()).unwrap();
     assert!(next_all.iter().find(|t| t.id == a).unwrap().checked);
@@ -247,9 +158,9 @@ fn a_sub_task_of_a_parent_that_does_not_repeat_never_reopens() {
 
 #[test]
 fn undoing_a_repeating_completion_restores_its_date_and_streak() {
-    let mut f = Fx::new();
-    let parent = f.add(None, Some(Recurrence::Daily));
-    let child = f.add(Some(&parent), Some(Recurrence::Daily));
+    let mut f = Fx::on(today());
+    let parent = f.add_under(None, Some(Recurrence::Daily));
+    let child = f.add_under(Some(&parent), Some(Recurrence::Daily));
     f.streak(&child);
     // Two days running, so the undo has a streak to step back to.
     let tomorrow = NaiveDate::from_ymd_opt(2026, 1, 6).unwrap();
@@ -270,8 +181,8 @@ fn undoing_a_repeating_completion_restores_its_date_and_streak() {
 
 #[test]
 fn undo_returns_an_overdue_task_to_its_overdue_date() {
-    let mut f = Fx::new();
-    let task = f.add(None, Some(Recurrence::Weekly(vec![FRIDAY])));
+    let mut f = Fx::on(today());
+    let task = f.add_under(None, Some(Recurrence::Weekly(vec![FRIDAY])));
     let first = f.date(&task);
     let later = NaiveDate::parse_from_str(&first, "%Y-%m-%d").unwrap() + chrono::Duration::days(10);
     f.run_on(Action::TaskComplete { id: task.clone() }, later);
@@ -284,8 +195,8 @@ fn undo_returns_an_overdue_task_to_its_overdue_date() {
 
 #[test]
 fn undo_leaves_a_task_whose_date_was_changed_since() {
-    let mut f = Fx::new();
-    let task = f.add(None, Some(Recurrence::Daily));
+    let mut f = Fx::on(today());
+    let task = f.add_under(None, Some(Recurrence::Daily));
     f.complete(&task);
     let due = keel_core::commands::DueEdit {
         date: Some("2026-02-01".into()),
@@ -314,8 +225,8 @@ fn undo_leaves_a_task_whose_date_was_changed_since() {
 
 #[test]
 fn undoing_twice_steps_back_only_once() {
-    let mut f = Fx::new();
-    let task = f.add(None, Some(Recurrence::Daily));
+    let mut f = Fx::on(today());
+    let task = f.add_under(None, Some(Recurrence::Daily));
     f.complete(&task);
     f.run_on(Action::TaskUncomplete { id: task.clone() }, today());
     f.run_on(Action::TaskUncomplete { id: task.clone() }, today());
@@ -324,9 +235,9 @@ fn undoing_twice_steps_back_only_once() {
 
 #[test]
 fn a_completed_sub_task_stays_completed_until_its_next_date() {
-    let mut f = Fx::new();
-    let parent = f.add(None, Some(Recurrence::Daily));
-    let child = f.add(Some(&parent), Some(Recurrence::Daily));
+    let mut f = Fx::on(today());
+    let parent = f.add_under(None, Some(Recurrence::Daily));
+    let child = f.add_under(Some(&parent), Some(Recurrence::Daily));
     f.complete(&child);
     assert!(is_done(&f.get(&child), today()));
     assert!(!is_done(&f.get(&child), tomorrow()));
@@ -334,10 +245,10 @@ fn a_completed_sub_task_stays_completed_until_its_next_date() {
 
 #[test]
 fn completing_a_repeating_parent_leaves_its_sub_tasks_completed_for_today() {
-    let mut f = Fx::new();
-    let parent = f.add(None, Some(Recurrence::Daily));
-    let a = f.add(Some(&parent), Some(Recurrence::Daily));
-    let b = f.add(Some(&parent), Some(Recurrence::Daily));
+    let mut f = Fx::on(today());
+    let parent = f.add_under(None, Some(Recurrence::Daily));
+    let a = f.add_under(Some(&parent), Some(Recurrence::Daily));
+    let b = f.add_under(Some(&parent), Some(Recurrence::Daily));
     f.streak(&a);
     f.complete(&parent);
 
@@ -360,17 +271,17 @@ fn completing_a_repeating_parent_leaves_its_sub_tasks_completed_for_today() {
 
 #[test]
 fn a_sub_task_just_not_due_yet_is_not_completed() {
-    let mut f = Fx::new();
-    let parent = f.add(None, Some(Recurrence::Daily));
-    let child = f.add(Some(&parent), Some(Recurrence::Weekly(vec![FRIDAY])));
+    let mut f = Fx::on(today());
+    let parent = f.add_under(None, Some(Recurrence::Daily));
+    let child = f.add_under(Some(&parent), Some(Recurrence::Weekly(vec![FRIDAY])));
     assert!(!is_done(&f.get(&child), today()));
 }
 
 #[test]
 fn a_sub_task_completed_before_completions_were_saved_shows_done_and_undoes() {
-    let mut f = Fx::new();
-    let parent = f.add(None, Some(Recurrence::Daily));
-    let child = f.add(Some(&parent), Some(Recurrence::Daily));
+    let mut f = Fx::on(today());
+    let parent = f.add_under(None, Some(Recurrence::Daily));
+    let child = f.add_under(Some(&parent), Some(Recurrence::Daily));
     f.streak(&child);
     f.complete(&child);
     // As the older build left it: moved and credited, nothing saved.

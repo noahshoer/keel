@@ -7,6 +7,7 @@ import { sidebarCounts } from "../core";
 import { ROW_PRESS } from "../gestures/long-press";
 import { addLabel } from "../ipc/actions";
 import { invoke } from "../ipc/invoke";
+import { stubMedia } from "../test/media";
 import { rejectFilterCheck } from "../test/rejectCheck";
 import { loadCoreForTests } from "../test/wasm";
 
@@ -50,11 +51,7 @@ it("the drawer has no search field on a phone; the header's button is the way in
 });
 
 it("on desktop a search field sits under the brand row", async () => {
-  vi.stubGlobal("matchMedia", (q: string) => ({
-    matches: q.includes("min-width"),
-    addEventListener: () => {},
-    removeEventListener: () => {},
-  }));
+  stubMedia({ wide: true });
   await start();
   const field = sidebar().querySelector(".sidebar-search-input") as HTMLInputElement;
   const brand = sidebar().querySelector(".brand") as HTMLElement;
@@ -64,11 +61,7 @@ it("on desktop a search field sits under the brand row", async () => {
 });
 
 it("on desktop the field types the search, and results fill the main area", async () => {
-  vi.stubGlobal("matchMedia", (q: string) => ({
-    matches: q.includes("min-width"),
-    addEventListener: () => {},
-    removeEventListener: () => {},
-  }));
+  stubMedia({ wide: true });
   await start();
   const field = sidebar().querySelector(".sidebar-search-input") as HTMLInputElement;
   expect(field.readOnly).toBe(false);
@@ -84,11 +77,7 @@ it("on desktop the field types the search, and results fill the main area", asyn
 });
 
 it("/ focuses the search on desktop", async () => {
-  vi.stubGlobal("matchMedia", (q: string) => ({
-    matches: q.includes("min-width"),
-    addEventListener: () => {},
-    removeEventListener: () => {},
-  }));
+  stubMedia({ wide: true });
   await start();
   fireEvent.keyDown(document, { key: "/" });
   await waitFor(() => expect(title()).toBe("Search"));
@@ -125,11 +114,7 @@ it("rows show how many tasks each view lists", async () => {
 });
 
 it("typing a desktop search doesn't count the sidebar's tasks again", async () => {
-  vi.stubGlobal("matchMedia", (q: string) => ({
-    matches: q.includes("min-width"),
-    addEventListener: () => {},
-    removeEventListener: () => {},
-  }));
+  stubMedia({ wide: true });
   await start();
   const field = sidebar().querySelector(".sidebar-search-input") as HTMLInputElement;
   fireEvent.focus(field);

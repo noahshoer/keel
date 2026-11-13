@@ -14,11 +14,13 @@
 //
 // `ghostGo` leaves a dragged ghost alone. Reduced motion gets the instant
 // swipes instead (gestures/sheet-rules.ts).
-import { installPan } from "../gestures/pan";
-import { NARROW_MAX } from "../gestures/sheet-rules";
+import { canPan, installPan } from "../gestures/pan";
+import { EASE } from "../gestures/sheet-rules";
+import { makeTimers } from "../gestures/timers";
+import { prefersReducedMotion } from "../shell/device";
 import { ghost } from "./ghost";
 
-export type SearchDragControl = {
+type SearchDragControl = {
   isSearch: () => boolean;
   drawerOpen: () => boolean;
   /** Back: the drag began: go to the page Search was opened from (it loads under the ghost). */
@@ -35,7 +37,6 @@ export type SearchDragControl = {
 
 /** The pace and curve of the Search slide (`.view-ghost.pop.go` in app.css). */
 const SETTLE_MS = 360;
-const EASE = "cubic-bezier(.32,.72,0,1)";
 /** How far the page left behind slides, and how much it fades (`ghost-under`). */
 const UNDER_SHIFT = 24;
 const UNDER_FADE = 0.4;
@@ -51,18 +52,11 @@ export function clearPush(doc: Document = document): void {
 }
 
 export function installSearchDrag(doc: Document, ctl: SearchDragControl): () => void {
-  const timers = new Set<ReturnType<typeof setTimeout>>();
-  const later = (f: () => void, ms: number) => {
-    const t = setTimeout(() => {
-      timers.delete(t);
-      f();
-    }, ms);
-    timers.add(t);
-  };
-  const reduced = () => doc.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+  const { later, clear } = makeTimers();
+  const reduced = () => prefersReducedMotion(doc.defaultView);
 
   const back = installPan(doc, (ctx) => {
-    if (ctx.blocked || ctx.inSheet || ctx.inSettings || ctx.width > NARROW_MAX) return null;
+    if (!canPan(ctx)) return null;
     if (!ctl.isSearch() || ctl.drawerOpen() || reduced()) return null;
     const main = doc.querySelector<HTMLElement>(".main");
     if (!main) return null;
@@ -95,7 +89,7 @@ export function installSearchDrag(doc: Document, ctl: SearchDragControl): () => 
   });
 
   const forward = installPan(doc, (ctx) => {
-    if (ctx.blocked || ctx.inSheet || ctx.inSettings || ctx.width > NARROW_MAX) return null;
+    if (!canPan(ctx)) return null;
     if (ctl.isSearch() || ctl.drawerOpen() || reduced()) return null;
     const app = doc.querySelector<HTMLElement>(".app");
     const main = doc.querySelector<HTMLElement>(".main");
@@ -149,6 +143,6 @@ export function installSearchDrag(doc: Document, ctl: SearchDragControl): () => 
   return () => {
     back();
     forward();
-    for (const t of timers) clearTimeout(t);
+    clear();
   };
 }

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { setWidth, touch } from "../test/touch";
-import { installPan, type Pan } from "./pan";
+import { canPan, installPan, type Pan } from "./pan";
 
 let uninstall: () => void;
 let pan: Pan;
@@ -144,4 +144,14 @@ it("keeps following a touch whose element left the page mid-pan", () => {
   touch("touchmove", target, 190, 104, 400);
   touch("touchend", target, 190, 104, 410);
   expect(log).toEqual(["start", "move 0.00", "move 0.50", "end true 0.50"]);
+});
+
+it("canPan wants the narrow layout with nothing blocking", () => {
+  const ok = { width: 390, blocked: false, inSheet: false, inSettings: false };
+  expect(canPan(ok)).toBe(true);
+  expect(canPan({ ...ok, width: 700 })).toBe(true);
+  expect(canPan({ ...ok, width: 701 })).toBe(false);
+  expect(canPan({ ...ok, blocked: true })).toBe(false);
+  expect(canPan({ ...ok, inSheet: true })).toBe(false);
+  expect(canPan({ ...ok, inSettings: true })).toBe(false);
 });

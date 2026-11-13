@@ -319,16 +319,9 @@ impl AppService {
                         project_id: project_id.clone(),
                         description: (!description.is_empty()).then(|| description.clone()),
                         priority: Some(*priority),
-                        due: due.as_ref().map(|date| Due {
-                            date: date.clone(),
-                            timezone: None,
-                            string: date.clone(),
-                            lang: "en".to_string(),
-                            is_recurring: false,
-                            recurrence: None,
-                            until: None,
-                            moved_from: None,
-                        }),
+                        due: due
+                            .as_ref()
+                            .map(|date| Due::new(date.clone(), date.clone())),
                         labels: (!labels.is_empty()).then(|| labels.clone()),
                         parent_id: lookup(parent),
                         section_id: lookup(section),

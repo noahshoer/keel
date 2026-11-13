@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KEYBOARD_EVENT, keyboardInset } from "../gestures/sheet-rules";
+import { rect } from "../test/dom";
 import {
   afterKeyboardMove,
   KEYBOARD_MOVE_LIMIT_MS,
@@ -15,15 +16,6 @@ import {
   textRoomUnderPicker,
   useKeyboard,
 } from "./keyboardAnchor";
-import type { Rect } from "./popover";
-
-const rect = (left: number, top: number, width: number, height: number): Rect => ({
-  left,
-  top,
-  width,
-  height,
-  bottom: top + height,
-});
 
 describe("the task card's inset", () => {
   it("is the keyboard's height", () => {

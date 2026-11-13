@@ -6,8 +6,9 @@ use std::collections::HashSet;
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
+use crate::calendar::{MONTHS_SHORT, WEEKDAYS_LONG};
 use crate::ids::Id;
-use crate::model::{Label, Task};
+use crate::model::{contains_name, parse_ymd_prefix, ymd, Due, Label, Task};
 use crate::streak;
 
 /// Which colored due chip a date gets, relative to today.
@@ -32,20 +33,6 @@ pub fn due_bucket(due: NaiveDate, today: NaiveDate) -> DueBucket {
     }
 }
 
-const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-const WEEKDAYS_LONG: [&str; 7] = [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
-];
-
 /// Todoist-style chip text: Today / Tomorrow / Yesterday / weekday / "3 Nov"
 /// (with the year when it differs from today's).
 /// "Moved from Wed 21 Oct" while `day` stands in for the occurrence `from`
@@ -61,7 +48,7 @@ pub fn moved_text(
 /// [`moved_text`] for a task's due: what a list row says about a moved occurrence.
 pub fn moved_note(task: &Task) -> Option<String> {
     let due = task.due.as_ref()?;
-    let parse = |s: &str| NaiveDate::parse_from_str(s.get(..10)?, "%Y-%m-%d").ok();
+    let parse = parse_ymd_prefix;
     moved_text(
         parse(due.moved_from.as_deref()?)?,
         parse(&due.date)?,
@@ -76,7 +63,7 @@ pub fn due_label(due: NaiveDate, today: NaiveDate) -> String {
         -1 => "Yesterday".to_string(),
         2..=6 => WEEKDAYS_LONG[due.weekday().num_days_from_monday() as usize].to_string(),
         _ => {
-            let month = MONTHS[due.month0() as usize];
+            let month = MONTHS_SHORT[due.month0() as usize];
             if due.year() == today.year() {
                 format!("{} {}", due.day(), month)
             } else {
@@ -84,64 +71,6 @@ pub fn due_label(due: NaiveDate, today: NaiveDate) -> String {
             }
         }
     }
-}
-
-/// A task positioned in a nested (sub-task) display.
-#[derive(Clone, PartialEq, Debug)]
-pub struct Nested {
-    pub task: Task,
-    pub depth: usize,
-    /// True when the task has sub-tasks in this list (shown or collapsed).
-    pub has_children: bool,
-}
-
-/// Orders a flat list for display: each sub-task follows its parent (depth+1),
-/// siblings keep their input order, collapsed tasks hide their descendants, and
-/// a sub-task whose parent isn't in the list shows at top level.
-pub fn nest(tasks: Vec<Task>) -> Vec<Nested> {
-    use std::collections::{HashMap, HashSet};
-
-    let present: HashSet<&Id> = tasks.iter().map(|t| &t.id).collect();
-    let mut children: HashMap<&Id, Vec<usize>> = HashMap::new();
-    let mut roots = Vec::new();
-    for (i, t) in tasks.iter().enumerate() {
-        match &t.parent_id {
-            Some(p) if p != &t.id && present.contains(p) => children.entry(p).or_default().push(i),
-            _ => roots.push(i),
-        }
-    }
-
-    fn visit<'a>(
-        i: usize,
-        depth: usize,
-        tasks: &'a [Task],
-        children: &HashMap<&'a Id, Vec<usize>>,
-        seen: &mut HashSet<usize>,
-        out: &mut Vec<Nested>,
-    ) {
-        if !seen.insert(i) {
-            return; // cycle guard
-        }
-        let task = &tasks[i];
-        let kids = children.get(&task.id).map(Vec::as_slice).unwrap_or(&[]);
-        out.push(Nested {
-            task: task.clone(),
-            depth,
-            has_children: !kids.is_empty(),
-        });
-        if !task.is_collapsed {
-            for &k in kids {
-                visit(k, depth + 1, tasks, children, seen, out);
-            }
-        }
-    }
-
-    let mut out = Vec::with_capacity(tasks.len());
-    let mut seen = HashSet::new();
-    for &r in &roots {
-        visit(r, 0, &tasks, &children, &mut seen, &mut out);
-    }
-    out
 }
 
 /// Sub-task completion counts for one parent.
@@ -156,11 +85,6 @@ impl Progress {
     /// True when there is at least one counted sub-task and all are checked.
     pub fn all_done(&self) -> bool {
         self.total > 0 && self.done == self.total
-    }
-
-    /// Compact count for rows: "2/5".
-    pub fn short(&self) -> String {
-        format!("{}/{}", self.done, self.total)
     }
 
     /// Spelled-out count for the task view header: "2 of 5".
@@ -223,9 +147,8 @@ pub fn done_for_now(t: &Task, today: NaiveDate) -> bool {
 pub fn done_today(t: &Task, today: NaiveDate) -> bool {
     t.checked
         || (done_for_now(t, today)
-            && streak::undoable_completion(t, today).is_some_and(|u| {
-                u.completed_on.as_deref() == Some(today.format("%Y-%m-%d").to_string().as_str())
-            }))
+            && streak::undoable_completion(t, today)
+                .is_some_and(|u| u.completed_on.as_deref() == Some(ymd(today).as_str())))
 }
 
 /// Whether every sub-task its "x of y" counts is done (false with none).
@@ -353,7 +276,7 @@ pub struct LabelChoice {
 /// Whether `name` is among the chosen labels, matching as `label_groups` does.
 pub fn label_chosen(selected: &[String], name: &str) -> bool {
     let name = name.trim();
-    selected.iter().any(|s| s.eq_ignore_ascii_case(name))
+    contains_name(selected, name)
 }
 
 /// The labels whose names contain `query` (any case), each marked if chosen.
@@ -535,10 +458,7 @@ pub fn time_label(t: chrono::NaiveTime) -> String {
 
 /// The calendar date of a task's due (`YYYY-MM-DD` or a datetime string).
 pub fn due_date_of(task: &Task) -> Option<NaiveDate> {
-    task.due
-        .as_ref()
-        .and_then(|d| d.date.get(..10))
-        .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+    task.due.as_ref().and_then(|d| parse_ymd_prefix(&d.date))
 }
 
 /// Whether the task has an occurrence `d` with `from <= d < to`. Its next date
@@ -556,9 +476,7 @@ pub fn occurs_in(task: &Task, from: NaiveDate, to: NaiveDate) -> bool {
     let Some(rule) = due.and_then(|d| d.recurrence.as_ref()) else {
         return false;
     };
-    let until = due
-        .and_then(|d| d.until.as_deref())
-        .and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok());
+    let until = due.and_then(Due::until_date);
     // The first date the rule contains on or after `from` (every later
     // occurrence is a date the rule contains), without walking up to it.
     let day = rule.next_after(from - chrono::Duration::days(1));
@@ -585,11 +503,7 @@ pub fn occurs_after(task: &Task, day: NaiveDate) -> bool {
         return false;
     };
     let next = rule.next_after(day.max(first));
-    match due
-        .until
-        .as_deref()
-        .and_then(|u| NaiveDate::parse_from_str(u, "%Y-%m-%d").ok())
-    {
+    match due.until_date() {
         Some(u) => next <= u,
         None => true,
     }
@@ -618,7 +532,7 @@ pub enum DateGroupMode {
 
 /// "30 Oct".
 pub(crate) fn short_date(d: NaiveDate) -> String {
-    format!("{} {}", d.day(), MONTHS[d.month0() as usize])
+    format!("{} {}", d.day(), MONTHS_SHORT[d.month0() as usize])
 }
 
 pub(crate) fn weekday_long(d: NaiveDate) -> &'static str {
@@ -753,84 +667,8 @@ mod tests {
     fn due_date_of_reads_date_and_datetime() {
         let mut t = Task::new("x", Id::new());
         assert_eq!(due_date_of(&t), None);
-        t.due = Some(Due {
-            date: "2026-10-19T09:30:00".to_string(),
-            timezone: None,
-            string: "today at 9:30".to_string(),
-            lang: "en".to_string(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        t.due = Some(Due::new("2026-10-19T09:30:00", "today at 9:30"));
         assert_eq!(due_date_of(&t), Some(d(2026, 10, 19)));
-    }
-}
-
-#[cfg(test)]
-mod nest_tests {
-    use super::nest;
-    use crate::ids::Id;
-    use crate::model::Task;
-
-    fn t(name: &str, parent: Option<&Task>) -> Task {
-        let mut task = Task::new(name, Id::from("P"));
-        task.parent_id = parent.map(|p| p.id.clone());
-        task
-    }
-
-    fn shape(tasks: Vec<Task>) -> Vec<(String, usize, bool)> {
-        nest(tasks)
-            .into_iter()
-            .map(|n| (n.task.content, n.depth, n.has_children))
-            .collect()
-    }
-
-    #[test]
-    fn nests_children_under_parents_in_order() {
-        let a = t("a", None);
-        let b = t("b", None);
-        let a1 = t("a1", Some(&a));
-        let a2 = t("a2", Some(&a));
-        // Input is flat and interleaved; children follow their parent, in input order.
-        let got = shape(vec![a1.clone(), b.clone(), a.clone(), a2.clone()]);
-        assert_eq!(
-            got,
-            vec![
-                ("b".into(), 0, false),
-                ("a".into(), 0, true),
-                ("a1".into(), 1, false),
-                ("a2".into(), 1, false),
-            ]
-        );
-    }
-
-    #[test]
-    fn grandchildren_depth_2() {
-        let a = t("a", None);
-        let a1 = t("a1", Some(&a));
-        let a1x = t("a1x", Some(&a1));
-        let got = shape(vec![a, a1, a1x]);
-        assert_eq!(got[2], ("a1x".into(), 2, false));
-        assert!(got[1].2, "a1 has children");
-    }
-
-    #[test]
-    fn collapsed_hides_descendants() {
-        let mut a = t("a", None);
-        let a1 = t("a1", Some(&a));
-        let a1x = t("a1x", Some(&a1));
-        let b = t("b", None);
-        a.is_collapsed = true;
-        let got = shape(vec![a, a1, a1x, b]);
-        assert_eq!(got, vec![("a".into(), 0, true), ("b".into(), 0, false)]);
-    }
-
-    #[test]
-    fn orphan_child_is_top_level() {
-        let missing_parent = t("gone", None);
-        let orphan = t("orphan", Some(&missing_parent));
-        assert_eq!(shape(vec![orphan]), vec![("orphan".into(), 0, false)]);
     }
 }
 
@@ -858,16 +696,7 @@ mod time_tests {
     fn reads_time_from_due() {
         let mut task = Task::new("x", Id::from("P"));
         assert_eq!(due_time(&task), None);
-        let due = |date: &str| Due {
-            date: date.into(),
-            timezone: None,
-            string: String::new(),
-            lang: "en".into(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        };
+        let due = |date: &str| Due::new(date, "");
         task.due = Some(due("2026-10-19"));
         assert_eq!(due_time(&task), None, "date-only due has no time");
         task.due = Some(due("2026-10-19T17:30:00"));
@@ -885,16 +714,7 @@ mod sidebar_count_mode_tests {
     fn task(name: &str, parent: Option<&Task>, date: Option<&str>) -> Task {
         let mut t = Task::new(name, Id::from("P"));
         t.parent_id = parent.map(|p| p.id.clone());
-        t.due = date.map(|d| Due {
-            date: d.into(),
-            timezone: None,
-            string: d.into(),
-            lang: "en".into(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        t.due = date.map(|d| Due::new(d, d));
         t
     }
 
@@ -940,14 +760,8 @@ mod progress_tests {
         task.checked = checked;
         if recurring {
             task.due = Some(Due {
-                date: "2026-10-23".into(),
-                timezone: None,
-                string: "every day".into(),
-                lang: "en".into(),
                 is_recurring: true,
-                recurrence: None,
-                until: None,
-                moved_from: None,
+                ..Due::new("2026-10-23", "every day")
             });
         }
         task
@@ -1001,14 +815,8 @@ mod progress_tests {
 
     fn dated(mut task: Task, date: &str) -> Task {
         task.due = Some(Due {
-            date: date.into(),
-            timezone: None,
-            string: "every day".into(),
-            lang: "en".into(),
             is_recurring: true,
-            recurrence: None,
-            until: None,
-            moved_from: None,
+            ..Due::new(date, "every day")
         });
         task
     }
@@ -1072,7 +880,6 @@ mod progress_tests {
 
     #[test]
     fn progress_text() {
-        assert_eq!(Progress { done: 2, total: 5 }.short(), "2/5");
         assert_eq!(Progress { done: 5, total: 5 }.long(), "5 of 5");
     }
 
@@ -1179,14 +986,8 @@ mod card_tests {
         let f = fx();
         let mut done = f.chargers.clone();
         done.due = Some(Due {
-            date: "2026-11-04".into(),
-            timezone: None,
-            string: "every day".into(),
-            lang: "en".into(),
             is_recurring: true,
-            recurrence: None,
-            until: None,
-            moved_from: None,
+            ..Due::new("2026-11-04", "every day")
         });
         done.last_completion = Some(crate::model::LastCompletion {
             moved_to: "2026-11-04".into(),
@@ -1293,14 +1094,8 @@ mod card_tests {
         f.pack.checked = true;
         let mut h = task("H", Some(&f.pack));
         h.due = Some(Due {
-            date: "2026-10-23".into(),
-            timezone: None,
-            string: "every day".into(),
-            lang: "en".into(),
             is_recurring: true,
-            recurrence: None,
-            until: None,
-            moved_from: None,
+            ..Due::new("2026-10-23", "every day")
         });
         let mut a = all(&f);
         a.push(h.clone());
@@ -1424,7 +1219,7 @@ mod date_group_tests {
         cards, date_groups, deadline_urgent, upcoming_tasks, CardMode, DateGroupMode, Progress,
     };
     use crate::ids::Id;
-    use crate::model::{Due, Task};
+    use crate::model::{ymd, Due, Task};
     use chrono::{Datelike, NaiveDate};
 
     fn d(y: i32, m: u32, day: u32) -> NaiveDate {
@@ -1435,16 +1230,7 @@ mod date_group_tests {
         let mut t = Task::new(name, Id::from("proj"));
         t.id = Id::from(name);
         t.parent_id = parent.map(|p| p.id.clone());
-        t.due = Some(Due {
-            date: due.format("%Y-%m-%d").to_string(),
-            timezone: None,
-            string: String::new(),
-            lang: "en".to_string(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        t.due = Some(Due::new(ymd(due), ""));
         t
     }
 
@@ -1725,28 +1511,19 @@ mod label_group_tests {
 mod sidebar_count_tests {
     use super::{sidebar_counts, ProjectCount};
     use crate::ids::Id;
-    use crate::model::{Due, Task};
+    use crate::model::{parse_ymd, Due, Task};
     use chrono::NaiveDate;
 
     const TODAY: &str = "2026-11-01";
 
     fn today() -> NaiveDate {
-        NaiveDate::parse_from_str(TODAY, "%Y-%m-%d").unwrap()
+        parse_ymd(TODAY).unwrap()
     }
 
     fn task(name: &str, project: &str, due: Option<&str>) -> Task {
         let mut t = Task::new(name, Id::from(project));
         t.id = Id::from(name);
-        t.due = due.map(|d| Due {
-            date: d.to_string(),
-            is_recurring: false,
-            string: d.to_string(),
-            lang: "en".to_string(),
-            timezone: None,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        t.due = due.map(|d| Due::new(d, d));
         t
     }
 
@@ -1870,14 +1647,8 @@ mod moved_tests {
     fn every_wed(date: &str, moved_from: Option<&str>) -> Task {
         let mut t = Task::new("Swim", Id::from("P"));
         t.due = Some(Due {
-            date: date.into(),
-            timezone: None,
-            string: String::new(),
-            lang: "en".into(),
-            is_recurring: true,
-            recurrence: Some(Recurrence::Weekly(vec![2])),
-            until: None,
             moved_from: moved_from.map(str::to_string),
+            ..Due::repeating(date, "", Recurrence::Weekly(vec![2]))
         });
         t
     }
@@ -1918,14 +1689,11 @@ mod occurrence_tests {
     ) -> Task {
         let mut t = Task::new("x", Id::new());
         t.due = Some(Due {
-            date: date.to_string(),
-            timezone: None,
-            string: String::new(),
-            lang: "en".to_string(),
             is_recurring: rule.is_some(),
             recurrence: rule,
             until: until.map(String::from),
             moved_from: moved.map(String::from),
+            ..Due::new(date, "")
         });
         t
     }

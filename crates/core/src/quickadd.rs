@@ -8,7 +8,7 @@
 use chrono::{Duration, Months, NaiveDate, NaiveTime};
 
 use crate::ids::Id;
-use crate::model::{Priority, Project, Section};
+use crate::model::{contains_name, ymd, Priority, Project, Section};
 use crate::phrases::{
     match_date, match_deadline, match_name, match_priority, match_repeat, match_time, number_word,
     resolve_repeat, sigil_name, tokens, unread_every, RepeatSpec, Token,
@@ -78,22 +78,9 @@ impl QuickAdd {
     /// `YYYY-MM-DD`, or `YYYY-MM-DDTHH:MM:00` with a time (the `Due.date` format).
     pub fn due_string(&self) -> Option<String> {
         self.date.map(|d| match self.time {
-            Some(t) => format!("{}T{}", d.format("%Y-%m-%d"), t.format("%H:%M:00")),
-            None => d.format("%Y-%m-%d").to_string(),
+            Some(t) => format!("{}T{}", ymd(d), t.format("%H:%M:00")),
+            None => ymd(d),
         })
-    }
-
-    /// True when nothing besides the title was recognized.
-    pub fn is_plain(&self) -> bool {
-        self.date.is_none()
-            && self.time.is_none()
-            && self.recurrence.is_none()
-            && self.priority.is_none()
-            && self.project_id.is_none()
-            && self.section_id.is_none()
-            && self.new_project.is_none()
-            && self.labels.is_empty()
-            && self.deadline.is_none()
     }
 }
 
@@ -306,7 +293,7 @@ fn parse_tokens(
             }
         }
         if let Some(name) = sigil_name(&t[i].raw, "@") {
-            if !q.labels.iter().any(|l| l.eq_ignore_ascii_case(&name)) {
+            if !contains_name(&q.labels, &name) {
                 q.labels.push(name);
             }
             take(&mut used, &mut spans, i, 1, SpanKind::Label);

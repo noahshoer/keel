@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 const repo = fileURLToPath(new URL("../../", import.meta.url));
 const crateToml = `${repo}crates/core-wasm/Cargo.toml`;
 const cli = `${repo}.tools/bin/wasm-bindgen${process.platform === "win32" ? ".exe" : ""}`;
-const wasm = `${repo}target/wasm32-unknown-unknown/release/keel_core_wasm.wasm`;
+const wasm = `${repo}target/wasm32-unknown-unknown/wasm-release/keel_core_wasm.wasm`;
 const outDir = fileURLToPath(new URL("../src/core/pkg", import.meta.url));
 
 function fail(message: string): never {
@@ -36,5 +36,13 @@ const run = (cmd: string, args: string[]) => {
     fail(`${cmd} ${args[0] ?? ""} failed`);
   }
 };
-run("cargo", ["build", "-p", "keel-core-wasm", "--target", "wasm32-unknown-unknown", "--release"]);
+run("cargo", [
+  "build",
+  "-p",
+  "keel-core-wasm",
+  "--target",
+  "wasm32-unknown-unknown",
+  "--profile",
+  "wasm-release",
+]);
 run(cli, ["--target", "web", "--out-dir", outDir, "--out-name", "keel_core_wasm", wasm]);

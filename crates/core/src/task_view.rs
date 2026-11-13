@@ -372,14 +372,8 @@ mod tests {
 
     fn repeats(mut t: Task, date: &str) -> Task {
         t.due = Some(crate::model::Due {
-            date: date.into(),
-            timezone: None,
-            string: "every day".into(),
-            lang: "en".into(),
             is_recurring: true,
-            recurrence: None,
-            until: None,
-            moved_from: None,
+            ..crate::model::Due::new(date, "every day")
         });
         t
     }

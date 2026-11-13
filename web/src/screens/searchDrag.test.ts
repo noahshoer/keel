@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { stubMedia } from "../test/media";
 import { setWidth, touch } from "../test/touch";
 import { installSearchDrag } from "./searchDrag";
 
@@ -79,7 +80,7 @@ it("only on the Search page, with the drawer shut", () => {
 });
 
 it("leaves the swipe to the instant fallback when motion is reduced", () => {
-  vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
+  stubMedia({ reduced: true });
   drag(300, true);
   vi.unstubAllGlobals();
   expect(calls).toEqual([]);

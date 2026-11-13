@@ -1,111 +1,47 @@
 use chrono::NaiveDate;
-use keel_core::commands::{Action, Command};
+use keel_core::commands::Action;
+use keel_core::ids::Id;
 use keel_core::model::{Due, Priority};
 use keel_core::search::SearchScope;
-use keel_service::AppService;
+
+mod common;
+use common::{d, Fx, NewTask};
 
 fn today() -> NaiveDate {
-    NaiveDate::from_ymd_opt(2026, 10, 19).unwrap()
+    d(2026, 10, 19)
 }
 
-struct F {
-    _dir: tempfile::TempDir,
-    svc: AppService,
-    n: u32,
-}
-
-impl F {
-    fn new() -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
-        F {
-            _dir: dir,
-            svc,
-            n: 0,
-        }
-    }
-
-    fn add(
-        &mut self,
-        name: &str,
-        description: &str,
-        due: Option<&str>,
-        priority: Priority,
-    ) -> String {
-        self.n += 1;
-        let inbox = self
-            .svc
-            .list_projects()
-            .unwrap()
-            .into_iter()
-            .find(|p| p.is_inbox)
-            .unwrap()
-            .id;
-        let action = Action::TaskAdd {
-            content: name.into(),
-            project_id: inbox,
-            description: Some(description.into()),
-            priority: Some(priority),
-            due: due.map(|d| Due {
-                date: d.into(),
-                timezone: None,
-                string: d.into(),
-                lang: "en".into(),
-                is_recurring: false,
-                recurrence: None,
-                until: None,
-                moved_from: None,
-            }),
-            labels: None,
-            parent_id: None,
-            section_id: None,
-            recurrence: None,
-            deadline: None,
-        };
-        let cmd = Command {
-            uuid: format!("u{}", self.n),
-            temp_id: Some("t".into()),
-            action,
-        };
-        self.svc.dispatch_at(cmd, today()).unwrap().id_mapping["t"].to_string()
-    }
-
-    fn run(&mut self, action: Action) -> String {
-        self.n += 1;
-        let cmd = Command {
-            uuid: format!("u{}", self.n),
-            temp_id: Some("x".into()),
-            action,
-        };
-        self.svc
-            .dispatch_at(cmd, today())
-            .unwrap()
-            .id_mapping
-            .get("x")
-            .map(|i| i.to_string())
-            .unwrap_or_default()
+impl Fx {
+    fn add(&mut self, name: &str, description: &str, due: Option<&str>, priority: Priority) -> Id {
+        let due = due.map(|d| Due::new(d, d));
+        self.add_task(
+            NewTask::new(name)
+                .description(description)
+                .priority(priority)
+                .due(due),
+        )
     }
 
     /// A task in `project` (or the Inbox) carrying `labels`.
     fn add_in(
         &mut self,
         name: &str,
-        project: Option<&str>,
+        project: Option<&Id>,
         labels: &[&str],
         due: Option<&str>,
         priority: Priority,
-    ) -> String {
+    ) -> Id {
         let id = self.add(name, "", due, priority);
         if let Some(p) = project {
             self.run(Action::TaskMove {
-                id: id.clone().into(),
-                project_id: p.into(),
+                id: id.clone(),
+                project_id: p.clone(),
                 section_id: None,
             });
         }
         if !labels.is_empty() {
             self.run(Action::TaskUpdate {
-                id: id.clone().into(),
+                id: id.clone(),
                 content: None,
                 description: None,
                 priority: None,
@@ -118,16 +54,6 @@ impl F {
         }
         id
     }
-
-    fn complete(&mut self, id: &str) {
-        self.n += 1;
-        let cmd = Command {
-            uuid: format!("u{}", self.n),
-            temp_id: None,
-            action: Action::TaskComplete { id: id.into() },
-        };
-        self.svc.dispatch_at(cmd, today()).unwrap();
-    }
 }
 
 fn names(tasks: &[keel_core::model::Task]) -> Vec<&str> {
@@ -136,7 +62,7 @@ fn names(tasks: &[keel_core::model::Task]) -> Vec<&str> {
 
 #[test]
 fn title_matches_first_then_due_then_priority() {
-    let mut f = F::new();
+    let mut f = Fx::on(today());
     f.add(
         "Groceries",
         "milk and eggs",
@@ -157,7 +83,7 @@ fn title_matches_first_then_due_then_priority() {
 
 #[test]
 fn completed_matches_are_separate_and_empty_query_finds_nothing() {
-    let mut f = F::new();
+    let mut f = Fx::on(today());
     let done = f.add("Call the bank", "", None, Priority::None);
     f.add("Bank statement", "", None, Priority::None);
     f.complete(&done);
@@ -172,7 +98,7 @@ fn completed_matches_are_separate_and_empty_query_finds_nothing() {
 
 #[test]
 fn filter_terms_narrow_the_search() {
-    let mut f = F::new();
+    let mut f = Fx::on(today());
     f.run(Action::LabelAdd {
         name: "errands".into(),
     });
@@ -191,7 +117,7 @@ fn filter_terms_narrow_the_search() {
         Priority::None,
     );
     f.add_in("Buy stamps", None, &[], Some("2026-10-19"), Priority::None);
-    let open = |f: &F, q: &str| {
+    let open = |f: &Fx, q: &str| {
         names(&f.svc.search_at(q, None, today()).unwrap().open)
             .iter()
             .map(|s| s.to_string())
@@ -209,7 +135,7 @@ fn filter_terms_narrow_the_search() {
 
 #[test]
 fn a_query_that_does_not_parse_searches_as_text() {
-    let mut f = F::new();
+    let mut f = Fx::on(today());
     f.add("Plan p1 & beyond", "", None, Priority::None);
     f.add("Other", "", None, Priority::None);
     // "p1 &" is not a filter (the & has nothing after it), so it is read as words.
@@ -219,7 +145,7 @@ fn a_query_that_does_not_parse_searches_as_text() {
 
 #[test]
 fn comma_groups_are_one_list() {
-    let mut f = F::new();
+    let mut f = Fx::on(today());
     f.add("Alpha", "", Some("2026-10-19"), Priority::None);
     f.add("Beta", "", None, Priority::P1);
     f.add("Gamma", "", None, Priority::None);
@@ -229,7 +155,7 @@ fn comma_groups_are_one_list() {
 
 #[test]
 fn filters_apply_to_completed_tasks_too() {
-    let mut f = F::new();
+    let mut f = Fx::on(today());
     let done = f.add("Call the bank", "", None, Priority::P1);
     let other = f.add("Call the vet", "", None, Priority::None);
     f.complete(&done);
@@ -240,18 +166,19 @@ fn filters_apply_to_completed_tasks_too() {
 
 #[test]
 fn a_project_scope_limits_every_group() {
-    let mut f = F::new();
-    let home = f.run(Action::ProjectAdd {
-        name: "Home".into(),
-    });
+    let mut f = Fx::on(today());
+    let home = f
+        .run(Action::ProjectAdd {
+            name: "Home".into(),
+        })
+        .id_mapping["t"]
+        .clone();
     f.run(Action::ProjectAdd {
         name: "Work".into(),
     });
     f.add_in("Fix sink", Some(&home), &[], None, Priority::None);
     f.add_in("Fix report", None, &[], None, Priority::None);
-    let scope = SearchScope::Project {
-        id: home.clone().into(),
-    };
+    let scope = SearchScope::Project { id: home.clone() };
     let r = f.svc.search_at("fix", Some(&scope), today()).unwrap();
     assert_eq!(names(&r.open), vec!["Fix sink"]);
     let both = f
@@ -267,7 +194,7 @@ fn a_project_scope_limits_every_group() {
 
 #[test]
 fn a_label_scope_limits_the_search() {
-    let mut f = F::new();
+    let mut f = Fx::on(today());
     f.run(Action::LabelAdd {
         name: "Errands".into(),
     });

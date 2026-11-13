@@ -3,9 +3,9 @@
 // edge. Fixed positioning, so scrolling containers never clip it (the
 // Dioxus `PLACE_JS` in crates/ui/src/pickers.rs).
 import { type RefObject, useLayoutEffect } from "react";
+import { isTouch } from "../shell/device";
 import { layoutRect } from "./glide";
 import { keyboardUp, placeAboveCard, textRoomUnderPicker } from "./keyboardAnchor";
-import { isTouch } from "./locale";
 
 export type Rect = { top: number; bottom: number; left: number; width: number; height: number };
 

@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useWideLayout } from "../shell/platform";
 import { useAnchoredPopup } from "../shell/useAnchoredPopup";
 
-export type ArrangePanelProps = {
+type ArrangePanelProps = {
   title: string;
   action: { label: string; run: () => void };
   /** The header button it opens from. */

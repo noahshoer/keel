@@ -41,12 +41,12 @@ function NavProbe() {
   return <output data-testid="nav">{`${nav.stack.join(",")}|${nav.addSub ? "add" : ""}`}</output>;
 }
 const wrapper = ({ children }: { children: ReactNode }) => (
-  <LocationsContext.Provider value={{ projects: fx.projects, sections: fx.sections }}>
+  <LocationsContext value={{ projects: fx.projects, sections: fx.sections }}>
     <TaskNavProvider all={fx.tasks}>
       {children}
       <NavProbe />
     </TaskNavProvider>
-  </LocationsContext.Provider>
+  </LocationsContext>
 );
 const opened = () => screen.getByTestId("nav").textContent;
 const row = (task: Task, progress: CardRow["progress"] = null): CardRow => ({ task, progress });

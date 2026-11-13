@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Recurrence } from "../bindings";
 import { dueBucket, monthNames, monthView, quickDates, timeLabel, typedTime, yearChoices } from "../core";
 import { BUCKET_CLASS } from "../lists/chips";
+import { isTouch } from "../shell/device";
 import {
   CheckCircleIcon,
   CheckSmallIcon,
@@ -15,7 +16,7 @@ import {
 } from "../shell/icons";
 import { CalendarMonths } from "./CalendarMonths";
 import { afterKeyboardMove, unrollWithCard } from "./keyboardAnchor";
-import { isTouch, weekStart } from "./locale";
+import { weekStart } from "./locale";
 import type { MenuItem } from "./Menu";
 import { cx } from "./pop";
 import { usePlacedPopover } from "./popover";

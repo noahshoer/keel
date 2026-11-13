@@ -18,7 +18,7 @@ use crate::ids::Id;
 use serde::Serialize;
 
 use crate::editor::{title_segments, TitleSegment};
-use crate::model::{Label, Priority, Project, Section, Task};
+use crate::model::{parse_ymd, Label, Priority, Project, Section, Task};
 use crate::phrases::{
     closest, match_date, match_deadline, match_name, match_priority, match_repeat, match_time,
     repeat_matches, sigil_name, tokens, unknown_name, unread_every, RepeatSpec, Token as Word,
@@ -286,7 +286,7 @@ fn parse_date(raw: &str, today: NaiveDate) -> Result<DateRef, FilterError> {
             if let Some(n) = parse_days(&s) {
                 return Ok(DateRef::Offset(n));
             }
-            if let Ok(d) = NaiveDate::parse_from_str(&s, "%Y-%m-%d") {
+            if let Some(d) = parse_ymd(&s) {
                 return Ok(DateRef::On(d));
             }
             // Quick add's date phrases, when they are the whole date.
@@ -915,10 +915,7 @@ pub fn matches(expr: &Expr, task: &Task, ctx: &FilterContext) -> bool {
 fn term_matches(term: &Term, task: &Task, ctx: &FilterContext) -> bool {
     let due = due_date_of(task);
     let today = ctx.today;
-    let deadline = task
-        .deadline
-        .as_deref()
-        .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+    let deadline = task.deadline.as_deref().and_then(parse_ymd);
     let lower_eq = |a: &str, b: &str| a.to_lowercase() == b;
     match term {
         Term::All => true,
@@ -1314,16 +1311,7 @@ mod tests {
     }
 
     fn due(mut t: Task, date: &str) -> Task {
-        t.due = Some(Due {
-            date: date.to_string(),
-            timezone: None,
-            string: date.to_string(),
-            lang: "en".into(),
-            is_recurring: false,
-            recurrence: None,
-            until: None,
-            moved_from: None,
-        });
+        t.due = Some(Due::new(date, date));
         t
     }
 

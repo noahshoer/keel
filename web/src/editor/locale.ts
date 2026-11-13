@@ -17,8 +17,3 @@ export function weekStart(): number {
     return 1;
   }
 }
-
-/** True on touch screens (phones), where the task card sits on the keyboard and time is a wheel. */
-export function isTouch(): boolean {
-  return typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
-}

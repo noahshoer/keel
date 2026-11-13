@@ -1,67 +1,34 @@
-use keel_core::commands::{Action, Command};
-use keel_service::AppService;
+use keel_core::commands::Action;
 
-fn temp_service() -> (tempfile::TempDir, AppService) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("keel.db");
-    let svc = AppService::open(path.to_str().unwrap()).expect("open service");
-    (dir, svc)
-}
+mod common;
+use common::{Fx, NewTask};
 
 #[test]
 fn first_run_seeds_inbox() {
-    let (_d, svc) = temp_service();
-    let projects = svc.list_projects().unwrap();
+    let f = Fx::new();
+    let projects = f.svc.list_projects().unwrap();
     assert_eq!(projects.len(), 1, "fresh db seeds exactly one project");
     assert!(projects[0].is_inbox, "the seeded project is the Inbox");
 }
 
 #[test]
 fn dispatch_task_add_then_list_returns_it() {
-    let (_d, svc) = temp_service();
-    let inbox = svc
-        .list_projects()
-        .unwrap()
-        .into_iter()
-        .find(|p| p.is_inbox)
-        .unwrap();
+    let mut f = Fx::new();
+    f.add_task(NewTask::new("milk"));
 
-    svc.dispatch(Command {
-        uuid: "u1".to_string(),
-        temp_id: Some("tmp-1".to_string()),
-        action: Action::TaskAdd {
-            content: "milk".to_string(),
-            project_id: inbox.id.clone(),
-            description: None,
-            priority: None,
-            due: None,
-            labels: None,
-            parent_id: None,
-            section_id: None,
-            recurrence: None,
-            deadline: None,
-        },
-    })
-    .unwrap();
-
-    let tasks = svc.list_tasks(inbox.id.as_str()).unwrap();
+    let tasks = f.svc.list_tasks(f.inbox.as_str()).unwrap();
     assert_eq!(tasks.len(), 1);
     assert_eq!(tasks[0].content, "milk");
 }
 
 #[test]
 fn seed_inbox_is_idempotent_across_reopen() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("keel.db");
-    let p = path.to_str().unwrap();
-    {
-        let svc = AppService::open(p).unwrap();
-        assert_eq!(svc.list_projects().unwrap().len(), 1);
-    }
+    let mut f = Fx::new();
+    assert_eq!(f.svc.list_projects().unwrap().len(), 1);
     // Reopening must not seed a second Inbox.
-    let svc2 = AppService::open(p).unwrap();
+    f.reopen();
     assert_eq!(
-        svc2.list_projects().unwrap().len(),
+        f.svc.list_projects().unwrap().len(),
         1,
         "no duplicate Inbox on reopen"
     );
@@ -70,25 +37,19 @@ fn seed_inbox_is_idempotent_across_reopen() {
 #[test]
 fn list_arrangements_returns_what_was_dispatched() {
     use keel_core::arrange::{Arrangement, PlacedArrangement, SortField, ViewPlace};
-    let dir = tempfile::tempdir().unwrap();
-    let svc = AppService::open(dir.path().join("keel.db").to_str().unwrap()).unwrap();
-    assert!(svc.list_arrangements().unwrap().is_empty());
+    let mut f = Fx::new();
+    assert!(f.svc.list_arrangements().unwrap().is_empty());
     let arrangement = Arrangement {
         filter: "p1".into(),
         groups: vec![SortField::Priority],
         order: vec![],
     };
-    svc.dispatch(Command {
-        uuid: "arr1".into(),
-        temp_id: None,
-        action: Action::ViewArrange {
-            place: ViewPlace::Today,
-            arrangement: arrangement.clone(),
-        },
-    })
-    .unwrap();
+    f.run(Action::ViewArrange {
+        place: ViewPlace::Today,
+        arrangement: arrangement.clone(),
+    });
     assert_eq!(
-        svc.list_arrangements().unwrap(),
+        f.svc.list_arrangements().unwrap(),
         vec![PlacedArrangement {
             place: ViewPlace::Today,
             arrangement

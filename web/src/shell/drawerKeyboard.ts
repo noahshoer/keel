@@ -4,7 +4,7 @@
 // whole form above the keyboard, where WebKit alone would reveal only the cursor.
 import { type RefObject, useEffect, useState } from "react";
 import { useKeyboard } from "../editor/keyboardAnchor";
-import { isTouch } from "../editor/locale";
+import { isTouch } from "./device";
 
 /** Keeps the form clear of the keyboard's top edge. */
 const MARGIN = 12;

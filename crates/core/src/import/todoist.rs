@@ -6,7 +6,7 @@
 
 use chrono::NaiveDate;
 
-use crate::model::Priority;
+use crate::model::{contains_name, parse_ymd, ymd, Priority};
 use crate::quickadd;
 use crate::recurrence::Recurrence;
 
@@ -189,7 +189,7 @@ pub fn plan(items: &[TodoistItem], today: NaiveDate) -> ImportPlan {
                 let parent = stack.last().map(|&(_, key)| key);
                 let (content, labels) = split_labels(&t.content);
                 for l in &labels {
-                    if !out.labels.iter().any(|x| x.eq_ignore_ascii_case(l)) {
+                    if !contains_name(&out.labels, l) {
                         out.labels.push(l.clone());
                     }
                 }
@@ -270,8 +270,8 @@ fn read_date(text: &str, lang: &str, today: NaiveDate) -> DateRead {
             return DateRead::Read(dt.format("%Y-%m-%dT%H:%M:00").to_string(), None);
         }
     }
-    if let Ok(d) = NaiveDate::parse_from_str(text, "%Y-%m-%d") {
-        return DateRead::Read(d.format("%Y-%m-%d").to_string(), None);
+    if let Some(d) = parse_ymd(text) {
+        return DateRead::Read(ymd(d), None);
     }
     let q = quickadd::parse(&format!("x {text}"), today, &[], &[]);
     let only_a_date = q.content == "x"
@@ -295,7 +295,7 @@ fn split_labels(content: &str) -> (String, Vec<String>) {
             .map(|n| n.trim_end_matches([',', '.', ';', '!', '?']));
         match name {
             Some(n) if !n.is_empty() => {
-                if !labels.iter().any(|l| l.eq_ignore_ascii_case(n)) {
+                if !contains_name(&labels, n) {
                     labels.push(n.to_string());
                 }
             }

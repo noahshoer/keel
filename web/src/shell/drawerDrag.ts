@@ -14,11 +14,12 @@
 // - carried to shut, or back to shut: React is told, and `clearDrag` (called
 //   once its drawer state is false) removes the rest, so the scrim React is
 //   about to remove never shows between.
-import { installPan } from "../gestures/pan";
-import { NARROW_MAX } from "../gestures/sheet-rules";
+import { canPan, installPan } from "../gestures/pan";
+import { EASE_SOFT } from "../gestures/sheet-rules";
+import { makeTimers } from "../gestures/timers";
 
 /** What the drawer drag needs from the app. */
-export type DrawerControl = {
+type DrawerControl = {
   isOpen: () => boolean;
   /** False where the page's own swipe takes over (the Search screen goes back). */
   canOpen: () => boolean;
@@ -27,7 +28,6 @@ export type DrawerControl = {
 
 /** The drawer's own pace and curve (`.26s var(--ease)` in app.css). */
 const SETTLE_S = 0.26;
-const EASE = "cubic-bezier(.2,.8,.2,1)";
 /** How far the page slides right while the drawer is open (the CSS parallax). */
 const PARALLAX = 28;
 /** The dimming at full open (`.drawer-scrim`'s background alpha is its own). */
@@ -47,16 +47,16 @@ export function clearDrag(app: HTMLElement): void {
 
 export function installDrawerDrag(doc: Document, ctl: DrawerControl): () => void {
   let settling = false;
-  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const { later, clear } = makeTimers();
   const off = installPan(doc, (ctx) => {
-    if (settling || ctx.blocked || ctx.inSheet || ctx.inSettings || ctx.width > NARROW_MAX) return null;
+    if (settling || !canPan(ctx)) return null;
     const app = doc.querySelector<HTMLElement>(".app");
     const sidebar = doc.querySelector<HTMLElement>(".sidebar");
     const content = doc.querySelector<HTMLElement>(".content");
     const open = ctl.isOpen();
     if (!app || !sidebar || !content || (!open && !ctl.canOpen())) return null;
     let dim: HTMLElement | null = null;
-    const ease = `${SETTLE_S}s ${EASE}`;
+    const ease = `${SETTLE_S}s ${EASE_SOFT}`;
     // `p`: 0 shut, 1 open.
     const place = (p: number, settle = false) => {
       sidebar.style.transition = settle ? `transform ${ease}` : "none";
@@ -86,8 +86,7 @@ export function installDrawerDrag(doc: Document, ctl: DrawerControl): () => void
         const final = commit ? !open : open;
         settling = true;
         place(final ? 1 : 0, true);
-        const t = setTimeout(() => {
-          timers.delete(t);
+        later(() => {
           settling = false;
           if (final) {
             // Open: React's scrim is showing under the dim; the rest of the styles are the class's.
@@ -97,12 +96,11 @@ export function installDrawerDrag(doc: Document, ctl: DrawerControl): () => void
           // Shut: it was open and is closing (or was a cancelled open): Frame clears once React has it.
           ctl.setOpen(final);
         }, SETTLE_S * 1000);
-        timers.add(t);
       },
     };
   });
   return () => {
     off();
-    for (const t of timers) clearTimeout(t);
+    clear();
   };
 }

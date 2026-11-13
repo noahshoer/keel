@@ -14,6 +14,7 @@ import { NARROW_MAX } from "../gestures/sheet-rules";
 import { invoke } from "../ipc/invoke";
 import { COMPLETION_ICONS, type CompletionIcon, iconLabel, saveIcon } from "../lists/completion";
 import { ShowSubtasksContext, saveShowSubtasks } from "../lists/showSubtasks";
+import { NARROW_QUERY } from "../shell/device";
 import {
   BellSmallIcon,
   CalendarSmallIcon,
@@ -34,6 +35,29 @@ const BLOCKED = "Notifications are blocked. Allow them for Keel in your system s
 const upcomingInto = (set: (r: PlannedReminder[]) => void): Promise<void> =>
   invoke("upcoming_reminders", {}).then(set, () => set([]));
 
+/** One setting: its name and hint on the left, its control (the children) on the right. */
+function SettingRow({
+  name,
+  hint,
+  className = "setting-row",
+  children,
+}: {
+  name: string;
+  hint: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={className}>
+      <div className="setting-text">
+        <div className="setting-name">{name}</div>
+        <div className="setting-hint">{hint}</div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 /** Which mark fills a task's circle when it's completed (this device). */
 function CompletionSetting({
   icon,
@@ -43,11 +67,11 @@ function CompletionSetting({
   setIcon: (i: CompletionIcon) => void;
 }) {
   return (
-    <div className="setting-row completion-setting">
-      <div className="setting-text">
-        <div className="setting-name">Completion mark</div>
-        <div className="setting-hint">Fills the circle when you complete a task</div>
-      </div>
+    <SettingRow
+      className="setting-row completion-setting"
+      name="Completion mark"
+      hint="Fills the circle when you complete a task"
+    >
       <div className="mark-choices">
         {COMPLETION_ICONS.map((i) => (
           <button
@@ -68,7 +92,7 @@ function CompletionSetting({
           </button>
         ))}
       </div>
-    </div>
+    </SettingRow>
   );
 }
 
@@ -122,7 +146,7 @@ export function Settings({
   const [leaving, setLeaving] = useState(false);
   const close = () => {
     if (leaving) return;
-    if (!window.matchMedia?.("(max-width: 899px)").matches) return onClose();
+    if (!window.matchMedia?.(NARROW_QUERY).matches) return onClose();
     setLeaving(true);
     setTimeout(onClose, 260);
   };
@@ -205,7 +229,7 @@ export function Settings({
     })();
   };
 
-  if (settings === null || latest.current === null) {
+  if (settings === null) {
     return (
       // biome-ignore lint/a11y/useKeyWithClickEvents: same markup as the Dioxus dialog; Escape works once it has loaded.
       // biome-ignore lint/a11y/noStaticElementInteractions: see above.
@@ -222,12 +246,11 @@ export function Settings({
   const enabled = settings.enabled;
   const menus = reminderMenus(settings);
   const pick = (kind: MenuKind) => (value: string) => {
-    if (latest.current) save(pickSetting(latest.current, kind, value));
+    save(pickSetting(latest.current ?? settings, kind, value));
   };
 
   const toggle = () => {
-    const s = latest.current;
-    if (s === null) return;
+    const s = latest.current ?? settings;
     setMessage(null);
     if (s.enabled) {
       save({ ...s, enabled: false });
@@ -236,7 +259,7 @@ export function Settings({
     // Turning on asks the OS for permission first.
     void turnOn(permission, () => invoke("request_notification_permission", {})).then((r) => {
       setPermission(r.permission);
-      if (r.granted && latest.current) save({ ...latest.current, enabled: true });
+      if (r.granted) save({ ...(latest.current ?? settings), enabled: true });
       else if (!r.granted) setMessage(BLOCKED);
     });
   };
@@ -331,40 +354,26 @@ export function Settings({
         <h2 className="modal-title">Settings</h2>
         <h3 className="modal-section">Notifications</h3>
         <div className="settings-card">
-          <div className="setting-row">
-            <div className="setting-text">
-              <div className="setting-name">Task reminders</div>
-              <div className="setting-hint">{permissionHint(permission, enabled)}</div>
-            </div>
+          <SettingRow name="Task reminders" hint={permissionHint(permission, enabled)}>
             <Switch on={enabled} title="Task reminders" onClick={toggle} />
-          </div>
+          </SettingRow>
           {message !== null ? <div className="setting-warning">{message}</div> : null}
           <div className={enabled ? "setting-group" : "setting-group disabled"}>
-            <div className="setting-row">
-              <div className="setting-text">
-                <div className="setting-name">Default reminder</div>
-                <div className="setting-hint">
-                  Sent for each task with a due time. A task can add its own reminders too.
-                </div>
-              </div>
+            <SettingRow
+              name="Default reminder"
+              hint="Sent for each task with a due time. A task can add its own reminders too."
+            >
               {menu("offset", "Offset", "Default reminder", menus.offset, <ClockSmallIcon />)}
-            </div>
-            <div className="setting-row">
-              <div className="setting-text">
-                <div className="setting-name">Tasks without a time</div>
-                <div className="setting-hint">
-                  Sent on the due day, and for deadlines that day with no due time.
-                </div>
-              </div>
+            </SettingRow>
+            <SettingRow
+              name="Tasks without a time"
+              hint="Sent on the due day, and for deadlines that day with no due time."
+            >
               {menu("allday", "AllDay", "Tasks without a time", menus.all_day, <CalendarSmallIcon />)}
-            </div>
-            <div className="setting-row">
-              <div className="setting-text">
-                <div className="setting-name">Daily summary</div>
-                <div className="setting-hint">Send how many tasks are due that day at this time.</div>
-              </div>
+            </SettingRow>
+            <SettingRow name="Daily summary" hint="Send how many tasks are due that day at this time.">
               {menu("summary", "Summary", "Daily summary", menus.summary, <SunIcon />)}
-            </div>
+            </SettingRow>
             <div className="setting-row">
               <div className="setting-name">Coming up</div>
               <button
@@ -400,11 +409,7 @@ export function Settings({
         <h3 className="modal-section">Appearance</h3>
         <div className="settings-card">
           <CompletionSetting icon={icon} setIcon={setIcon} />
-          <div className="setting-row">
-            <div className="setting-text">
-              <div className="setting-name">Show sub-tasks in lists</div>
-              <div className="setting-hint">Off shows a task with its sub-task count</div>
-            </div>
+          <SettingRow name="Show sub-tasks in lists" hint="Off shows a task with its sub-task count">
             <Switch
               on={subtasks.show}
               title="Show sub-tasks in lists"
@@ -413,17 +418,14 @@ export function Settings({
                 subtasks.setShow(!subtasks.show);
               }}
             />
-          </div>
+          </SettingRow>
         </div>
         <h3 className="modal-section">Import</h3>
         <div className="settings-card">
-          <div className="setting-row">
-            <div className="setting-text">
-              <div className="setting-name">From Todoist</div>
-              <div className="setting-hint">
-                In Todoist, open a project → ⋯ → Manage data → Export as CSV. Each file becomes a new project.
-              </div>
-            </div>
+          <SettingRow
+            name="From Todoist"
+            hint="In Todoist, open a project → ⋯ → Manage data → Export as CSV. Each file becomes a new project."
+          >
             <label className={importing ? "btn btn-cancel file-btn busy" : "btn btn-cancel file-btn"}>
               {importing ? "Importing…" : "Choose CSV files"}
               <input
@@ -434,7 +436,7 @@ export function Settings({
                 onChange={(e) => importFiles([...(e.currentTarget.files ?? [])])}
               />
             </label>
-          </div>
+          </SettingRow>
           {imports.length > 0 ? (
             <ul className="import-results">
               {imports.map((l, i) => (
@@ -449,13 +451,9 @@ export function Settings({
         </div>
         <h3 className="modal-section">Diagnostics</h3>
         <div className="settings-card">
-          <div className="setting-row">
-            <div className="setting-text">
-              <div className="setting-name">Diagnostics logging</div>
-              <div className="setting-hint">Writes a log for bug reports. Off by default.</div>
-            </div>
+          <SettingRow name="Diagnostics logging" hint="Writes a log for bug reports. Off by default.">
             <Switch on={diagOn} title="Diagnostics logging" onClick={toggleDiag} />
-          </div>
+          </SettingRow>
         </div>
         {whenClosed !== null ? (
           <p className="modal-foot">
